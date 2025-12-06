@@ -5,6 +5,7 @@ Python-based cron job for processing WhatsApp Business API bot interactions for 
 ## Overview
 
 This cron job continuously polls MongoDB for unprocessed messages and handles:
+
 - Restaurant conversation state management
 - Main menu navigation
 - Strategy review and approval workflow
@@ -14,7 +15,7 @@ This cron job continuously polls MongoDB for unprocessed messages and handles:
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────┐
 │  Restaurant Owner   │
 │   (WhatsApp User)   │
@@ -68,11 +69,13 @@ This cron job continuously polls MongoDB for unprocessed messages and handles:
 2. Activate the virtual environment:
 
    **Windows:**
+
    ```bash
    .\venv\Scripts\Activate.ps1
    ```
 
    **macOS/Linux:**
+
    ```bash
    source venv/bin/activate
    ```
@@ -94,7 +97,7 @@ This cron job continuously polls MongoDB for unprocessed messages and handles:
 ## Required Environment Variables
 
 - `MONGODB_URI` - MongoDB connection string
-- `WHATSAPP_API_URL` - WhatsApp Business API URL (default: https://graph.facebook.com/v18.0)
+- `WHATSAPP_API_URL` - WhatsApp Business API URL (default: <https://graph.facebook.com/v18.0>)
 - `WHATSAPP_PHONE_NUMBER_ID` - Your WhatsApp phone number ID
 - `WHATSAPP_ACCESS_TOKEN` - WhatsApp API access token
 - `AZURE_STORAGE_CONNECTION_STRING` - Azure Storage connection string (for media uploads)
@@ -133,12 +136,14 @@ The cron job will continuously poll for unprocessed messages every 5 seconds (co
 ### Development Mode
 
 For development and testing, use the Jupyter notebook `message_processor.ipynb` which provides:
+
 - Interactive development and debugging
 - Step-by-step message processing
 - Testing individual functions
 - Visualizing conversation flows
 
 **Important:** The notebook is the source of truth. After making changes, regenerate `bot_cron.py`:
+
 ```bash
 jupyter nbconvert --to script message_processor.ipynb --output bot_cron
 ```
@@ -153,6 +158,7 @@ For enhanced development experience, you can configure VS Code with the [AG2 Wha
 
 - VS Code with GitHub Copilot extension
 - Node.js installed (required for npx):
+
   ```bash
   node --version
   ```
@@ -160,6 +166,7 @@ For enhanced development experience, you can configure VS Code with the [AG2 Wha
 #### What It Provides
 
 The MCP server gives Copilot:
+
 - **Accurate WhatsApp API code generation**: Get proper code snippets for messages, buttons, lists
 - **Structure validation**: Check if your interactive messages are correctly formatted
 - **Best practices**: Recommendations for WhatsApp Business API patterns
@@ -172,19 +179,22 @@ The MCP server is already configured in `.vscode/mcp.json`. Just:
 1. Set environment variables (same as above: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`)
 2. Restart VS Code
 3. Verify by opening Copilot Chat (`Ctrl+Shift+I`) and asking:
-   ```
+
+   ```text
    @workspace What WhatsApp tools are available?
    ```
 
 #### Using Copilot with MCP
 
 **In Copilot Chat:**
-```
+
+```text
 Help me create a Python function to build an interactive button 
 message with 3 options: View Profile, Check Strategy, Contact Manager
 ```
 
 **Inline suggestions:**
+
 ```python
 # Just start typing, Copilot will suggest complete WhatsApp structures
 def send_menu_message(to):
@@ -192,7 +202,8 @@ def send_menu_message(to):
 ```
 
 **Validate your code:**
-```
+
+```text
 Is this WhatsApp interactive message structure correct?
 [paste your code]
 ```
@@ -207,11 +218,15 @@ Is this WhatsApp interactive message structure correct?
 ## Notebooks
 
 ### `message_processor.ipynb`
+
 Main processing notebook containing:
+
 - All conversation flows (menu, strategy, post approval)
 
 ### `test_scenarios.ipynb` (Optional)
+
 Testing notebook for:
+
 - Simulating different message scenarios
 - Testing conversation flows
 - Debugging edge cases
@@ -219,6 +234,7 @@ Testing notebook for:
 ## Features
 
 ### Message Processing
+
 - Polls MongoDB for unprocessed messages
 - Handles text, interactive (buttons/lists), and flow responses
 - Updates conversation states automatically
@@ -242,7 +258,7 @@ Testing notebook for:
 
 ## Project Structure
 
-```
+```text
 whatsappbusinessapi-bot/
 ├── .env.test                 # Environment variables template
 ├── .gitignore                # Git ignore rules
@@ -257,6 +273,7 @@ whatsappbusinessapi-bot/
 ## Error Handling
 
 The cron job includes:
+
 - Automatic retry logic for failed API calls
 - Error logging to MongoDB
 - Graceful handling of malformed messages
@@ -272,6 +289,7 @@ The cron job includes:
 ## Development
 
 To add new conversation flows:
+
 1. Define new conversation states in the constants
 2. Add message handlers for the new states
 3. Create WhatsApp message builders for responses
