@@ -1,0 +1,15 @@
+{
+  "name": "whatsappbusinessapi-webhook",
+  "version": "1.0.0",
+  "description": "Azure Function for WhatsApp Business API Webhook",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "mongoose": "^8.0.0"
+  },
+  "devDependencies": {
+    "@azure/functions": "^4.0.0"
+  }
+}
