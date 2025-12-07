@@ -7,7 +7,7 @@
  */
 
 import { Schema as _Schema, model, connect } from 'mongoose';
-import * as pb from '../generated/restropulse_pb.js';
+import * as pb from '../generated/restropulse_pb.cjs';
 import {
     RestaurantSchema,
     ContentStrategySchema,

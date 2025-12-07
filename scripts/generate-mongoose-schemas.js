@@ -147,7 +147,7 @@ class MongooseSchemaGenerator {
  */
 
 import { Schema } from 'mongoose';
-import * as pb from './restropulse_pb.js';
+import * as pb from './restropulse_pb.cjs';
 
 // ===== PROTOBUF ENUM REFERENCES =====
 `;

@@ -18,10 +18,19 @@ if (!(Test-Path $jsOutDir)) {
     New-Item -ItemType Directory -Path $jsOutDir | Out-Null
 }
 
-protoc --js_out=import_style=commonjs,binary:$jsOutDir --proto_path=shared-schemas shared-schemas/restropulse.proto
+protoc --js_out=import_style=commonjs, binary:$jsOutDir --proto_path=shared-schemas shared-schemas/restropulse.proto
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "JavaScript code generated successfully" -ForegroundColor Green
+    # Rename .js to .cjs for CommonJS compatibility with ES modules
+    $generatedFile = Join-Path $jsOutDir "restropulse_pb.js"
+    $cjsFile = Join-Path $jsOutDir "restropulse_pb.cjs"
+    if (Test-Path $generatedFile) {
+        Move-Item -Path $generatedFile -Destination $cjsFile -Force
+        Write-Host "JavaScript code generated and renamed to .cjs" -ForegroundColor Green
+    }
+    else {
+        Write-Host "JavaScript code generated successfully" -ForegroundColor Green
+    }
 }
 else {
     Write-Host "JavaScript compilation failed" -ForegroundColor Red

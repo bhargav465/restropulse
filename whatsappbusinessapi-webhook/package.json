@@ -2,9 +2,11 @@
   "name": "whatsappbusinessapi-webhook",
   "version": "1.0.0",
   "description": "Azure Function for WhatsApp Business API Webhook",
+  "type": "module",
   "scripts": {
     "start": "func start",
     "build:proto": "protoc --js_out=import_style=commonjs,binary:./generated --proto_path=../shared-schemas ../shared-schemas/restropulse.proto",
+    "postbuild:proto": "powershell -Command \"if (Test-Path './generated/restropulse_pb.js') { Move-Item -Path './generated/restropulse_pb.js' -Destination './generated/restropulse_pb.cjs' -Force }\"",
     "generate:schemas": "node ../scripts/generate-mongoose-schemas.js",
     "build": "npm run build:proto && npm run generate:schemas",
     "prebuild": "npm run build:proto",
