@@ -8,6 +8,9 @@ from pymongo import MongoClient
 from bson import ObjectId
 from dotenv import load_dotenv
 
+# TODO: Migrate to protobuf enums
+# from generated import restropulse_pb2 as pb
+
 # Load environment variables
 load_dotenv()
 
@@ -68,7 +71,6 @@ class ConversationState:
     SUPPORT_QUERY = 'SUPPORT_QUERY'
     FLOW_IN_PROGRESS = 'FLOW_IN_PROGRESS'
 
-# Button Actions
 class ButtonAction:
     VIEW_PROFILE = 'btn_view_profile'
     CHECK_STRATEGY = 'btn_check_strategy'
@@ -80,9 +82,7 @@ class ButtonAction:
     POST_FEEDBACK = 'btn_post_feedback'
     BACK_TO_MENU = 'btn_back_to_menu'
 
-# Message Context
 class MessageContext:
-    # Inbound
     USER_SPONTANEOUS = 'user_spontaneous'
     USER_MENU_REQUEST = 'user_menu_request'
     USER_PROFILE_VIEW = 'user_profile_view'
@@ -91,8 +91,6 @@ class MessageContext:
     USER_CONTACT_MANAGER = 'user_contact_manager'
     USER_STRATEGY_APPROVE = 'user_strategy_approve'
     USER_POST_APPROVE = 'user_post_approve'
-    
-    # Outbound
     BOT_MENU = 'bot_menu'
     BOT_PROFILE = 'bot_profile'
     BOT_STRATEGY_DISPLAY = 'bot_strategy_display'

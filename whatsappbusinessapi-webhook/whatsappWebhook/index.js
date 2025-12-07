@@ -9,6 +9,9 @@
 import { Schema as _Schema, model, connect } from 'mongoose';
 const Schema = _Schema;
 
+// TODO: Migrate to protobuf enums from '../generated/restropulse_pb.js'
+// import * as pb from '../generated/restropulse_pb.js';
+
 // ===== CONSTANTS & ENUMS =====
 
 // Subscription Plans
