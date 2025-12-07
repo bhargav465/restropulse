@@ -22,7 +22,8 @@ protoc --js_out=import_style=commonjs,binary:$jsOutDir --proto_path=shared-schem
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "JavaScript code generated successfully" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "JavaScript compilation failed" -ForegroundColor Red
     exit 1
 }
@@ -44,12 +45,37 @@ if ($LASTEXITCODE -eq 0) {
     if (!(Test-Path $initFile)) {
         New-Item -ItemType File -Path $initFile | Out-Null
     }
-} else {
+}
+else {
     Write-Host "Python compilation failed" -ForegroundColor Red
     exit 1
 }
 
-Write-Host "`nAll protobuf schemas compiled successfully!" -ForegroundColor Green
+# Generate Mongoose schemas
+Write-Host "`nGenerating Mongoose schemas..." -ForegroundColor Cyan
+node scripts/generate-mongoose-schemas.js
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Mongoose schemas generated successfully" -ForegroundColor Green
+}
+else {
+    Write-Host "Mongoose schema generation failed" -ForegroundColor Red
+    exit 1
+}
+
+# Generate PyMongo schemas
+Write-Host "`nGenerating PyMongo schemas..." -ForegroundColor Cyan
+python scripts/generate-pymongo-schemas.py
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "PyMongo schemas generated successfully" -ForegroundColor Green
+}
+else {
+    Write-Host "PyMongo schema generation failed" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "\nAll schemas generated successfully!" -ForegroundColor Green
 Write-Host "Generated files:" -ForegroundColor Cyan
 Write-Host "  - $jsOutDir/restropulse_pb.js" -ForegroundColor Gray
 Write-Host "  - $pyOutDir/restropulse_pb2.py" -ForegroundColor Gray
+Write-Host "  - $jsOutDir/mongoose-schemas.js" -ForegroundColor Gray
+Write-Host "  - $pyOutDir/pymongo_schemas.py" -ForegroundColor Gray

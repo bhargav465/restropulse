@@ -48,7 +48,7 @@ Verify installation:
 protoc --version
 ```
 
-### Compile Schemas
+### Compile Schemas and Generate Database Schemas
 
 From the workspace root, run:
 
@@ -67,18 +67,27 @@ chmod +x scripts/compile-proto.sh
 
 This generates:
 
+**Protobuf Code:**
+
 - `whatsappbusinessapi-webhook/generated/restropulse_pb.js` (JavaScript)
 - `whatsappbusinessapi-bot/generated/restropulse_pb2.py` (Python)
+
+**Database Schemas (Auto-generated):**
+
+- `whatsappbusinessapi-webhook/generated/mongoose-schemas.js` (Mongoose)
+- `whatsappbusinessapi-bot/generated/pymongo_schemas.py` (PyMongo)
+
+> **Note:** Database schemas are automatically generated from protobuf definitions. See `scripts/README.md` for details on the schema generation system.
 
 ## Usage
 
 ### JavaScript (Webhook)
 
 ```javascript
-const { ConversationState, MessageLog } = require('./generated/restropulse_pb');
+import * as pb from './generated/restropulse_pb.js';
 
 // Use enum
-const state = ConversationState.IDLE;
+const state = pb.ConversationState.IDLE;
 
 // Create message
 const log = new MessageLog();
@@ -89,13 +98,13 @@ log.setProcessed(false);
 ### Python (Bot)
 
 ```python
-from generated import restropulse_pb2
+from generated import restropulse_pb2 as pb
 
 # Use enum
-state = restropulse_pb2.ConversationState.IDLE
+state = pb.ConversationState.IDLE
 
 # Create message
-log = restropulse_pb2.MessageLog()
+log = pb.MessageLog()
 log.restaurant_whatsapp_id = '1234567890'
 log.processed = False
 ```

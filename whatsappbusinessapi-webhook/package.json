@@ -5,6 +5,8 @@
   "scripts": {
     "start": "func start",
     "build:proto": "protoc --js_out=import_style=commonjs,binary:./generated --proto_path=../shared-schemas ../shared-schemas/restropulse.proto",
+    "generate:schemas": "node ../scripts/generate-mongoose-schemas.js",
+    "build": "npm run build:proto && npm run generate:schemas",
     "prebuild": "npm run build:proto",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

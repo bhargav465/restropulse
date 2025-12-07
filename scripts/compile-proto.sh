@@ -47,7 +47,29 @@ else
     exit 1
 fi
 
-echo -e "\n\033[32m✓ All protobuf schemas compiled successfully!\033[0m"
+# Generate Mongoose schemas
+echo -e "\n\033[36mGenerating Mongoose schemas...\033[0m"
+node scripts/generate-mongoose-schemas.js
+if [ $? -eq 0 ]; then
+    echo -e "\033[32m✓ Mongoose schemas generated successfully\033[0m"
+else
+    echo -e "\033[31m✗ Mongoose schema generation failed\033[0m"
+    exit 1
+fi
+
+# Generate PyMongo schemas
+echo -e "\n\033[36mGenerating PyMongo schemas...\033[0m"
+python scripts/generate-pymongo-schemas.py
+if [ $? -eq 0 ]; then
+    echo -e "\033[32m✓ PyMongo schemas generated successfully\033[0m"
+else
+    echo -e "\033[31m✗ PyMongo schema generation failed\033[0m"
+    exit 1
+fi
+
+echo -e "\n\033[32m✓ All schemas generated successfully!\033[0m"
 echo -e "\033[36mGenerated files:\033[0m"
 echo -e "\033[90m  - $JS_OUT_DIR/restropulse_pb.js\033[0m"
+echo -e "\033[90m  - $JS_OUT_DIR/mongoose-schemas.js\033[0m"
 echo -e "\033[90m  - $PY_OUT_DIR/restropulse_pb2.py\033[0m"
+echo -e "\033[90m  - $PY_OUT_DIR/pymongo_schemas.py\033[0m"
