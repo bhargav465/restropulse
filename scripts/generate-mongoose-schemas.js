@@ -361,7 +361,7 @@ try {
     console.log('Writing output file...');
     writeFileSync(OUTPUT_PATH, output, 'utf-8');
 
-    console.log(`✓ Mongoose schemas generated successfully at ${OUTPUT_PATH}`);
+    console.log(`[SUCCESS] Mongoose schemas generated successfully at ${OUTPUT_PATH}`);
 } catch (error) {
     console.error('Error generating Mongoose schemas:', error.message);
     process.exit(1);

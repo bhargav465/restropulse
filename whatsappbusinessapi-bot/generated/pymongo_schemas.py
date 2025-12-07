@@ -690,9 +690,9 @@ def apply_validators(db):
                 "validationLevel": "moderate",  # moderate = apply to inserts and updates
                 "validationAction": "warn"  # warn = log violations but allow writes
             })
-            print(f"✓ Applied validator to {collection_name}")
+            print(f"[SUCCESS] Applied validator to {collection_name}")
         except Exception as e:
-            print(f"✗ Error applying validator to {collection_name}: {e}")
+            print(f"[ERROR] Error applying validator to {collection_name}: {e}")
 
 
 def create_indexes(db):
@@ -708,9 +708,9 @@ def create_indexes(db):
         for field, options in indexes:
             try:
                 collection.create_index([(field, 1)], **options)
-                print(f"✓ Created index on {collection_name}.{field}")
+                print(f"[SUCCESS] Created index on {collection_name}.{field}")
             except Exception as e:
-                print(f"✗ Error creating index on {collection_name}.{field}: {e}")
+                print(f"[ERROR] Error creating index on {collection_name}.{field}: {e}")
 
 
 def setup_database(db):

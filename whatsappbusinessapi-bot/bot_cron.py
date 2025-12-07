@@ -54,10 +54,10 @@ support_requests = db['supportrequests']
 # Test connection
 try:
     client.admin.command('ping')
-    print("✅ Connected to MongoDB")
+    print("Connected to MongoDB")
     print(f"   Database: {db.name}")
 except Exception as e:
-    print(f"❌ MongoDB connection failed: {e}")
+    print(f"ERROR: MongoDB connection failed: {e}")
 
 # Conversation States
 class ConversationState:
@@ -170,7 +170,7 @@ def build_main_menu():
                     'type': 'reply',
                     'reply': {
                         'id': ButtonAction.VIEW_NEXT_POST,
-                        'title': '🖼️ View Next Post'
+                        'title': 'View Next Post'
                     }
                 }
             ]

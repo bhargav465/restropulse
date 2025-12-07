@@ -22,9 +22,9 @@ protoc --js_out=import_style=commonjs,binary:"$JS_OUT_DIR" \
        shared-schemas/restropulse.proto
 
 if [ $? -eq 0 ]; then
-    echo -e "\033[32m✓ JavaScript code generated successfully\033[0m"
+    echo -e "\033[32m[SUCCESS] JavaScript code generated successfully\033[0m"
 else
-    echo -e "\033[31m✗ JavaScript compilation failed\033[0m"
+    echo -e "\033[31m[ERROR] JavaScript compilation failed\033[0m"
     exit 1
 fi
 
@@ -38,12 +38,12 @@ protoc --python_out="$PY_OUT_DIR" \
        shared-schemas/restropulse.proto
 
 if [ $? -eq 0 ]; then
-    echo -e "\033[32m✓ Python code generated successfully\033[0m"
+    echo -e "\033[32m[SUCCESS] Python code generated successfully\033[0m"
     
     # Create __init__.py to make it a Python package
     touch "$PY_OUT_DIR/__init__.py"
 else
-    echo -e "\033[31m✗ Python compilation failed\033[0m"
+    echo -e "\033[31m[ERROR] Python compilation failed\033[0m"
     exit 1
 fi
 
@@ -51,9 +51,9 @@ fi
 echo -e "\n\033[36mGenerating Mongoose schemas...\033[0m"
 node scripts/generate-mongoose-schemas.js
 if [ $? -eq 0 ]; then
-    echo -e "\033[32m✓ Mongoose schemas generated successfully\033[0m"
+    echo -e "\033[32m[SUCCESS] Mongoose schemas generated successfully\033[0m"
 else
-    echo -e "\033[31m✗ Mongoose schema generation failed\033[0m"
+    echo -e "\033[31m[ERROR] Mongoose schema generation failed\033[0m"
     exit 1
 fi
 
@@ -61,13 +61,13 @@ fi
 echo -e "\n\033[36mGenerating PyMongo schemas...\033[0m"
 python scripts/generate-pymongo-schemas.py
 if [ $? -eq 0 ]; then
-    echo -e "\033[32m✓ PyMongo schemas generated successfully\033[0m"
+    echo -e "\033[32m[SUCCESS] PyMongo schemas generated successfully\033[0m"
 else
-    echo -e "\033[31m✗ PyMongo schema generation failed\033[0m"
+    echo -e "\033[31m[ERROR] PyMongo schema generation failed\033[0m"
     exit 1
 fi
 
-echo -e "\n\033[32m✓ All schemas generated successfully!\033[0m"
+echo -e "\n\033[32m[SUCCESS] All schemas generated successfully!\033[0m"
 echo -e "\033[36mGenerated files:\033[0m"
 echo -e "\033[90m  - $JS_OUT_DIR/restropulse_pb.js\033[0m"
 echo -e "\033[90m  - $JS_OUT_DIR/mongoose-schemas.js\033[0m"
