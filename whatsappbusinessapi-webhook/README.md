@@ -16,38 +16,113 @@ whatsappbusinessapi-webhook/          # Root folder
     └── function.json                 # HTTP trigger configuration
 ```
 
-## Setup
+## Prerequisites
 
-1. Install dependencies:
+- Node.js (v18 or later)
+- Azure Functions Core Tools
+- MongoDB (local or Atlas)
 
-   ```bash
-   npm install
-   ```
+## Local Development Setup
 
-2. Configure `local.settings.json` with your credentials:
+**📁 Run all commands from the repository root: `D:\Work\restropulse`**
 
-   ```json
-   {
-     "Values": {
-       "MONGODB_URI": "your-mongodb-connection-string",
-       "VERIFY_TOKEN": "your-whatsapp-verify-token"
-     }
-   }
-   ```
+### 1. Install Dependencies
 
-3. Run locally:
+```powershell
+cd whatsappbusinessapi-webhook
+npm install
+```
 
-   ```bash
-   func start
-   ```
+### 2. Configure Environment Variables
 
-   The function will be available at: `http://localhost:7071/api/whatsappWebhook`
+Update `local.settings.json` with your values:
 
-4. Deploy to Azure:
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "MONGODB_URI": "your-mongodb-connection-string",
+    "VERIFY_TOKEN": "your-whatsapp-verify-token"
+  }
+}
+```
 
-   ```bash
-   func azure functionapp publish <your-function-app-name>
-   ```
+**Note:** `local.settings.json` is ignored by git to keep credentials secure.
+
+### 3. Start Local Development Server
+
+```powershell
+cd whatsappbusinessapi-webhook
+func start
+```
+
+The webhook will be available at: `http://localhost:7071/api/whatsappWebhook`
+
+## Testing
+
+### Test Webhook Verification (GET)
+
+```powershell
+curl "http://localhost:7071/api/whatsappWebhook?hub.mode=subscribe&hub.verify_token=your_verify_token&hub.challenge=test123"
+```
+
+Expected response: `test123`
+
+### Test Message Reception (POST)
+
+```powershell
+$body = @{
+    object = "whatsapp_business_account"
+    entry = @(
+        @{
+            changes = @(
+                @{
+                    value = @{
+                        messages = @(
+                            @{
+                                from = "1234567890"
+                                type = "text"
+                                timestamp = "1234567890"
+                                text = @{
+                                    body = "test message"
+                                }
+                            }
+                        )
+                    }
+                }
+            )
+        }
+    )
+} | ConvertTo-Json -Depth 10
+
+Invoke-WebRequest -Uri "http://localhost:7071/api/whatsappWebhook" -Method POST -Body $body -ContentType "application/json"
+```
+
+### Verify MongoDB Storage
+
+Check if messages are being saved:
+
+```powershell
+mongosh
+use restropulse
+db.messagelogs.find().sort({created_at: -1}).limit(1)
+```
+
+## Troubleshooting
+
+- **Connection errors**: Verify MongoDB is running and `MONGODB_URI` is correct
+- **Verification fails**: Check that `VERIFY_TOKEN` matches in both your request and local.settings.json
+- **Module not found**: Run `npm install` to install dependencies
+
+## Deployment
+
+Deploy to Azure:
+
+```powershell
+func azure functionapp publish <your-function-app-name>
+```
 
 ## Functionality
 
@@ -68,12 +143,16 @@ Receives incoming WhatsApp messages and stores them in MongoDB for processing by
 
 ## MongoDB Schemas
 
-All schemas are embedded in `index.js`:
+All schemas are **auto-generated from Protocol Buffers** (`shared-schemas/restropulse.proto`) and imported from `generated/mongoose-schemas.js`:
 
-- **Restaurant/User Schema** - Restaurant profile and subscription info
-- **Content Strategy Schema** - Content planning and approval workflow
-- **Post Schema** - Social media posts with status tracking
-- **Message Log Schema** - WhatsApp message history with media support
+- **Restaurant Schema** - Restaurant profile, contact info, and WhatsApp conversation state
+- **Content Strategy Schema** - Monthly content planning with approval workflow
+- **Post Schema** - Individual social media posts with scheduling and approval tracking
+- **Message Log Schema** - WhatsApp message history with media, interactive data, and processing status
+- **Support Request Schema** - Customer support tickets
+- **WhatsApp Flow Schema** - WhatsApp Flow configurations
+
+**Schema Generation:** Run `.\scripts\compile-proto.ps1` from repository root to regenerate schemas from protobuf definitions.
 
 ## Features
 
