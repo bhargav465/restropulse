@@ -4,12 +4,16 @@
   "description": "Azure Function for WhatsApp Business API Webhook",
   "scripts": {
     "start": "func start",
+    "build:proto": "protoc --js_out=import_style=commonjs,binary:./generated --proto_path=../shared-schemas ../shared-schemas/restropulse.proto",
+    "prebuild": "npm run build:proto",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "mongoose": "^8.0.0"
+    "mongoose": "^8.0.0",
+    "google-protobuf": "^3.21.2"
   },
   "devDependencies": {
-    "@azure/functions": "^4.0.0"
+    "@azure/functions": "^4.0.0",
+    "protoc-gen-js": "^3.21.2"
   }
 }
