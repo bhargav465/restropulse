@@ -81,6 +81,22 @@ function Record-TestResult {
     }
 }
 
+# Prerequisite: Check if Azure Functions server is running
+Write-TestHeader "Prerequisites Check"
+Write-Info "Checking if Azure Functions server is running at $WebhookUrl..."
+try {
+    $testConnection = Invoke-WebRequest -Uri $WebhookUrl -Method GET -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+    Write-Success "Azure Functions server is reachable"
+}
+catch {
+    Write-Failure "Cannot connect to Azure Functions server at $WebhookUrl"
+    Write-Host "`nPlease start the Azure Functions server first:" -ForegroundColor Yellow
+    Write-Host "  cd d:\Work\restropulse\whatsappbusinessapi-webhook" -ForegroundColor Cyan
+    Write-Host "  func start" -ForegroundColor Cyan
+    Write-Host "`nThen run this test script again.`n" -ForegroundColor Yellow
+    exit 1
+}
+
 # Test 1: Webhook Verification (GET)
 Write-TestHeader "Test 1: Webhook Verification (GET)"
 try {
