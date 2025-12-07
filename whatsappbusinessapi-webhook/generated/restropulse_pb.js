@@ -27,7 +27,7 @@ goog.exportSymbol('proto.restropulse.InteractiveType', null, global);
 goog.exportSymbol('proto.restropulse.MessageContext', null, global);
 goog.exportSymbol('proto.restropulse.MessageDirection', null, global);
 goog.exportSymbol('proto.restropulse.MessageLog', null, global);
-goog.exportSymbol('proto.restropulse.MessageResolutionStatus', null, global);
+goog.exportSymbol('proto.restropulse.MessageProcessingStatus', null, global);
 goog.exportSymbol('proto.restropulse.MessageType', null, global);
 goog.exportSymbol('proto.restropulse.Post', null, global);
 goog.exportSymbol('proto.restropulse.PostBreakdown', null, global);
@@ -1507,14 +1507,16 @@ proto.restropulse.Restaurant.toObject = function(includeInstance, msg) {
     whatsappId: jspb.Message.getFieldWithDefault(msg, 2, ""),
     businessName: jspb.Message.getFieldWithDefault(msg, 3, ""),
     cuisineType: jspb.Message.getFieldWithDefault(msg, 4, ""),
-    contactNumber: jspb.Message.getFieldWithDefault(msg, 5, ""),
-    instagramLink: jspb.Message.getFieldWithDefault(msg, 6, ""),
-    accountManagerId: jspb.Message.getFieldWithDefault(msg, 7, ""),
-    subscriptionId: jspb.Message.getFieldWithDefault(msg, 8, ""),
-    conversationState: jspb.Message.getFieldWithDefault(msg, 9, 0),
-    lastInteractionAt: jspb.Message.getFieldWithDefault(msg, 10, 0),
-    createdAt: jspb.Message.getFieldWithDefault(msg, 11, 0),
-    updatedAt: jspb.Message.getFieldWithDefault(msg, 12, 0)
+    contactPerson: jspb.Message.getFieldWithDefault(msg, 5, ""),
+    contactEmail: jspb.Message.getFieldWithDefault(msg, 6, ""),
+    contactNumber: jspb.Message.getFieldWithDefault(msg, 7, ""),
+    instagramLink: jspb.Message.getFieldWithDefault(msg, 8, ""),
+    accountManagerId: jspb.Message.getFieldWithDefault(msg, 9, ""),
+    subscriptionId: jspb.Message.getFieldWithDefault(msg, 10, ""),
+    conversationState: jspb.Message.getFieldWithDefault(msg, 11, 0),
+    lastInteractionAt: jspb.Message.getFieldWithDefault(msg, 12, 0),
+    createdAt: jspb.Message.getFieldWithDefault(msg, 13, 0),
+    updatedAt: jspb.Message.getFieldWithDefault(msg, 14, 0)
   };
 
   if (includeInstance) {
@@ -1569,33 +1571,41 @@ proto.restropulse.Restaurant.deserializeBinaryFromReader = function(msg, reader)
       break;
     case 5:
       var value = /** @type {string} */ (reader.readString());
-      msg.setContactNumber(value);
+      msg.setContactPerson(value);
       break;
     case 6:
       var value = /** @type {string} */ (reader.readString());
-      msg.setInstagramLink(value);
+      msg.setContactEmail(value);
       break;
     case 7:
       var value = /** @type {string} */ (reader.readString());
-      msg.setAccountManagerId(value);
+      msg.setContactNumber(value);
       break;
     case 8:
       var value = /** @type {string} */ (reader.readString());
-      msg.setSubscriptionId(value);
+      msg.setInstagramLink(value);
       break;
     case 9:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setAccountManagerId(value);
+      break;
+    case 10:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setSubscriptionId(value);
+      break;
+    case 11:
       var value = /** @type {!proto.restropulse.ConversationState} */ (reader.readEnum());
       msg.setConversationState(value);
       break;
-    case 10:
+    case 12:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setLastInteractionAt(value);
       break;
-    case 11:
+    case 13:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setCreatedAt(value);
       break;
-    case 12:
+    case 14:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setUpdatedAt(value);
       break;
@@ -1656,59 +1666,73 @@ proto.restropulse.Restaurant.serializeBinaryToWriter = function(message, writer)
       f
     );
   }
-  f = message.getContactNumber();
+  f = message.getContactPerson();
   if (f.length > 0) {
     writer.writeString(
       5,
       f
     );
   }
-  f = message.getInstagramLink();
+  f = message.getContactEmail();
   if (f.length > 0) {
     writer.writeString(
       6,
       f
     );
   }
-  f = message.getAccountManagerId();
+  f = message.getContactNumber();
   if (f.length > 0) {
     writer.writeString(
       7,
       f
     );
   }
-  f = message.getSubscriptionId();
+  f = message.getInstagramLink();
   if (f.length > 0) {
     writer.writeString(
       8,
       f
     );
   }
+  f = message.getAccountManagerId();
+  if (f.length > 0) {
+    writer.writeString(
+      9,
+      f
+    );
+  }
+  f = message.getSubscriptionId();
+  if (f.length > 0) {
+    writer.writeString(
+      10,
+      f
+    );
+  }
   f = message.getConversationState();
   if (f !== 0.0) {
     writer.writeEnum(
-      9,
+      11,
       f
     );
   }
   f = message.getLastInteractionAt();
   if (f !== 0) {
     writer.writeInt64(
-      10,
+      12,
       f
     );
   }
   f = message.getCreatedAt();
   if (f !== 0) {
     writer.writeInt64(
-      11,
+      13,
       f
     );
   }
   f = message.getUpdatedAt();
   if (f !== 0) {
     writer.writeInt64(
-      12,
+      14,
       f
     );
   }
@@ -1788,10 +1812,10 @@ proto.restropulse.Restaurant.prototype.setCuisineType = function(value) {
 
 
 /**
- * optional string contact_number = 5;
+ * optional string contact_person = 5;
  * @return {string}
  */
-proto.restropulse.Restaurant.prototype.getContactNumber = function() {
+proto.restropulse.Restaurant.prototype.getContactPerson = function() {
   return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 5, ""));
 };
 
@@ -1800,16 +1824,16 @@ proto.restropulse.Restaurant.prototype.getContactNumber = function() {
  * @param {string} value
  * @return {!proto.restropulse.Restaurant} returns this
  */
-proto.restropulse.Restaurant.prototype.setContactNumber = function(value) {
+proto.restropulse.Restaurant.prototype.setContactPerson = function(value) {
   return jspb.Message.setProto3StringField(this, 5, value);
 };
 
 
 /**
- * optional string instagram_link = 6;
+ * optional string contact_email = 6;
  * @return {string}
  */
-proto.restropulse.Restaurant.prototype.getInstagramLink = function() {
+proto.restropulse.Restaurant.prototype.getContactEmail = function() {
   return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 6, ""));
 };
 
@@ -1818,16 +1842,16 @@ proto.restropulse.Restaurant.prototype.getInstagramLink = function() {
  * @param {string} value
  * @return {!proto.restropulse.Restaurant} returns this
  */
-proto.restropulse.Restaurant.prototype.setInstagramLink = function(value) {
+proto.restropulse.Restaurant.prototype.setContactEmail = function(value) {
   return jspb.Message.setProto3StringField(this, 6, value);
 };
 
 
 /**
- * optional string account_manager_id = 7;
+ * optional string contact_number = 7;
  * @return {string}
  */
-proto.restropulse.Restaurant.prototype.getAccountManagerId = function() {
+proto.restropulse.Restaurant.prototype.getContactNumber = function() {
   return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 7, ""));
 };
 
@@ -1836,16 +1860,16 @@ proto.restropulse.Restaurant.prototype.getAccountManagerId = function() {
  * @param {string} value
  * @return {!proto.restropulse.Restaurant} returns this
  */
-proto.restropulse.Restaurant.prototype.setAccountManagerId = function(value) {
+proto.restropulse.Restaurant.prototype.setContactNumber = function(value) {
   return jspb.Message.setProto3StringField(this, 7, value);
 };
 
 
 /**
- * optional string subscription_id = 8;
+ * optional string instagram_link = 8;
  * @return {string}
  */
-proto.restropulse.Restaurant.prototype.getSubscriptionId = function() {
+proto.restropulse.Restaurant.prototype.getInstagramLink = function() {
   return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 8, ""));
 };
 
@@ -1854,17 +1878,53 @@ proto.restropulse.Restaurant.prototype.getSubscriptionId = function() {
  * @param {string} value
  * @return {!proto.restropulse.Restaurant} returns this
  */
-proto.restropulse.Restaurant.prototype.setSubscriptionId = function(value) {
+proto.restropulse.Restaurant.prototype.setInstagramLink = function(value) {
   return jspb.Message.setProto3StringField(this, 8, value);
 };
 
 
 /**
- * optional ConversationState conversation_state = 9;
+ * optional string account_manager_id = 9;
+ * @return {string}
+ */
+proto.restropulse.Restaurant.prototype.getAccountManagerId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 9, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.Restaurant} returns this
+ */
+proto.restropulse.Restaurant.prototype.setAccountManagerId = function(value) {
+  return jspb.Message.setProto3StringField(this, 9, value);
+};
+
+
+/**
+ * optional string subscription_id = 10;
+ * @return {string}
+ */
+proto.restropulse.Restaurant.prototype.getSubscriptionId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 10, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.Restaurant} returns this
+ */
+proto.restropulse.Restaurant.prototype.setSubscriptionId = function(value) {
+  return jspb.Message.setProto3StringField(this, 10, value);
+};
+
+
+/**
+ * optional ConversationState conversation_state = 11;
  * @return {!proto.restropulse.ConversationState}
  */
 proto.restropulse.Restaurant.prototype.getConversationState = function() {
-  return /** @type {!proto.restropulse.ConversationState} */ (jspb.Message.getFieldWithDefault(this, 9, 0));
+  return /** @type {!proto.restropulse.ConversationState} */ (jspb.Message.getFieldWithDefault(this, 11, 0));
 };
 
 
@@ -1873,51 +1933,15 @@ proto.restropulse.Restaurant.prototype.getConversationState = function() {
  * @return {!proto.restropulse.Restaurant} returns this
  */
 proto.restropulse.Restaurant.prototype.setConversationState = function(value) {
-  return jspb.Message.setProto3EnumField(this, 9, value);
+  return jspb.Message.setProto3EnumField(this, 11, value);
 };
 
 
 /**
- * optional int64 last_interaction_at = 10;
+ * optional int64 last_interaction_at = 12;
  * @return {number}
  */
 proto.restropulse.Restaurant.prototype.getLastInteractionAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 10, 0));
-};
-
-
-/**
- * @param {number} value
- * @return {!proto.restropulse.Restaurant} returns this
- */
-proto.restropulse.Restaurant.prototype.setLastInteractionAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 10, value);
-};
-
-
-/**
- * optional int64 created_at = 11;
- * @return {number}
- */
-proto.restropulse.Restaurant.prototype.getCreatedAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 11, 0));
-};
-
-
-/**
- * @param {number} value
- * @return {!proto.restropulse.Restaurant} returns this
- */
-proto.restropulse.Restaurant.prototype.setCreatedAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 11, value);
-};
-
-
-/**
- * optional int64 updated_at = 12;
- * @return {number}
- */
-proto.restropulse.Restaurant.prototype.getUpdatedAt = function() {
   return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 12, 0));
 };
 
@@ -1926,8 +1950,44 @@ proto.restropulse.Restaurant.prototype.getUpdatedAt = function() {
  * @param {number} value
  * @return {!proto.restropulse.Restaurant} returns this
  */
-proto.restropulse.Restaurant.prototype.setUpdatedAt = function(value) {
+proto.restropulse.Restaurant.prototype.setLastInteractionAt = function(value) {
   return jspb.Message.setProto3IntField(this, 12, value);
+};
+
+
+/**
+ * optional int64 created_at = 13;
+ * @return {number}
+ */
+proto.restropulse.Restaurant.prototype.getCreatedAt = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 13, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.restropulse.Restaurant} returns this
+ */
+proto.restropulse.Restaurant.prototype.setCreatedAt = function(value) {
+  return jspb.Message.setProto3IntField(this, 13, value);
+};
+
+
+/**
+ * optional int64 updated_at = 14;
+ * @return {number}
+ */
+proto.restropulse.Restaurant.prototype.getUpdatedAt = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 14, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.restropulse.Restaurant} returns this
+ */
+proto.restropulse.Restaurant.prototype.setUpdatedAt = function(value) {
+  return jspb.Message.setProto3IntField(this, 14, value);
 };
 
 
@@ -2810,7 +2870,7 @@ proto.restropulse.ContentCalendar.prototype.clearPostTypeDistributionMap = funct
  * @private {!Array<number>}
  * @const
  */
-proto.restropulse.ContentStrategy.repeatedFields_ = [12];
+proto.restropulse.ContentStrategy.repeatedFields_ = [13];
 
 
 
@@ -2851,12 +2911,13 @@ proto.restropulse.ContentStrategy.toObject = function(includeInstance, msg) {
     postBreakdown: (f = msg.getPostBreakdown()) && proto.restropulse.PostBreakdown.toObject(includeInstance, f),
     contentCalendar: (f = msg.getContentCalendar()) && proto.restropulse.ContentCalendar.toObject(includeInstance, f),
     totalPosts: jspb.Message.getFieldWithDefault(msg, 8, 0),
-    status: jspb.Message.getFieldWithDefault(msg, 9, 0),
-    approvedAt: jspb.Message.getFieldWithDefault(msg, 10, 0),
-    feedbackText: jspb.Message.getFieldWithDefault(msg, 11, ""),
-    feedbackTagsList: (f = jspb.Message.getRepeatedField(msg, 12)) == null ? undefined : f,
-    createdAt: jspb.Message.getFieldWithDefault(msg, 13, 0),
-    updatedAt: jspb.Message.getFieldWithDefault(msg, 14, 0)
+    notificationSentAt: jspb.Message.getFieldWithDefault(msg, 9, 0),
+    status: jspb.Message.getFieldWithDefault(msg, 10, 0),
+    approvedAt: jspb.Message.getFieldWithDefault(msg, 11, 0),
+    feedbackText: jspb.Message.getFieldWithDefault(msg, 12, ""),
+    feedbackTagsList: (f = jspb.Message.getRepeatedField(msg, 13)) == null ? undefined : f,
+    createdAt: jspb.Message.getFieldWithDefault(msg, 14, 0),
+    updatedAt: jspb.Message.getFieldWithDefault(msg, 15, 0)
   };
 
   if (includeInstance) {
@@ -2928,26 +2989,30 @@ proto.restropulse.ContentStrategy.deserializeBinaryFromReader = function(msg, re
       msg.setTotalPosts(value);
       break;
     case 9:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setNotificationSentAt(value);
+      break;
+    case 10:
       var value = /** @type {!proto.restropulse.StrategyStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
-    case 10:
+    case 11:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setApprovedAt(value);
       break;
-    case 11:
+    case 12:
       var value = /** @type {string} */ (reader.readString());
       msg.setFeedbackText(value);
       break;
-    case 12:
+    case 13:
       var value = /** @type {string} */ (reader.readString());
       msg.addFeedbackTags(value);
       break;
-    case 13:
+    case 14:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setCreatedAt(value);
       break;
-    case 14:
+    case 15:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setUpdatedAt(value);
       break;
@@ -3038,45 +3103,52 @@ proto.restropulse.ContentStrategy.serializeBinaryToWriter = function(message, wr
       f
     );
   }
+  f = message.getNotificationSentAt();
+  if (f !== 0) {
+    writer.writeInt64(
+      9,
+      f
+    );
+  }
   f = message.getStatus();
   if (f !== 0.0) {
     writer.writeEnum(
-      9,
+      10,
       f
     );
   }
   f = message.getApprovedAt();
   if (f !== 0) {
     writer.writeInt64(
-      10,
+      11,
       f
     );
   }
   f = message.getFeedbackText();
   if (f.length > 0) {
     writer.writeString(
-      11,
+      12,
       f
     );
   }
   f = message.getFeedbackTagsList();
   if (f.length > 0) {
     writer.writeRepeatedString(
-      12,
+      13,
       f
     );
   }
   f = message.getCreatedAt();
   if (f !== 0) {
     writer.writeInt64(
-      13,
+      14,
       f
     );
   }
   f = message.getUpdatedAt();
   if (f !== 0) {
     writer.writeInt64(
-      14,
+      15,
       f
     );
   }
@@ -3266,11 +3338,29 @@ proto.restropulse.ContentStrategy.prototype.setTotalPosts = function(value) {
 
 
 /**
- * optional StrategyStatus status = 9;
+ * optional int64 notification_sent_at = 9;
+ * @return {number}
+ */
+proto.restropulse.ContentStrategy.prototype.getNotificationSentAt = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 9, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.restropulse.ContentStrategy} returns this
+ */
+proto.restropulse.ContentStrategy.prototype.setNotificationSentAt = function(value) {
+  return jspb.Message.setProto3IntField(this, 9, value);
+};
+
+
+/**
+ * optional StrategyStatus status = 10;
  * @return {!proto.restropulse.StrategyStatus}
  */
 proto.restropulse.ContentStrategy.prototype.getStatus = function() {
-  return /** @type {!proto.restropulse.StrategyStatus} */ (jspb.Message.getFieldWithDefault(this, 9, 0));
+  return /** @type {!proto.restropulse.StrategyStatus} */ (jspb.Message.getFieldWithDefault(this, 10, 0));
 };
 
 
@@ -3279,16 +3369,16 @@ proto.restropulse.ContentStrategy.prototype.getStatus = function() {
  * @return {!proto.restropulse.ContentStrategy} returns this
  */
 proto.restropulse.ContentStrategy.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3EnumField(this, 9, value);
+  return jspb.Message.setProto3EnumField(this, 10, value);
 };
 
 
 /**
- * optional int64 approved_at = 10;
+ * optional int64 approved_at = 11;
  * @return {number}
  */
 proto.restropulse.ContentStrategy.prototype.getApprovedAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 10, 0));
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 11, 0));
 };
 
 
@@ -3297,16 +3387,16 @@ proto.restropulse.ContentStrategy.prototype.getApprovedAt = function() {
  * @return {!proto.restropulse.ContentStrategy} returns this
  */
 proto.restropulse.ContentStrategy.prototype.setApprovedAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 10, value);
+  return jspb.Message.setProto3IntField(this, 11, value);
 };
 
 
 /**
- * optional string feedback_text = 11;
+ * optional string feedback_text = 12;
  * @return {string}
  */
 proto.restropulse.ContentStrategy.prototype.getFeedbackText = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 11, ""));
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 12, ""));
 };
 
 
@@ -3315,16 +3405,16 @@ proto.restropulse.ContentStrategy.prototype.getFeedbackText = function() {
  * @return {!proto.restropulse.ContentStrategy} returns this
  */
 proto.restropulse.ContentStrategy.prototype.setFeedbackText = function(value) {
-  return jspb.Message.setProto3StringField(this, 11, value);
+  return jspb.Message.setProto3StringField(this, 12, value);
 };
 
 
 /**
- * repeated string feedback_tags = 12;
+ * repeated string feedback_tags = 13;
  * @return {!Array<string>}
  */
 proto.restropulse.ContentStrategy.prototype.getFeedbackTagsList = function() {
-  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 12));
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 13));
 };
 
 
@@ -3333,7 +3423,7 @@ proto.restropulse.ContentStrategy.prototype.getFeedbackTagsList = function() {
  * @return {!proto.restropulse.ContentStrategy} returns this
  */
 proto.restropulse.ContentStrategy.prototype.setFeedbackTagsList = function(value) {
-  return jspb.Message.setField(this, 12, value || []);
+  return jspb.Message.setField(this, 13, value || []);
 };
 
 
@@ -3343,7 +3433,7 @@ proto.restropulse.ContentStrategy.prototype.setFeedbackTagsList = function(value
  * @return {!proto.restropulse.ContentStrategy} returns this
  */
 proto.restropulse.ContentStrategy.prototype.addFeedbackTags = function(value, opt_index) {
-  return jspb.Message.addToRepeatedField(this, 12, value, opt_index);
+  return jspb.Message.addToRepeatedField(this, 13, value, opt_index);
 };
 
 
@@ -3357,28 +3447,10 @@ proto.restropulse.ContentStrategy.prototype.clearFeedbackTagsList = function() {
 
 
 /**
- * optional int64 created_at = 13;
+ * optional int64 created_at = 14;
  * @return {number}
  */
 proto.restropulse.ContentStrategy.prototype.getCreatedAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 13, 0));
-};
-
-
-/**
- * @param {number} value
- * @return {!proto.restropulse.ContentStrategy} returns this
- */
-proto.restropulse.ContentStrategy.prototype.setCreatedAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 13, value);
-};
-
-
-/**
- * optional int64 updated_at = 14;
- * @return {number}
- */
-proto.restropulse.ContentStrategy.prototype.getUpdatedAt = function() {
   return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 14, 0));
 };
 
@@ -3387,8 +3459,26 @@ proto.restropulse.ContentStrategy.prototype.getUpdatedAt = function() {
  * @param {number} value
  * @return {!proto.restropulse.ContentStrategy} returns this
  */
-proto.restropulse.ContentStrategy.prototype.setUpdatedAt = function(value) {
+proto.restropulse.ContentStrategy.prototype.setCreatedAt = function(value) {
   return jspb.Message.setProto3IntField(this, 14, value);
+};
+
+
+/**
+ * optional int64 updated_at = 15;
+ * @return {number}
+ */
+proto.restropulse.ContentStrategy.prototype.getUpdatedAt = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 15, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.restropulse.ContentStrategy} returns this
+ */
+proto.restropulse.ContentStrategy.prototype.setUpdatedAt = function(value) {
+  return jspb.Message.setProto3IntField(this, 15, value);
 };
 
 
@@ -3398,7 +3488,7 @@ proto.restropulse.ContentStrategy.prototype.setUpdatedAt = function(value) {
  * @private {!Array<number>}
  * @const
  */
-proto.restropulse.Post.repeatedFields_ = [5,12];
+proto.restropulse.Post.repeatedFields_ = [5,13];
 
 
 
@@ -3439,13 +3529,14 @@ proto.restropulse.Post.toObject = function(includeInstance, msg) {
     mediaUrl: jspb.Message.getFieldWithDefault(msg, 6, ""),
     mediaType: jspb.Message.getFieldWithDefault(msg, 7, ""),
     scheduledDate: jspb.Message.getFieldWithDefault(msg, 8, 0),
-    status: jspb.Message.getFieldWithDefault(msg, 9, 0),
-    approvedAt: jspb.Message.getFieldWithDefault(msg, 10, 0),
-    feedbackText: jspb.Message.getFieldWithDefault(msg, 11, ""),
-    feedbackTagsList: (f = jspb.Message.getRepeatedField(msg, 12)) == null ? undefined : f,
-    postedAt: jspb.Message.getFieldWithDefault(msg, 13, 0),
-    createdAt: jspb.Message.getFieldWithDefault(msg, 14, 0),
-    updatedAt: jspb.Message.getFieldWithDefault(msg, 15, 0)
+    notificationSentAt: jspb.Message.getFieldWithDefault(msg, 9, 0),
+    status: jspb.Message.getFieldWithDefault(msg, 10, 0),
+    approvedAt: jspb.Message.getFieldWithDefault(msg, 11, 0),
+    feedbackText: jspb.Message.getFieldWithDefault(msg, 12, ""),
+    feedbackTagsList: (f = jspb.Message.getRepeatedField(msg, 13)) == null ? undefined : f,
+    postedAt: jspb.Message.getFieldWithDefault(msg, 14, 0),
+    createdAt: jspb.Message.getFieldWithDefault(msg, 15, 0),
+    updatedAt: jspb.Message.getFieldWithDefault(msg, 16, 0)
   };
 
   if (includeInstance) {
@@ -3515,30 +3606,34 @@ proto.restropulse.Post.deserializeBinaryFromReader = function(msg, reader) {
       msg.setScheduledDate(value);
       break;
     case 9:
+      var value = /** @type {number} */ (reader.readInt64());
+      msg.setNotificationSentAt(value);
+      break;
+    case 10:
       var value = /** @type {!proto.restropulse.PostStatus} */ (reader.readEnum());
       msg.setStatus(value);
       break;
-    case 10:
+    case 11:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setApprovedAt(value);
       break;
-    case 11:
+    case 12:
       var value = /** @type {string} */ (reader.readString());
       msg.setFeedbackText(value);
       break;
-    case 12:
+    case 13:
       var value = /** @type {string} */ (reader.readString());
       msg.addFeedbackTags(value);
       break;
-    case 13:
+    case 14:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setPostedAt(value);
       break;
-    case 14:
+    case 15:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setCreatedAt(value);
       break;
-    case 15:
+    case 16:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setUpdatedAt(value);
       break;
@@ -3627,52 +3722,59 @@ proto.restropulse.Post.serializeBinaryToWriter = function(message, writer) {
       f
     );
   }
+  f = message.getNotificationSentAt();
+  if (f !== 0) {
+    writer.writeInt64(
+      9,
+      f
+    );
+  }
   f = message.getStatus();
   if (f !== 0.0) {
     writer.writeEnum(
-      9,
+      10,
       f
     );
   }
   f = message.getApprovedAt();
   if (f !== 0) {
     writer.writeInt64(
-      10,
+      11,
       f
     );
   }
   f = message.getFeedbackText();
   if (f.length > 0) {
     writer.writeString(
-      11,
+      12,
       f
     );
   }
   f = message.getFeedbackTagsList();
   if (f.length > 0) {
     writer.writeRepeatedString(
-      12,
+      13,
       f
     );
   }
   f = message.getPostedAt();
   if (f !== 0) {
     writer.writeInt64(
-      13,
+      14,
       f
     );
   }
   f = message.getCreatedAt();
   if (f !== 0) {
     writer.writeInt64(
-      14,
+      15,
       f
     );
   }
   f = message.getUpdatedAt();
   if (f !== 0) {
     writer.writeInt64(
-      15,
+      16,
       f
     );
   }
@@ -3843,11 +3945,29 @@ proto.restropulse.Post.prototype.setScheduledDate = function(value) {
 
 
 /**
- * optional PostStatus status = 9;
+ * optional int64 notification_sent_at = 9;
+ * @return {number}
+ */
+proto.restropulse.Post.prototype.getNotificationSentAt = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 9, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.restropulse.Post} returns this
+ */
+proto.restropulse.Post.prototype.setNotificationSentAt = function(value) {
+  return jspb.Message.setProto3IntField(this, 9, value);
+};
+
+
+/**
+ * optional PostStatus status = 10;
  * @return {!proto.restropulse.PostStatus}
  */
 proto.restropulse.Post.prototype.getStatus = function() {
-  return /** @type {!proto.restropulse.PostStatus} */ (jspb.Message.getFieldWithDefault(this, 9, 0));
+  return /** @type {!proto.restropulse.PostStatus} */ (jspb.Message.getFieldWithDefault(this, 10, 0));
 };
 
 
@@ -3856,16 +3976,16 @@ proto.restropulse.Post.prototype.getStatus = function() {
  * @return {!proto.restropulse.Post} returns this
  */
 proto.restropulse.Post.prototype.setStatus = function(value) {
-  return jspb.Message.setProto3EnumField(this, 9, value);
+  return jspb.Message.setProto3EnumField(this, 10, value);
 };
 
 
 /**
- * optional int64 approved_at = 10;
+ * optional int64 approved_at = 11;
  * @return {number}
  */
 proto.restropulse.Post.prototype.getApprovedAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 10, 0));
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 11, 0));
 };
 
 
@@ -3874,16 +3994,16 @@ proto.restropulse.Post.prototype.getApprovedAt = function() {
  * @return {!proto.restropulse.Post} returns this
  */
 proto.restropulse.Post.prototype.setApprovedAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 10, value);
+  return jspb.Message.setProto3IntField(this, 11, value);
 };
 
 
 /**
- * optional string feedback_text = 11;
+ * optional string feedback_text = 12;
  * @return {string}
  */
 proto.restropulse.Post.prototype.getFeedbackText = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 11, ""));
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 12, ""));
 };
 
 
@@ -3892,16 +4012,16 @@ proto.restropulse.Post.prototype.getFeedbackText = function() {
  * @return {!proto.restropulse.Post} returns this
  */
 proto.restropulse.Post.prototype.setFeedbackText = function(value) {
-  return jspb.Message.setProto3StringField(this, 11, value);
+  return jspb.Message.setProto3StringField(this, 12, value);
 };
 
 
 /**
- * repeated string feedback_tags = 12;
+ * repeated string feedback_tags = 13;
  * @return {!Array<string>}
  */
 proto.restropulse.Post.prototype.getFeedbackTagsList = function() {
-  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 12));
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 13));
 };
 
 
@@ -3910,7 +4030,7 @@ proto.restropulse.Post.prototype.getFeedbackTagsList = function() {
  * @return {!proto.restropulse.Post} returns this
  */
 proto.restropulse.Post.prototype.setFeedbackTagsList = function(value) {
-  return jspb.Message.setField(this, 12, value || []);
+  return jspb.Message.setField(this, 13, value || []);
 };
 
 
@@ -3920,7 +4040,7 @@ proto.restropulse.Post.prototype.setFeedbackTagsList = function(value) {
  * @return {!proto.restropulse.Post} returns this
  */
 proto.restropulse.Post.prototype.addFeedbackTags = function(value, opt_index) {
-  return jspb.Message.addToRepeatedField(this, 12, value, opt_index);
+  return jspb.Message.addToRepeatedField(this, 13, value, opt_index);
 };
 
 
@@ -3934,28 +4054,10 @@ proto.restropulse.Post.prototype.clearFeedbackTagsList = function() {
 
 
 /**
- * optional int64 posted_at = 13;
+ * optional int64 posted_at = 14;
  * @return {number}
  */
 proto.restropulse.Post.prototype.getPostedAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 13, 0));
-};
-
-
-/**
- * @param {number} value
- * @return {!proto.restropulse.Post} returns this
- */
-proto.restropulse.Post.prototype.setPostedAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 13, value);
-};
-
-
-/**
- * optional int64 created_at = 14;
- * @return {number}
- */
-proto.restropulse.Post.prototype.getCreatedAt = function() {
   return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 14, 0));
 };
 
@@ -3964,16 +4066,16 @@ proto.restropulse.Post.prototype.getCreatedAt = function() {
  * @param {number} value
  * @return {!proto.restropulse.Post} returns this
  */
-proto.restropulse.Post.prototype.setCreatedAt = function(value) {
+proto.restropulse.Post.prototype.setPostedAt = function(value) {
   return jspb.Message.setProto3IntField(this, 14, value);
 };
 
 
 /**
- * optional int64 updated_at = 15;
+ * optional int64 created_at = 15;
  * @return {number}
  */
-proto.restropulse.Post.prototype.getUpdatedAt = function() {
+proto.restropulse.Post.prototype.getCreatedAt = function() {
   return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 15, 0));
 };
 
@@ -3982,8 +4084,26 @@ proto.restropulse.Post.prototype.getUpdatedAt = function() {
  * @param {number} value
  * @return {!proto.restropulse.Post} returns this
  */
-proto.restropulse.Post.prototype.setUpdatedAt = function(value) {
+proto.restropulse.Post.prototype.setCreatedAt = function(value) {
   return jspb.Message.setProto3IntField(this, 15, value);
+};
+
+
+/**
+ * optional int64 updated_at = 16;
+ * @return {number}
+ */
+proto.restropulse.Post.prototype.getUpdatedAt = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 16, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.restropulse.Post} returns this
+ */
+proto.restropulse.Post.prototype.setUpdatedAt = function(value) {
+  return jspb.Message.setProto3IntField(this, 16, value);
 };
 
 
@@ -4438,17 +4558,20 @@ proto.restropulse.MessageLog.toObject = function(includeInstance, msg) {
     messageType: jspb.Message.getFieldWithDefault(msg, 4, 0),
     body: jspb.Message.getFieldWithDefault(msg, 5, ""),
     mediaUrl: jspb.Message.getFieldWithDefault(msg, 6, ""),
+    whatsappMediaId: jspb.Message.getFieldWithDefault(msg, 7, ""),
+    mimeType: jspb.Message.getFieldWithDefault(msg, 8, ""),
+    mediaCaption: jspb.Message.getFieldWithDefault(msg, 9, ""),
+    cloudStorageUrl: jspb.Message.getFieldWithDefault(msg, 10, ""),
     interactiveData: (f = msg.getInteractiveData()) && proto.restropulse.InteractiveData.toObject(includeInstance, f),
     flowResponseData: (f = msg.getFlowResponseData()) && proto.restropulse.FlowResponseData.toObject(includeInstance, f),
-    context: jspb.Message.getFieldWithDefault(msg, 9, 0),
-    botResponseSent: jspb.Message.getBooleanFieldWithDefault(msg, 10, false),
-    processingError: jspb.Message.getFieldWithDefault(msg, 11, ""),
-    requiresHumanAttention: jspb.Message.getBooleanFieldWithDefault(msg, 12, false),
-    resolutionStatus: jspb.Message.getFieldWithDefault(msg, 13, 0),
-    resolvedAt: jspb.Message.getFieldWithDefault(msg, 14, 0),
-    resolvedBy: jspb.Message.getFieldWithDefault(msg, 15, ""),
-    timestamp: jspb.Message.getFieldWithDefault(msg, 16, 0),
-    createdAt: jspb.Message.getFieldWithDefault(msg, 17, 0)
+    context: jspb.Message.getFieldWithDefault(msg, 13, 0),
+    processingStatus: jspb.Message.getFieldWithDefault(msg, 14, 0),
+    processingError: jspb.Message.getFieldWithDefault(msg, 15, ""),
+    relatedStrategyId: jspb.Message.getFieldWithDefault(msg, 16, ""),
+    relatedPostId: jspb.Message.getFieldWithDefault(msg, 17, ""),
+    relatedSupportRequestId: jspb.Message.getFieldWithDefault(msg, 18, ""),
+    timestamp: jspb.Message.getFieldWithDefault(msg, 19, 0),
+    createdAt: jspb.Message.getFieldWithDefault(msg, 20, 0)
   };
 
   if (includeInstance) {
@@ -4510,48 +4633,60 @@ proto.restropulse.MessageLog.deserializeBinaryFromReader = function(msg, reader)
       msg.setMediaUrl(value);
       break;
     case 7:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setWhatsappMediaId(value);
+      break;
+    case 8:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setMimeType(value);
+      break;
+    case 9:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setMediaCaption(value);
+      break;
+    case 10:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setCloudStorageUrl(value);
+      break;
+    case 11:
       var value = new proto.restropulse.InteractiveData;
       reader.readMessage(value,proto.restropulse.InteractiveData.deserializeBinaryFromReader);
       msg.setInteractiveData(value);
       break;
-    case 8:
+    case 12:
       var value = new proto.restropulse.FlowResponseData;
       reader.readMessage(value,proto.restropulse.FlowResponseData.deserializeBinaryFromReader);
       msg.setFlowResponseData(value);
       break;
-    case 9:
+    case 13:
       var value = /** @type {!proto.restropulse.MessageContext} */ (reader.readEnum());
       msg.setContext(value);
       break;
-    case 10:
-      var value = /** @type {boolean} */ (reader.readBool());
-      msg.setBotResponseSent(value);
-      break;
-    case 11:
-      var value = /** @type {string} */ (reader.readString());
-      msg.setProcessingError(value);
-      break;
-    case 12:
-      var value = /** @type {boolean} */ (reader.readBool());
-      msg.setRequiresHumanAttention(value);
-      break;
-    case 13:
-      var value = /** @type {!proto.restropulse.MessageResolutionStatus} */ (reader.readEnum());
-      msg.setResolutionStatus(value);
-      break;
     case 14:
-      var value = /** @type {number} */ (reader.readInt64());
-      msg.setResolvedAt(value);
+      var value = /** @type {!proto.restropulse.MessageProcessingStatus} */ (reader.readEnum());
+      msg.setProcessingStatus(value);
       break;
     case 15:
       var value = /** @type {string} */ (reader.readString());
-      msg.setResolvedBy(value);
+      msg.setProcessingError(value);
       break;
     case 16:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setRelatedStrategyId(value);
+      break;
+    case 17:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setRelatedPostId(value);
+      break;
+    case 18:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setRelatedSupportRequestId(value);
+      break;
+    case 19:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setTimestamp(value);
       break;
-    case 17:
+    case 20:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setCreatedAt(value);
       break;
@@ -4626,10 +4761,38 @@ proto.restropulse.MessageLog.serializeBinaryToWriter = function(message, writer)
       f
     );
   }
+  f = message.getWhatsappMediaId();
+  if (f.length > 0) {
+    writer.writeString(
+      7,
+      f
+    );
+  }
+  f = message.getMimeType();
+  if (f.length > 0) {
+    writer.writeString(
+      8,
+      f
+    );
+  }
+  f = message.getMediaCaption();
+  if (f.length > 0) {
+    writer.writeString(
+      9,
+      f
+    );
+  }
+  f = message.getCloudStorageUrl();
+  if (f.length > 0) {
+    writer.writeString(
+      10,
+      f
+    );
+  }
   f = message.getInteractiveData();
   if (f != null) {
     writer.writeMessage(
-      7,
+      11,
       f,
       proto.restropulse.InteractiveData.serializeBinaryToWriter
     );
@@ -4637,7 +4800,7 @@ proto.restropulse.MessageLog.serializeBinaryToWriter = function(message, writer)
   f = message.getFlowResponseData();
   if (f != null) {
     writer.writeMessage(
-      8,
+      12,
       f,
       proto.restropulse.FlowResponseData.serializeBinaryToWriter
     );
@@ -4645,63 +4808,56 @@ proto.restropulse.MessageLog.serializeBinaryToWriter = function(message, writer)
   f = message.getContext();
   if (f !== 0.0) {
     writer.writeEnum(
-      9,
+      13,
       f
     );
   }
-  f = message.getBotResponseSent();
-  if (f) {
-    writer.writeBool(
-      10,
+  f = message.getProcessingStatus();
+  if (f !== 0.0) {
+    writer.writeEnum(
+      14,
       f
     );
   }
   f = message.getProcessingError();
   if (f.length > 0) {
     writer.writeString(
-      11,
+      15,
       f
     );
   }
-  f = message.getRequiresHumanAttention();
-  if (f) {
-    writer.writeBool(
-      12,
-      f
-    );
-  }
-  f = message.getResolutionStatus();
-  if (f !== 0.0) {
-    writer.writeEnum(
-      13,
-      f
-    );
-  }
-  f = message.getResolvedAt();
-  if (f !== 0) {
-    writer.writeInt64(
-      14,
-      f
-    );
-  }
-  f = message.getResolvedBy();
+  f = message.getRelatedStrategyId();
   if (f.length > 0) {
     writer.writeString(
-      15,
+      16,
+      f
+    );
+  }
+  f = message.getRelatedPostId();
+  if (f.length > 0) {
+    writer.writeString(
+      17,
+      f
+    );
+  }
+  f = message.getRelatedSupportRequestId();
+  if (f.length > 0) {
+    writer.writeString(
+      18,
       f
     );
   }
   f = message.getTimestamp();
   if (f !== 0) {
     writer.writeInt64(
-      16,
+      19,
       f
     );
   }
   f = message.getCreatedAt();
   if (f !== 0) {
     writer.writeInt64(
-      17,
+      20,
       f
     );
   }
@@ -4817,12 +4973,84 @@ proto.restropulse.MessageLog.prototype.setMediaUrl = function(value) {
 
 
 /**
- * optional InteractiveData interactive_data = 7;
+ * optional string whatsapp_media_id = 7;
+ * @return {string}
+ */
+proto.restropulse.MessageLog.prototype.getWhatsappMediaId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 7, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.MessageLog} returns this
+ */
+proto.restropulse.MessageLog.prototype.setWhatsappMediaId = function(value) {
+  return jspb.Message.setProto3StringField(this, 7, value);
+};
+
+
+/**
+ * optional string mime_type = 8;
+ * @return {string}
+ */
+proto.restropulse.MessageLog.prototype.getMimeType = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 8, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.MessageLog} returns this
+ */
+proto.restropulse.MessageLog.prototype.setMimeType = function(value) {
+  return jspb.Message.setProto3StringField(this, 8, value);
+};
+
+
+/**
+ * optional string media_caption = 9;
+ * @return {string}
+ */
+proto.restropulse.MessageLog.prototype.getMediaCaption = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 9, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.MessageLog} returns this
+ */
+proto.restropulse.MessageLog.prototype.setMediaCaption = function(value) {
+  return jspb.Message.setProto3StringField(this, 9, value);
+};
+
+
+/**
+ * optional string cloud_storage_url = 10;
+ * @return {string}
+ */
+proto.restropulse.MessageLog.prototype.getCloudStorageUrl = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 10, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.MessageLog} returns this
+ */
+proto.restropulse.MessageLog.prototype.setCloudStorageUrl = function(value) {
+  return jspb.Message.setProto3StringField(this, 10, value);
+};
+
+
+/**
+ * optional InteractiveData interactive_data = 11;
  * @return {?proto.restropulse.InteractiveData}
  */
 proto.restropulse.MessageLog.prototype.getInteractiveData = function() {
   return /** @type{?proto.restropulse.InteractiveData} */ (
-    jspb.Message.getWrapperField(this, proto.restropulse.InteractiveData, 7));
+    jspb.Message.getWrapperField(this, proto.restropulse.InteractiveData, 11));
 };
 
 
@@ -4831,7 +5059,7 @@ proto.restropulse.MessageLog.prototype.getInteractiveData = function() {
  * @return {!proto.restropulse.MessageLog} returns this
 */
 proto.restropulse.MessageLog.prototype.setInteractiveData = function(value) {
-  return jspb.Message.setWrapperField(this, 7, value);
+  return jspb.Message.setWrapperField(this, 11, value);
 };
 
 
@@ -4849,17 +5077,17 @@ proto.restropulse.MessageLog.prototype.clearInteractiveData = function() {
  * @return {boolean}
  */
 proto.restropulse.MessageLog.prototype.hasInteractiveData = function() {
-  return jspb.Message.getField(this, 7) != null;
+  return jspb.Message.getField(this, 11) != null;
 };
 
 
 /**
- * optional FlowResponseData flow_response_data = 8;
+ * optional FlowResponseData flow_response_data = 12;
  * @return {?proto.restropulse.FlowResponseData}
  */
 proto.restropulse.MessageLog.prototype.getFlowResponseData = function() {
   return /** @type{?proto.restropulse.FlowResponseData} */ (
-    jspb.Message.getWrapperField(this, proto.restropulse.FlowResponseData, 8));
+    jspb.Message.getWrapperField(this, proto.restropulse.FlowResponseData, 12));
 };
 
 
@@ -4868,7 +5096,7 @@ proto.restropulse.MessageLog.prototype.getFlowResponseData = function() {
  * @return {!proto.restropulse.MessageLog} returns this
 */
 proto.restropulse.MessageLog.prototype.setFlowResponseData = function(value) {
-  return jspb.Message.setWrapperField(this, 8, value);
+  return jspb.Message.setWrapperField(this, 12, value);
 };
 
 
@@ -4886,16 +5114,16 @@ proto.restropulse.MessageLog.prototype.clearFlowResponseData = function() {
  * @return {boolean}
  */
 proto.restropulse.MessageLog.prototype.hasFlowResponseData = function() {
-  return jspb.Message.getField(this, 8) != null;
+  return jspb.Message.getField(this, 12) != null;
 };
 
 
 /**
- * optional MessageContext context = 9;
+ * optional MessageContext context = 13;
  * @return {!proto.restropulse.MessageContext}
  */
 proto.restropulse.MessageLog.prototype.getContext = function() {
-  return /** @type {!proto.restropulse.MessageContext} */ (jspb.Message.getFieldWithDefault(this, 9, 0));
+  return /** @type {!proto.restropulse.MessageContext} */ (jspb.Message.getFieldWithDefault(this, 13, 0));
 };
 
 
@@ -4904,105 +5132,33 @@ proto.restropulse.MessageLog.prototype.getContext = function() {
  * @return {!proto.restropulse.MessageLog} returns this
  */
 proto.restropulse.MessageLog.prototype.setContext = function(value) {
-  return jspb.Message.setProto3EnumField(this, 9, value);
-};
-
-
-/**
- * optional bool bot_response_sent = 10;
- * @return {boolean}
- */
-proto.restropulse.MessageLog.prototype.getBotResponseSent = function() {
-  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 10, false));
-};
-
-
-/**
- * @param {boolean} value
- * @return {!proto.restropulse.MessageLog} returns this
- */
-proto.restropulse.MessageLog.prototype.setBotResponseSent = function(value) {
-  return jspb.Message.setProto3BooleanField(this, 10, value);
-};
-
-
-/**
- * optional string processing_error = 11;
- * @return {string}
- */
-proto.restropulse.MessageLog.prototype.getProcessingError = function() {
-  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 11, ""));
-};
-
-
-/**
- * @param {string} value
- * @return {!proto.restropulse.MessageLog} returns this
- */
-proto.restropulse.MessageLog.prototype.setProcessingError = function(value) {
-  return jspb.Message.setProto3StringField(this, 11, value);
-};
-
-
-/**
- * optional bool requires_human_attention = 12;
- * @return {boolean}
- */
-proto.restropulse.MessageLog.prototype.getRequiresHumanAttention = function() {
-  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 12, false));
-};
-
-
-/**
- * @param {boolean} value
- * @return {!proto.restropulse.MessageLog} returns this
- */
-proto.restropulse.MessageLog.prototype.setRequiresHumanAttention = function(value) {
-  return jspb.Message.setProto3BooleanField(this, 12, value);
-};
-
-
-/**
- * optional MessageResolutionStatus resolution_status = 13;
- * @return {!proto.restropulse.MessageResolutionStatus}
- */
-proto.restropulse.MessageLog.prototype.getResolutionStatus = function() {
-  return /** @type {!proto.restropulse.MessageResolutionStatus} */ (jspb.Message.getFieldWithDefault(this, 13, 0));
-};
-
-
-/**
- * @param {!proto.restropulse.MessageResolutionStatus} value
- * @return {!proto.restropulse.MessageLog} returns this
- */
-proto.restropulse.MessageLog.prototype.setResolutionStatus = function(value) {
   return jspb.Message.setProto3EnumField(this, 13, value);
 };
 
 
 /**
- * optional int64 resolved_at = 14;
- * @return {number}
+ * optional MessageProcessingStatus processing_status = 14;
+ * @return {!proto.restropulse.MessageProcessingStatus}
  */
-proto.restropulse.MessageLog.prototype.getResolvedAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 14, 0));
+proto.restropulse.MessageLog.prototype.getProcessingStatus = function() {
+  return /** @type {!proto.restropulse.MessageProcessingStatus} */ (jspb.Message.getFieldWithDefault(this, 14, 0));
 };
 
 
 /**
- * @param {number} value
+ * @param {!proto.restropulse.MessageProcessingStatus} value
  * @return {!proto.restropulse.MessageLog} returns this
  */
-proto.restropulse.MessageLog.prototype.setResolvedAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 14, value);
+proto.restropulse.MessageLog.prototype.setProcessingStatus = function(value) {
+  return jspb.Message.setProto3EnumField(this, 14, value);
 };
 
 
 /**
- * optional string resolved_by = 15;
+ * optional string processing_error = 15;
  * @return {string}
  */
-proto.restropulse.MessageLog.prototype.getResolvedBy = function() {
+proto.restropulse.MessageLog.prototype.getProcessingError = function() {
   return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 15, ""));
 };
 
@@ -5011,17 +5167,71 @@ proto.restropulse.MessageLog.prototype.getResolvedBy = function() {
  * @param {string} value
  * @return {!proto.restropulse.MessageLog} returns this
  */
-proto.restropulse.MessageLog.prototype.setResolvedBy = function(value) {
+proto.restropulse.MessageLog.prototype.setProcessingError = function(value) {
   return jspb.Message.setProto3StringField(this, 15, value);
 };
 
 
 /**
- * optional int64 timestamp = 16;
+ * optional string related_strategy_id = 16;
+ * @return {string}
+ */
+proto.restropulse.MessageLog.prototype.getRelatedStrategyId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 16, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.MessageLog} returns this
+ */
+proto.restropulse.MessageLog.prototype.setRelatedStrategyId = function(value) {
+  return jspb.Message.setProto3StringField(this, 16, value);
+};
+
+
+/**
+ * optional string related_post_id = 17;
+ * @return {string}
+ */
+proto.restropulse.MessageLog.prototype.getRelatedPostId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 17, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.MessageLog} returns this
+ */
+proto.restropulse.MessageLog.prototype.setRelatedPostId = function(value) {
+  return jspb.Message.setProto3StringField(this, 17, value);
+};
+
+
+/**
+ * optional string related_support_request_id = 18;
+ * @return {string}
+ */
+proto.restropulse.MessageLog.prototype.getRelatedSupportRequestId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 18, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.restropulse.MessageLog} returns this
+ */
+proto.restropulse.MessageLog.prototype.setRelatedSupportRequestId = function(value) {
+  return jspb.Message.setProto3StringField(this, 18, value);
+};
+
+
+/**
+ * optional int64 timestamp = 19;
  * @return {number}
  */
 proto.restropulse.MessageLog.prototype.getTimestamp = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 16, 0));
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 19, 0));
 };
 
 
@@ -5030,16 +5240,16 @@ proto.restropulse.MessageLog.prototype.getTimestamp = function() {
  * @return {!proto.restropulse.MessageLog} returns this
  */
 proto.restropulse.MessageLog.prototype.setTimestamp = function(value) {
-  return jspb.Message.setProto3IntField(this, 16, value);
+  return jspb.Message.setProto3IntField(this, 19, value);
 };
 
 
 /**
- * optional int64 created_at = 17;
+ * optional int64 created_at = 20;
  * @return {number}
  */
 proto.restropulse.MessageLog.prototype.getCreatedAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 17, 0));
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 20, 0));
 };
 
 
@@ -5048,7 +5258,7 @@ proto.restropulse.MessageLog.prototype.getCreatedAt = function() {
  * @return {!proto.restropulse.MessageLog} returns this
  */
 proto.restropulse.MessageLog.prototype.setCreatedAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 17, value);
+  return jspb.Message.setProto3IntField(this, 20, value);
 };
 
 
@@ -5430,7 +5640,8 @@ proto.restropulse.WhatsAppFlow.toObject = function(includeInstance, msg) {
     flowToken: jspb.Message.getFieldWithDefault(msg, 4, ""),
     screenId: jspb.Message.getFieldWithDefault(msg, 5, ""),
     purpose: jspb.Message.getFieldWithDefault(msg, 6, ""),
-    createdAt: jspb.Message.getFieldWithDefault(msg, 7, 0)
+    isActive: jspb.Message.getBooleanFieldWithDefault(msg, 7, false),
+    createdAt: jspb.Message.getFieldWithDefault(msg, 8, 0)
   };
 
   if (includeInstance) {
@@ -5492,6 +5703,10 @@ proto.restropulse.WhatsAppFlow.deserializeBinaryFromReader = function(msg, reade
       msg.setPurpose(value);
       break;
     case 7:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setIsActive(value);
+      break;
+    case 8:
       var value = /** @type {number} */ (reader.readInt64());
       msg.setCreatedAt(value);
       break;
@@ -5566,10 +5781,17 @@ proto.restropulse.WhatsAppFlow.serializeBinaryToWriter = function(message, write
       f
     );
   }
+  f = message.getIsActive();
+  if (f) {
+    writer.writeBool(
+      7,
+      f
+    );
+  }
   f = message.getCreatedAt();
   if (f !== 0) {
     writer.writeInt64(
-      7,
+      8,
       f
     );
   }
@@ -5685,11 +5907,29 @@ proto.restropulse.WhatsAppFlow.prototype.setPurpose = function(value) {
 
 
 /**
- * optional int64 created_at = 7;
+ * optional bool is_active = 7;
+ * @return {boolean}
+ */
+proto.restropulse.WhatsAppFlow.prototype.getIsActive = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 7, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.restropulse.WhatsAppFlow} returns this
+ */
+proto.restropulse.WhatsAppFlow.prototype.setIsActive = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 7, value);
+};
+
+
+/**
+ * optional int64 created_at = 8;
  * @return {number}
  */
 proto.restropulse.WhatsAppFlow.prototype.getCreatedAt = function() {
-  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 7, 0));
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 8, 0));
 };
 
 
@@ -5698,7 +5938,7 @@ proto.restropulse.WhatsAppFlow.prototype.getCreatedAt = function() {
  * @return {!proto.restropulse.WhatsAppFlow} returns this
  */
 proto.restropulse.WhatsAppFlow.prototype.setCreatedAt = function(value) {
-  return jspb.Message.setProto3IntField(this, 7, value);
+  return jspb.Message.setProto3IntField(this, 8, value);
 };
 
 
@@ -5856,12 +6096,16 @@ proto.restropulse.MessageContext = {
 /**
  * @enum {number}
  */
-proto.restropulse.MessageResolutionStatus = {
-  MESSAGE_RESOLUTION_STATUS_UNSPECIFIED: 0,
-  AUTO_RESOLVED: 1,
-  PENDING_HUMAN: 2,
-  RESOLVED_BY_HUMAN: 3,
-  ESCALATED: 4
+proto.restropulse.MessageProcessingStatus = {
+  MESSAGE_PROCESSING_STATUS_UNSPECIFIED: 0,
+  RECEIVED: 1,
+  SAVED_TO_DB: 2,
+  PROCESSING: 3,
+  ACTED_UPON: 4,
+  SENDING: 5,
+  SENT_SUCCESSFULLY: 6,
+  SEND_FAILED: 7,
+  REQUIRES_HUMAN_ATTENTION: 8
 };
 
 goog.object.extend(exports, proto.restropulse);

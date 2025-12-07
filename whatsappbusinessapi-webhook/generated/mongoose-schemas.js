@@ -20,7 +20,7 @@ const ButtonAction = pb.ButtonAction;
 const StrategyFeedbackTag = pb.StrategyFeedbackTag;
 const PostFeedbackTag = pb.PostFeedbackTag;
 const MessageContext = pb.MessageContext;
-const MessageResolutionStatus = pb.MessageResolutionStatus;
+const MessageProcessingStatus = pb.MessageProcessingStatus;
 
 // ===== MONGOOSE SCHEMAS =====
 
@@ -59,6 +59,8 @@ const RestaurantSchema = new Schema({
   whatsapp_id: { type: String, required: true, unique: true, index: true },
   business_name: { type: String, required: true },
   cuisine_type: { type: String },
+  contact_person: { type: String },
+  contact_email: { type: String },
   contact_number: { type: String },
   instagram_link: { type: String },
   account_manager_id: { type: Schema.Types.ObjectId, ref: 'AccountManager' },
@@ -99,6 +101,7 @@ const ContentStrategySchema = new Schema({
     posts_on_weekends: { type: Number, default: 0 },
   },
   total_posts: { type: Number },
+  notification_sent_at: { type: Date, default: Date.now },
   status: { type: String, enum: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'CHANGES_REQUESTED'], default: 'DRAFT', index: true },
   approved_at: { type: Date, default: Date.now },
   feedback_text: { type: String },
@@ -118,6 +121,7 @@ const PostSchema = new Schema({
   media_url: { type: String },
   media_type: { type: String },
   scheduled_date: { type: Date, default: Date.now },
+  notification_sent_at: { type: Date, default: Date.now },
   status: { type: String, enum: ['POST_DRAFT', 'POST_PENDING_APPROVAL', 'POST_CHANGES_REQUESTED', 'POST_APPROVED', 'SCHEDULED', 'POSTED', 'FAILED'], default: 'POST_DRAFT', index: true },
   approved_at: { type: Date, default: Date.now },
   feedback_text: { type: String },
@@ -137,6 +141,10 @@ const MessageLogSchema = new Schema({
   message_type: { type: String, enum: ['TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT', 'INTERACTIVE', 'FLOW_RESPONSE'] },
   body: { type: String },
   media_url: { type: String },
+  whatsapp_media_id: { type: String },
+  mime_type: { type: String },
+  media_caption: { type: String },
+  cloud_storage_url: { type: String },
   interactive_data: {
     type: { type: String },
     button_id: { type: String },
@@ -148,12 +156,11 @@ const MessageLogSchema = new Schema({
     flow_token: { type: String },
   },
   context: { type: String, enum: ['USER_SPONTANEOUS', 'USER_MENU_REQUEST', 'USER_PROFILE_VIEW', 'USER_STRATEGY_VIEW', 'USER_POST_VIEW', 'USER_CONTACT_MANAGER', 'USER_BACK_TO_MENU', 'USER_STRATEGY_APPROVE', 'USER_STRATEGY_FEEDBACK_START', 'USER_STRATEGY_FEEDBACK_SUBMIT', 'USER_POST_APPROVE', 'USER_POST_FEEDBACK_START', 'USER_POST_FEEDBACK_SUBMIT', 'BOT_MENU', 'BOT_PROFILE', 'BOT_STRATEGY_DISPLAY', 'BOT_POST_DISPLAY', 'BOT_SUPPORT_CONFIRMATION', 'BOT_STRATEGY_APPROVED', 'BOT_POST_APPROVED', 'BOT_FEEDBACK_RECEIVED'], index: true },
-  bot_response_sent: { type: Boolean, default: false },
+  processing_status: { type: String, enum: ['RECEIVED', 'SAVED_TO_DB', 'PROCESSING', 'ACTED_UPON', 'SENDING', 'SENT_SUCCESSFULLY', 'SEND_FAILED', 'REQUIRES_HUMAN_ATTENTION'] },
   processing_error: { type: String },
-  requires_human_attention: { type: Boolean, default: false },
-  resolution_status: { type: String, enum: ['AUTO_RESOLVED', 'PENDING_HUMAN', 'RESOLVED_BY_HUMAN', 'ESCALATED'] },
-  resolved_at: { type: Date, default: Date.now },
-  resolved_by: { type: String },
+  related_strategy_id: { type: String },
+  related_post_id: { type: String },
+  related_support_request_id: { type: String },
   timestamp: { type: Date, index: true },
 }, { timestamps: true });
 
@@ -182,6 +189,7 @@ const WhatsAppFlowSchema = new Schema({
   flow_token: { type: String },
   screen_id: { type: String },
   purpose: { type: String },
+  is_active: { type: Boolean },
 }, { timestamps: true });
 
 // ===== EXPORTS =====

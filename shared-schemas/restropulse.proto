@@ -2,8 +2,11 @@ syntax = "proto3";
 
 package restropulse;
 
-// ===== ENUMS =====
+// ========================================
+// ENUMS
+// ========================================
 
+// Subscription plan status
 enum SubscriptionStatus {
   SUBSCRIPTION_STATUS_UNSPECIFIED = 0;
   ACTIVE = 1;
@@ -11,6 +14,7 @@ enum SubscriptionStatus {
   PAST_DUE = 3;
 }
 
+// Restaurant conversation state in WhatsApp bot
 enum ConversationState {
   CONVERSATION_STATE_UNSPECIFIED = 0;
   IDLE = 1;
@@ -24,6 +28,7 @@ enum ConversationState {
   FLOW_IN_PROGRESS = 9;
 }
 
+// Content strategy approval status
 enum StrategyStatus {
   STRATEGY_STATUS_UNSPECIFIED = 0;
   DRAFT = 1;
@@ -32,6 +37,7 @@ enum StrategyStatus {
   CHANGES_REQUESTED = 4;
 }
 
+// Content post lifecycle status
 enum PostStatus {
   POST_STATUS_UNSPECIFIED = 0;
   POST_DRAFT = 1;
@@ -43,12 +49,14 @@ enum PostStatus {
   FAILED = 7;
 }
 
+// WhatsApp message direction
 enum MessageDirection {
   MESSAGE_DIRECTION_UNSPECIFIED = 0;
   INBOUND = 1;
   OUTBOUND = 2;
 }
 
+// WhatsApp message content type
 enum MessageType {
   MESSAGE_TYPE_UNSPECIFIED = 0;
   TEXT = 1;
@@ -59,6 +67,7 @@ enum MessageType {
   FLOW_RESPONSE = 6;
 }
 
+// WhatsApp interactive message type
 enum InteractiveType {
   INTERACTIVE_TYPE_UNSPECIFIED = 0;
   LIST_REPLY = 1;
@@ -66,6 +75,7 @@ enum InteractiveType {
   NFM_REPLY = 3;
 }
 
+// Button actions in WhatsApp interactive messages
 enum ButtonAction {
   BUTTON_ACTION_UNSPECIFIED = 0;
   VIEW_PROFILE = 1;
@@ -79,6 +89,7 @@ enum ButtonAction {
   BACK_TO_MENU = 9;
 }
 
+// Categories for strategy feedback
 enum StrategyFeedbackTag {
   STRATEGY_FEEDBACK_TAG_UNSPECIFIED = 0;
   FREQUENCY = 1;
@@ -88,6 +99,7 @@ enum StrategyFeedbackTag {
   OTHER = 5;
 }
 
+// Categories for post feedback
 enum PostFeedbackTag {
   POST_FEEDBACK_TAG_UNSPECIFIED = 0;
   MEDIA = 1;
@@ -97,6 +109,7 @@ enum PostFeedbackTag {
   POST_OTHER = 5;
 }
 
+// Context of WhatsApp message in conversation flow
 enum MessageContext {
   MESSAGE_CONTEXT_UNSPECIFIED = 0;
   // User -> Bot
@@ -124,17 +137,24 @@ enum MessageContext {
   BOT_FEEDBACK_RECEIVED = 27;
 }
 
-enum MessageResolutionStatus {
-  MESSAGE_RESOLUTION_STATUS_UNSPECIFIED = 0;
-  AUTO_RESOLVED = 1;
-  PENDING_HUMAN = 2;
-  RESOLVED_BY_HUMAN = 3;
-  ESCALATED = 4;
+// Message processing status for tracking lifecycle
+enum MessageProcessingStatus {
+  MESSAGE_PROCESSING_STATUS_UNSPECIFIED = 0;
+  RECEIVED = 1;
+  SAVED_TO_DB = 2;
+  PROCESSING = 3;
+  ACTED_UPON = 4;
+  SENDING = 5;
+  SENT_SUCCESSFULLY = 6;
+  SEND_FAILED = 7;
+  REQUIRES_HUMAN_ATTENTION = 8;
 }
 
-// ===== MESSAGES =====
+// ========================================
+// MESSAGES
+// ========================================
 
-// Standalone collection for account managers
+// Account managers who oversee restaurant accounts
 message AccountManager {
   string id = 1;
   string name = 2;
@@ -145,7 +165,7 @@ message AccountManager {
   int64 updated_at = 7;
 }
 
-// Standalone collection for subscription plans
+// Subscription plans available to restaurants
 message SubscriptionPlan {
   string id = 1;
   string name = 2;
@@ -161,7 +181,7 @@ message SubscriptionPlan {
   int64 updated_at = 12;
 }
 
-// Standalone collection for restaurant subscriptions
+// Restaurant subscription to a plan
 message Subscription {
   string id = 1;
   string restaurant_id = 2;
@@ -173,21 +193,25 @@ message Subscription {
   int64 updated_at = 8;
 }
 
+// Restaurant profile and WhatsApp conversation state
 message Restaurant {
   string id = 1;
   string whatsapp_id = 2;
   string business_name = 3;
   string cuisine_type = 4;
-  string contact_number = 5;
-  string instagram_link = 6;
-  string account_manager_id = 7;
-  string subscription_id = 8;
-  ConversationState conversation_state = 9;
-  int64 last_interaction_at = 10;
-  int64 created_at = 11;
-  int64 updated_at = 12;
+  string contact_person = 5;
+  string contact_email = 6;
+  string contact_number = 7;
+  string instagram_link = 8;
+  string account_manager_id = 9;
+  string subscription_id = 10;
+  ConversationState conversation_state = 11;
+  int64 last_interaction_at = 12;
+  int64 created_at = 13;
+  int64 updated_at = 14;
 }
 
+// Breakdown of post types in content strategy
 message PostBreakdown {
   int32 menu_highlights = 1;
   int32 customer_reviews = 2;
@@ -199,6 +223,7 @@ message PostBreakdown {
   int32 miscellaneous = 8;
 }
 
+// Single scheduled post entry in content calendar
 message CalendarEntry {
   string post_type = 1;
   int32 day_of_month = 2;
@@ -207,6 +232,7 @@ message CalendarEntry {
   string rationale = 5;
 }
 
+// Content posting calendar with scheduling details
 message ContentCalendar {
   repeated CalendarEntry scheduled_posts = 1;
   int32 posts_per_week = 2;
@@ -215,6 +241,7 @@ message ContentCalendar {
   map<string, int32> post_type_distribution = 5;
 }
 
+// Monthly content strategy for restaurant with approval workflow
 message ContentStrategy {
   string id = 1;
   string restaurant_id = 2;
@@ -224,14 +251,16 @@ message ContentStrategy {
   PostBreakdown post_breakdown = 6;
   ContentCalendar content_calendar = 7;
   int32 total_posts = 8;
-  StrategyStatus status = 9;
-  int64 approved_at = 10;
-  string feedback_text = 11;
-  repeated string feedback_tags = 12;
-  int64 created_at = 13;
-  int64 updated_at = 14;
+  int64 notification_sent_at = 9;
+  StrategyStatus status = 10;
+  int64 approved_at = 11;
+  string feedback_text = 12;
+  repeated string feedback_tags = 13;
+  int64 created_at = 14;
+  int64 updated_at = 15;
 }
 
+// Individual content post with approval and scheduling
 message Post {
   string id = 1;
   string restaurant_id = 2;
@@ -241,15 +270,17 @@ message Post {
   string media_url = 6;
   string media_type = 7;
   int64 scheduled_date = 8;
-  PostStatus status = 9;
-  int64 approved_at = 10;
-  string feedback_text = 11;
-  repeated string feedback_tags = 12;
-  int64 posted_at = 13;
-  int64 created_at = 14;
-  int64 updated_at = 15;
+  int64 notification_sent_at = 9;
+  PostStatus status = 10;
+  int64 approved_at = 11;
+  string feedback_text = 12;
+  repeated string feedback_tags = 13;
+  int64 posted_at = 14;
+  int64 created_at = 15;
+  int64 updated_at = 16;
 }
 
+// WhatsApp interactive message response data
 message InteractiveData {
   InteractiveType type = 1;
   string button_id = 2;
@@ -258,31 +289,42 @@ message InteractiveData {
   string description = 5;
 }
 
+// WhatsApp Flow response data
 message FlowResponseData {
   string flow_token = 1;
   map<string, string> response_json = 2;
 }
 
+// WhatsApp message log with conversation tracking
 message MessageLog {
   string id = 1;
   string restaurant_whatsapp_id = 2;
   MessageDirection direction = 3;
   MessageType message_type = 4;
   string body = 5;
+  // Media fields grouped together
   string media_url = 6;
-  InteractiveData interactive_data = 7;
-  FlowResponseData flow_response_data = 8;
-  MessageContext context = 9;
-  bool bot_response_sent = 10;
-  string processing_error = 11;
-  bool requires_human_attention = 12;
-  MessageResolutionStatus resolution_status = 13;
-  int64 resolved_at = 14;
-  string resolved_by = 15;
-  int64 timestamp = 16;
-  int64 created_at = 17;
+  string whatsapp_media_id = 7;
+  string mime_type = 8;
+  string media_caption = 9;
+  string cloud_storage_url = 10;
+  // Interactive and flow data
+  InteractiveData interactive_data = 11;
+  FlowResponseData flow_response_data = 12;
+  MessageContext context = 13;
+  // Processing and delivery tracking
+  MessageProcessingStatus processing_status = 14;
+  string processing_error = 15;
+  // Related entity references for conversation tracking
+  string related_strategy_id = 16;
+  string related_post_id = 17;
+  string related_support_request_id = 18;
+  // Timestamps
+  int64 timestamp = 19;
+  int64 created_at = 20;
 }
 
+// Support request from restaurant
 message SupportRequest {
   string id = 1;
   string restaurant_id = 2;
@@ -294,6 +336,7 @@ message SupportRequest {
   int64 resolved_at = 8;
 }
 
+// WhatsApp Flow configuration
 message WhatsAppFlow {
   string id = 1;
   string name = 2;
@@ -301,5 +344,6 @@ message WhatsAppFlow {
   string flow_token = 4;
   string screen_id = 5;
   string purpose = 6;
-  int64 created_at = 7;
+  bool is_active = 7;
+  int64 created_at = 8;
 }

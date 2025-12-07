@@ -124,11 +124,15 @@ MESSAGECONTEXT_VALUES = [
     'BOT_FEEDBACK_RECEIVED',
 ]
 
-MESSAGERESOLUTIONSTATUS_VALUES = [
-    'AUTO_RESOLVED',
-    'PENDING_HUMAN',
-    'RESOLVED_BY_HUMAN',
-    'ESCALATED',
+MESSAGEPROCESSINGSTATUS_VALUES = [
+    'RECEIVED',
+    'SAVED_TO_DB',
+    'PROCESSING',
+    'ACTED_UPON',
+    'SENDING',
+    'SENT_SUCCESSFULLY',
+    'SEND_FAILED',
+    'REQUIRES_HUMAN_ATTENTION',
 ]
 
 
@@ -262,6 +266,12 @@ RESTAURANT_VALIDATOR = {
             "cuisine_type": {
                 "bsonType": "string"
             },
+            "contact_person": {
+                "bsonType": "string"
+            },
+            "contact_email": {
+                "bsonType": "string"
+            },
             "contact_number": {
                 "bsonType": "string"
             },
@@ -365,6 +375,9 @@ CONTENTSTRATEGY_VALIDATOR = {
             "total_posts": {
                 "bsonType": "int"
             },
+            "notification_sent_at": {
+                "bsonType": "date"
+            },
             "status": {
                 "bsonType": "string",
                 "enum": ["DRAFT", "PENDING_APPROVAL", "APPROVED", "CHANGES_REQUESTED"],
@@ -419,6 +432,9 @@ POST_VALIDATOR = {
                 "bsonType": "string"
             },
             "scheduled_date": {
+                "bsonType": "date"
+            },
+            "notification_sent_at": {
                 "bsonType": "date"
             },
             "status": {
@@ -477,6 +493,18 @@ MESSAGELOG_VALIDATOR = {
             "media_url": {
                 "bsonType": "string"
             },
+            "whatsapp_media_id": {
+                "bsonType": "string"
+            },
+            "mime_type": {
+                "bsonType": "string"
+            },
+            "media_caption": {
+                "bsonType": "string"
+            },
+            "cloud_storage_url": {
+                "bsonType": "string"
+            },
             "interactive_data":  {
                     "bsonType": "object",
                     "properties": {
@@ -512,24 +540,21 @@ MESSAGELOG_VALIDATOR = {
                 "enum": ["USER_SPONTANEOUS", "USER_MENU_REQUEST", "USER_PROFILE_VIEW", "USER_STRATEGY_VIEW", "USER_POST_VIEW", "USER_CONTACT_MANAGER", "USER_BACK_TO_MENU", "USER_STRATEGY_APPROVE", "USER_STRATEGY_FEEDBACK_START", "USER_STRATEGY_FEEDBACK_SUBMIT", "USER_POST_APPROVE", "USER_POST_FEEDBACK_START", "USER_POST_FEEDBACK_SUBMIT", "BOT_MENU", "BOT_PROFILE", "BOT_STRATEGY_DISPLAY", "BOT_POST_DISPLAY", "BOT_SUPPORT_CONFIRMATION", "BOT_STRATEGY_APPROVED", "BOT_POST_APPROVED", "BOT_FEEDBACK_RECEIVED"],
                 "description": "MessageContext enum value"
             },
-            "bot_response_sent": {
-                "bsonType": "bool"
+            "processing_status": {
+                "bsonType": "string",
+                "enum": ["RECEIVED", "SAVED_TO_DB", "PROCESSING", "ACTED_UPON", "SENDING", "SENT_SUCCESSFULLY", "SEND_FAILED", "REQUIRES_HUMAN_ATTENTION"],
+                "description": "MessageProcessingStatus enum value"
             },
             "processing_error": {
                 "bsonType": "string"
             },
-            "requires_human_attention": {
-                "bsonType": "bool"
+            "related_strategy_id": {
+                "bsonType": "string"
             },
-            "resolution_status": {
-                "bsonType": "string",
-                "enum": ["AUTO_RESOLVED", "PENDING_HUMAN", "RESOLVED_BY_HUMAN", "ESCALATED"],
-                "description": "MessageResolutionStatus enum value"
+            "related_post_id": {
+                "bsonType": "string"
             },
-            "resolved_at": {
-                "bsonType": "date"
-            },
-            "resolved_by": {
+            "related_support_request_id": {
                 "bsonType": "string"
             },
             "timestamp": {
@@ -597,6 +622,9 @@ WHATSAPPFLOW_VALIDATOR = {
             },
             "purpose": {
                 "bsonType": "string"
+            },
+            "is_active": {
+                "bsonType": "bool"
             },
             "created_at": {
                 "bsonType": "date"
