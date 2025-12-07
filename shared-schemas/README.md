@@ -55,14 +55,14 @@ From the workspace root, run:
 **Windows:**
 
 ```powershell
-.\compile-proto.ps1
+.\scripts\compile-proto.ps1
 ```
 
 **macOS/Linux:**
 
 ```bash
-chmod +x compile-proto.sh
-./compile-proto.sh
+chmod +x scripts/compile-proto.sh
+./scripts/compile-proto.sh
 ```
 
 This generates:
