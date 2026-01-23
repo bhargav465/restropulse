@@ -1,10 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Clock, CalendarCheck, Zap, ChevronRight, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
-import { MOCK_CYCLES } from '../constants';
+import { strategyAPI } from '../api';
 import { StrategyCycle } from '../types';
 
 const Strategy: React.FC = () => {
-    const [cycles, setCycles] = useState<StrategyCycle[]>(MOCK_CYCLES);
+    const [cycles, setCycles] = useState<StrategyCycle[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadCycles = async () => {
+            try {
+                const data = await strategyAPI.getAllCycles();
+                setCycles(data);
+            } catch (error) {
+                console.error('Failed to load cycles:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadCycles();
+    }, []);
 
     // Feedback Modal State
     const [feedbackState, setFeedbackState] = useState<{
@@ -88,10 +103,10 @@ const Strategy: React.FC = () => {
                         <h3 className="text-lg font-bold text-slate-800">{cycle.period}</h3>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide flex items-center gap-1.5 ${cycle.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
-                            cycle.status === 'PENDING_APPROVAL' ? 'bg-orange-100 text-orange-700' :
-                                cycle.status === 'CHANGES_REQUESTED' ? 'bg-red-100 text-red-700' :
-                                    cycle.status === 'APPROVED' ? 'bg-blue-100 text-blue-700' :
-                                        'bg-slate-200 text-slate-500'
+                        cycle.status === 'PENDING_APPROVAL' ? 'bg-orange-100 text-orange-700' :
+                            cycle.status === 'CHANGES_REQUESTED' ? 'bg-red-100 text-red-700' :
+                                cycle.status === 'APPROVED' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-slate-200 text-slate-500'
                         }`}>
                         {cycle.status === 'ACTIVE' && <Zap size={12} fill="currentColor" />}
                         {cycle.status === 'PENDING_APPROVAL' && <Clock size={12} />}
@@ -269,8 +284,8 @@ const Strategy: React.FC = () => {
                                             key={area}
                                             onClick={() => toggleArea(area)}
                                             className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-sm font-medium ${selectedAreas.includes(area)
-                                                    ? 'bg-orange-50 border-orange-200 text-orange-800 shadow-sm'
-                                                    : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'
+                                                ? 'bg-orange-50 border-orange-200 text-orange-800 shadow-sm'
+                                                : 'bg-white border-slate-100 text-slate-600 hover:bg-slate-50'
                                                 }`}
                                         >
                                             {area}

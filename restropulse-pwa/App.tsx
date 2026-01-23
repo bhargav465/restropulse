@@ -7,37 +7,53 @@ import Strategy from './components/Strategy';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
-import { ViewState } from './types';
-import { MOCK_RESTAURANT } from './constants';
+import { ViewState, Restaurant } from './types';
+import { authAPI, restaurantAPI } from './api';
 
 const App: React.FC = () => {
-    // Simple state-based routing for PWA experience
     const [currentView, setCurrentView] = useState<ViewState>('LOGIN');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
+    const [loading, setLoading] = useState(true);
 
-    // Centralized State for Restaurant Data
-    const [restaurantData, setRestaurantData] = useState(MOCK_RESTAURANT);
-
-    // Check for existing session
+    // Check for existing session and load restaurant data
     useEffect(() => {
-        const session = localStorage.getItem('rp_session');
-        if (session) {
-            setIsLoggedIn(true);
-            // Initialize history state if needed
-            if (!window.history.state) {
-                window.history.replaceState({ view: 'DASHBOARD' }, '');
+        const initializeApp = async () => {
+            const token = localStorage.getItem('rp_token');
+            const session = localStorage.getItem('rp_session');
+
+            if (token && session) {
+                try {
+                    // Verify session
+                    await authAPI.checkSession();
+
+                    // Load restaurant data
+                    const restaurant = await restaurantAPI.get('r1');
+                    setRestaurantData(restaurant);
+
+                    setIsLoggedIn(true);
+                    if (!window.history.state) {
+                        window.history.replaceState({ view: 'DASHBOARD' }, '');
+                    }
+                    setCurrentView('DASHBOARD');
+                } catch (error) {
+                    console.error('Session validation failed:', error);
+                    localStorage.removeItem('rp_token');
+                    localStorage.removeItem('rp_session');
+                }
             }
-            setCurrentView('DASHBOARD');
-        }
+            setLoading(false);
+        };
+
+        initializeApp();
     }, []);
 
-    // Handle Browser Back Button (Popstate)
+    // Handle browser back button
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
             if (event.state && event.state.view) {
                 setCurrentView(event.state.view);
             } else if (isLoggedIn) {
-                // Fallback if state is lost but user is logged in
                 setCurrentView('DASHBOARD');
             }
         };
@@ -51,64 +67,65 @@ const App: React.FC = () => {
         window.history.pushState({ view }, '', `?view=${view.toLowerCase()}`);
     };
 
-    const handleLogin = () => {
-        setIsLoggedIn(true);
-        localStorage.setItem('rp_session', 'true');
-        // Replace login entry with dashboard so back button doesn't go to login
-        window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
-        setCurrentView('DASHBOARD');
+    const handleLogin = async (email: string, password: string) => {
+        try {
+            const response = await authAPI.login({ email, password });
+
+            if (response.success) {
+                setIsLoggedIn(true);
+                localStorage.setItem('rp_session', 'true');
+
+                // Load restaurant data
+                const restaurant = await restaurantAPI.get('r1');
+                setRestaurantData(restaurant);
+
+                window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
+                setCurrentView('DASHBOARD');
+            }
+        } catch (error) {
+            console.error('Login failed:', error);
+            throw error;
+        }
     };
 
-    const handleLogout = () => {
-        setIsLoggedIn(false);
-        localStorage.removeItem('rp_session');
-        window.history.replaceState({ view: 'LOGIN' }, '', '/');
-        setCurrentView('LOGIN');
+    const handleLogout = async () => {
+        try {
+            await authAPI.logout();
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            setIsLoggedIn(false);
+            setRestaurantData(null);
+            window.history.replaceState({ view: 'LOGIN' }, '', '/');
+            setCurrentView('LOGIN');
+        }
     };
 
-    // Handler to update restaurant data
-    const handleUpdateRestaurant = (type: 'OFFER' | 'SPECIAL' | 'MENU', action: 'ADD' | 'DELETE' | 'UPDATE', payload?: any) => {
-        setRestaurantData(prev => {
-            const newState = { ...prev };
-
-            if (type === 'OFFER') {
-                if (action === 'ADD' && typeof payload === 'string') {
-                    newState.activeOffers = [payload, ...(newState.activeOffers || [])];
-                }
-                if (action === 'DELETE' && typeof payload === 'number') {
-                    newState.activeOffers = (newState.activeOffers || []).filter((_, i) => i !== payload);
-                }
+    const refreshRestaurantData = async () => {
+        if (restaurantData) {
+            try {
+                const updated = await restaurantAPI.get(restaurantData.id);
+                setRestaurantData(updated);
+            } catch (error) {
+                console.error('Failed to refresh restaurant data:', error);
             }
-
-            if (type === 'SPECIAL') {
-                if (action === 'ADD' && typeof payload === 'string') {
-                    newState.chefSpecials = [payload, ...(newState.chefSpecials || [])];
-                }
-                if (action === 'DELETE' && typeof payload === 'number') {
-                    newState.chefSpecials = (newState.chefSpecials || []).filter((_, i) => i !== payload);
-                }
-            }
-
-            if (type === 'MENU') {
-                newState.menuLastUpdated = new Date().toISOString().split('T')[0];
-            }
-
-            return newState;
-        });
+        }
     };
 
     const renderView = () => {
+        if (!restaurantData) return <div>Loading...</div>;
+
         switch (currentView) {
             case 'DASHBOARD':
                 return <Dashboard setView={navigateTo} restaurantData={restaurantData} />;
             case 'STUDIO':
                 return <ContentStudio />;
             case 'INPUTS':
-                return <Inputs restaurantData={restaurantData} onUpdate={handleUpdateRestaurant} />;
+                return <Inputs restaurantData={restaurantData} onRefresh={refreshRestaurantData} />;
             case 'STRATEGY':
                 return <Strategy />;
             case 'SETTINGS':
-                return <Settings onLogout={handleLogout} />;
+                return <Settings onLogout={handleLogout} restaurantData={restaurantData} />;
             default:
                 return <Dashboard setView={navigateTo} restaurantData={restaurantData} />;
         }
@@ -124,6 +141,12 @@ const App: React.FC = () => {
             default: return 'RestroPulse';
         }
     };
+
+    if (loading) {
+        return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            Loading RestroPulse...
+        </div>;
+    }
 
     if (!isLoggedIn) {
         return (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, CheckCircle, MessageCircle, RefreshCw, Send, Edit, Clock, Lock, Undo2, AlertTriangle, FileText, Image as ImageIcon, MoreHorizontal, CheckSquare, Square, AlertCircle, ChevronDown, LockKeyhole, History, Sparkles, Phone, Film, CircleDashed, Layers, Play, Video, ChevronLeft, ChevronRight, Pause, ScanEye, CalendarClock, Archive, X } from 'lucide-react';
-import { MOCK_POSTS, MOCK_RESTAURANT } from '../constants';
-import { Post } from '../types';
+import { Post, Restaurant } from '../types';
+import { postsAPI, restaurantAPI } from '../api';
 
 // Constants for Feedback configuration
 const FEEDBACK_CATEGORIES = [
@@ -380,17 +380,17 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback })
                 {/* Feedback Section (Review & Scheduled Tabs) */}
                 {post.feedback && (tab === 'REVIEW' || tab === 'SCHEDULED' || post.status === 'MISSED_DEADLINE') && (
                     <div className={`p-4 rounded-2xl flex gap-3 items-start border ${post.status === 'MISSED_DEADLINE' ? 'bg-red-50 border-red-100 text-red-900' :
-                            tab === 'SCHEDULED' ? 'bg-slate-50 border-slate-100 text-slate-700' :
-                                'bg-orange-50 border-orange-100 text-orange-900'
+                        tab === 'SCHEDULED' ? 'bg-slate-50 border-slate-100 text-slate-700' :
+                            'bg-orange-50 border-orange-100 text-orange-900'
                         }`}>
                         <MessageCircle size={16} className={`mt-0.5 shrink-0 ${post.status === 'MISSED_DEADLINE' ? 'text-red-600' :
-                                tab === 'SCHEDULED' ? 'text-slate-400' :
-                                    'text-orange-600'
+                            tab === 'SCHEDULED' ? 'text-slate-400' :
+                                'text-orange-600'
                             }`} />
                         <div className="flex-1 min-w-0">
                             <span className={`text-xs font-bold block mb-2 ${post.status === 'MISSED_DEADLINE' ? 'text-red-700' :
-                                    tab === 'SCHEDULED' ? 'text-slate-500' :
-                                        'text-orange-700'
+                                tab === 'SCHEDULED' ? 'text-slate-500' :
+                                    'text-orange-700'
                                 }`}>Feedback History:</span>
                             {formatFeedbackDisplay(post.feedback)}
                         </div>
@@ -489,7 +489,27 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback })
 const ContentStudio: React.FC = () => {
     type TabType = 'REVIEW' | 'SCHEDULED' | 'HISTORY';
     const [activeTab, setActiveTab] = useState<TabType>('REVIEW');
-    const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [postsData, restaurantData] = await Promise.all([
+                    postsAPI.getAll(),
+                    restaurantAPI.get('r1')
+                ]);
+                setPosts(postsData);
+                setRestaurant(restaurantData);
+            } catch (error) {
+                console.error('Failed to load content studio data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
 
     // Feedback Modal State
     const [feedbackState, setFeedbackState] = useState<{
@@ -709,6 +729,12 @@ const ContentStudio: React.FC = () => {
 
         const feedbackString = JSON.stringify(feedbackPayload);
 
+        // API Call
+        postsAPI.update(feedbackState.postId!, {
+            status: 'CHANGES_REQUESTED',
+            feedback: feedbackString
+        }).catch(err => console.error("Failed to update post:", err));
+
         setPosts(prev => prev.map(p => p.id === feedbackState.postId ? {
             ...p,
             status: 'CHANGES_REQUESTED',
@@ -729,8 +755,11 @@ const ContentStudio: React.FC = () => {
     };
 
     const contactAccountManager = () => {
-        const message = `Hi ${MOCK_RESTAURANT.accountManager.name.split(' ')[0]}, regarding Post #${feedbackState.postId} for ${MOCK_RESTAURANT.name}. I have some more complex feedback and have reached the revision limit. Previous context: ${previousNote.substring(0, 100)}...`;
-        const url = `https://wa.me/${MOCK_RESTAURANT.accountManager.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+        const managerName = restaurant?.accountManager?.name || 'Account Manager';
+        const managerPhone = restaurant?.accountManager?.phone || '';
+        const restaurantName = restaurant?.name || 'Restaurant';
+        const message = `Hi ${managerName.split(' ')[0]}, regarding Post #${feedbackState.postId} for ${restaurantName}. I have some more complex feedback and have reached the revision limit. Previous context: ${previousNote.substring(0, 100)}...`;
+        const url = `https://wa.me/${managerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
     };
 
@@ -897,7 +926,7 @@ const ContentStudio: React.FC = () => {
                                         className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 rounded-xl shadow-md shadow-green-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5"
                                     >
                                         <WhatsAppIcon size={20} />
-                                        <span>Chat with {MOCK_RESTAURANT.accountManager.name.split(' ')[0]}</span>
+                                        <span>Chat with {restaurant?.accountManager?.name.split(' ')[0] || 'Manager'}</span>
                                     </button>
                                     <p className="text-[10px] text-slate-400 font-medium mt-3">
                                         Direct Priority Support Channel

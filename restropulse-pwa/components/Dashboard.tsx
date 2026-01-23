@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, Users, ArrowRight, Bell, Calendar, Eye, Tag, UtensilsCrossed, Lock, Activity, Sparkles, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { MOCK_USER, MOCK_POSTS, INSIGHT_DATA } from '../constants';
-import { ViewState, Restaurant } from '../types';
+import { INSIGHT_DATA } from '../constants';
+import { ViewState, Restaurant, User, Post } from '../types';
+import { authAPI, postsAPI } from '../api';
 
 interface DashboardProps {
     setView?: (view: ViewState) => void;
@@ -10,8 +11,30 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
-    const pendingCount = MOCK_POSTS.filter(p => p.status === 'PENDING_APPROVAL' || p.status === 'CHANGES_REQUESTED').length;
-    const nextScheduled = MOCK_POSTS.find(p => p.status === 'SCHEDULED');
+    const [user, setUser] = useState<User | null>(null);
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [userData, postsData] = await Promise.all([
+                    authAPI.checkSession(),
+                    postsAPI.getAll()
+                ]);
+                setUser(userData.user);
+                setPosts(postsData);
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
+
+    const pendingCount = posts.filter(p => p.status === 'PENDING_APPROVAL' || p.status === 'CHANGES_REQUESTED').length;
+    const nextScheduled = posts.find(p => p.status === 'SCHEDULED');
 
     const [pullStartY, setPullStartY] = useState<number | null>(null);
     const [pullDistance, setPullDistance] = useState(0);
@@ -86,7 +109,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
             <div className="flex justify-between items-end mb-2">
                 <div>
                     <p className="text-slate-500 text-sm font-medium">Welcome back,</p>
-                    <h1 className="text-2xl font-bold text-slate-800">{MOCK_USER.name.split(' ')[0]} 👋</h1>
+                    <h1 className="text-2xl font-bold text-slate-800">{user?.name.split(' ')[0] || 'User'} 👋</h1>
                 </div>
                 <div className="bg-white p-2 rounded-full border border-slate-100 shadow-sm relative">
                     <Bell size={20} className="text-slate-600" />

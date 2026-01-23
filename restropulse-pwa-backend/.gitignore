@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+coverage/
+.jest-cache/
+*.test.js
+*.spec.js

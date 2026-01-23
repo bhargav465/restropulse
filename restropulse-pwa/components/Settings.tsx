@@ -48,7 +48,7 @@ const SUBSCRIPTION_PLANS: { id: SubscriptionTier; name: string; price: string; f
     }
 ];
 
-const Settings: React.FC<SettingsProps> = ({ onLogout }) => {
+const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
 
@@ -56,8 +56,8 @@ const Settings: React.FC<SettingsProps> = ({ onLogout }) => {
     const [dragOffset, setDragOffset] = useState(0);
 
     // Local state to simulate changes
-    const [integrations, setIntegrations] = useState(MOCK_RESTAURANT.integrations);
-    const [subscription, setSubscription] = useState(MOCK_RESTAURANT.subscription);
+    const [integrations, setIntegrations] = useState(restaurantData.integrations);
+    const [subscription, setSubscription] = useState(restaurantData.subscription);
 
     // History Handling for Modals
     useEffect(() => {
@@ -145,15 +145,15 @@ const Settings: React.FC<SettingsProps> = ({ onLogout }) => {
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Restaurant Name</label>
-                        <input type="text" defaultValue={MOCK_RESTAURANT.name} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
+                        <input type="text" defaultValue={restaurantData.name} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cuisine</label>
-                        <input type="text" defaultValue={MOCK_RESTAURANT.cuisine} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
+                        <input type="text" defaultValue={restaurantData.cuisine} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Location</label>
-                        <input type="text" defaultValue={MOCK_RESTAURANT.location.address} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
+                        <input type="text" defaultValue={restaurantData.location.address} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
                     </div>
                     <button onClick={closeEditProfile} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold mt-4 flex items-center justify-center gap-2">
                         <Save size={18} /> Save Changes
@@ -175,7 +175,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout }) => {
             if (dragStartY !== null) {
                 const offset = e.touches[0].clientY - dragStartY;
                 const scrollTop = modalRef.current?.scrollTop || 0;
-                
+
                 // Only allow dragging down when at the top of scroll
                 if (offset > 0 && scrollTop === 0) {
                     e.preventDefault();
@@ -221,62 +221,62 @@ const Settings: React.FC<SettingsProps> = ({ onLogout }) => {
 
                     {/* Current Plan Status */}
                     <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-5 text-white mb-8 shadow-lg">
-                            <div className="flex justify-between items-start mb-4">
-                                <div>
-                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Current Plan</p>
-                                    <h4 className="text-2xl font-bold flex items-center gap-2">
-                                        {currentPlan?.name} <span className="px-2 py-0.5 bg-white/20 text-xs rounded-md font-medium">Active</span>
-                                    </h4>
-                                </div>
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-white/10`}>
-                                    {currentPlan && <currentPlan.icon size={20} />}
-                                </div>
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Current Plan</p>
+                                <h4 className="text-2xl font-bold flex items-center gap-2">
+                                    {currentPlan?.name} <span className="px-2 py-0.5 bg-white/20 text-xs rounded-md font-medium">Active</span>
+                                </h4>
                             </div>
-                            <div className="flex items-center justify-between text-sm border-t border-white/10 pt-4">
-                                <span className="text-slate-300">Renews on {new Date(subscription.renewalDate).toLocaleDateString()}</span>
-                                <span className="font-bold">{currentPlan?.price}</span>
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-white/10`}>
+                                {currentPlan && <currentPlan.icon size={20} />}
                             </div>
                         </div>
+                        <div className="flex items-center justify-between text-sm border-t border-white/10 pt-4">
+                            <span className="text-slate-300">Renews on {new Date(subscription.renewalDate).toLocaleDateString()}</span>
+                            <span className="font-bold">{currentPlan?.price}</span>
+                        </div>
+                    </div>
 
-                        <h4 className="font-bold text-slate-800 mb-4">Available Plans</h4>
-                        <div className="space-y-3">
-                            {SUBSCRIPTION_PLANS.map((plan) => (
-                                <div key={plan.id} className={`border rounded-2xl p-4 transition-all ${subscription.tier === plan.id ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200'}`}>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${plan.color}`}>
-                                                <plan.icon size={20} />
-                                            </div>
-                                            <div>
-                                                <h5 className="font-bold text-slate-800">{plan.name}</h5>
-                                                <p className="text-sm text-slate-500 font-medium">{plan.price}</p>
-                                            </div>
+                    <h4 className="font-bold text-slate-800 mb-4">Available Plans</h4>
+                    <div className="space-y-3">
+                        {SUBSCRIPTION_PLANS.map((plan) => (
+                            <div key={plan.id} className={`border rounded-2xl p-4 transition-all ${subscription.tier === plan.id ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200'}`}>
+                                <div className="flex justify-between items-center mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${plan.color}`}>
+                                            <plan.icon size={20} />
                                         </div>
-                                        {subscription.tier === plan.id ? (
-                                            <CheckCircle2 size={24} className="text-orange-500" />
-                                        ) : (
-                                            <button
-                                                onClick={() => handleSwitchPlan(plan.id)}
-                                                className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800"
-                                            >
-                                                Switch
-                                            </button>
-                                        )}
+                                        <div>
+                                            <h5 className="font-bold text-slate-800">{plan.name}</h5>
+                                            <p className="text-sm text-slate-500 font-medium">{plan.price}</p>
+                                        </div>
                                     </div>
-                                    <ul className="space-y-2 pl-1">
-                                        {plan.features.map((feat, i) => (
-                                            <li key={i} className="text-xs text-slate-600 flex items-center gap-2">
-                                                <div className="w-1 h-1 bg-slate-300 rounded-full"></div> {feat}
-                                            </li>
-                                        ))}
-                                    </ul>
+                                    {subscription.tier === plan.id ? (
+                                        <CheckCircle2 size={24} className="text-orange-500" />
+                                    ) : (
+                                        <button
+                                            onClick={() => handleSwitchPlan(plan.id)}
+                                            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800"
+                                        >
+                                            Switch
+                                        </button>
+                                    )}
                                 </div>
-                            ))}
-                        </div>
+                                <ul className="space-y-2 pl-1">
+                                    {plan.features.map((feat, i) => (
+                                        <li key={i} className="text-xs text-slate-600 flex items-center gap-2">
+                                            <div className="w-1 h-1 bg-slate-300 rounded-full"></div> {feat}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
 
-                        <div className="mt-6 text-center">
-                            <p className="text-xs text-slate-400">Payments are processed securely via Razorpay.</p>
-                        </div>
+                    <div className="mt-6 text-center">
+                        <p className="text-xs text-slate-400">Payments are processed securely via Razorpay.</p>
+                    </div>
                 </div>
             </div>
         );
@@ -298,11 +298,11 @@ const Settings: React.FC<SettingsProps> = ({ onLogout }) => {
                         <Edit3 size={14} />
                     </button>
                 </div>
-                <h2 className="text-2xl font-bold text-slate-800">{MOCK_RESTAURANT.name}</h2>
-                <p className="text-slate-500 font-medium">{MOCK_RESTAURANT.cuisine}</p>
+                <h2 className="text-2xl font-bold text-slate-800">{restaurantData.name}</h2>
+                <p className="text-slate-500 font-medium">{restaurantData.cuisine}</p>
                 <div className="flex items-center gap-1 text-slate-400 text-sm mt-1">
                     <MapPin size={14} />
-                    <span className="truncate max-w-[200px]">{MOCK_RESTAURANT.location.address}</span>
+                    <span className="truncate max-w-[200px]">{restaurantData.location.address}</span>
                 </div>
             </div>
 
@@ -356,15 +356,15 @@ const Settings: React.FC<SettingsProps> = ({ onLogout }) => {
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Your Team</h3>
                 <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src={MOCK_RESTAURANT.accountManager.avatar} alt="AM" className="w-10 h-10 rounded-full" />
+                        <img src={restaurantData.accountManager.avatar} alt="AM" className="w-10 h-10 rounded-full" />
                         <div>
-                            <p className="font-bold text-slate-800 text-sm">{MOCK_RESTAURANT.accountManager.name}</p>
+                            <p className="font-bold text-slate-800 text-sm">{restaurantData.accountManager.name}</p>
                             <p className="text-xs text-slate-500">Account Manager</p>
                         </div>
                     </div>
                     {/* WhatsApp Redirect */}
                     <a
-                        href={`https://wa.me/${MOCK_RESTAURANT.accountManager.phone.replace(/[^0-9]/g, '')}?text=Hi%20${MOCK_RESTAURANT.accountManager.name.split(' ')[0]},%20I%20need%20assistance%20with%20my%20account.`}
+                        href={`https://wa.me/${restaurantData.accountManager.phone.replace(/[^0-9]/g, '')}?text=Hi%20${restaurantData.accountManager.name.split(' ')[0]},%20I%20need%20assistance%20with%20my%20account.`}
                         target="_blank"
                         rel="noreferrer"
                         className="w-10 h-10 bg-[#25D366] text-white rounded-full flex items-center justify-center hover:bg-[#20bd5a] shadow-md shadow-green-500/20 active:scale-95 transition-all"
