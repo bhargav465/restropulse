@@ -15,6 +15,7 @@ This backend provides RESTful APIs for:
 - **Runtime**: Node.js
 - **Framework**: Express.js
 - **Language**: TypeScript
+- **Database**: MongoDB
 - **Build Tool**: TSC (TypeScript Compiler)
 
 ## Getting Started
@@ -37,7 +38,36 @@ cp .env.example .env
 |----------|-------------|---------|
 | `PORT` | API Port | `3001` |
 | `CONTENT_BASE_URL` | Base URL for images/videos | `http://localhost:3001/content/mockdata` |
-| `JWT_SECRET` | Token secret | `your-secret-key` |
+| `MONGODB_URI` | MongoDB connection string | Required |
+| `MONGODB_DB_NAME` | Database name | `restropulse` |
+
+## Database
+
+The backend uses MongoDB for data storage. Configure your connection string in `.env`:
+
+```env
+MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DB_NAME=restropulsev1
+```
+
+### Collections
+- `users` - User accounts
+- `restaurants` - Restaurant data
+- `posts` - Social media posts
+- `contentStrategies` - Content strategies
+- `strategyCycles` - Strategy cycles
+- `sessions` - User sessions
+
+### Database CLI
+
+For database setup, validation, and seeding, see the `restropulse-pwa-database` project:
+
+```bash
+cd ../restropulse-pwa-database
+npm run setup      # Create collections and indexes
+npm run validate   # Validate database structure
+npm run seed       # Seed test data
+```
 
 ## Asset Management
 

@@ -3,6 +3,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { connectDB, disconnectDB } from './db/connection.js';
 import authRoutes from './routes/auth.js';
 import restaurantRoutes from './routes/restaurant.js';
 import postsRoutes from './routes/posts.js';
@@ -62,18 +63,44 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-    console.log(`
+const startServer = async () => {
+    try {
+        // Connect to MongoDB
+        await connectDB();
+
+        app.listen(PORT, () => {
+            console.log(`
   RestroPulse Backend Server
   
   Environment: ${process.env.NODE_ENV || 'development'}
   Port: ${PORT}
   CORS Origin: ${CORS_ORIGIN}
+  Database: MongoDB Connected
   
   Server is running at http://localhost:${PORT}
   Health check: http://localhost:${PORT}/health
   API Base: http://localhost:${PORT}/api
   `);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
+};
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+    console.log('\nShutting down gracefully...');
+    await disconnectDB();
+    process.exit(0);
 });
+
+process.on('SIGTERM', async () => {
+    console.log('\nShutting down gracefully...');
+    await disconnectDB();
+    process.exit(0);
+});
+
+startServer();
 
 export default app;

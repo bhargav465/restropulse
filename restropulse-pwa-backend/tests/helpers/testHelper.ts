@@ -93,5 +93,5 @@ export const mockStrategyCycle = {
 };
 
 export function generateAuthToken(): string {
-    return 'mock-jwt-token-' + Date.now();
+    return 'jwt-token-' + Date.now();
 }

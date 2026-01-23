@@ -17,19 +17,17 @@ npm install
 
 ## Configuration
 
-Copy `.env.example` to `.env` and configure your MongoDB connection:
+This CLI reads MongoDB configuration from the backend project's `.env` file:
+`../restropulse-pwa-backend/.env`
 
-```bash
-cp .env.example .env
+Ensure the backend's `.env` file exists with:
+
+```env
+MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/?retryWrites=true&w=majority
+MONGODB_DB_NAME=restropulsev1
 ```
 
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017` |
-| `MONGODB_DATABASE` | Main database name | `restropulse` |
-| `MONGODB_TEST_DATABASE` | Test database name | `restropulse-test` |
+The test database name is automatically derived as `{MONGODB_DB_NAME}-test`.
 
 ## Usage
 

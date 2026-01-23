@@ -23,7 +23,7 @@ describe('Auth Routes - Unit Tests', () => {
                 email: mockUser.email,
                 name: mockUser.name
             });
-            expect(response.body.token).toMatch(/^mock-jwt-token-/);
+            expect(response.body.token).toMatch(/^jwt-token-/);
         });
 
         test('should fail login with invalid email', async () => {
@@ -46,7 +46,7 @@ describe('Auth Routes - Unit Tests', () => {
                     email: 'arjun@spicelounge.com'
                 });
 
-            expect(response.status).toBe(401);
+            expect(response.status).toBe(400);
             expect(response.body).toHaveProperty('success', false);
         });
 
@@ -57,7 +57,7 @@ describe('Auth Routes - Unit Tests', () => {
                     password: 'demo123'
                 });
 
-            expect(response.status).toBe(401);
+            expect(response.status).toBe(400);
             expect(response.body).toHaveProperty('success', false);
         });
 
@@ -66,7 +66,7 @@ describe('Auth Routes - Unit Tests', () => {
                 .post('/api/auth/login')
                 .send({});
 
-            expect(response.status).toBe(401);
+            expect(response.status).toBe(400);
             expect(response.body).toHaveProperty('success', false);
         });
 

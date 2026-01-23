@@ -175,7 +175,8 @@ describe('Strategy Routes - Unit Tests', () => {
                 .send(newCycle);
 
             expect(response.body.data).toHaveProperty('id');
-            expect(response.body.data.id).toMatch(/^sc\d+$/);
+            // MongoDB generates ObjectId strings (24 hex chars)
+            expect(response.body.data.id).toMatch(/^[a-f0-9]{24}$/);
         });
 
         test('should handle cycle with feedback', async () => {

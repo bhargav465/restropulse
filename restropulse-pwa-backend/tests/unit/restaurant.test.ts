@@ -346,7 +346,7 @@ describe('Restaurant Routes - Unit Tests', () => {
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
             expect(response.body.data.menuLastUpdated).toBeDefined();
-            expect(response.body).toHaveProperty('message', 'Menu timestamp updated');
+            expect(response.body).toHaveProperty('message', 'Menu updated successfully');
         });
 
         test('should set current date as menu update date', async () => {

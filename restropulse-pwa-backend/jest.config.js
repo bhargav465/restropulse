@@ -17,6 +17,7 @@ export default {
         '**/tests/**/*.test.ts',
         '**/tests/**/*.spec.ts'
     ],
+    setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
     collectCoverageFrom: [
         'src/**/*.ts',
         '!src/**/*.d.ts',

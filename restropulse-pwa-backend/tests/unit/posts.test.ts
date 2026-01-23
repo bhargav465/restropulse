@@ -102,7 +102,8 @@ describe('Posts Routes - Unit Tests', () => {
                 .send(newPost);
 
             expect(response.body.data).toHaveProperty('id');
-            expect(response.body.data.id).toMatch(/^p\d+$/);
+            // MongoDB generates ObjectId strings (24 hex chars)
+            expect(response.body.data.id).toMatch(/^[a-f0-9]{24}$/);
         });
 
         test('should handle post with stats', async () => {

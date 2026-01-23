@@ -1,10 +1,17 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import { config } from 'dotenv';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { setupCommand } from './commands/setup.js';
 import { validateCommand } from './commands/validate.js';
 import { seedCommand } from './commands/seed.js';
+
+// Load .env from backend project (single source of truth for MongoDB config)
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const backendEnvPath = resolve(__dirname, '../../restropulse-pwa-backend/.env');
+config({ path: backendEnvPath });
 
 const program = new Command();
 

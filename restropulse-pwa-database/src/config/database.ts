@@ -9,19 +9,20 @@ export interface DatabaseConfig {
 
 export function getConfig(): DatabaseConfig {
     const uri = process.env.MONGODB_URI;
-    const mainDatabase = process.env.MONGODB_DATABASE;
-    const testDatabase = process.env.MONGODB_TEST_DATABASE;
+    // Use backend's env var name (MONGODB_DB_NAME), derive test database name
+    const mainDatabase = process.env.MONGODB_DB_NAME || 'restropulsev1';
+    const testDatabase = `${mainDatabase}-test`;
 
     if (!uri) {
         console.error(chalk.red('Error: MONGODB_URI environment variable is not set'));
-        console.log(chalk.yellow('Copy .env.example to .env and configure your MongoDB connection'));
+        console.log(chalk.yellow('Ensure restropulse-pwa-backend/.env exists with MongoDB configuration'));
         process.exit(1);
     }
 
     return {
         uri,
-        mainDatabase: mainDatabase || 'restropulse',
-        testDatabase: testDatabase || 'restropulse-test',
+        mainDatabase,
+        testDatabase,
     };
 }
 

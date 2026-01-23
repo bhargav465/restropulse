@@ -1,89 +1,119 @@
 import express, { Request, Response } from 'express';
-import { MOCK_POSTS } from '../data/mockData.js';
+import { findAllPosts, findPostById, createPost, updatePost, deletePost } from '../db/posts.js';
 import { ApiResponse, Post } from '../models/types.js';
 
 const router = express.Router();
 
-// In-memory storage
-let posts = [...MOCK_POSTS];
-
 // Get all posts
-router.get('/', (_req: Request, res: Response<ApiResponse<Post[]>>) => {
-    res.json({
-        success: true,
-        data: posts
-    });
+router.get('/', async (_req: Request, res: Response<ApiResponse<Post[]>>) => {
+    try {
+        const posts = await findAllPosts();
+        res.json({
+            success: true,
+            data: posts
+        });
+    } catch (error) {
+        console.error('Get posts error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
 });
 
 // Get post by ID
-router.get('/:id', (req: Request, res: Response<ApiResponse<Post>>) => {
-    const { id } = req.params;
-    const post = posts.find(p => p.id === id);
+router.get('/:id', async (req: Request, res: Response<ApiResponse<Post>>) => {
+    try {
+        const { id } = req.params;
+        const post = await findPostById(id);
 
-    if (post) {
-        res.json({
-            success: true,
-            data: post
-        });
-    } else {
-        res.status(404).json({
+        if (post) {
+            res.json({
+                success: true,
+                data: post
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                error: 'Post not found'
+            });
+        }
+    } catch (error) {
+        console.error('Get post error:', error);
+        res.status(500).json({
             success: false,
-            error: 'Post not found'
+            error: 'Internal server error'
         });
     }
 });
 
 // Create new post
-router.post('/', (req: Request, res: Response<ApiResponse<Post>>) => {
-    const newPost: Post = {
-        id: 'p' + (posts.length + 1),
-        ...req.body
-    };
-
-    posts.unshift(newPost);
-
-    res.status(201).json({
-        success: true,
-        data: newPost,
-        message: 'Post created successfully'
-    });
+router.post('/', async (req: Request, res: Response<ApiResponse<Post>>) => {
+    try {
+        const newPost = await createPost(req.body);
+        res.status(201).json({
+            success: true,
+            data: newPost,
+            message: 'Post created successfully'
+        });
+    } catch (error) {
+        console.error('Create post error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
 });
 
 // Update post
-router.put('/:id', (req: Request, res: Response<ApiResponse<Post>>) => {
-    const { id } = req.params;
-    const index = posts.findIndex(p => p.id === id);
+router.put('/:id', async (req: Request, res: Response<ApiResponse<Post>>) => {
+    try {
+        const { id } = req.params;
+        const post = await updatePost(id, req.body);
 
-    if (index !== -1) {
-        posts[index] = { ...posts[index], ...req.body, id };
-        res.json({
-            success: true,
-            data: posts[index],
-            message: 'Post updated successfully'
-        });
-    } else {
-        res.status(404).json({
+        if (post) {
+            res.json({
+                success: true,
+                data: post,
+                message: 'Post updated successfully'
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                error: 'Post not found'
+            });
+        }
+    } catch (error) {
+        console.error('Update post error:', error);
+        res.status(500).json({
             success: false,
-            error: 'Post not found'
+            error: 'Internal server error'
         });
     }
 });
 
 // Delete post
-router.delete('/:id', (req: Request, res: Response<ApiResponse>) => {
-    const { id } = req.params;
-    const index = posts.findIndex(p => p.id === id);
+router.delete('/:id', async (req: Request, res: Response<ApiResponse>) => {
+    try {
+        const { id } = req.params;
+        const deleted = await deletePost(id);
 
-    if (index !== -1) {
-        posts.splice(index, 1);
-        res.json({
-            success: true,
-            message: 'Post deleted successfully'
-        });
-    } else {
-        res.status(404).json({
+        if (deleted) {
+            res.json({
+                success: true,
+                message: 'Post deleted successfully'
+            });
+        } else {
+            res.status(404).json({
+                success: false,
+                error: 'Post not found'
+            });
+        }
+    } catch (error) {
+        console.error('Delete post error:', error);
+        res.status(500).json({
             success: false,
-            error: 'Post not found'
+            error: 'Internal server error'
         });
     }
 });
