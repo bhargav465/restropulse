@@ -85,6 +85,11 @@ describe('Integration Tests - Complete Workflows', () => {
         });
 
         test('should manage multiple offers lifecycle', async () => {
+            // Get initial count
+            const initialResponse = await request(app)
+                .get('/api/restaurant/r1');
+            const initialCount = initialResponse.body.data.activeOffers?.length || 0;
+
             // Add multiple offers
             await request(app)
                 .patch('/api/restaurant/r1/offers')
@@ -97,7 +102,7 @@ describe('Integration Tests - Complete Workflows', () => {
             const getResponse = await request(app)
                 .get('/api/restaurant/r1');
 
-            expect(getResponse.body.data.activeOffers.length).toBeGreaterThanOrEqual(2);
+            expect(getResponse.body.data.activeOffers.length).toBe(initialCount + 2);
 
             // Delete one offer
             await request(app)
@@ -107,9 +112,7 @@ describe('Integration Tests - Complete Workflows', () => {
             const afterDeleteResponse = await request(app)
                 .get('/api/restaurant/r1');
 
-            expect(afterDeleteResponse.body.data.activeOffers.length).toBe(
-                getResponse.body.data.activeOffers.length - 1
-            );
+            expect(afterDeleteResponse.body.data.activeOffers.length).toBe(initialCount + 1);
         });
     });
 

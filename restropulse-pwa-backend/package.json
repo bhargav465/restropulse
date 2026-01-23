@@ -9,11 +9,12 @@
         "build": "tsc",
         "start": "node dist/server.js",
         "type-check": "tsc --noEmit",
-        "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-        "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-        "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
-        "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=unit",
-        "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=integration"
+        "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+        "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch --runInBand",
+        "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand",
+        "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=unit --runInBand",
+        "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern=integration --runInBand",
+        "db:seed": "cd ../restropulse-pwa-database && npm run seed:clean"
     },
     "keywords": [
         "restropulse",

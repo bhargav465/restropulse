@@ -17,6 +17,8 @@ export default {
         '**/tests/**/*.test.ts',
         '**/tests/**/*.spec.ts'
     ],
+    // Run unit tests first, then integration tests
+    testSequencer: '<rootDir>/tests/sequencer.cjs',
     setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
     collectCoverageFrom: [
         'src/**/*.ts',
