@@ -107,6 +107,27 @@ See [restropulse-pwa-backend/README.md](restropulse-pwa-backend/README.md) for d
 **Backend:**
 - Node.js + Express
 - TypeScript
+- JWT Auth
+
+**Media & Assets:**
+- Served via Express static middleware
+- Configurable base URL for CDN readiness
+
+## Configuration
+
+### Environment Variables
+
+#### Backend (`/restropulse-pwa-backend/.env`)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | API Port | `3001` |
+| `CONTENT_BASE_URL` | Base URL for images/videos | `http://localhost:3001/content/mockdata` |
+| `JWT_SECRET` | Token secret | `your-secret-key` |
+
+#### Frontend (`/restropulse-pwa/.env`)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_API_URL` | Backend API URL | `http://localhost:3001/api` |
 - REST API
 
 ## Future Roadmap

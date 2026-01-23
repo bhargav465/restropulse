@@ -1,17 +1,22 @@
+import 'dotenv/config'; // Load environment variables before other imports
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import restaurantRoutes from './routes/restaurant.js';
 import postsRoutes from './routes/posts.js';
 import strategyRoutes from './routes/strategy.js';
 
-// Load environment variables
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
+
+// Serve static content from public directory
+app.use('/content', express.static(path.join(__dirname, '../public')));
 
 // Middleware - Allow both ports 3000 and 3001 for development
 app.use(cors({

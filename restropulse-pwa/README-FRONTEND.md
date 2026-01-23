@@ -87,7 +87,7 @@ All API calls include proper error handling and loading states.
 - Components are in `/components`
 - Shared types are in `types.ts`
 - API service layer is in `api.ts`
-- Mock assets are in `/mockdata` (for development only)
+- Mock assets are served by the backend via the `CONTENT_BASE_URL` configuration.
 
 ## Future Enhancements
 

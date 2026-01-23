@@ -33,6 +33,20 @@ Copy `.env.example` to `.env` and configure:
 cp .env.example .env
 ```
 
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | API Port | `3001` |
+| `CONTENT_BASE_URL` | Base URL for images/videos | `http://localhost:3001/content/mockdata` |
+| `JWT_SECRET` | Token secret | `your-secret-key` |
+
+## Asset Management
+
+Assets (images/videos) are served via `express.static` from the `public` directory.
+- Root path: `/content`
+- Local path: `./public`
+
+To use a CDN, update `CONTENT_BASE_URL` in `.env` to point to the CDN endpoint.
+
 ### Development
 
 ```bash
