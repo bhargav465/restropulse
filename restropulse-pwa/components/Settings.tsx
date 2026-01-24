@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, LogOut, Trash2, MapPin, Instagram, Edit3, X, Save, Facebook, CheckCircle2, Star, Zap, Crown, ChevronRight } from 'lucide-react';
-import { MOCK_RESTAURANT } from '../constants';
-import { SubscriptionTier } from '../types';
+import { SubscriptionTier, Restaurant } from '../types';
 
 interface SettingsProps {
     onLogout: () => void;
+    restaurantData: Restaurant;
 }
 
 // ... [WhatsAppIcon and SUBSCRIPTION_PLANS remain unchanged] ...
@@ -56,7 +56,11 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
     const [dragOffset, setDragOffset] = useState(0);
 
     // Local state to simulate changes
-    const [integrations, setIntegrations] = useState(restaurantData.integrations);
+    // Only Instagram is supported now
+    const [integrations, setIntegrations] = useState<{ instagram: boolean }>({
+        instagram: restaurantData.integrations.instagram
+    });
+
     const [subscription, setSubscription] = useState(restaurantData.subscription);
 
     // History Handling for Modals
@@ -330,24 +334,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
                         </button>
                     </div>
 
-                    {/* Facebook (Disabled/Coming Soon) */}
-                    <div className="p-4 flex items-center justify-between opacity-60">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
-                                <Facebook size={20} />
-                            </div>
-                            <div>
-                                <p className="font-bold text-slate-800 text-sm">Facebook</p>
-                                <p className="text-xs text-slate-500">Coming Soon</p>
-                            </div>
-                        </div>
-                        <button
-                            disabled
-                            className="px-4 py-1.5 rounded-full text-xs font-bold bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100"
-                        >
-                            Disabled
-                        </button>
-                    </div>
+                    {/* Facebook (Disabled/Coming Soon) - REMOVED */}
                 </div>
             </div>
 
@@ -362,15 +349,6 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
                             <p className="text-xs text-slate-500">Account Manager</p>
                         </div>
                     </div>
-                    {/* WhatsApp Redirect */}
-                    <a
-                        href={`https://wa.me/${restaurantData.accountManager.phone.replace(/[^0-9]/g, '')}?text=Hi%20${restaurantData.accountManager.name.split(' ')[0]},%20I%20need%20assistance%20with%20my%20account.`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-10 h-10 bg-[#25D366] text-white rounded-full flex items-center justify-center hover:bg-[#20bd5a] shadow-md shadow-green-500/20 active:scale-95 transition-all"
-                    >
-                        <WhatsAppIcon size={20} />
-                    </a>
                 </div>
             </div>
 

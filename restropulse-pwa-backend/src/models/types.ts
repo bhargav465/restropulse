@@ -31,9 +31,7 @@ export interface Restaurant {
         status: 'ACTIVE' | 'Past Due';
     };
     integrations: {
-        whatsapp: boolean;
         instagram: boolean;
-        facebook: boolean;
     };
     activeOffers?: string[];
     chefSpecials?: string[];

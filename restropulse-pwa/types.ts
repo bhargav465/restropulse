@@ -32,9 +32,7 @@ export interface Restaurant {
     status: 'ACTIVE' | 'Past Due';
   };
   integrations: {
-    whatsapp: boolean;
     instagram: boolean;
-    facebook: boolean;
   };
   // New fields for 'Inputs' data visibility
   activeOffers?: string[];
