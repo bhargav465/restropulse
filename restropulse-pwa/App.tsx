@@ -7,6 +7,7 @@ import Strategy from './components/Strategy';
 import Settings from './components/Settings';
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
+import InstagramCallback from './components/InstagramCallback';
 import { ViewState, Restaurant } from './types';
 import { authAPI, restaurantAPI } from './api';
 
@@ -15,9 +16,27 @@ const App: React.FC = () => {
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isInstagramCallback, setIsInstagramCallback] = useState(false);
+
+    // Check if this is an Instagram OAuth callback
+    useEffect(() => {
+        const path = window.location.pathname;
+        const searchParams = new URLSearchParams(window.location.search);
+
+        // Check for Instagram callback path or OAuth parameters
+        if (path === '/instagram/callback' ||
+            searchParams.has('code') && searchParams.has('state')) {
+            setIsInstagramCallback(true);
+            setLoading(false);
+            return;
+        }
+    }, []);
 
     // Check for existing session and load restaurant data
     useEffect(() => {
+        // Skip if this is an Instagram callback
+        if (isInstagramCallback) return;
+
         const initializeApp = async () => {
             const token = localStorage.getItem('rp_token');
             const session = localStorage.getItem('rp_session');
@@ -46,7 +65,7 @@ const App: React.FC = () => {
         };
 
         initializeApp();
-    }, []);
+    }, [isInstagramCallback]);
 
     // Handle browser back button
     useEffect(() => {
@@ -152,7 +171,11 @@ const App: React.FC = () => {
             case 'STRATEGY':
                 return <Strategy />;
             case 'SETTINGS':
-                return <Settings onLogout={handleLogout} restaurantData={restaurantData} />;
+                return <Settings
+                    onLogout={handleLogout}
+                    restaurantData={restaurantData}
+                    onRestaurantUpdate={refreshRestaurantData}
+                />;
             default:
                 return <Dashboard setView={navigateTo} restaurantData={restaurantData} />;
         }
@@ -173,6 +196,15 @@ const App: React.FC = () => {
         return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
             Loading RestroPulse...
         </div>;
+    }
+
+    // Render Instagram callback handler if this is an OAuth callback
+    if (isInstagramCallback) {
+        return (
+            <ErrorBoundary>
+                <InstagramCallback />
+            </ErrorBoundary>
+        );
     }
 
     if (!isLoggedIn) {

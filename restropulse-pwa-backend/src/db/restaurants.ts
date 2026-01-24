@@ -1,5 +1,5 @@
 import { getRestaurantsCollection, toApiFormat } from './connection.js';
-import { Restaurant } from '../models/types.js';
+import { Restaurant, InstagramCredentials } from '../models/types.js';
 
 export async function findRestaurantById(id: string): Promise<Restaurant | null> {
     const col = getRestaurantsCollection();
@@ -7,11 +7,57 @@ export async function findRestaurantById(id: string): Promise<Restaurant | null>
     return toApiFormat(doc) as Restaurant | null;
 }
 
+// Get all restaurants with Instagram credentials (for token refresh cron)
+export async function findRestaurantsWithInstagram(): Promise<Restaurant[]> {
+    const col = getRestaurantsCollection();
+    const docs = await col.find({
+        'instagramCredentials.accessToken': { $exists: true, $ne: null }
+    }).toArray();
+    return docs.map(doc => toApiFormat(doc) as Restaurant);
+}
+
 export async function updateRestaurant(id: string, updates: Partial<Restaurant>): Promise<Restaurant | null> {
     const col = getRestaurantsCollection();
     const result = await col.findOneAndUpdate(
         { _id: id as any },
         { $set: { ...updates, updatedAt: new Date() } },
+        { returnDocument: 'after' }
+    );
+    return toApiFormat(result) as Restaurant | null;
+}
+
+// Update Instagram credentials for a restaurant
+export async function updateInstagramCredentials(
+    id: string,
+    credentials: InstagramCredentials
+): Promise<Restaurant | null> {
+    const col = getRestaurantsCollection();
+    const result = await col.findOneAndUpdate(
+        { _id: id as any },
+        {
+            $set: {
+                instagramCredentials: credentials,
+                'integrations.instagram': true,
+                updatedAt: new Date()
+            }
+        },
+        { returnDocument: 'after' }
+    );
+    return toApiFormat(result) as Restaurant | null;
+}
+
+// Remove Instagram credentials (disconnect)
+export async function removeInstagramCredentials(id: string): Promise<Restaurant | null> {
+    const col = getRestaurantsCollection();
+    const result = await col.findOneAndUpdate(
+        { _id: id as any },
+        {
+            $unset: { instagramCredentials: '' },
+            $set: {
+                'integrations.instagram': false,
+                updatedAt: new Date()
+            }
+        },
         { returnDocument: 'after' }
     );
     return toApiFormat(result) as Restaurant | null;

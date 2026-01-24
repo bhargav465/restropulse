@@ -1,5 +1,28 @@
 export type SubscriptionTier = 'BASIC' | 'GOLD' | 'PLATINUM';
 
+// Instagram Integration Types
+export interface InstagramCredentials {
+    userId: string;
+    username: string;
+    pageId: string;
+    pageName: string;
+    accessToken: string; // Encrypted
+    tokenExpiresAt: Date;
+    scopes: string[];
+    connectedAt: Date;
+    lastRefreshedAt?: Date;
+}
+
+export interface InstagramConnectionStatus {
+    connected: boolean;
+    username?: string;
+    userId?: string;
+    pageName?: string;
+    connectedAt?: Date;
+    tokenStatus?: 'valid' | 'expiring_soon' | 'expired';
+    needsReauthorization?: boolean;
+}
+
 export interface User {
     id: string;
     name: string;
@@ -33,6 +56,7 @@ export interface Restaurant {
     integrations: {
         instagram: boolean;
     };
+    instagramCredentials?: InstagramCredentials;
     activeOffers?: string[];
     chefSpecials?: string[];
     menuLastUpdated?: string;

@@ -1,27 +1,50 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { authAPI, restaurantAPI, postsAPI, strategyAPI } from '../api';
+import { authAPI, restaurantAPI, postsAPI, strategyAPI, instagramAPI } from '../api';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+// Mock LocalStorage
+const localStorageMock = (() => {
+    let store: Record<string, string> = {};
+    return {
+        getItem: vi.fn((key: string) => store[key] || null),
+        setItem: vi.fn((key: string, value: string) => {
+            store[key] = value.toString();
+        }),
+        removeItem: vi.fn((key: string) => {
+            delete store[key];
+        }),
+        clear: vi.fn(() => {
+            store = {};
+        }),
+    };
+})();
+
+Object.defineProperty(window, 'localStorage', {
+    value: localStorageMock,
+});
+
 describe('API Service', () => {
     beforeEach(() => {
         mockFetch.mockClear();
-        localStorage.clear();
+        localStorageMock.clear();
+        vi.restoreAllMocks();
     });
 
     describe('authAPI', () => {
         it('should login successfully', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                json: async () => ({ success: true, token: 'test-token', data: { user: { id: 'u1', name: 'Test User' } } }),
+                json: async () => ({ success: true, token: 'test-token', refreshToken: 'refresh-token', data: { user: { id: 'u1', name: 'Test User' } } }),
             });
 
             const result = await authAPI.login({ email: 'test@test.com', password: 'password' });
 
             expect(result.success).toBe(true);
             expect(result.token).toBe('test-token');
+            expect(localStorage.getItem('rp_token')).toBe('test-token');
         });
 
         it('should handle login failure', async () => {
@@ -42,12 +65,12 @@ describe('API Service', () => {
             });
 
             await authAPI.logout();
-
             expect(localStorage.removeItem).toHaveBeenCalledWith('rp_token');
         });
 
         it('should check session with valid token', async () => {
-            localStorage.getItem = vi.fn().mockReturnValue('test-token');
+            localStorage.setItem('rp_token', 'test-token');
+
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 json: async () => ({ success: true, data: { user: { id: 'u1', name: 'Test' } } }),
@@ -57,6 +80,133 @@ describe('API Service', () => {
 
             expect(result.success).toBe(true);
             expect(result.data?.user).toBeDefined();
+        });
+
+        it('should verify OTP successfully', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, token: 'otp-token', refreshToken: 'otp-refresh', data: { user: { id: 'u1' } } }),
+            });
+
+            const result = await authAPI.verifyOtp('1234567890', '123456');
+
+            expect(result.success).toBe(true);
+            expect(localStorage.getItem('rp_token')).toBe('otp-token');
+            expect(localStorage.getItem('rp_refresh_token')).toBe('otp-refresh');
+        });
+
+        it('should login with Firebase token', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, token: 'firebase-token', refreshToken: 'fb-refresh', data: { user: { id: 'u1' } } }),
+            });
+
+            const result = await authAPI.loginWithFirebase('fake-firebase-id-token');
+
+            expect(result.success).toBe(true);
+            expect(localStorage.getItem('rp_token')).toBe('firebase-token');
+        });
+
+        it('should fail refresh token', async () => {
+            // refresh failure due to network status
+            mockFetch.mockResolvedValueOnce({
+                ok: false,
+                status: 400
+            });
+
+            const result = await authAPI.refreshToken('bad-token');
+            expect(result).toBe(false);
+        });
+
+        it('should fail refresh token on exception', async () => {
+            mockFetch.mockRejectedValueOnce(new Error('Network'));
+
+            const result = await authAPI.refreshToken('tok');
+            expect(result).toBe(false);
+        });
+
+        it('should succeed refresh token', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, token: 'new-token' })
+            });
+
+            const result = await authAPI.refreshToken('good-token');
+            expect(result).toBe(true);
+            expect(localStorage.getItem('rp_token')).toBe('new-token');
+        });
+    });
+
+    describe('instagramAPI', () => {
+        it('should get OAuth URL', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { oauthUrl: 'https://insta.com/auth', state: 'xyz' } }),
+            });
+
+            const result = await instagramAPI.getOAuthUrl('r1');
+            expect(result.oauthUrl).toBe('https://insta.com/auth');
+            expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/integrations/instagram/oauth-url?restaurantId=r1'), expect.anything());
+        });
+
+        it('should handle callback', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: {
+                        account: { id: 'ig1', username: 'iguser' },
+                        requiresSelection: false
+                    }
+                }),
+            });
+
+            const result = await instagramAPI.handleCallback('code123', 'state456');
+            expect(result.success).toBe(true);
+            expect(result.account?.username).toBe('iguser');
+            expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/integrations/instagram/callback'), expect.objectContaining({
+                method: 'POST',
+                body: JSON.stringify({ code: 'code123', state: 'state456' })
+            }));
+        });
+
+        it('should get pending accounts', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { accounts: [{ id: 'a1' }] } }),
+            });
+
+            const result = await instagramAPI.getPendingAccounts('sel1');
+            expect(result).toHaveLength(1);
+        });
+
+        it('should select account', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { username: 'user1', message: 'Connected' } }),
+            });
+
+            const result = await instagramAPI.selectAccount('sel1', 'a1');
+            expect(result.username).toBe('user1');
+        });
+
+        it('should get status', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { isConnected: true, username: 'user1' } }),
+            });
+
+            const result = await instagramAPI.getStatus('r1');
+            expect(result.isConnected).toBe(true);
+        });
+
+        it('should disconnect', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true }),
+            });
+
+            await expect(instagramAPI.disconnect('r1')).resolves.not.toThrow();
         });
     });
 

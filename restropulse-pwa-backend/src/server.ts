@@ -5,10 +5,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB, disconnectDB } from './db/connection.js';
 import { initializeFirebaseAdmin } from './services/firebase-admin.js';
+import { startTokenRefreshCron } from './services/token-refresh-cron.js';
 import authRoutes from './routes/auth.js';
 import restaurantRoutes from './routes/restaurant.js';
 import postsRoutes from './routes/posts.js';
 import strategyRoutes from './routes/strategy.js';
+import integrationsRoutes from './routes/integrations.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +49,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/restaurant', restaurantRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/strategy', strategyRoutes);
+app.use('/api/integrations', integrationsRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {
@@ -71,6 +74,9 @@ const startServer = async () => {
     try {
         // Connect to MongoDB
         await connectDB();
+
+        // Start Instagram token refresh cron job
+        startTokenRefreshCron();
 
         app.listen(PORT, () => {
             console.log(`

@@ -1,10 +1,61 @@
-import { describe, test, expect, beforeEach } from '@jest/globals';
+import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 import request from 'supertest';
-import { createTestApp, mockRestaurant } from '../helpers/testHelper.js';
+
+// Import Actual Implementation
+import * as actualRestaurantsDb from '../../src/db/restaurants.js';
+
+// Define Mocks
+const mockFindRestaurantById = jest.fn<any>();
+const mockUpdateRestaurant = jest.fn<any>();
+const mockAddOffer = jest.fn<any>();
+const mockRemoveOffer = jest.fn<any>();
+const mockAddSpecial = jest.fn<any>();
+const mockRemoveSpecial = jest.fn<any>();
+const mockUpdateMenuTimestamp = jest.fn<any>();
+
+// Mock Module
+await jest.unstable_mockModule('../../src/db/restaurants.js', () => ({
+    __esModule: true,
+    ...actualRestaurantsDb,
+    findRestaurantById: mockFindRestaurantById,
+    updateRestaurant: mockUpdateRestaurant,
+    addOffer: mockAddOffer,
+    removeOffer: mockRemoveOffer,
+    addSpecial: mockAddSpecial,
+    removeSpecial: mockRemoveSpecial,
+    updateMenuTimestamp: mockUpdateMenuTimestamp
+}));
+
+// Import Helpers
+const { createTestApp, mockRestaurant } = await import('../helpers/testHelper.js');
+const { getRestaurantsCollection } = await import('../../src/db/connection.js');
+
+// Reset Helper
+const useActualImplementation = () => {
+    mockFindRestaurantById.mockImplementation(actualRestaurantsDb.findRestaurantById);
+    mockUpdateRestaurant.mockImplementation(actualRestaurantsDb.updateRestaurant);
+    mockAddOffer.mockImplementation(actualRestaurantsDb.addOffer);
+    mockRemoveOffer.mockImplementation(actualRestaurantsDb.removeOffer);
+    mockAddSpecial.mockImplementation(actualRestaurantsDb.addSpecial);
+    mockRemoveSpecial.mockImplementation(actualRestaurantsDb.removeSpecial);
+    mockUpdateMenuTimestamp.mockImplementation(actualRestaurantsDb.updateMenuTimestamp);
+};
 
 const app = createTestApp();
 
 describe('Restaurant Routes - Unit Tests', () => {
+    beforeEach(async () => {
+        jest.clearAllMocks();
+        useActualImplementation();
+        // Reset restaurant state in memory DB
+        const col = getRestaurantsCollection();
+        await col.updateOne(
+            { _id: 'r1' as any },
+            { $set: mockRestaurant },
+            { upsert: true }
+        );
+    });
+
     describe('GET /api/restaurant/:id', () => {
         test('should get restaurant by valid ID', async () => {
             const response = await request(app)
@@ -37,6 +88,19 @@ describe('Restaurant Routes - Unit Tests', () => {
             expect(response.body.data).toHaveProperty('accountManager');
             expect(response.body.data).toHaveProperty('subscription');
             expect(response.body.data).toHaveProperty('integrations');
+        });
+
+        test('should handle database error', async () => {
+            mockFindRestaurantById.mockRejectedValue(new Error('DB Error'));
+
+            const response = await request(app)
+                .get('/api/restaurant/r1');
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
         });
     });
 
@@ -82,6 +146,20 @@ describe('Restaurant Routes - Unit Tests', () => {
 
             expect(response.status).toBe(200);
             expect(response.body.data.cuisine).toBe('Only Cuisine Update');
+        });
+
+        test('should handle database error', async () => {
+            mockUpdateRestaurant.mockRejectedValue(new Error('Update Error'));
+
+            const response = await request(app)
+                .put('/api/restaurant/r1')
+                .send({ name: 'New Name' });
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
         });
     });
 
@@ -220,6 +298,34 @@ describe('Restaurant Routes - Unit Tests', () => {
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
         });
+
+        test('should handle restaurant not found during ADD', async () => {
+            mockAddOffer.mockResolvedValue(null);
+
+            const response = await request(app)
+                .patch('/api/restaurant/invalid-id/offers')
+                .send({ action: 'ADD', payload: 'New Offer' });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Restaurant not found'
+            });
+        });
+
+        test('should handle database error during ADD', async () => {
+            mockAddOffer.mockRejectedValue(new Error('DB Error'));
+
+            const response = await request(app)
+                .patch('/api/restaurant/r1/offers')
+                .send({ action: 'ADD', payload: 'New Offer' });
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
+        });
     });
 
     describe('PATCH /api/restaurant/:id/specials', () => {
@@ -336,6 +442,34 @@ describe('Restaurant Routes - Unit Tests', () => {
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
         });
+
+        test('should handle restaurant not found during ADD', async () => {
+            mockAddSpecial.mockResolvedValue(null);
+
+            const response = await request(app)
+                .patch('/api/restaurant/invalid-id/specials')
+                .send({ action: 'ADD', payload: 'Special Dish' });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Restaurant not found'
+            });
+        });
+
+        test('should handle database error during ADD', async () => {
+            mockAddSpecial.mockRejectedValue(new Error('DB Error'));
+
+            const response = await request(app)
+                .patch('/api/restaurant/r1/specials')
+                .send({ action: 'ADD', payload: 'Special Dish' });
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
+        });
     });
 
     describe('PATCH /api/restaurant/:id/menu', () => {
@@ -355,6 +489,34 @@ describe('Restaurant Routes - Unit Tests', () => {
 
             const today = new Date().toISOString().split('T')[0];
             expect(response.body.data.menuLastUpdated).toBe(today);
+        });
+
+        test('should handle restaurant not found', async () => {
+            mockUpdateMenuTimestamp.mockResolvedValue(null);
+
+            const response = await request(app)
+                .patch('/api/restaurant/invalid-id/menu')
+                .send({});
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Restaurant not found'
+            });
+        });
+
+        test('should handle database error', async () => {
+            mockUpdateMenuTimestamp.mockRejectedValue(new Error('DB Error'));
+
+            const response = await request(app)
+                .patch('/api/restaurant/r1/menu')
+                .send({});
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
         });
     });
 });

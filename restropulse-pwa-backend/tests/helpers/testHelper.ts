@@ -1,9 +1,11 @@
 import express, { Express } from 'express';
 import cors from 'cors';
+import { generateTokens } from '../../src/services/jwt.js';
 import authRoutes from '../../src/routes/auth.js';
 import restaurantRoutes from '../../src/routes/restaurant.js';
 import postsRoutes from '../../src/routes/posts.js';
 import strategyRoutes from '../../src/routes/strategy.js';
+import integrationsRoutes from '../../src/routes/integrations.js';
 
 export function createTestApp(): Express {
     const app = express();
@@ -20,6 +22,7 @@ export function createTestApp(): Express {
     app.use('/api/restaurant', restaurantRoutes);
     app.use('/api/posts', postsRoutes);
     app.use('/api/strategy', strategyRoutes);
+    app.use('/api/integrations', integrationsRoutes);
 
     return app;
 }
@@ -64,7 +67,6 @@ export const mockRestaurant = {
 };
 
 export const mockPost = {
-    id: 'p1',
     type: 'IMAGE' as const,
     status: 'POSTED' as const,
     thumbnail: '/mockdata/images/food_platter.jpg',
@@ -80,7 +82,6 @@ export const mockPost = {
 };
 
 export const mockStrategyCycle = {
-    id: 'sc1',
     period: 'June 2024',
     startDate: '2024-06-01',
     endDate: '2024-06-30',
@@ -93,5 +94,6 @@ export const mockStrategyCycle = {
 };
 
 export function generateAuthToken(): string {
-    return 'jwt-token-' + Date.now();
+    const tokens = generateTokens(mockUser.id, mockUser.phone);
+    return tokens.accessToken;
 }

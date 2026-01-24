@@ -1,10 +1,51 @@
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect, jest, beforeEach } from '@jest/globals';
 import request from 'supertest';
-import { createTestApp, mockStrategyCycle } from '../helpers/testHelper.js';
+
+// Import Actual Implementation
+import * as actualStrategyDb from '../../src/db/strategy.js';
+
+// Define Mock Functions
+const mockFindContentStrategy = jest.fn<any>();
+const mockUpdateContentStrategy = jest.fn<any>();
+const mockFindAllCycles = jest.fn<any>();
+const mockFindCycleById = jest.fn<any>();
+const mockCreateCycle = jest.fn<any>();
+const mockUpdateCycle = jest.fn<any>();
+
+// Mock the module
+await jest.unstable_mockModule('../../src/db/strategy.js', () => ({
+    // Retain other exports if any (though we are mocking all)
+    __esModule: true, // Specific for ESM interop in Jest
+    ...actualStrategyDb,
+    findContentStrategy: mockFindContentStrategy,
+    updateContentStrategy: mockUpdateContentStrategy,
+    findAllCycles: mockFindAllCycles,
+    findCycleById: mockFindCycleById,
+    createCycle: mockCreateCycle,
+    updateCycle: mockUpdateCycle
+}));
+
+// Helper to reset to actual implementation
+const useActualImplementation = () => {
+    mockFindContentStrategy.mockImplementation(actualStrategyDb.findContentStrategy);
+    mockUpdateContentStrategy.mockImplementation(actualStrategyDb.updateContentStrategy);
+    mockFindAllCycles.mockImplementation(actualStrategyDb.findAllCycles);
+    mockFindCycleById.mockImplementation(actualStrategyDb.findCycleById);
+    mockCreateCycle.mockImplementation(actualStrategyDb.createCycle);
+    mockUpdateCycle.mockImplementation(actualStrategyDb.updateCycle);
+};
+
+// Dynamic Import of Test Helper
+const { createTestApp, mockStrategyCycle } = await import('../helpers/testHelper.js');
 
 const app = createTestApp();
 
 describe('Strategy Routes - Unit Tests', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        useActualImplementation();
+    });
+
     describe('GET /api/strategy', () => {
         test('should get content strategy', async () => {
             const response = await request(app)
@@ -30,6 +71,29 @@ describe('Strategy Routes - Unit Tests', () => {
                 .get('/api/strategy');
 
             expect(Array.isArray(response.body.data.focusCategories)).toBe(true);
+        });
+
+        test('should handle database error', async () => {
+            mockFindContentStrategy.mockRejectedValue(new Error('DB Error'));
+
+            const response = await request(app).get('/api/strategy');
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
+        });
+
+        test('should return default strategy if none exists', async () => {
+            mockFindContentStrategy.mockResolvedValue(null);
+
+            const response = await request(app).get('/api/strategy');
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.data.id).toBe('default');
+            expect(response.body.data.postsPerWeek).toBe(5);
         });
     });
 
@@ -75,6 +139,20 @@ describe('Strategy Routes - Unit Tests', () => {
 
             expect(response.body).toHaveProperty('message', 'Content strategy updated successfully');
         });
+
+        test('should handle database error', async () => {
+            mockUpdateContentStrategy.mockRejectedValue(new Error('Update Error'));
+
+            const response = await request(app)
+                .put('/api/strategy')
+                .send({ postsPerWeek: 5 });
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
+        });
     });
 
     describe('GET /api/strategy/cycles', () => {
@@ -100,6 +178,18 @@ describe('Strategy Routes - Unit Tests', () => {
                 expect(cycle).toHaveProperty('plannedPosts');
                 expect(cycle).toHaveProperty('focus');
             }
+        });
+
+        test('should handle database error', async () => {
+            mockFindAllCycles.mockRejectedValue(new Error('DB Error'));
+
+            const response = await request(app).get('/api/strategy/cycles');
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
         });
     });
 
@@ -130,6 +220,18 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data).toHaveProperty('endDate');
             expect(response.body.data).toHaveProperty('plannedPosts');
             expect(Array.isArray(response.body.data.plannedPosts)).toBe(true);
+        });
+
+        test('should handle database error', async () => {
+            mockFindCycleById.mockRejectedValue(new Error('DB Error'));
+
+            const response = await request(app).get('/api/strategy/cycles/123');
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
         });
     });
 
@@ -216,6 +318,24 @@ describe('Strategy Routes - Unit Tests', () => {
 
             expect(response.body).toHaveProperty('message', 'Strategy cycle created successfully');
         });
+
+        test('should handle database error', async () => {
+            mockCreateCycle.mockRejectedValue(new Error('Create Error'));
+
+            const response = await request(app)
+                .post('/api/strategy/cycles')
+                .send({
+                    period: 'Test Period',
+                    startDate: '2024-01-01',
+                    endDate: '2024-01-31'
+                });
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
+        });
     });
 
     describe('PUT /api/strategy/cycles/:id', () => {
@@ -282,6 +402,20 @@ describe('Strategy Routes - Unit Tests', () => {
 
             expect(response.body.data.feedback).toBe('Looks great, approved!');
         });
+
+        test('should handle database error', async () => {
+            mockUpdateCycle.mockRejectedValue(new Error('Update Error'));
+
+            const response = await request(app)
+                .put('/api/strategy/cycles/123')
+                .send({ period: 'Updated Period' });
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error'
+            });
+        });
     });
 
     describe('Edge Cases', () => {
@@ -307,8 +441,8 @@ describe('Strategy Routes - Unit Tests', () => {
         test('should handle empty focus array', async () => {
             const newCycle = {
                 period: 'Test',
-                startDate: '2024-12-01',
-                endDate: '2024-12-31',
+                startDate: '2024-11-01',
+                endDate: '2024-11-30',
                 status: 'ACTIVE',
                 summary: 'Test',
                 plannedPosts: [],

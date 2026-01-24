@@ -8,13 +8,22 @@ vi.mock('../api', () => ({
         update: vi.fn(),
         updateOffers: vi.fn(),
     },
+    instagramAPI: {
+        getOAuthUrl: vi.fn(),
+        handleCallback: vi.fn(),
+        getPendingAccounts: vi.fn(),
+        selectAccount: vi.fn(),
+        getStatus: vi.fn(),
+        disconnect: vi.fn(),
+    },
 }));
 
-import { restaurantAPI } from '../api';
+import { restaurantAPI, instagramAPI } from '../api';
 
 // Mock window.history
 const mockHistoryPushState = vi.fn();
 const mockHistoryBack = vi.fn();
+const mockHistoryReplaceState = vi.fn();
 
 describe('Settings Component', () => {
     const mockOnLogout = vi.fn();
@@ -41,9 +50,7 @@ describe('Settings Component', () => {
             status: 'ACTIVE' as const,
         },
         integrations: {
-            whatsapp: true,
-            instagram: true,
-            facebook: false,
+            instagram: false,
         },
         activeOffers: ['10% off on weekdays', 'Free dessert with main course'],
         chefSpecials: ['Truffle Risotto'],
@@ -399,23 +406,10 @@ describe('Settings Component', () => {
     describe('Integration Management', () => {
 
 
-        it('should display Facebook integration status', () => {
+        it('should display Instagram integration status', () => {
             render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
 
-            expect(screen.getByText(/Facebook/i)).toBeInTheDocument();
-        });
-
-        it('should toggle WhatsApp integration', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const toggleButtons = screen.getAllByRole('button');
-            const whatsappToggle = toggleButtons.find(btn =>
-                btn.closest('div')?.textContent?.includes('WhatsApp')
-            );
-
-            if (whatsappToggle) {
-                fireEvent.click(whatsappToggle);
-            }
+            expect(screen.getByText(/Instagram/i)).toBeInTheDocument();
         });
 
         it('should toggle Facebook integration', () => {
@@ -733,32 +727,39 @@ describe('Settings Component', () => {
             alertSpy.mockRestore();
         });
 
-        // 2. WhatsApp Link Generation
-        it('should generate correct WhatsApp link with cleaned phone number', () => {
+        // 2. Instagram Integration Display
+        it('should show Instagram integration section', () => {
             render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
 
-            const waLink = document.querySelector('a[href*="wa.me"]');
-            expect(waLink).toBeInTheDocument();
-            // Phone should be digits only: +1234567890 -> 1234567890
-            expect(waLink?.getAttribute('href')).toContain('1234567890');
-            // First name check: John
-            expect(waLink?.getAttribute('href')).toContain('Hi%20John');
+            const instagramText = screen.getByText('Instagram');
+            expect(instagramText).toBeInTheDocument();
+
+            // Should have a connect button when not connected
+            const connectButtons = screen.getAllByRole('button');
+            const hasConnectButton = connectButtons.some(btn => btn.textContent?.includes('Connect'));
+            expect(hasConnectButton).toBe(true);
         });
 
-        // 3. Disabled Facebook Integration
-        it('should show Facebook as disabled/coming soon', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
+        // 3. Connected Instagram State
+        it('should show connected state for Instagram when integrated', () => {
+            const connectedData = {
+                ...mockRestaurantData,
+                integrations: {
+                    ...mockRestaurantData.integrations,
+                    instagram: true
+                },
+                instagramConnection: {
+                    accessToken: 'ig_token',
+                    username: 'testuser',
+                    userId: 'ig123',
+                    pageName: 'Test Page',
+                    tokenStatus: 'valid' as const
+                }
+            };
+            render(<Settings onLogout={mockOnLogout} restaurantData={connectedData} />);
 
-            // Confirm "Coming Soon" text exists near Facebook
-            const fbText = screen.getByText('Facebook');
-            const comingSoon = screen.getByText('Coming Soon');
-            expect(fbText).toBeInTheDocument();
-            expect(comingSoon).toBeInTheDocument();
-
-            // Find the specific button
-            const disabledBtn = screen.getByRole('button', { name: /Disabled/i });
-            expect(disabledBtn).toBeInTheDocument();
-            expect(disabledBtn).toBeDisabled();
+            const connectedBtn = screen.getByText('Connected');
+            expect(connectedBtn).toBeInTheDocument();
         });
 
         // 4. Subscription Modal Scroll Logic
@@ -877,12 +878,10 @@ describe('Settings Branching Logic', () => {
         if (modalContainer) {
             // Drag Up (Scrolling content up)
             fireEvent.touchStart(modalContainer, { touches: [{ clientY: 500 }] });
-            await waitFor(() => { });
 
             modalContainer = getModalContainer('Manage your plan');
             if (modalContainer) {
                 fireEvent.touchMove(modalContainer, { touches: [{ clientY: 400 }] }); // -100px
-                await waitFor(() => { });
 
                 modalContainer = getModalContainer('Manage your plan');
                 // Should stay at 0
@@ -910,15 +909,12 @@ describe('Settings Branching Logic', () => {
 
             // Try to drag down
             fireEvent.touchStart(modalContainer, { touches: [{ clientY: 100 }] });
-            await waitFor(() => { });
-
             modalContainer = getModalContainer('Manage your plan');
             if (modalContainer) {
                 // Re-apply scrollTop because re-render might have reset
                 Object.defineProperty(modalContainer, 'scrollTop', { value: 50, configurable: true });
 
                 fireEvent.touchMove(modalContainer, { touches: [{ clientY: 200 }] }); // +100px
-                await waitFor(() => { });
 
                 modalContainer = getModalContainer('Manage your plan');
                 // Should stay at 0 because scrollTop > 0
@@ -953,12 +949,10 @@ describe('Settings Branching Logic', () => {
         if (modalContainer) {
             // 1. Drag down
             fireEvent.touchStart(modalContainer, { touches: [{ clientY: 100 }] });
-            await waitFor(() => { });
 
             modalContainer = getModalContainer('Edit Profile');
             if (modalContainer) {
                 fireEvent.touchMove(modalContainer, { touches: [{ clientY: 150 }] });
-                await waitFor(() => { });
 
                 modalContainer = getModalContainer('Edit Profile');
                 if (modalContainer) {
@@ -967,7 +961,6 @@ describe('Settings Branching Logic', () => {
 
                     // 2. Drag up (negative) -> should stay at 0
                     fireEvent.touchMove(modalContainer, { touches: [{ clientY: 50 }] });
-                    await waitFor(() => { });
 
                     modalContainer = getModalContainer('Edit Profile');
                     if (modalContainer) {
@@ -995,15 +988,58 @@ describe('Settings Branching Logic', () => {
         }
     });
 
-    it('should handle Facebook button click', () => {
-        render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-        const fbText = screen.getByText('Facebook');
-        const fbContainer = fbText.closest('div')?.parentElement;
-        const fbBtn = fbContainer?.querySelector('button');
+    it('should handle Instagram connect button click', () => {
+        render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} onRestaurantUpdate={() => { }} />);
+        const instagramText = screen.getByText('Instagram');
+        const instagramContainer = instagramText.closest('div')?.parentElement;
+        const connectBtn = instagramContainer?.querySelector('button');
 
-        if (fbBtn) {
-            fireEvent.click(fbBtn);
+        if (connectBtn) {
+            fireEvent.click(connectBtn);
         }
-        expect(screen.getByText('Coming Soon')).toBeInTheDocument();
+    });
+
+    describe('Integration Advanced Flows', () => {
+        it('should show generic error modal when Instagram connection initiation fails', async () => {
+            (instagramAPI.getOAuthUrl as any).mockRejectedValueOnce(new Error('Network error'));
+
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
+
+            const connectButton = screen.getByRole('button', { name: /Connect/i });
+            fireEvent.click(connectButton);
+
+            await waitFor(() => {
+                expect(screen.getByText('Connection Error')).toBeInTheDocument();
+                expect(screen.getByText(/An error occurred while connecting to Instagram/)).toBeInTheDocument();
+            });
+
+            consoleSpy.mockRestore();
+        });
+
+        it('should show specific error and help link when callback returns NO_IG_ACCOUNT_FOUND', async () => {
+            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
+
+            // Simulate message from popup
+            fireEvent(window, new MessageEvent('message', {
+                data: {
+                    type: 'instagram-oauth-callback',
+                    success: false,
+                    error: 'NO_IG_ACCOUNT_FOUND',
+                    errorMessage: 'No linked account found'
+                },
+                origin: window.location.origin
+            }));
+
+            await waitFor(() => {
+                expect(screen.getByText('Personal Instagram Account')).toBeInTheDocument();
+                expect(screen.getByText(/Your Instagram is currently a Personal account/)).toBeInTheDocument();
+
+                const links = screen.getAllByRole('link');
+                const helpLink = links.find(l => l.getAttribute('href')?.includes('help.instagram.com'));
+                expect(helpLink).toBeInTheDocument();
+            });
+        });
     });
 });

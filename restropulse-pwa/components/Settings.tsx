@@ -1,11 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, LogOut, Trash2, MapPin, Instagram, Edit3, X, Save, Facebook, CheckCircle2, Star, Zap, Crown, ChevronRight } from 'lucide-react';
-import { SubscriptionTier, Restaurant } from '../types';
+import { CreditCard, LogOut, Trash2, MapPin, Instagram, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
+import { SubscriptionTier, Restaurant, InstagramConnectionError, InstagramAccount } from '../types';
+import { instagramAPI, restaurantAPI } from '../api';
 
 interface SettingsProps {
     onLogout: () => void;
     restaurantData: Restaurant;
+    onRestaurantUpdate?: (restaurant: Restaurant) => void;
 }
+
+// Error messages for Instagram connection issues
+const INSTAGRAM_ERROR_MESSAGES: Record<InstagramConnectionError, { title: string; description: string }> = {
+    NO_PAGES_FOUND: {
+        title: 'No Facebook Pages Found',
+        description: 'Please ensure you are an Admin of a Facebook Page.'
+    },
+    NO_IG_ACCOUNT_FOUND: {
+        title: 'Personal Instagram Account',
+        description: 'Your Instagram is currently a Personal account. Switch to Professional in Instagram Settings to continue.'
+    },
+    PERMISSIONS_MISSING: {
+        title: 'Permissions Required',
+        description: 'Please re-authenticate and ensure all checkboxes are checked in the Facebook popup.'
+    },
+    INVALID_STATE: {
+        title: 'Session Expired',
+        description: 'Invalid or expired authorization request. Please try again.'
+    },
+    TOKEN_EXCHANGE_FAILED: {
+        title: 'Authorization Failed',
+        description: 'Failed to complete authorization. Please try again.'
+    },
+    API_ERROR: {
+        title: 'Connection Error',
+        description: 'An error occurred while connecting to Instagram. Please try again.'
+    },
+    ACCOUNT_TYPE_MISMATCH: {
+        title: 'Account Type Issue',
+        description: 'Your account type may not support all required features.'
+    }
+};
 
 // ... [WhatsAppIcon and SUBSCRIPTION_PLANS remain unchanged] ...
 const WhatsAppIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
@@ -48,20 +82,169 @@ const SUBSCRIPTION_PLANS: { id: SubscriptionTier; name: string; price: string; f
     }
 ];
 
-const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
+const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaurantUpdate }) => {
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
 
     const [dragStartY, setDragStartY] = useState<number | null>(null);
     const [dragOffset, setDragOffset] = useState(0);
 
-    // Local state to simulate changes
-    // Only Instagram is supported now
-    const [integrations, setIntegrations] = useState<{ instagram: boolean }>({
-        instagram: restaurantData.integrations.instagram
-    });
+    // Instagram connection state
+    const [instagramConnected, setInstagramConnected] = useState(restaurantData.integrations.instagram);
+    const [instagramUsername, setInstagramUsername] = useState(restaurantData.instagramConnection?.username || '');
+    const [instagramLoading, setInstagramLoading] = useState(false);
+    const [instagramError, setInstagramError] = useState<{ type: InstagramConnectionError; message: string } | null>(null);
+    const [showInstagramErrorModal, setShowInstagramErrorModal] = useState(false);
+    const [showAccountPicker, setShowAccountPicker] = useState(false);
+    const [pendingAccounts, setPendingAccounts] = useState<InstagramAccount[]>([]);
+    const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
 
     const [subscription, setSubscription] = useState(restaurantData.subscription);
+
+    // Listen for OAuth popup messages
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.origin !== window.location.origin) return;
+
+            if (event.data?.type === 'instagram-oauth-callback') {
+                setInstagramLoading(false);
+
+                if (event.data.success) {
+                    setInstagramConnected(true);
+                    setInstagramUsername(event.data.username || '');
+                    setInstagramError(null);
+                    // Refresh restaurant data
+                    refreshRestaurantData();
+                } else if (event.data.error) {
+                    setInstagramError({
+                        type: event.data.error,
+                        message: event.data.errorMessage || 'Connection failed'
+                    });
+                    setShowInstagramErrorModal(true);
+                }
+            } else if (event.data?.type === 'instagram-oauth-retry') {
+                // User wants to retry from popup
+                handleInstagramConnect();
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [restaurantData.id]);
+
+    // Refresh restaurant data after connection changes
+    const refreshRestaurantData = async () => {
+        try {
+            const updated = await restaurantAPI.get(restaurantData.id);
+            if (onRestaurantUpdate) {
+                onRestaurantUpdate(updated);
+            }
+        } catch (err) {
+            console.error('Failed to refresh restaurant data:', err);
+        }
+    };
+
+    // Handle Instagram connect button click
+    const handleInstagramConnect = async () => {
+        if (instagramConnected) {
+            // Disconnect flow
+            if (confirm('Are you sure you want to disconnect Instagram?')) {
+                setInstagramLoading(true);
+                try {
+                    await instagramAPI.disconnect(restaurantData.id);
+                    setInstagramConnected(false);
+                    setInstagramUsername('');
+                    refreshRestaurantData();
+                } catch (err) {
+                    console.error('Disconnect error:', err);
+                    alert('Failed to disconnect. Please try again.');
+                } finally {
+                    setInstagramLoading(false);
+                }
+            }
+            return;
+        }
+
+        // Connect flow - open OAuth popup
+        setInstagramLoading(true);
+        setInstagramError(null);
+
+        try {
+            const { oauthUrl } = await instagramAPI.getOAuthUrl(restaurantData.id);
+
+            // Open OAuth popup
+            const width = 600;
+            const height = 700;
+            const left = window.screenX + (window.outerWidth - width) / 2;
+            const top = window.screenY + (window.outerHeight - height) / 2;
+
+            const popup = window.open(
+                oauthUrl,
+                'instagram-oauth',
+                `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes`
+            );
+
+            // Check if popup was blocked
+            if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+                setInstagramLoading(false);
+                setInstagramError({
+                    type: 'API_ERROR',
+                    message: 'Popup was blocked. Please allow popups and try again.'
+                });
+                setShowInstagramErrorModal(true);
+
+                // Fallback to redirect
+                if (confirm('Popup was blocked. Would you like to continue in this window instead?')) {
+                    window.location.href = oauthUrl;
+                }
+                return;
+            }
+
+            // Monitor popup for close
+            const checkPopup = setInterval(() => {
+                if (popup.closed) {
+                    clearInterval(checkPopup);
+                    // If still loading, user closed popup without completing
+                    setInstagramLoading(false);
+                }
+            }, 500);
+
+        } catch (err) {
+            console.error('OAuth initiation error:', err);
+            setInstagramLoading(false);
+            setInstagramError({
+                type: 'API_ERROR',
+                message: 'Failed to start Instagram connection. Please try again.'
+            });
+            setShowInstagramErrorModal(true);
+        }
+    };
+
+    // Handle account selection when multiple accounts are available
+    const handleSelectAccount = async (account: InstagramAccount) => {
+        if (!pendingSelectionId) return;
+
+        setInstagramLoading(true);
+        setShowAccountPicker(false);
+
+        try {
+            const result = await instagramAPI.selectAccount(pendingSelectionId, account.id);
+            setInstagramConnected(true);
+            setInstagramUsername(result.username);
+            setPendingAccounts([]);
+            setPendingSelectionId(null);
+            refreshRestaurantData();
+        } catch (err) {
+            console.error('Account selection error:', err);
+            setInstagramError({
+                type: 'API_ERROR',
+                message: 'Failed to connect account. Please try again.'
+            });
+            setShowInstagramErrorModal(true);
+        } finally {
+            setInstagramLoading(false);
+        }
+    };
 
     // History Handling for Modals
     useEffect(() => {
@@ -74,10 +257,16 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
                 setIsSubscriptionOpen(false);
                 setDragOffset(0);
             }
+            if (showInstagramErrorModal) {
+                setShowInstagramErrorModal(false);
+            }
+            if (showAccountPicker) {
+                setShowAccountPicker(false);
+            }
         };
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [isEditingProfile, isSubscriptionOpen]);
+    }, [isEditingProfile, isSubscriptionOpen, showInstagramErrorModal, showAccountPicker]);
 
     const openEditProfile = () => {
         setIsEditingProfile(true);
@@ -99,8 +288,112 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
         window.history.back();
     };
 
-    const toggleIntegration = (key: 'instagram') => {
-        setIntegrations(prev => ({ ...prev, [key]: !prev[key] }));
+    // Instagram Error Modal
+    const InstagramErrorModal = () => {
+        if (!instagramError) return null;
+        const errorInfo = INSTAGRAM_ERROR_MESSAGES[instagramError.type] || {
+            title: 'Connection Error',
+            description: instagramError.message
+        };
+
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="absolute inset-0" onClick={() => setShowInstagramErrorModal(false)}></div>
+                <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 relative z-10">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <AlertCircle className="w-8 h-8 text-red-600" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 text-center mb-2">{errorInfo.title}</h3>
+                    <p className="text-slate-600 text-center mb-6">{errorInfo.description}</p>
+
+                    {/* Help link for specific errors */}
+                    {(instagramError.type === 'NO_IG_ACCOUNT_FOUND' || instagramError.type === 'NO_PAGES_FOUND') && (
+                        <a
+                            href={instagramError.type === 'NO_IG_ACCOUNT_FOUND'
+                                ? 'https://help.instagram.com/502981923235522'
+                                : 'https://www.facebook.com/pages/create'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 text-pink-600 hover:text-pink-700 text-sm font-medium mb-4"
+                        >
+                            <ExternalLink size={14} />
+                            {instagramError.type === 'NO_IG_ACCOUNT_FOUND'
+                                ? 'How to switch to Professional account'
+                                : 'Create a Facebook Page'}
+                        </a>
+                    )}
+
+                    <div className="flex gap-3">
+                        <button
+                            onClick={() => setShowInstagramErrorModal(false)}
+                            className="flex-1 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200"
+                        >
+                            Close
+                        </button>
+                        <button
+                            onClick={() => {
+                                setShowInstagramErrorModal(false);
+                                handleInstagramConnect();
+                            }}
+                            className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:opacity-90"
+                        >
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Account Picker Modal (for multiple Instagram accounts)
+    const AccountPickerModal = () => {
+        if (!showAccountPicker || pendingAccounts.length === 0) return null;
+
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="absolute inset-0" onClick={() => setShowAccountPicker(false)}></div>
+                <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 relative z-10">
+                    <div className="w-16 h-16 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <Instagram size={28} className="text-white" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800 text-center mb-2">Select Account</h3>
+                    <p className="text-slate-500 text-sm text-center mb-6">Choose which Instagram account to connect</p>
+
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                        {pendingAccounts.map((account) => (
+                            <button
+                                key={account.id}
+                                onClick={() => handleSelectAccount(account)}
+                                className="w-full p-4 border border-slate-200 rounded-xl hover:border-pink-300 hover:bg-pink-50 transition-all flex items-center gap-4"
+                            >
+                                {account.profilePictureUrl ? (
+                                    <img
+                                        src={account.profilePictureUrl}
+                                        alt={account.username}
+                                        className="w-12 h-12 rounded-full"
+                                    />
+                                ) : (
+                                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                                        <Instagram size={20} className="text-white" />
+                                    </div>
+                                )}
+                                <div className="flex-1 text-left">
+                                    <p className="font-bold text-slate-800">@{account.username}</p>
+                                    <p className="text-xs text-slate-500">via {account.pageName}</p>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+
+                    <button
+                        onClick={() => setShowAccountPicker(false)}
+                        className="w-full mt-4 px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        );
     };
 
     const handleSwitchPlan = (tier: SubscriptionTier) => {
@@ -290,6 +583,8 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
         <div className="p-4 space-y-8">
             {isEditingProfile && <EditProfileModal />}
             {isSubscriptionOpen && <SubscriptionModal />}
+            {showInstagramErrorModal && <InstagramErrorModal />}
+            {showAccountPicker && <AccountPickerModal />}
 
             {/* Profile Header */}
             <div className="flex flex-col items-center text-center">
@@ -317,25 +612,64 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData }) => {
                     {/* Instagram */}
                     <div className="p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-pink-100 text-pink-600 rounded-full flex items-center justify-center">
-                                <Instagram size={20} />
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${instagramConnected
+                                    ? 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500'
+                                    : 'bg-pink-100'
+                                }`}>
+                                <Instagram size={20} className={instagramConnected ? 'text-white' : 'text-pink-600'} />
                             </div>
                             <div>
                                 <p className="font-bold text-slate-800 text-sm">Instagram</p>
-                                <p className="text-xs text-slate-500">{integrations.instagram ? 'Connected' : 'Not Connected'}</p>
+                                <p className="text-xs text-slate-500">
+                                    {instagramConnected
+                                        ? `@${instagramUsername}`
+                                        : 'Connect your business account'}
+                                </p>
                             </div>
                         </div>
                         <button
-                            onClick={() => toggleIntegration('instagram')}
-                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${integrations.instagram ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+                            onClick={handleInstagramConnect}
+                            disabled={instagramLoading}
+                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${instagramLoading
+                                    ? 'bg-slate-100 text-slate-400 cursor-wait'
+                                    : instagramConnected
+                                        ? 'bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-700'
+                                        : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90'
                                 }`}
                         >
-                            {integrations.instagram ? 'Connected' : 'Connect'}
+                            {instagramLoading ? (
+                                <>
+                                    <Loader2 size={12} className="animate-spin" />
+                                    <span>Connecting...</span>
+                                </>
+                            ) : instagramConnected ? (
+                                'Connected'
+                            ) : (
+                                'Connect'
+                            )}
                         </button>
                     </div>
-
-                    {/* Facebook (Disabled/Coming Soon) - REMOVED */}
                 </div>
+
+                {/* Instagram connection status details */}
+                {instagramConnected && restaurantData.instagramConnection && (
+                    <div className="mt-2 px-4 py-3 bg-slate-50 rounded-xl">
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-500">Connected via {restaurantData.instagramConnection.pageName}</span>
+                            {restaurantData.instagramConnection.tokenStatus === 'expiring_soon' && (
+                                <span className="text-orange-600 font-medium">Token expiring soon</span>
+                            )}
+                            {restaurantData.instagramConnection.needsReauthorization && (
+                                <button
+                                    onClick={handleInstagramConnect}
+                                    className="text-pink-600 font-medium hover:text-pink-700"
+                                >
+                                    Reauthorize
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Account Manager */}

@@ -97,4 +97,13 @@ export function isFirebaseInitialized(): boolean {
     return initialized;
 }
 
+
+/**
+ * Reset initialization state (for testing only)
+ */
+export function resetFirebaseConfigForTesting(): void {
+    initialized = false;
+}
+
 export { admin };
+

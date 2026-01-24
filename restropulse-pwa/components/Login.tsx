@@ -89,6 +89,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                 setTimeout(() => otpRefs.current[0]?.focus(), 100);
             } else {
                 // Fallback: Backend OTP (for development)
+                setUseFirebase(false); // Ensure we use fallback mode for verification
                 const response = await fetch(
                     `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/send-otp`,
                     {
@@ -110,7 +111,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                         setOtp(otpDigits);
                         // Auto-verify after a short delay for UX
                         setTimeout(() => {
-                            handleVerifyOtp(data.devOtp);
+                            handleVerifyOtp(data.devOtp, true);
                         }, 500);
                     } else {
                         setTimeout(() => otpRefs.current[0]?.focus(), 100);
@@ -147,6 +148,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                             setTimeout(async () => {
                                 if (onFallbackLogin) {
                                     try {
+                                        // Force fallback here too
                                         await onFallbackLogin(fullPhone, data.devOtp);
                                     } catch (e) {
                                         console.error('Auto-verify failed:', e);
@@ -213,7 +215,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
         }
     };
 
-    const handleVerifyOtp = useCallback(async (otpCode?: string) => {
+    const handleVerifyOtp = useCallback(async (otpCode?: string, forceFallback = false) => {
         const code = otpCode || otp.join('');
         if (code.length !== 6) {
             setError('Please enter the 6-digit OTP');
@@ -224,13 +226,23 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
         setError(null);
 
         try {
-            if (useFirebase) {
-                // Firebase: Verify OTP and get ID token
-                const idToken = await verifyOTP(code);
-                await onLogin(idToken);
-            } else if (onFallbackLogin) {
-                // Fallback: Backend verification
+            // If fallback is available and we're not explicitly using Firebase (or forced), use fallback
+            // This is important for dev mode where OTP is auto-filled via backend
+            if (onFallbackLogin && (!useFirebase || forceFallback)) {
                 await onFallbackLogin(`+91${phone}`, code);
+            } else if (useFirebase) {
+                // Firebase: Verify OTP and get ID token
+                try {
+                    const idToken = await verifyOTP(code);
+                    await onLogin(idToken);
+                } catch (firebaseErr: any) {
+                    // If Firebase verification fails and fallback is available, try fallback
+                    if (onFallbackLogin && firebaseErr.message?.includes('No OTP request in progress')) {
+                        await onFallbackLogin(`+91${phone}`, code);
+                    } else {
+                        throw firebaseErr;
+                    }
+                }
             } else {
                 throw new Error('No authentication method available');
             }

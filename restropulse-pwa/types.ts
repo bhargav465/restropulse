@@ -1,6 +1,34 @@
 
 export type SubscriptionTier = 'BASIC' | 'GOLD' | 'PLATINUM';
 
+// Instagram Integration Types (public-safe, no tokens)
+export interface InstagramConnectionStatus {
+  connected: boolean;
+  username?: string;
+  userId?: string;
+  pageName?: string;
+  connectedAt?: string;
+  tokenStatus?: 'valid' | 'expiring_soon' | 'expired';
+  needsReauthorization?: boolean;
+}
+
+export interface InstagramAccount {
+  id: string;
+  username: string;
+  name?: string;
+  profilePictureUrl?: string;
+  pageName: string;
+}
+
+export type InstagramConnectionError =
+  | 'NO_PAGES_FOUND'
+  | 'NO_IG_ACCOUNT_FOUND'
+  | 'PERMISSIONS_MISSING'
+  | 'INVALID_STATE'
+  | 'TOKEN_EXCHANGE_FAILED'
+  | 'API_ERROR'
+  | 'ACCOUNT_TYPE_MISMATCH';
+
 export interface User {
   id: string;
   name: string;
@@ -34,6 +62,7 @@ export interface Restaurant {
   integrations: {
     instagram: boolean;
   };
+  instagramConnection?: InstagramConnectionStatus;
   // New fields for 'Inputs' data visibility
   activeOffers?: string[];
   chefSpecials?: string[];

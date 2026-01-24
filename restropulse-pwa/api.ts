@@ -1,4 +1,4 @@
-import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse } from './types';
+import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError } from './types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -234,6 +234,120 @@ export const strategyAPI = {
             method: 'PUT',
             body: JSON.stringify(cycle),
         });
+        return response.data!;
+    },
+};
+
+// Instagram Integration API
+export const instagramAPI = {
+    // Get OAuth URL to initiate connection
+    getOAuthUrl: async (restaurantId: string): Promise<{ oauthUrl: string; state: string }> => {
+        const response = await fetchAPI<ApiResponse<{ oauthUrl: string; state: string }>>(
+            `/integrations/instagram/oauth-url?restaurantId=${restaurantId}`
+        );
+        return response.data!;
+    },
+
+    // Complete OAuth callback (for popup flow)
+    handleCallback: async (code: string, state: string): Promise<{
+        success: boolean;
+        account?: InstagramAccount;
+        accounts?: InstagramAccount[];
+        selectionId?: string;
+        requiresSelection?: boolean;
+        error?: InstagramConnectionError;
+        message?: string;
+    }> => {
+        const response = await fetchAPI<ApiResponse<{
+            account?: InstagramAccount;
+            accounts?: InstagramAccount[];
+            selectionId?: string;
+            requiresSelection?: boolean;
+        }> & { error?: InstagramConnectionError; message?: string }>('/integrations/instagram/callback', {
+            method: 'POST',
+            body: JSON.stringify({ code, state }),
+        }, false);
+
+        return {
+            success: response.success,
+            account: response.data?.account,
+            accounts: response.data?.accounts,
+            selectionId: response.data?.selectionId,
+            requiresSelection: response.data?.requiresSelection,
+            error: response.error as InstagramConnectionError,
+            message: response.message
+        };
+    },
+
+    // Get pending accounts for selection
+    getPendingAccounts: async (selectionId: string): Promise<InstagramAccount[]> => {
+        const response = await fetchAPI<ApiResponse<{ accounts: InstagramAccount[] }>>(
+            `/integrations/instagram/pending-accounts/${selectionId}`
+        );
+        return response.data!.accounts;
+    },
+
+    // Select account to complete connection
+    selectAccount: async (selectionId: string, accountId: string): Promise<{ username: string; message: string }> => {
+        const response = await fetchAPI<ApiResponse<{ username: string; message: string }>>(
+            '/integrations/instagram/select-account',
+            {
+                method: 'POST',
+                body: JSON.stringify({ selectionId, accountId }),
+            }
+        );
+        return response.data!;
+    },
+
+    // Get connection status
+    getStatus: async (restaurantId: string): Promise<InstagramConnectionStatus> => {
+        const response = await fetchAPI<ApiResponse<InstagramConnectionStatus>>(
+            `/integrations/instagram/status/${restaurantId}`
+        );
+        return response.data!;
+    },
+
+    // Disconnect Instagram
+    disconnect: async (restaurantId: string): Promise<void> => {
+        await fetchAPI(`/integrations/instagram/disconnect/${restaurantId}`, {
+            method: 'DELETE',
+        });
+    },
+
+    // Refresh token manually
+    refreshToken: async (restaurantId: string): Promise<boolean> => {
+        try {
+            await fetchAPI(`/integrations/instagram/refresh/${restaurantId}`, {
+                method: 'POST',
+            });
+            return true;
+        } catch {
+            return false;
+        }
+    },
+
+    // Validate connection
+    validate: async (restaurantId: string): Promise<{ valid: boolean; needsReauthorization: boolean }> => {
+        const response = await fetchAPI<ApiResponse<{ valid: boolean; needsReauthorization: boolean }>>(
+            `/integrations/instagram/validate/${restaurantId}`,
+            { method: 'POST' }
+        );
+        return response.data!;
+    },
+
+    // Get Instagram profile
+    getProfile: async (restaurantId: string): Promise<any> => {
+        const response = await fetchAPI<ApiResponse<any>>(
+            `/integrations/instagram/profile/${restaurantId}`
+        );
+        return response.data;
+    },
+
+    // Check if integration is configured
+    getConfig: async (): Promise<{ instagram: { configured: boolean } }> => {
+        const response = await fetchAPI<ApiResponse<{ instagram: { configured: boolean } }>>(
+            '/integrations/config'
+        );
         return response.data!;
     },
 };
