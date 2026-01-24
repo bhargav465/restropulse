@@ -1,4 +1,4 @@
-import { getUsersCollection, toApiFormat } from './connection.js';
+import { getUsersCollection, toApiFormat, toObjectId } from './connection.js';
 import { User } from '../models/types.js';
 
 export async function findUserByEmail(email: string): Promise<User | null> {
@@ -7,9 +7,21 @@ export async function findUserByEmail(email: string): Promise<User | null> {
     return toApiFormat(doc) as User | null;
 }
 
+export async function findUserByPhone(phone: string): Promise<User | null> {
+    const col = getUsersCollection();
+    const doc = await col.findOne({ phone });
+    return toApiFormat(doc) as User | null;
+}
+
 export async function findUserById(id: string): Promise<User | null> {
     const col = getUsersCollection();
-    const doc = await col.findOne({ _id: id as any });
+    const doc = await col.findOne({ _id: toObjectId(id) as any });
+    return toApiFormat(doc) as User | null;
+}
+
+export async function findUserByFirebaseUid(firebaseUid: string): Promise<User | null> {
+    const col = getUsersCollection();
+    const doc = await col.findOne({ firebaseUid });
     return toApiFormat(doc) as User | null;
 }
 
@@ -26,7 +38,7 @@ export async function createUser(user: Omit<User, 'id'>): Promise<User> {
 export async function updateUser(id: string, updates: Partial<User>): Promise<User | null> {
     const col = getUsersCollection();
     const result = await col.findOneAndUpdate(
-        { _id: id as any },
+        { _id: toObjectId(id) as any },
         { $set: { ...updates, updatedAt: new Date() } },
         { returnDocument: 'after' }
     );

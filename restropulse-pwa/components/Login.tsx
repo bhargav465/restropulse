@@ -1,97 +1,402 @@
-import React, { useState } from 'react';
-import { Instagram } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Smartphone, ShieldCheck, ArrowRight, KeyRound } from 'lucide-react';
+import { initRecaptcha, sendOTP, verifyOTP, auth } from '../firebase';
+import { RecaptchaVerifier } from 'firebase/auth';
 
 interface LoginProps {
-    onLogin: (email: string, password: string) => Promise<void>;
+    onLogin: (firebaseIdToken: string) => Promise<void>;
+    // Fallback for when Firebase is not configured
+    onFallbackLogin?: (phone: string, otp: string) => Promise<void>;
 }
 
-const WhatsAppIcon = ({ size = 20 }: { size?: number }) => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="currentColor"
-    >
-        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.008-.57-.008-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-    </svg>
-);
+type Step = 'phone' | 'otp';
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+// Check if Firebase is configured
+const isFirebaseConfigured = () => {
+    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+    return apiKey && apiKey !== 'your-api-key' && !apiKey.includes('your-');
+};
+
+// Check if development mode (allows fallback OTP)
+const isDevelopment = () => import.meta.env.DEV;
+
+const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
+    const [step, setStep] = useState<Step>('phone');
+    const [phone, setPhone] = useState('');
+    const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [countdown, setCountdown] = useState(0);
+    const [useFirebase, setUseFirebase] = useState(isFirebaseConfigured());
 
-    const handleLogin = async (provider: string) => {
+    const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+    const recaptchaVerifierRef = useRef<RecaptchaVerifier | null>(null);
+
+    // Countdown timer for resend
+    useEffect(() => {
+        if (countdown > 0) {
+            const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [countdown]);
+
+    // Initialize reCAPTCHA when component mounts (Firebase mode)
+    useEffect(() => {
+        if (useFirebase && step === 'phone') {
+            // Small delay to ensure button is rendered
+            const timer = setTimeout(() => {
+                try {
+                    recaptchaVerifierRef.current = initRecaptcha('send-otp-button');
+                } catch (err) {
+                    console.error('Failed to initialize reCAPTCHA:', err);
+                }
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [useFirebase, step]);
+
+    // Format phone for display
+    const formatPhone = (value: string) => {
+        const digits = value.replace(/\D/g, '');
+        if (digits.length <= 5) return digits;
+        if (digits.length <= 10) return `${digits.slice(0, 5)} ${digits.slice(5)}`;
+        return `${digits.slice(0, 5)} ${digits.slice(5, 10)}`;
+    };
+
+    const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+        setPhone(digits);
+        setError(null);
+    };
+
+    const handleSendOtp = async () => {
+        if (phone.length !== 10) {
+            setError('Please enter a valid 10-digit phone number');
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
 
-        try {
-            // Mock credentials for demo - in real app this would use OAuth
-            const email = provider === 'whatsapp' ? 'arjun@spicelounge.com' : 'arjun@spicelounge.com';
-            const password = 'demo123';
+        const fullPhone = `+91${phone}`;
 
-            await onLogin(email, password);
-        } catch (err) {
-            setError('Login failed. Please try again.');
-            console.error(err);
+        try {
+            if (useFirebase && recaptchaVerifierRef.current) {
+                // Firebase Authentication
+                await sendOTP(fullPhone, recaptchaVerifierRef.current);
+                setStep('otp');
+                setCountdown(30);
+                setTimeout(() => otpRefs.current[0]?.focus(), 100);
+            } else {
+                // Fallback: Backend OTP (for development)
+                const response = await fetch(
+                    `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/send-otp`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone: fullPhone }),
+                    }
+                );
+
+                const data = await response.json();
+
+                if (data.success) {
+                    setStep('otp');
+                    setCountdown(30);
+
+                    // Silent OTP: Auto-fill in development mode
+                    if (data.devOtp) {
+                        const otpDigits = data.devOtp.split('');
+                        setOtp(otpDigits);
+                        // Auto-verify after a short delay for UX
+                        setTimeout(() => {
+                            handleVerifyOtp(data.devOtp);
+                        }, 500);
+                    } else {
+                        setTimeout(() => otpRefs.current[0]?.focus(), 100);
+                    }
+                } else {
+                    setError(data.message || 'Failed to send OTP');
+                }
+            }
+        } catch (err: any) {
+            console.error('Send OTP error:', err);
+
+            // Handle Firebase specific errors - fall back to dev OTP only in development
+            if ((err.code === 'auth/billing-not-enabled' || err.code === 'auth/quota-exceeded') && isDevelopment()) {
+                console.log('[DEV] Firebase billing/quota issue, falling back to dev OTP...');
+                // Fall back to development OTP
+                try {
+                    const response = await fetch(
+                        `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/send-otp`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phone: fullPhone }),
+                        }
+                    );
+                    const data = await response.json();
+                    if (data.success) {
+                        setStep('otp');
+                        setCountdown(30);
+                        setUseFirebase(false); // Switch to fallback mode for verification
+                        if (data.devOtp) {
+                            const otpDigits = data.devOtp.split('');
+                            setOtp(otpDigits);
+                            // Auto-verify using fallback login
+                            setTimeout(async () => {
+                                if (onFallbackLogin) {
+                                    try {
+                                        await onFallbackLogin(fullPhone, data.devOtp);
+                                    } catch (e) {
+                                        console.error('Auto-verify failed:', e);
+                                    }
+                                }
+                            }, 500);
+                        } else {
+                            setTimeout(() => otpRefs.current[0]?.focus(), 100);
+                        }
+                    } else {
+                        setError(data.message || 'Failed to send OTP');
+                    }
+                } catch {
+                    setError('Failed to send OTP. Please try again.');
+                }
+            } else if (err.code === 'auth/billing-not-enabled' || err.code === 'auth/quota-exceeded') {
+                // Production - no fallback, show proper error
+                setError('SMS service temporarily unavailable. Please try again later.');
+            } else if (err.code === 'auth/invalid-phone-number') {
+                setError('Invalid phone number format');
+            } else if (err.code === 'auth/too-many-requests') {
+                setError('Too many attempts. Please try again later.');
+            } else {
+                setError('Failed to send OTP. Please try again.');
+            }
         } finally {
             setIsLoading(false);
         }
     };
 
+    const handleOtpChange = (index: number, value: string) => {
+        if (!/^\d*$/.test(value)) return;
+
+        const newOtp = [...otp];
+        newOtp[index] = value.slice(-1);
+        setOtp(newOtp);
+        setError(null);
+
+        // Auto-focus next input
+        if (value && index < 5) {
+            otpRefs.current[index + 1]?.focus();
+        }
+
+        // Auto-submit when all digits entered
+        if (value && index === 5 && newOtp.every((d) => d)) {
+            handleVerifyOtp(newOtp.join(''));
+        }
+    };
+
+    const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+        if (e.key === 'Backspace' && !otp[index] && index > 0) {
+            otpRefs.current[index - 1]?.focus();
+        }
+    };
+
+    const handleOtpPaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+        if (pastedData.length === 6) {
+            const newOtp = pastedData.split('');
+            setOtp(newOtp);
+            otpRefs.current[5]?.focus();
+            handleVerifyOtp(pastedData);
+        }
+    };
+
+    const handleVerifyOtp = useCallback(async (otpCode?: string) => {
+        const code = otpCode || otp.join('');
+        if (code.length !== 6) {
+            setError('Please enter the 6-digit OTP');
+            return;
+        }
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            if (useFirebase) {
+                // Firebase: Verify OTP and get ID token
+                const idToken = await verifyOTP(code);
+                await onLogin(idToken);
+            } else if (onFallbackLogin) {
+                // Fallback: Backend verification
+                await onFallbackLogin(`+91${phone}`, code);
+            } else {
+                throw new Error('No authentication method available');
+            }
+        } catch (err: any) {
+            console.error('Verify OTP error:', err);
+            // Handle Firebase specific errors
+            if (err.code === 'auth/invalid-verification-code') {
+                setError('Invalid OTP. Please check and try again.');
+            } else if (err.code === 'auth/code-expired') {
+                setError('OTP has expired. Please request a new one.');
+            } else {
+                setError('Verification failed. Please try again.');
+            }
+            setOtp(['', '', '', '', '', '']);
+            otpRefs.current[0]?.focus();
+        } finally {
+            setIsLoading(false);
+        }
+    }, [otp, phone, useFirebase, onLogin, onFallbackLogin]);
+
+    const handleResendOtp = () => {
+        if (countdown > 0) return;
+        setOtp(['', '', '', '', '', '']);
+        handleSendOtp();
+    };
+
+    const handleBack = () => {
+        setStep('phone');
+        setOtp(['', '', '', '', '', '']);
+        setError(null);
+    };
+
     return (
         <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-
             {/* Background Decor */}
             <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-600 rounded-full blur-[100px]"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600 rounded-full blur-[100px]"></div>
+                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-500 rounded-full blur-[100px]"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-amber-600 rounded-full blur-[100px]"></div>
             </div>
 
-            <div className="z-10 w-full max-w-sm text-center">
-                <div className="mb-10">
-                    <div className="w-20 h-20 bg-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-orange-500/20">
-                        <span className="text-white font-bold text-4xl">R</span>
+            <div className="z-10 w-full max-w-sm">
+                {/* Logo */}
+                <div className="text-center mb-8">
+                    <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-orange-500/20">
+                        <span className="text-white font-bold text-2xl">R</span>
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">RestroPulse</h1>
-                    <p className="text-slate-400 text-sm">Supercharge your restaurant's social presence with AI.</p>
+                    <h1 className="text-2xl font-bold text-white mb-1">RestroPulse</h1>
+                    <p className="text-slate-400 text-sm">Sign in to your account</p>
                 </div>
 
                 {error && (
-                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
+                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm text-center">
                         {error}
                     </div>
                 )}
 
-                <div className="space-y-4">
-                    <button
-                        disabled={isLoading}
-                        onClick={() => handleLogin('whatsapp')}
-                        className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {isLoading ? <span className="animate-pulse">Connecting...</span> : (
-                            <>
-                                <WhatsAppIcon size={20} />
-                                <span>Continue with WhatsApp</span>
-                            </>
-                        )}
-                    </button>
+                {step === 'phone' ? (
+                    /* Phone Input Step */
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-slate-400 text-sm mb-2">
+                                <Smartphone className="inline w-4 h-4 mr-1" />
+                                Enter your phone number
+                            </label>
+                            <div className="flex gap-2">
+                                <div className="bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 text-center font-medium">
+                                    +91
+                                </div>
+                                <input
+                                    type="tel"
+                                    value={formatPhone(phone)}
+                                    onChange={handlePhoneChange}
+                                    placeholder="98765 43210"
+                                    className="flex-1 bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-lg tracking-wider placeholder:text-slate-500"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
 
-                    <button
-                        disabled={isLoading}
-                        onClick={() => handleLogin('instagram')}
-                        className="w-full bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#FCAF45] text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {isLoading ? <span className="animate-pulse">Connecting...</span> : (
-                            <>
-                                <Instagram size={20} />
-                                <span>Continue with Instagram</span>
-                            </>
-                        )}
-                    </button>
-                </div>
+                        <button
+                            id="send-otp-button"
+                            onClick={handleSendOtp}
+                            disabled={isLoading || phone.length !== 10}
+                            className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isLoading ? (
+                                <span className="animate-pulse">Sending OTP...</span>
+                            ) : (
+                                <>
+                                    <KeyRound size={20} />
+                                    <span>Get OTP</span>
+                                    <ArrowRight size={18} />
+                                </>
+                            )}
+                        </button>
 
-                <p className="mt-8 text-xs text-slate-500">
+                        <p className="text-center text-xs text-slate-500">
+                            We'll send a 6-digit verification code to your phone
+                        </p>
+                    </div>
+                ) : (
+                    /* OTP Verification Step */
+                    <div className="space-y-6">
+                        <div className="text-center">
+                            <div className="w-12 h-12 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <ShieldCheck className="w-6 h-6 text-orange-500" />
+                            </div>
+                            <p className="text-slate-400 text-sm mb-1">
+                                Enter the code sent to
+                            </p>
+                            <p className="text-white font-medium">+91 {formatPhone(phone)}</p>
+                            <button
+                                onClick={handleBack}
+                                className="text-orange-500 text-sm mt-1 hover:underline"
+                            >
+                                Change number
+                            </button>
+                        </div>
+
+                        <div className="flex justify-center gap-2" onPaste={handleOtpPaste}>
+                            {otp.map((digit, index) => (
+                                <input
+                                    key={index}
+                                    ref={(el) => (otpRefs.current[index] = el)}
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={1}
+                                    value={digit}
+                                    onChange={(e) => handleOtpChange(index, e.target.value)}
+                                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                                    aria-label={`OTP digit ${index + 1}`}
+                                    className="w-12 h-14 bg-slate-800 text-white text-center text-xl font-bold rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                                />
+                            ))}
+                        </div>
+
+                        <button
+                            onClick={() => handleVerifyOtp()}
+                            disabled={isLoading || otp.some((d) => !d)}
+                            className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isLoading ? (
+                                <span className="animate-pulse">Verifying...</span>
+                            ) : (
+                                'Verify & Login'
+                            )}
+                        </button>
+
+                        <div className="text-center">
+                            {countdown > 0 ? (
+                                <p className="text-slate-500 text-sm">
+                                    Resend code in <span className="text-white">{countdown}s</span>
+                                </p>
+                            ) : (
+                                <button
+                                    onClick={handleResendOtp}
+                                    className="text-orange-500 text-sm hover:underline"
+                                >
+                                    Resend OTP
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                <p className="mt-8 text-xs text-slate-500 text-center">
                     By continuing, you agree to our Terms of Service & Privacy Policy.
                 </p>
             </div>

@@ -7,6 +7,7 @@ export interface User {
   email: string;
   phone: string;
   role: 'OWNER' | 'MANAGER';
+  firebaseUid?: string;
 }
 
 export interface Restaurant {
@@ -72,7 +73,7 @@ export interface ContentStrategy {
 
 export interface StrategyCycle {
   id: string;
-  period: string; 
+  period: string;
   startDate: string; // ISO Date
   endDate: string; // ISO Date
   status: 'ACTIVE' | 'PENDING_APPROVAL' | 'APPROVED' | 'CHANGES_REQUESTED' | 'HISTORY';

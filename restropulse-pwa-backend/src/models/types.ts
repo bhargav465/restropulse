@@ -6,6 +6,7 @@ export interface User {
     email: string;
     phone: string;
     role: 'OWNER' | 'MANAGER';
+    firebaseUid?: string;
 }
 
 export interface Restaurant {
@@ -86,6 +87,15 @@ export interface StrategyCycle {
 export interface LoginRequest {
     email: string;
     password: string;
+}
+
+export interface OtpRequest {
+    phone: string;
+}
+
+export interface OtpVerifyRequest {
+    phone: string;
+    otp: string;
 }
 
 export interface AuthResponse {

@@ -4,6 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { connectDB, disconnectDB } from './db/connection.js';
+import { initializeFirebaseAdmin } from './services/firebase-admin.js';
 import authRoutes from './routes/auth.js';
 import restaurantRoutes from './routes/restaurant.js';
 import postsRoutes from './routes/posts.js';
@@ -15,6 +16,9 @@ const __dirname = path.dirname(__filename);
 const app: Express = express();
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
+
+// Initialize Firebase Admin SDK (optional - for production auth)
+initializeFirebaseAdmin();
 
 // Serve static content from public directory
 app.use('/content', express.static(path.join(__dirname, '../public')));

@@ -67,9 +67,10 @@ const App: React.FC = () => {
         window.history.pushState({ view }, '', `?view=${view.toLowerCase()}`);
     };
 
-    const handleLogin = async (email: string, password: string) => {
+    // Firebase Authentication (Primary)
+    const handleFirebaseLogin = async (firebaseIdToken: string) => {
         try {
-            const response = await authAPI.login({ email, password });
+            const response = await authAPI.loginWithFirebase(firebaseIdToken);
 
             if (response.success) {
                 setIsLoggedIn(true);
@@ -81,9 +82,35 @@ const App: React.FC = () => {
 
                 window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
                 setCurrentView('DASHBOARD');
+            } else {
+                throw new Error(response.message || 'Login failed');
             }
         } catch (error) {
-            console.error('Login failed:', error);
+            console.error('Firebase login failed:', error);
+            throw error;
+        }
+    };
+
+    // Fallback OTP Authentication (Development)
+    const handleFallbackLogin = async (phone: string, otp: string) => {
+        try {
+            const response = await authAPI.verifyOtp(phone, otp);
+
+            if (response.success) {
+                setIsLoggedIn(true);
+                localStorage.setItem('rp_session', 'true');
+
+                // Load restaurant data
+                const restaurant = await restaurantAPI.get('r1');
+                setRestaurantData(restaurant);
+
+                window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
+                setCurrentView('DASHBOARD');
+            } else {
+                throw new Error(response.message || 'Login failed');
+            }
+        } catch (error) {
+            console.error('Fallback login failed:', error);
             throw error;
         }
     };
@@ -151,7 +178,10 @@ const App: React.FC = () => {
     if (!isLoggedIn) {
         return (
             <ErrorBoundary>
-                <Login onLogin={handleLogin} />
+                <Login
+                    onLogin={handleFirebaseLogin}
+                    onFallbackLogin={handleFallbackLogin}
+                />
             </ErrorBoundary>
         );
     }

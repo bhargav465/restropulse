@@ -2,8 +2,8 @@ import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, A
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-// Helper function for API calls
-async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+// Helper function for API calls with auto token refresh
+async function fetchAPI<T>(endpoint: string, options?: RequestInit, retry = true): Promise<T> {
     const token = localStorage.getItem('rp_token');
 
     const headers: HeadersInit = {
@@ -17,6 +17,22 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
         headers,
     });
 
+    // If unauthorized and we have a refresh token, try to refresh
+    if (response.status === 401 && retry) {
+        const refreshToken = localStorage.getItem('rp_refresh_token');
+        if (refreshToken) {
+            const refreshed = await authAPI.refreshToken(refreshToken);
+            if (refreshed) {
+                // Retry the original request with new token
+                return fetchAPI<T>(endpoint, options, false);
+            }
+        }
+        // Clear tokens if refresh failed
+        localStorage.removeItem('rp_token');
+        localStorage.removeItem('rp_refresh_token');
+        localStorage.removeItem('rp_session');
+    }
+
     if (!response.ok) {
         const error = await response.json().catch(() => ({ message: 'Network error' }));
         throw new Error(error.message || `HTTP ${response.status}`);
@@ -27,11 +43,29 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 
 // Authentication API
 export const authAPI = {
+    // Firebase Authentication (Primary - Production)
+    loginWithFirebase: async (firebaseIdToken: string): Promise<AuthResponse & { refreshToken?: string }> => {
+        const response = await fetchAPI<AuthResponse & { refreshToken?: string }>('/auth/firebase', {
+            method: 'POST',
+            body: JSON.stringify({ idToken: firebaseIdToken }),
+        }, false);
+
+        if (response.success && response.token) {
+            localStorage.setItem('rp_token', response.token);
+            if (response.refreshToken) {
+                localStorage.setItem('rp_refresh_token', response.refreshToken);
+            }
+        }
+
+        return response;
+    },
+
+    // Legacy email/password login
     login: async (credentials: LoginRequest): Promise<AuthResponse> => {
         const response = await fetchAPI<AuthResponse>('/auth/login', {
             method: 'POST',
             body: JSON.stringify(credentials),
-        });
+        }, false);
 
         if (response.success && response.token) {
             localStorage.setItem('rp_token', response.token);
@@ -40,9 +74,48 @@ export const authAPI = {
         return response;
     },
 
+    // Fallback OTP verification (when Firebase not configured)
+    verifyOtp: async (phone: string, otp: string): Promise<AuthResponse & { refreshToken?: string }> => {
+        const response = await fetchAPI<AuthResponse & { refreshToken?: string }>('/auth/verify-otp', {
+            method: 'POST',
+            body: JSON.stringify({ phone, otp }),
+        }, false);
+
+        if (response.success && response.token) {
+            localStorage.setItem('rp_token', response.token);
+            if (response.refreshToken) {
+                localStorage.setItem('rp_refresh_token', response.refreshToken);
+            }
+        }
+
+        return response;
+    },
+
+    refreshToken: async (refreshToken: string): Promise<boolean> => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken }),
+            });
+
+            if (!response.ok) return false;
+
+            const data = await response.json();
+            if (data.success && data.token) {
+                localStorage.setItem('rp_token', data.token);
+                return true;
+            }
+            return false;
+        } catch {
+            return false;
+        }
+    },
+
     logout: async (): Promise<void> => {
-        await fetchAPI('/auth/logout', { method: 'POST' });
+        await fetchAPI('/auth/logout', { method: 'POST' }, false);
         localStorage.removeItem('rp_token');
+        localStorage.removeItem('rp_refresh_token');
         localStorage.removeItem('rp_session');
     },
 

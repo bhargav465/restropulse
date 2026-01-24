@@ -1,0 +1,100 @@
+/**
+ * Firebase Admin SDK Configuration
+ * 
+ * For production:
+ * 1. Go to Firebase Console > Project Settings > Service Accounts
+ * 2. Click "Generate new private key"
+ * 3. Save the JSON file securely
+ * 4. Set FIREBASE_SERVICE_ACCOUNT_KEY env variable to the JSON content
+ *    OR set GOOGLE_APPLICATION_CREDENTIALS to the file path
+ */
+
+import admin from 'firebase-admin';
+import { DecodedIdToken } from 'firebase-admin/auth';
+
+let initialized = false;
+
+/**
+ * Initialize Firebase Admin SDK
+ */
+export function initializeFirebaseAdmin(): void {
+    if (initialized) return;
+
+    try {
+        // Option 1: Service account from environment variable (JSON string)
+        const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+        if (serviceAccountKey) {
+            const serviceAccount = JSON.parse(serviceAccountKey);
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount)
+            });
+            console.log('Firebase Admin initialized with service account');
+        }
+        // Option 2: GOOGLE_APPLICATION_CREDENTIALS env var (file path)
+        else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+            admin.initializeApp({
+                credential: admin.credential.applicationDefault()
+            });
+            console.log('Firebase Admin initialized with application default credentials');
+        }
+        // Option 3: Development mode - use project ID only (limited functionality)
+        else {
+            const projectId = process.env.FIREBASE_PROJECT_ID;
+            if (projectId) {
+                admin.initializeApp({
+                    projectId
+                });
+                console.log('Firebase Admin initialized in limited mode (project ID only)');
+            } else {
+                console.warn('Firebase Admin not configured. Set FIREBASE_SERVICE_ACCOUNT_KEY or FIREBASE_PROJECT_ID');
+                return;
+            }
+        }
+
+        initialized = true;
+    } catch (error) {
+        console.error('Failed to initialize Firebase Admin:', error);
+    }
+}
+
+/**
+ * Verify a Firebase ID token and return the decoded token
+ */
+export async function verifyFirebaseToken(idToken: string): Promise<DecodedIdToken | null> {
+    if (!initialized) {
+        console.error('Firebase Admin not initialized');
+        return null;
+    }
+
+    try {
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        return decodedToken;
+    } catch (error) {
+        console.error('Error verifying Firebase token:', error);
+        return null;
+    }
+}
+
+/**
+ * Get user info from Firebase by UID
+ */
+export async function getFirebaseUser(uid: string) {
+    if (!initialized) return null;
+
+    try {
+        return await admin.auth().getUser(uid);
+    } catch (error) {
+        console.error('Error getting Firebase user:', error);
+        return null;
+    }
+}
+
+/**
+ * Check if Firebase Admin is initialized
+ */
+export function isFirebaseInitialized(): boolean {
+    return initialized;
+}
+
+export { admin };
