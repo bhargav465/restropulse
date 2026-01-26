@@ -7,17 +7,18 @@ This guide walks you through creating and configuring a Meta Developer App to en
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Create a Meta Developer App](#step-1-create-a-meta-developer-app)
-3. [Add Required Products](#step-2-add-required-products)
-4. [Configure Facebook Login](#step-3-configure-facebook-login)
-5. [Get App Credentials](#step-4-get-app-credentials)
-6. [Configure Environment Variables](#step-5-configure-environment-variables)
-7. [Add Test Users (Development Mode)](#step-6-add-test-users-development-mode)
-8. [Prepare for Production](#step-7-prepare-for-production)
-9. [Submit for App Review](#step-8-submit-for-app-review)
-10. [Go Live](#step-9-go-live)
-11. [Setup Webhooks (Optional)](#step-11-setup-webhooks-optional)
-12. [Troubleshooting](#troubleshooting)
+2. [End-User Requirements](#end-user-requirements)
+3. [Create a Meta Developer App](#step-1-create-a-meta-developer-app)
+4. [Add Required Products](#step-2-add-required-products)
+5. [Configure Facebook Login](#step-3-configure-facebook-login)
+6. [Get App Credentials](#step-4-get-app-credentials)
+7. [Configure Environment Variables](#step-5-configure-environment-variables)
+8. [Add Test Users (Development Mode)](#step-6-add-test-users-development-mode)
+9. [Prepare for Production](#step-7-prepare-for-production)
+10. [Submit for App Review](#step-8-submit-for-app-review)
+11. [Go Live](#step-9-go-live)
+12. [Setup Webhooks (Optional)](#step-11-setup-webhooks-optional)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -29,6 +30,35 @@ Before starting, ensure you have:
 - A Facebook Page linked to an Instagram Business or Creator account
 - Access to the Instagram account you want to connect
 - Your RestroPulse backend running (for callback URL)
+
+---
+
+## End-User Requirements
+
+When users connect their Instagram account through RestroPulse, here's what they need:
+
+### Required Before OAuth Flow
+
+| Requirement | Can be done during OAuth? | Notes |
+|-------------|---------------------------|-------|
+| Instagram Professional Account | No | Must convert to Business or Creator beforehand |
+| Facebook Page | Yes | Can create during OAuth flow |
+| Link Instagram to Facebook Page | Yes | Handled during OAuth flow |
+| Grant permissions | Yes | Handled during OAuth flow |
+
+### How to Convert Instagram to Professional Account
+
+Users must have an Instagram Business or Creator account. To convert:
+
+1. Open the **Instagram mobile app**
+2. Go to **Profile** > **Settings** (gear icon)
+3. Tap **Account**
+4. Tap **Switch to Professional Account**
+5. Choose **Business** or **Creator**
+6. Follow the prompts (category selection, contact info)
+7. Optionally link to a Facebook Page (or do this during RestroPulse OAuth)
+
+**Important**: This is the ONLY step users must complete before connecting their Instagram in RestroPulse. Everything else (Page creation, linking, permissions) is handled automatically during the OAuth flow using Meta's Business Login for Instagram.
 
 ---
 
