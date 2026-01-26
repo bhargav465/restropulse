@@ -288,12 +288,12 @@ export const instagramAPI = {
     },
 
     // Select account to complete connection
-    selectAccount: async (selectionId: string, accountId: string): Promise<{ username: string; message: string }> => {
+    selectAccount: async (selectionId: string, accountId: string, restaurantId: string): Promise<{ username: string; message: string }> => {
         const response = await fetchAPI<ApiResponse<{ username: string; message: string }>>(
             '/integrations/instagram/select-account',
             {
                 method: 'POST',
-                body: JSON.stringify({ selectionId, accountId }),
+                body: JSON.stringify({ selectionId, accountId, restaurantId }),
             }
         );
         return response.data!;

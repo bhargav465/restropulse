@@ -1,34 +1,44 @@
 /**
  * Instagram Integration Routes
- * Handles OAuth flow, connection management, and token operations
+ * Handles OAuth flow, connection management, token operations,
+ * and Facebook callbacks (deauthorize, data deletion)
  */
 
 import express, { Request, Response } from 'express';
+import crypto from 'crypto';
 import {
     generateOAuthUrl,
     handleOAuthCallback,
     validateStateToken,
     prepareCredentialsForStorage,
-    refreshAccessToken,
     validateToken,
     getInstagramProfile,
     isInstagramConfigured,
     InstagramAccount
 } from '../services/instagram-api.js';
-import { encrypt } from '../services/encryption.js';
-import { getRestaurantsCollection, toApiFormat } from '../db/connection.js';
-import { checkAndRefreshTokenIfNeeded, triggerManualRefresh } from '../services/token-refresh-cron.js';
-import crypto from 'crypto';
+import { getRestaurantsCollection } from '../db/connection.js';
+import { checkAndRefreshTokenIfNeeded } from '../services/token-refresh-cron.js';
 
 const router = express.Router();
 
-// In-memory store for pending OAuth sessions (code -> account selection)
+// App Secret for signature verification
+const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || '';
+
+// In-memory store for pending OAuth sessions (selectionId -> account selection)
 const pendingSelections = new Map<string, {
     accounts: InstagramAccount[];
     accessToken: string;
     tokenExpiresAt: Date;
     restaurantId: string;
     createdAt: number;
+}>();
+
+// In-memory store for data deletion confirmations (for GDPR compliance)
+const dataDeletionRequests = new Map<string, {
+    confirmationCode: string;
+    userId: string;
+    requestedAt: Date;
+    status: 'pending' | 'completed';
 }>();
 
 // Cleanup expired pending selections every 5 minutes
@@ -40,6 +50,46 @@ setInterval(() => {
         }
     }
 }, 5 * 60 * 1000);
+
+/**
+ * Verify Facebook signed request
+ * Used by deauthorize and data deletion callbacks
+ */
+function verifySignedRequest(signedRequest: string): { userId: string } | null {
+    try {
+        const [encodedSig, payload] = signedRequest.split('.');
+
+        if (!encodedSig || !payload) {
+            return null;
+        }
+
+        // Decode the payload
+        const data = JSON.parse(Buffer.from(payload, 'base64').toString('utf-8'));
+
+        // Verify signature
+        const expectedSig = crypto
+            .createHmac('sha256', INSTAGRAM_APP_SECRET)
+            .update(payload)
+            .digest('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+
+        if (encodedSig !== expectedSig) {
+            console.error('Signed request signature verification failed');
+            return null;
+        }
+
+        return { userId: data.user_id };
+    } catch (error) {
+        console.error('Error parsing signed request:', error);
+        return null;
+    }
+}
+
+// ============================================
+// OAuth Flow
+// ============================================
 
 /**
  * GET /api/integrations/instagram/oauth-url
@@ -83,7 +133,7 @@ router.get('/instagram/oauth-url', async (req: Request, res: Response) => {
 
 /**
  * GET /api/integrations/instagram/callback
- * OAuth callback handler - processes authorization code
+ * OAuth callback handler - processes authorization code (redirect flow)
  */
 router.get('/instagram/callback', async (req: Request, res: Response) => {
     const { code, state, error: oauthError, error_description } = req.query;
@@ -199,7 +249,7 @@ router.post('/instagram/callback', async (req: Request, res: Response) => {
             });
         }
 
-        // Multiple accounts - return list for selection
+        // Multiple accounts - store and return selection ID
         if (result.accounts && result.accounts.length > 1) {
             const selectionId = crypto.randomBytes(16).toString('hex');
             const stateData = validateStateToken(state);
@@ -231,7 +281,7 @@ router.post('/instagram/callback', async (req: Request, res: Response) => {
         return res.status(500).json({
             success: false,
             error: 'UNKNOWN_ERROR',
-            message: 'Unexpected response from Instagram'
+            message: 'Unexpected error occurred'
         });
     } catch (error) {
         console.error('OAuth callback error:', error);
@@ -244,17 +294,18 @@ router.post('/instagram/callback', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/integrations/instagram/pending-accounts
- * Get accounts from pending selection
+ * GET /api/integrations/instagram/pending-accounts/:selectionId
+ * Get pending account selections
  */
 router.get('/instagram/pending-accounts/:selectionId', async (req: Request, res: Response) => {
     const { selectionId } = req.params;
 
     const pending = pendingSelections.get(selectionId);
+
     if (!pending) {
         return res.status(404).json({
             success: false,
-            error: 'Selection session expired or not found'
+            error: 'Selection expired or not found'
         });
     }
 
@@ -274,27 +325,39 @@ router.get('/instagram/pending-accounts/:selectionId', async (req: Request, res:
 
 /**
  * POST /api/integrations/instagram/select-account
- * Complete connection with selected account
+ * Select account from multiple accounts
  */
 router.post('/instagram/select-account', async (req: Request, res: Response) => {
-    const { selectionId, accountId } = req.body;
+    const { selectionId, accountId, restaurantId } = req.body;
 
     if (!selectionId || !accountId) {
         return res.status(400).json({
             success: false,
-            error: 'Missing selectionId or accountId'
+            error: 'Selection ID and account ID required'
         });
     }
 
     const pending = pendingSelections.get(selectionId);
+
     if (!pending) {
         return res.status(404).json({
             success: false,
-            error: 'Selection session expired. Please restart the connection process.'
+            error: 'Selection expired or not found. Please reconnect Instagram.'
+        });
+    }
+
+    // Use restaurantId from pending session or from request body
+    const targetRestaurantId = pending.restaurantId || restaurantId;
+
+    if (!targetRestaurantId) {
+        return res.status(400).json({
+            success: false,
+            error: 'Restaurant ID required'
         });
     }
 
     const selectedAccount = pending.accounts.find(a => a.id === accountId);
+
     if (!selectedAccount) {
         return res.status(400).json({
             success: false,
@@ -312,7 +375,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
         // Save to database
         const col = getRestaurantsCollection();
         await col.updateOne(
-            { _id: pending.restaurantId as any },
+            { _id: targetRestaurantId as any },
             {
                 $set: {
                     'integrations.instagram': true,
@@ -329,17 +392,21 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
             success: true,
             data: {
                 username: selectedAccount.username,
-                message: `Successfully linked to @${selectedAccount.username}!`
+                message: `Successfully connected to @${selectedAccount.username}!`
             }
         });
     } catch (error) {
         console.error('Account selection error:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to save connection'
+            error: 'Failed to save Instagram connection'
         });
     }
 });
+
+// ============================================
+// Connection Management
+// ============================================
 
 /**
  * DELETE /api/integrations/instagram/disconnect/:restaurantId
@@ -573,6 +640,201 @@ router.get('/instagram/profile/:restaurantId', async (req: Request, res: Respons
         });
     }
 });
+
+// ============================================
+// Facebook Callbacks (Deauthorize & Data Deletion)
+// ============================================
+
+/**
+ * POST /api/integrations/instagram/deauthorize
+ * Called by Facebook when a user removes the app
+ * 
+ * Facebook sends a signed_request parameter containing user info
+ */
+router.post('/instagram/deauthorize', async (req: Request, res: Response) => {
+    console.log('[Instagram Deauthorize] Received callback');
+
+    const { signed_request } = req.body;
+
+    if (!signed_request) {
+        console.error('[Instagram Deauthorize] Missing signed_request');
+        return res.status(400).json({ error: 'Missing signed_request' });
+    }
+
+    const userData = verifySignedRequest(signed_request);
+
+    if (!userData) {
+        console.error('[Instagram Deauthorize] Invalid signed_request');
+        return res.status(400).json({ error: 'Invalid signed_request' });
+    }
+
+    try {
+        console.log(`[Instagram Deauthorize] User ${userData.userId} deauthorized the app`);
+
+        // Find and update restaurants with this Instagram user ID
+        const col = getRestaurantsCollection();
+        const result = await col.updateMany(
+            { 'instagramCredentials.userId': userData.userId },
+            {
+                $set: {
+                    'integrations.instagram': false,
+                    'instagramCredentials.accessToken': null,
+                    'instagramCredentials.deauthorizedAt': new Date(),
+                    updatedAt: new Date()
+                }
+            }
+        );
+
+        console.log(`[Instagram Deauthorize] Updated ${result.modifiedCount} restaurant(s)`);
+
+        // Facebook expects a 200 response
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('[Instagram Deauthorize] Error:', error);
+        // Still return 200 to acknowledge receipt
+        res.status(200).json({ success: true });
+    }
+});
+
+/**
+ * POST /api/integrations/instagram/data-deletion
+ * GDPR Data Deletion Request Callback
+ * 
+ * Called by Facebook when a user requests data deletion
+ * Must return a confirmation code and status URL
+ */
+router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
+    console.log('[Instagram Data Deletion] Received request');
+
+    const { signed_request } = req.body;
+
+    if (!signed_request) {
+        console.error('[Instagram Data Deletion] Missing signed_request');
+        return res.status(400).json({ error: 'Missing signed_request' });
+    }
+
+    const userData = verifySignedRequest(signed_request);
+
+    if (!userData) {
+        console.error('[Instagram Data Deletion] Invalid signed_request');
+        return res.status(400).json({ error: 'Invalid signed_request' });
+    }
+
+    try {
+        console.log(`[Instagram Data Deletion] Request for user ${userData.userId}`);
+
+        // Generate a confirmation code
+        const confirmationCode = crypto.randomBytes(16).toString('hex');
+
+        // Store the deletion request
+        dataDeletionRequests.set(confirmationCode, {
+            confirmationCode,
+            userId: userData.userId,
+            requestedAt: new Date(),
+            status: 'pending'
+        });
+
+        // Delete user data from database
+        const col = getRestaurantsCollection();
+        const result = await col.updateMany(
+            { 'instagramCredentials.userId': userData.userId },
+            {
+                $unset: {
+                    instagramCredentials: ''
+                },
+                $set: {
+                    'integrations.instagram': false,
+                    updatedAt: new Date()
+                }
+            }
+        );
+
+        console.log(`[Instagram Data Deletion] Deleted data from ${result.modifiedCount} restaurant(s)`);
+
+        // Update deletion request status
+        const request = dataDeletionRequests.get(confirmationCode);
+        if (request) {
+            request.status = 'completed';
+        }
+
+        // Build the status URL
+        const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+        const statusUrl = `${baseUrl}/api/integrations/instagram/data-deletion-status?code=${confirmationCode}`;
+
+        // Facebook expects this specific response format
+        res.status(200).json({
+            url: statusUrl,
+            confirmation_code: confirmationCode
+        });
+    } catch (error) {
+        console.error('[Instagram Data Deletion] Error:', error);
+        res.status(500).json({ error: 'Failed to process deletion request' });
+    }
+});
+
+/**
+ * GET /api/integrations/instagram/data-deletion-status
+ * Check status of a data deletion request
+ */
+router.get('/instagram/data-deletion-status', async (req: Request, res: Response) => {
+    const { code } = req.query;
+
+    if (!code) {
+        return res.status(400).send(`
+            <html>
+                <head><title>Data Deletion Status</title></head>
+                <body>
+                    <h1>Invalid Request</h1>
+                    <p>Missing confirmation code.</p>
+                </body>
+            </html>
+        `);
+    }
+
+    const request = dataDeletionRequests.get(String(code));
+
+    if (!request) {
+        return res.status(404).send(`
+            <html>
+                <head><title>Data Deletion Status</title></head>
+                <body>
+                    <h1>Request Not Found</h1>
+                    <p>The deletion request with this confirmation code was not found or has expired.</p>
+                </body>
+            </html>
+        `);
+    }
+
+    const statusText = request.status === 'completed' ? 'Completed' : 'In Progress';
+    const statusColor = request.status === 'completed' ? 'green' : 'orange';
+
+    res.status(200).send(`
+        <html>
+            <head>
+                <title>Data Deletion Status - RestroPulse</title>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+                    .status { color: ${statusColor}; font-weight: bold; }
+                    .info { background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0; }
+                </style>
+            </head>
+            <body>
+                <h1>Data Deletion Request Status</h1>
+                <div class="info">
+                    <p><strong>Confirmation Code:</strong> ${request.confirmationCode}</p>
+                    <p><strong>Status:</strong> <span class="status">${statusText}</span></p>
+                    <p><strong>Requested At:</strong> ${request.requestedAt.toISOString()}</p>
+                </div>
+                <p>Your Instagram data associated with RestroPulse has been ${request.status === 'completed' ? 'deleted' : 'scheduled for deletion'}.</p>
+                <p>If you have any questions, please contact support.</p>
+            </body>
+        </html>
+    `);
+});
+
+// ============================================
+// Configuration
+// ============================================
 
 /**
  * GET /api/integrations/config

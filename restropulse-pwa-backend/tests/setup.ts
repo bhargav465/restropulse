@@ -1,5 +1,9 @@
-import { beforeAll, afterAll } from '@jest/globals';
+import { beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import { connectDB, disconnectDB } from '../src/db/connection.js';
+
+// Store original console methods
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
 
 beforeAll(async () => {
     // Set test environment variables
@@ -12,11 +16,19 @@ beforeAll(async () => {
     // Mock Encryption Key (64 hex characters)
     process.env.ENCRYPTION_KEY = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
 
+    // Suppress console.error and console.warn during tests (expected error handling logs)
+    console.error = jest.fn();
+    console.warn = jest.fn();
+
     // Connect to test database
     await connectDB();
 }, 30000);
 
 afterAll(async () => {
+    // Restore original console methods
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+
     // Cleanup and disconnect
     await disconnectDB();
     // Force exit after a short delay to ensure cleanup

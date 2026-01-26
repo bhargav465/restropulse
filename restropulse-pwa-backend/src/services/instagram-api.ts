@@ -15,6 +15,15 @@ const INSTAGRAM_REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI || 'http://loc
 const META_OAUTH_URL = 'https://www.facebook.com/v18.0/dialog/oauth';
 const META_GRAPH_API = 'https://graph.facebook.com/v18.0';
 
+// Request timeout (30 seconds)
+const API_TIMEOUT_MS = 30000;
+
+// Create axios instance with defaults
+const metaApi = axios.create({
+    baseURL: META_GRAPH_API,
+    timeout: API_TIMEOUT_MS
+});
+
 // Required OAuth Scopes for Instagram Business
 const OAUTH_SCOPES = [
     'instagram_basic',
@@ -36,7 +45,10 @@ export type InstagramConnectionError =
     | 'INVALID_STATE'
     | 'TOKEN_EXCHANGE_FAILED'
     | 'API_ERROR'
-    | 'ACCOUNT_TYPE_MISMATCH';
+    | 'ACCOUNT_TYPE_MISMATCH'
+    | 'RATE_LIMITED'
+    | 'CONFIG_ERROR'
+    | 'TIMEOUT';
 
 export interface InstagramAccount {
     id: string;
@@ -83,6 +95,8 @@ function cleanupExpiredStateTokens(): void {
 
 /**
  * Generate OAuth URL with CSRF protection
+ * Uses Business Login for Instagram with extras parameter for simplified onboarding
+ * See: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/business-login-for-instagram
  */
 export function generateOAuthUrl(restaurantId: string): { url: string; state: string } {
     // Cleanup old tokens first
@@ -91,12 +105,21 @@ export function generateOAuthUrl(restaurantId: string): { url: string; state: st
     const state = generateStateToken();
     stateTokenStore.set(state, { createdAt: Date.now(), restaurantId });
 
+    // extras parameter enables Business Login for Instagram onboarding flow
+    // This allows users to set up their Instagram Business account during OAuth
+    const extras = JSON.stringify({
+        setup: {
+            channel: 'IG_API_ONBOARDING'
+        }
+    });
+
     const params = new URLSearchParams({
         client_id: INSTAGRAM_APP_ID,
         redirect_uri: INSTAGRAM_REDIRECT_URI,
         scope: OAUTH_SCOPES,
         response_type: 'code',
-        state: state
+        state: state,
+        extras: extras
     });
 
     return {
@@ -128,11 +151,44 @@ export function validateStateToken(state: string): { valid: boolean; restaurantI
 }
 
 /**
+ * Parse Meta API error for better error messages
+ */
+function parseMetaApiError(error: unknown): { code: number | null; message: string; isRateLimit: boolean; isTimeout: boolean } {
+    if (error instanceof AxiosError) {
+        // Timeout error
+        if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+            return { code: null, message: 'Request timed out', isRateLimit: false, isTimeout: true };
+        }
+
+        const metaError = error.response?.data?.error;
+        if (metaError) {
+            // Meta rate limit codes: 4 (app-level), 17 (user-level), 32 (page-level)
+            const isRateLimit = [4, 17, 32].includes(metaError.code);
+            return {
+                code: metaError.code,
+                message: metaError.message || 'Unknown Meta API error',
+                isRateLimit,
+                isTimeout: false
+            };
+        }
+
+        return {
+            code: error.response?.status || null,
+            message: error.message,
+            isRateLimit: error.response?.status === 429,
+            isTimeout: false
+        };
+    }
+
+    return { code: null, message: String(error), isRateLimit: false, isTimeout: false };
+}
+
+/**
  * Exchange authorization code for access token
  */
 async function exchangeCodeForToken(code: string): Promise<{ accessToken: string; expiresIn: number } | null> {
     try {
-        const response = await axios.get(`${META_GRAPH_API}/oauth/access_token`, {
+        const response = await metaApi.get('/oauth/access_token', {
             params: {
                 client_id: INSTAGRAM_APP_ID,
                 client_secret: INSTAGRAM_APP_SECRET,
@@ -144,7 +200,7 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
         // Exchange short-lived token for long-lived token
         const shortLivedToken = response.data.access_token;
 
-        const longLivedResponse = await axios.get(`${META_GRAPH_API}/oauth/access_token`, {
+        const longLivedResponse = await metaApi.get('/oauth/access_token', {
             params: {
                 grant_type: 'fb_exchange_token',
                 client_id: INSTAGRAM_APP_ID,
@@ -168,7 +224,7 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
  */
 async function getUserPages(accessToken: string): Promise<Array<{ id: string; name: string; access_token: string }>> {
     try {
-        const response = await axios.get(`${META_GRAPH_API}/me/accounts`, {
+        const response = await metaApi.get('/me/accounts', {
             params: {
                 access_token: accessToken,
                 fields: 'id,name,access_token'
@@ -177,7 +233,8 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
 
         return response.data.data || [];
     } catch (error) {
-        console.error('Get pages error:', error instanceof AxiosError ? error.response?.data : error);
+        const parsed = parseMetaApiError(error);
+        console.error('Get pages error:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
         return [];
     }
 }
@@ -188,7 +245,7 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
 async function getInstagramBusinessAccount(pageId: string, pageAccessToken: string): Promise<InstagramAccount | null> {
     try {
         // Get Instagram Business Account ID linked to the page
-        const pageResponse = await axios.get(`${META_GRAPH_API}/${pageId}`, {
+        const pageResponse = await metaApi.get(`/${pageId}`, {
             params: {
                 access_token: pageAccessToken,
                 fields: 'instagram_business_account,name'
@@ -203,7 +260,7 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
         }
 
         // Get Instagram account details
-        const igResponse = await axios.get(`${META_GRAPH_API}/${igAccountId}`, {
+        const igResponse = await metaApi.get(`/${igAccountId}`, {
             params: {
                 access_token: pageAccessToken,
                 fields: 'id,username,name,profile_picture_url'
@@ -219,7 +276,8 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
             pageName: pageName
         };
     } catch (error) {
-        console.error('Get IG account error:', error instanceof AxiosError ? error.response?.data : error);
+        const parsed = parseMetaApiError(error);
+        console.error('Get IG account error:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
         return null;
     }
 }
@@ -229,7 +287,7 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
  */
 async function validatePermissions(accessToken: string): Promise<boolean> {
     try {
-        const response = await axios.get(`${META_GRAPH_API}/me/permissions`, {
+        const response = await metaApi.get('/me/permissions', {
             params: { access_token: accessToken }
         });
 
@@ -240,7 +298,8 @@ async function validatePermissions(accessToken: string): Promise<boolean> {
         const requiredPermissions = ['instagram_basic', 'pages_show_list', 'pages_read_engagement'];
         return requiredPermissions.every(p => grantedPermissions.includes(p));
     } catch (error) {
-        console.error('Permission validation error:', error);
+        const parsed = parseMetaApiError(error);
+        console.error('Permission validation error:', parsed.message);
         return false;
     }
 }
@@ -250,6 +309,15 @@ async function validatePermissions(accessToken: string): Promise<boolean> {
  * Steps A-B-C-D from the integration spec
  */
 export async function handleOAuthCallback(code: string, state: string): Promise<InstagramConnectionResult> {
+    // Validate configuration before proceeding
+    if (!isInstagramConfigured()) {
+        return {
+            success: false,
+            error: 'CONFIG_ERROR',
+            errorMessage: 'Instagram integration is not properly configured. Please contact support.'
+        };
+    }
+
     // Validate state token (CSRF protection)
     const stateValidation = validateStateToken(state);
     if (!stateValidation.valid) {
@@ -343,7 +411,7 @@ export async function refreshAccessToken(encryptedToken: string): Promise<{ acce
             return null;
         }
 
-        const response = await axios.get(`${META_GRAPH_API}/oauth/access_token`, {
+        const response = await metaApi.get('/oauth/access_token', {
             params: {
                 grant_type: 'fb_exchange_token',
                 client_id: INSTAGRAM_APP_ID,
@@ -361,7 +429,11 @@ export async function refreshAccessToken(encryptedToken: string): Promise<{ acce
             expiresAt
         };
     } catch (error) {
-        console.error('Token refresh error:', error instanceof AxiosError ? error.response?.data : error);
+        const parsed = parseMetaApiError(error);
+        console.error('Token refresh error:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
+        if (parsed.isRateLimit) {
+            console.warn('Rate limited during token refresh - will retry later');
+        }
         return null;
     }
 }
@@ -374,7 +446,7 @@ export async function validateToken(encryptedToken: string): Promise<boolean> {
         const token = decrypt(encryptedToken);
         if (!token) return false;
 
-        const response = await axios.get(`${META_GRAPH_API}/me`, {
+        const response = await metaApi.get('/me', {
             params: { access_token: token }
         });
 
@@ -392,7 +464,7 @@ export async function getInstagramProfile(encryptedToken: string, igUserId: stri
         const token = decrypt(encryptedToken);
         if (!token) return null;
 
-        const response = await axios.get(`${META_GRAPH_API}/${igUserId}`, {
+        const response = await metaApi.get(`/${igUserId}`, {
             params: {
                 access_token: token,
                 fields: 'id,username,name,profile_picture_url,followers_count,media_count'
@@ -401,7 +473,8 @@ export async function getInstagramProfile(encryptedToken: string, igUserId: stri
 
         return response.data;
     } catch (error) {
-        console.error('Get profile error:', error);
+        const parsed = parseMetaApiError(error);
+        console.error('Get profile error:', parsed.message);
         return null;
     }
 }

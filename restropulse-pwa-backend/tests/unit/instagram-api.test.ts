@@ -9,11 +9,18 @@ process.env.INSTAGRAM_REDIRECT_URI = 'http://localhost/callback';
 const mockGet = jest.fn<any>();
 const mockPost = jest.fn<any>();
 
+// Create mock axios instance
+const mockAxiosInstance = {
+    get: mockGet,
+    post: mockPost
+};
+
 // Mock axios module using unstable_mockModule for ESM support
 await jest.unstable_mockModule('axios', () => ({
     default: {
         get: mockGet,
         post: mockPost,
+        create: jest.fn(() => mockAxiosInstance),
         isAxiosError: jest.fn()
     },
     AxiosError: class extends Error {
@@ -68,6 +75,18 @@ describe('Instagram API Service', () => {
         test('should return invalid for unknown state', () => {
             const result = instagramService.validateStateToken('invalid-state');
             expect(result).toEqual({ valid: false });
+        });
+
+        test('should invalidate already used state token (one-time use)', () => {
+            const { state } = instagramService.generateOAuthUrl('res-123');
+
+            // First use - valid
+            const firstResult = instagramService.validateStateToken(state);
+            expect(firstResult).toEqual({ valid: true, restaurantId: 'res-123' });
+
+            // Second use - invalid (already consumed)
+            const secondResult = instagramService.validateStateToken(state);
+            expect(secondResult).toEqual({ valid: false });
         });
     });
 
@@ -213,6 +232,115 @@ describe('Instagram API Service', () => {
             expect(result.accounts).toHaveLength(2);
             expect(result.account).toBeUndefined(); // No auto-select
         });
+
+        test('should auto-select single account', async () => {
+            const { state } = instagramService.generateOAuthUrl('res-single');
+
+            mockGet.mockImplementation((url: any) => {
+                if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
+                if (url.includes('/me/permissions')) {
+                    return Promise.resolve({
+                        data: {
+                            data: ['instagram_basic', 'pages_show_list', 'pages_read_engagement'].map(p => ({ permission: p, status: 'granted' }))
+                        }
+                    });
+                }
+                if (url.includes('/me/accounts')) {
+                    return Promise.resolve({
+                        data: {
+                            data: [
+                                { id: 'page-1', access_token: 'pt1', name: 'My Page' }
+                            ]
+                        }
+                    });
+                }
+                // Page IG account lookup
+                if (url.includes('page-1')) {
+                    return Promise.resolve({ data: { instagram_business_account: { id: 'ig-1' }, name: 'My Page' } });
+                }
+                // IG account details
+                if (url.includes('ig-1')) {
+                    return Promise.resolve({ data: { id: 'ig-1', username: 'myuser', name: 'My User' } });
+                }
+                return Promise.resolve({ data: {} });
+            });
+
+            const result = await instagramService.handleOAuthCallback('code-123', state);
+            expect(result.success).toBe(true);
+            expect(result.account).toBeDefined(); // Auto-selected single account
+            expect(result.account?.username).toBe('myuser');
+            expect(result.accounts).toBeUndefined(); // Not multiple
+        });
+
+        test('should handle config error when not configured', async () => {
+            // Temporarily clear config to test CONFIG_ERROR path
+            const origAppId = process.env.INSTAGRAM_APP_ID;
+            process.env.INSTAGRAM_APP_ID = '';
+
+            // Re-import to pick up changed config
+            jest.resetModules();
+            const freshService = await import('../../src/services/instagram-api.js');
+
+            const result = await freshService.handleOAuthCallback('code', 'state');
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('CONFIG_ERROR');
+
+            // Restore config
+            process.env.INSTAGRAM_APP_ID = origAppId;
+        });
+
+        test('should handle page fetch error gracefully', async () => {
+            const { state } = instagramService.generateOAuthUrl('res-page-err');
+
+            mockGet.mockImplementation((url: any) => {
+                if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
+                if (url.includes('/me/permissions')) {
+                    return Promise.resolve({
+                        data: {
+                            data: ['instagram_basic', 'pages_show_list', 'pages_read_engagement'].map(p => ({ permission: p, status: 'granted' }))
+                        }
+                    });
+                }
+                // Pages endpoint fails
+                if (url.includes('/me/accounts')) {
+                    return Promise.reject(new Error('Failed to fetch pages'));
+                }
+                return Promise.resolve({ data: {} });
+            });
+
+            const result = await instagramService.handleOAuthCallback('code-123', state);
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('NO_PAGES_FOUND');
+        });
+
+        test('should handle IG account fetch error gracefully', async () => {
+            const { state } = instagramService.generateOAuthUrl('res-ig-err');
+
+            mockGet.mockImplementation((url: any) => {
+                if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
+                if (url.includes('/me/permissions')) {
+                    return Promise.resolve({
+                        data: {
+                            data: ['instagram_basic', 'pages_show_list', 'pages_read_engagement'].map(p => ({ permission: p, status: 'granted' }))
+                        }
+                    });
+                }
+                if (url.includes('/me/accounts')) {
+                    return Promise.resolve({
+                        data: { data: [{ id: 'page-1', access_token: 'pt1', name: 'Page' }] }
+                    });
+                }
+                // IG account lookup fails
+                if (url.includes('page-1')) {
+                    return Promise.reject(new Error('Failed to fetch IG account'));
+                }
+                return Promise.resolve({ data: {} });
+            });
+
+            const result = await instagramService.handleOAuthCallback('code-123', state);
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('NO_IG_ACCOUNT_FOUND');
+        });
     });
 
     describe('Token Management', () => {
@@ -262,6 +390,43 @@ describe('Instagram API Service', () => {
             const isValid = await instagramService.validateToken('');
             expect(isValid).toBe(false);
         });
+
+        test('should handle rate limit error during token refresh', async () => {
+            // Simulate Meta rate limit error (code 4)
+            const rateLimitError: any = new Error('Rate limited');
+            rateLimitError.response = {
+                status: 429,
+                data: {
+                    error: {
+                        code: 4,
+                        message: 'Application request limit reached'
+                    }
+                }
+            };
+            mockGet.mockRejectedValue(rateLimitError);
+
+            const encToken = encrypt('valid-token');
+            const result = await instagramService.refreshAccessToken(encToken);
+            expect(result).toBeNull();
+        });
+
+        test('should handle default expires_in when not provided', async () => {
+            mockGet.mockImplementation((url: any, config: any) => {
+                if (config?.params?.grant_type === 'fb_exchange_token') {
+                    return Promise.resolve({
+                        data: { access_token: 'new-token' } // No expires_in
+                    });
+                }
+                return Promise.reject(new Error('Unknown'));
+            });
+
+            const encToken = encrypt('old-token');
+            const result = await instagramService.refreshAccessToken(encToken);
+            expect(result).toBeDefined();
+            expect(result?.accessToken).toBe('new-token');
+            // Should use default 60 days expiry
+            expect(result?.expiresAt).toBeDefined();
+        });
     });
 
     describe('Profile & Credentials', () => {
@@ -302,6 +467,58 @@ describe('Instagram API Service', () => {
             expect(stored.userId).toBe('ig-123');
             expect(decrypt(stored.accessToken)).toBe('my-token');
             expect(stored.tokenExpiresAt).toBe(now);
+        });
+    });
+
+    describe('Error Handling (parseMetaApiError)', () => {
+        test('should handle permission validation error', async () => {
+            const { state } = instagramService.generateOAuthUrl('res-perm-err');
+
+            mockGet.mockImplementation((url: any) => {
+                if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
+                // Permissions endpoint fails
+                if (url.includes('/me/permissions')) {
+                    return Promise.reject(new Error('Permission check failed'));
+                }
+                return Promise.resolve({ data: {} });
+            });
+
+            const result = await instagramService.handleOAuthCallback('code-123', state);
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('PERMISSIONS_MISSING');
+        });
+
+        test('should handle Meta API error with code', async () => {
+            const { state } = instagramService.generateOAuthUrl('res-meta-err');
+
+            mockGet.mockImplementation((url: any) => {
+                if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
+                if (url.includes('/me/permissions')) {
+                    return Promise.resolve({
+                        data: {
+                            data: ['instagram_basic', 'pages_show_list', 'pages_read_engagement'].map(p => ({ permission: p, status: 'granted' }))
+                        }
+                    });
+                }
+                if (url.includes('/me/accounts')) {
+                    // Simulate Meta error with code
+                    const metaError: any = new Error('Meta error');
+                    metaError.response = {
+                        data: {
+                            error: {
+                                code: 190,
+                                message: 'Invalid OAuth access token'
+                            }
+                        }
+                    };
+                    return Promise.reject(metaError);
+                }
+                return Promise.resolve({ data: {} });
+            });
+
+            const result = await instagramService.handleOAuthCallback('code-123', state);
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('NO_PAGES_FOUND');
         });
     });
 });

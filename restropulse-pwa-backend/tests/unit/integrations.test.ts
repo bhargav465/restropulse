@@ -221,7 +221,7 @@ describe('Integration Routes', () => {
         });
     });
 
-    describe('GET /api/integrations/status/:restaurantId', () => {
+    describe('GET /api/integrations/instagram/status/:restaurantId', () => {
         test('should return status', async () => {
             // Setup DB state
             const col = realConnection.getRestaurantsCollection();
@@ -255,7 +255,7 @@ describe('Integration Routes', () => {
         });
     });
 
-    describe('POST /api/integrations/instagram/disconnect/:restaurantId', () => {
+    describe('DELETE /api/integrations/instagram/disconnect/:restaurantId', () => {
         test('should disconnect integration', async () => {
             const col = realConnection.getRestaurantsCollection();
             await col.updateOne({ _id: 'r1' } as any, {
