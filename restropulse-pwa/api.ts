@@ -241,9 +241,10 @@ export const strategyAPI = {
 // Instagram Integration API
 export const instagramAPI = {
     // Get OAuth URL to initiate connection
-    getOAuthUrl: async (restaurantId: string): Promise<{ oauthUrl: string; state: string }> => {
+    // useOnboarding: true for guided setup (new users), false for standard OAuth (existing setup)
+    getOAuthUrl: async (restaurantId: string, useOnboarding: boolean = false): Promise<{ oauthUrl: string; state: string }> => {
         const response = await fetchAPI<ApiResponse<{ oauthUrl: string; state: string }>>(
-            `/integrations/instagram/oauth-url?restaurantId=${restaurantId}`
+            `/integrations/instagram/oauth-url?restaurantId=${restaurantId}&onboarding=${useOnboarding}`
         );
         return response.data!;
     },

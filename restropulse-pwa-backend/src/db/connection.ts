@@ -76,10 +76,44 @@ export function getSessionsCollection(): Collection {
 }
 
 // Helper to convert MongoDB _id to id for API responses
+// Also transforms instagramCredentials to instagramConnection (public-safe)
 export function toApiFormat<T extends Document>(doc: WithId<T> | null): (Omit<T, '_id'> & { id: string }) | null {
     if (!doc) return null;
-    const { _id, ...rest } = doc;
-    return { ...rest, id: _id.toString() } as Omit<T, '_id'> & { id: string };
+    const { _id, instagramCredentials, ...rest } = doc as any;
+
+    const result: any = { ...rest, id: _id.toString() };
+
+    // Transform instagramCredentials to instagramConnection (exclude sensitive data)
+    if (instagramCredentials) {
+        const tokenExpiresAt = instagramCredentials.tokenExpiresAt
+            ? new Date(instagramCredentials.tokenExpiresAt)
+            : null;
+        const now = new Date();
+        const daysUntilExpiry = tokenExpiresAt
+            ? Math.floor((tokenExpiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+
+        let tokenStatus: 'valid' | 'expiring_soon' | 'expired' = 'valid';
+        if (daysUntilExpiry !== null) {
+            if (daysUntilExpiry <= 0) {
+                tokenStatus = 'expired';
+            } else if (daysUntilExpiry <= 7) {
+                tokenStatus = 'expiring_soon';
+            }
+        }
+
+        result.instagramConnection = {
+            connected: true,
+            username: instagramCredentials.username,
+            userId: instagramCredentials.userId,
+            pageName: instagramCredentials.pageName,
+            connectedAt: instagramCredentials.connectedAt,
+            tokenStatus,
+            needsReauthorization: tokenStatus === 'expired'
+        };
+    }
+
+    return result as Omit<T, '_id'> & { id: string };
 }
 
 // Helper to convert array of documents

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, LogOut, Trash2, MapPin, Instagram, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
+import { CreditCard, LogOut, Trash2, MapPin, Instagram, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, Facebook } from 'lucide-react';
 import { SubscriptionTier, Restaurant, InstagramConnectionError, InstagramAccount } from '../types';
 import { instagramAPI, restaurantAPI } from '../api';
 
@@ -9,35 +9,52 @@ interface SettingsProps {
     onRestaurantUpdate?: (restaurant: Restaurant) => void;
 }
 
-// Error messages for Instagram connection issues
-const INSTAGRAM_ERROR_MESSAGES: Record<InstagramConnectionError, { title: string; description: string }> = {
+// Error messages for Instagram connection issues with detailed help
+const INSTAGRAM_ERROR_MESSAGES: Record<InstagramConnectionError, {
+    title: string;
+    description: string;
+    helpUrl?: string;
+    helpLabel?: string;
+    setupStep?: string;
+}> = {
     NO_PAGES_FOUND: {
         title: 'No Facebook Pages Found',
-        description: 'Please ensure you are an Admin of a Facebook Page.'
+        description: 'You need to create a Facebook Page for your business and be an Admin of that page.',
+        helpUrl: 'https://www.facebook.com/pages/create',
+        helpLabel: 'Create a Facebook Page',
+        setupStep: 'facebook_page'
     },
     NO_IG_ACCOUNT_FOUND: {
-        title: 'Personal Instagram Account',
-        description: 'Your Instagram is currently a Personal account. Switch to Professional in Instagram Settings to continue.'
+        title: 'Professional Account Required',
+        description: 'Your Instagram account needs to be a Professional (Business or Creator) account, not a Personal account.',
+        helpUrl: 'https://help.instagram.com/502981923235522',
+        helpLabel: 'How to switch to Professional',
+        setupStep: 'professional_account'
     },
     PERMISSIONS_MISSING: {
         title: 'Permissions Required',
-        description: 'Please re-authenticate and ensure all checkboxes are checked in the Facebook popup.'
+        description: 'Please re-authenticate and make sure to check ALL permission boxes in the Facebook popup. We need these permissions to post content on your behalf.',
+        helpUrl: 'https://developers.facebook.com/docs/permissions',
+        helpLabel: 'Learn about permissions'
     },
     INVALID_STATE: {
         title: 'Session Expired',
-        description: 'Invalid or expired authorization request. Please try again.'
+        description: 'Your authorization session has expired. This can happen if you took too long or refreshed the page. Please try again.',
     },
     TOKEN_EXCHANGE_FAILED: {
         title: 'Authorization Failed',
-        description: 'Failed to complete authorization. Please try again.'
+        description: 'Failed to complete the authorization process. This might be a temporary issue. Please try again.',
     },
     API_ERROR: {
         title: 'Connection Error',
-        description: 'An error occurred while connecting to Instagram. Please try again.'
+        description: 'An error occurred while connecting to Instagram. Please check your internet connection and try again.',
     },
     ACCOUNT_TYPE_MISMATCH: {
-        title: 'Account Type Issue',
-        description: 'Your account type may not support all required features.'
+        title: 'Account Not Linked',
+        description: 'Your Instagram Professional account must be linked to your Facebook Page. Go to your Facebook Page settings to connect them.',
+        helpUrl: 'https://www.facebook.com/help/1148909221857370',
+        helpLabel: 'Link Instagram to Facebook Page',
+        setupStep: 'link_accounts'
     }
 };
 
@@ -99,7 +116,16 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
     const [pendingAccounts, setPendingAccounts] = useState<InstagramAccount[]>([]);
     const [pendingSelectionId, setPendingSelectionId] = useState<string | null>(null);
 
+    // Setup guide state - simplified to informational only
+    const [showSetupGuide, setShowSetupGuide] = useState(false);
+
     const [subscription, setSubscription] = useState(restaurantData.subscription);
+
+    // Sync Instagram state when restaurantData prop changes (e.g., after refresh)
+    useEffect(() => {
+        setInstagramConnected(restaurantData.integrations.instagram);
+        setInstagramUsername(restaurantData.instagramConnection?.username || '');
+    }, [restaurantData.integrations.instagram, restaurantData.instagramConnection?.username]);
 
     // Listen for OAuth popup messages
     useEffect(() => {
@@ -165,12 +191,20 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
             return;
         }
 
-        // Connect flow - open OAuth popup
+        // Show setup guide first
+        setShowSetupGuide(true);
+        window.history.pushState({ modal: 'setupGuide' }, '', '#setup-guide');
+    };
+
+    // Actually start the OAuth flow after user confirms setup
+    // useOnboarding: true for guided setup (new users), false for standard OAuth (existing setup)
+    const startInstagramOAuth = async (useOnboarding: boolean = false) => {
+        setShowSetupGuide(false);
         setInstagramLoading(true);
         setInstagramError(null);
 
         try {
-            const { oauthUrl } = await instagramAPI.getOAuthUrl(restaurantData.id);
+            const { oauthUrl } = await instagramAPI.getOAuthUrl(restaurantData.id, useOnboarding);
 
             // Open OAuth popup
             const width = 600;
@@ -228,7 +262,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
         setShowAccountPicker(false);
 
         try {
-            const result = await instagramAPI.selectAccount(pendingSelectionId, account.id);
+            const result = await instagramAPI.selectAccount(pendingSelectionId, account.id, restaurantData.id);
             setInstagramConnected(true);
             setInstagramUsername(result.username);
             setPendingAccounts([]);
@@ -263,10 +297,13 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
             if (showAccountPicker) {
                 setShowAccountPicker(false);
             }
+            if (showSetupGuide) {
+                setShowSetupGuide(false);
+            }
         };
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
-    }, [isEditingProfile, isSubscriptionOpen, showInstagramErrorModal, showAccountPicker]);
+    }, [isEditingProfile, isSubscriptionOpen, showInstagramErrorModal, showAccountPicker, showSetupGuide]);
 
     const openEditProfile = () => {
         setIsEditingProfile(true);
@@ -288,7 +325,122 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
         window.history.back();
     };
 
-    // Instagram Error Modal
+    // Instagram Setup Guide Modal - Offers two connection options
+    const InstagramSetupGuide = () => {
+        if (!showSetupGuide) return null;
+
+        return (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="absolute inset-0" onClick={() => { setShowSetupGuide(false); window.history.back(); }}></div>
+                <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 relative z-10 max-h-[90vh] overflow-y-auto">
+                    {/* Drag Handle for mobile */}
+                    <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4 sm:hidden"></div>
+
+                    {/* Header */}
+                    <div className="flex items-center gap-4 mb-6">
+                        <div className="w-14 h-14 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-2xl flex items-center justify-center">
+                            <Instagram size={28} className="text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-800">Connect Instagram</h3>
+                            <p className="text-sm text-slate-500">Choose your setup method</p>
+                        </div>
+                    </div>
+
+                    {/* Option 1: Already Have Everything Set Up */}
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                        <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-white font-bold text-sm">1</span>
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-semibold text-green-800 mb-1">I already have everything set up</p>
+                                <p className="text-xs text-green-700 mb-3">
+                                    Use this if you have a Facebook Page with Instagram Professional account already linked.
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        window.history.back();
+                                        startInstagramOAuth(false); // Standard OAuth
+                                    }}
+                                    className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700 text-sm"
+                                >
+                                    <Facebook size={16} />
+                                    Connect with Facebook
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Option 2: Need Guided Setup */}
+                    <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-5">
+                        <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                                <span className="text-white font-bold text-sm">2</span>
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-semibold text-purple-800 mb-1">I need help setting up</p>
+                                <p className="text-xs text-purple-700 mb-3">
+                                    Use this for a guided setup that helps you create a Page and link Instagram.
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        window.history.back();
+                                        startInstagramOAuth(true); // IG_API_ONBOARDING
+                                    }}
+                                    className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 text-sm"
+                                >
+                                    <Instagram size={16} />
+                                    Guided Setup
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Help Links */}
+                    <div className="border-t border-slate-100 pt-4 mb-4">
+                        <p className="text-xs text-slate-500 mb-2">Need to set things up manually first?</p>
+                        <div className="flex flex-wrap gap-2">
+                            <a
+                                href="https://www.facebook.com/pages/create"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors"
+                            >
+                                Create Facebook Page
+                            </a>
+                            <a
+                                href="https://help.instagram.com/502981923235522"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs px-3 py-1.5 bg-pink-50 text-pink-600 rounded-full hover:bg-pink-100 transition-colors"
+                            >
+                                Switch to Professional
+                            </a>
+                            <a
+                                href="https://www.facebook.com/help/1148909221857370"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs px-3 py-1.5 bg-purple-50 text-purple-600 rounded-full hover:bg-purple-100 transition-colors"
+                            >
+                                Link Instagram to Page
+                            </a>
+                        </div>
+                    </div>
+
+                    {/* Cancel button */}
+                    <button
+                        onClick={() => { setShowSetupGuide(false); window.history.back(); }}
+                        className="w-full px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // Instagram Error Modal with enhanced help
     const InstagramErrorModal = () => {
         if (!instagramError) return null;
         const errorInfo = INSTAGRAM_ERROR_MESSAGES[instagramError.type] || {
@@ -304,22 +456,18 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                         <AlertCircle className="w-8 h-8 text-red-600" />
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 text-center mb-2">{errorInfo.title}</h3>
-                    <p className="text-slate-600 text-center mb-6">{errorInfo.description}</p>
+                    <p className="text-slate-600 text-center mb-4">{errorInfo.description}</p>
 
                     {/* Help link for specific errors */}
-                    {(instagramError.type === 'NO_IG_ACCOUNT_FOUND' || instagramError.type === 'NO_PAGES_FOUND') && (
+                    {errorInfo.helpUrl && (
                         <a
-                            href={instagramError.type === 'NO_IG_ACCOUNT_FOUND'
-                                ? 'https://help.instagram.com/502981923235522'
-                                : 'https://www.facebook.com/pages/create'}
+                            href={errorInfo.helpUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center justify-center gap-2 text-pink-600 hover:text-pink-700 text-sm font-medium mb-4"
+                            className="flex items-center justify-center gap-2 text-pink-600 hover:text-pink-700 text-sm font-medium mb-4 p-3 bg-pink-50 rounded-xl"
                         >
                             <ExternalLink size={14} />
-                            {instagramError.type === 'NO_IG_ACCOUNT_FOUND'
-                                ? 'How to switch to Professional account'
-                                : 'Create a Facebook Page'}
+                            {errorInfo.helpLabel || 'Get Help'}
                         </a>
                     )}
 
@@ -333,7 +481,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                         <button
                             onClick={() => {
                                 setShowInstagramErrorModal(false);
-                                handleInstagramConnect();
+                                startInstagramOAuth();
                             }}
                             className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:opacity-90"
                         >
@@ -585,6 +733,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
             {isSubscriptionOpen && <SubscriptionModal />}
             {showInstagramErrorModal && <InstagramErrorModal />}
             {showAccountPicker && <AccountPickerModal />}
+            {showSetupGuide && <InstagramSetupGuide />}
 
             {/* Profile Header */}
             <div className="flex flex-col items-center text-center">
@@ -613,8 +762,8 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                     <div className="p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${instagramConnected
-                                    ? 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500'
-                                    : 'bg-pink-100'
+                                ? 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500'
+                                : 'bg-pink-100'
                                 }`}>
                                 <Instagram size={20} className={instagramConnected ? 'text-white' : 'text-pink-600'} />
                             </div>
@@ -627,27 +776,42 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                                 </p>
                             </div>
                         </div>
-                        <button
-                            onClick={handleInstagramConnect}
-                            disabled={instagramLoading}
-                            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${instagramLoading
+                        <div className="flex items-center gap-2">
+                            {/* Help button - only show when not connected */}
+                            {!instagramConnected && !instagramLoading && (
+                                <button
+                                    onClick={() => {
+                                        setShowSetupGuide(true);
+                                        window.history.pushState({ modal: 'setupGuide' }, '', '#setup-guide');
+                                    }}
+                                    className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 flex items-center justify-center transition-colors"
+                                    title="View setup guide"
+                                >
+                                    <HelpCircle size={16} />
+                                </button>
+                            )}
+                            <button
+                                onClick={handleInstagramConnect}
+                                disabled={instagramLoading}
+                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-2 ${instagramLoading
                                     ? 'bg-slate-100 text-slate-400 cursor-wait'
                                     : instagramConnected
                                         ? 'bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-700'
                                         : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90'
-                                }`}
-                        >
-                            {instagramLoading ? (
-                                <>
-                                    <Loader2 size={12} className="animate-spin" />
-                                    <span>Connecting...</span>
-                                </>
-                            ) : instagramConnected ? (
-                                'Connected'
-                            ) : (
-                                'Connect'
-                            )}
-                        </button>
+                                    }`}
+                            >
+                                {instagramLoading ? (
+                                    <>
+                                        <Loader2 size={12} className="animate-spin" />
+                                        <span>Connecting...</span>
+                                    </>
+                                ) : instagramConnected ? (
+                                    'Connected'
+                                ) : (
+                                    'Connect'
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
 

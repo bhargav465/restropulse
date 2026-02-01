@@ -158,7 +158,9 @@ const InstagramCallback: React.FC<InstagramCallbackProps> = ({ onComplete, onErr
         setMessage('Connecting account...');
 
         try {
-            const result = await instagramAPI.selectAccount(selectionId, account.id);
+            // Note: restaurantId is stored in the backend pending session, so we pass empty string
+            // The backend will use the stored restaurantId from the OAuth flow
+            const result = await instagramAPI.selectAccount(selectionId, account.id, '');
             setStatus('success');
             setUsername(result.username);
             setMessage(result.message);

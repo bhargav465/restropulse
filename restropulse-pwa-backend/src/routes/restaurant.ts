@@ -19,6 +19,12 @@ router.get('/:id', async (req: Request, res: Response<ApiResponse<Restaurant>>) 
         const restaurant = await findRestaurantById(id);
 
         if (restaurant) {
+            console.log('[DEBUG] Restaurant data:', JSON.stringify({
+                id: restaurant.id,
+                integrations: restaurant.integrations,
+                hasInstagramConnection: !!(restaurant as any).instagramConnection,
+                instagramConnection: (restaurant as any).instagramConnection
+            }, null, 2));
             res.json({
                 success: true,
                 data: restaurant

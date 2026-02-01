@@ -94,10 +94,14 @@ function verifySignedRequest(signedRequest: string): { userId: string } | null {
 /**
  * GET /api/integrations/instagram/oauth-url
  * Generate OAuth URL for Instagram connection
+ * Query params:
+ *   - restaurantId: required
+ *   - onboarding: optional, set to 'true' for guided IG_API_ONBOARDING flow
  */
 router.get('/instagram/oauth-url', async (req: Request, res: Response) => {
     try {
         const restaurantId = req.query.restaurantId as string;
+        const useOnboarding = req.query.onboarding === 'true';
 
         if (!restaurantId) {
             return res.status(400).json({
@@ -113,7 +117,7 @@ router.get('/instagram/oauth-url', async (req: Request, res: Response) => {
             });
         }
 
-        const { url, state } = generateOAuthUrl(restaurantId);
+        const { url, state } = generateOAuthUrl(restaurantId, useOnboarding);
 
         res.json({
             success: true,
@@ -154,15 +158,25 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
         // Validate state first to get restaurant ID
         const stateValidation = validateStateToken(String(state));
         if (!stateValidation.valid || !stateValidation.restaurantId) {
+            console.log('[DEBUG] Invalid state token');
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=invalid_state&message=${encodeURIComponent('Invalid or expired authorization request. Please try again.')}`);
         }
 
         const restaurantId = stateValidation.restaurantId;
+        console.log('[DEBUG] OAuth callback - restaurantId:', restaurantId);
 
-        // Process OAuth callback
-        const result = await handleOAuthCallback(String(code), String(state));
+        // Process OAuth callback (skip state validation since we already did it above)
+        const result = await handleOAuthCallback(String(code), String(state), true);
+        console.log('[DEBUG] OAuth callback result:', JSON.stringify({
+            success: result.success,
+            error: result.error,
+            hasAccount: !!result.account,
+            hasAccounts: !!result.accounts,
+            accountsCount: result.accounts?.length
+        }));
 
         if (!result.success) {
+            console.log('[DEBUG] OAuth failed:', result.error, result.errorMessage);
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=${result.error}&message=${encodeURIComponent(result.errorMessage || 'Connection failed')}`);
         }
 
@@ -175,8 +189,9 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
             );
 
             // Save to database
+            console.log('[DEBUG] Saving Instagram credentials for restaurant:', restaurantId);
             const col = getRestaurantsCollection();
-            await col.updateOne(
+            const updateResult = await col.updateOne(
                 { _id: restaurantId as any },
                 {
                     $set: {
@@ -186,6 +201,7 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
                     }
                 }
             );
+            console.log('[DEBUG] Update result:', JSON.stringify(updateResult));
 
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?success=true&username=${encodeURIComponent(result.account.username)}`);
         }
@@ -373,8 +389,9 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
         );
 
         // Save to database
+        console.log('[DEBUG] select-account: Saving Instagram credentials for restaurant:', targetRestaurantId);
         const col = getRestaurantsCollection();
-        await col.updateOne(
+        const updateResult = await col.updateOne(
             { _id: targetRestaurantId as any },
             {
                 $set: {
@@ -384,6 +401,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
                 }
             }
         );
+        console.log('[DEBUG] select-account: Update result:', JSON.stringify(updateResult));
 
         // Clean up pending selection
         pendingSelections.delete(selectionId);

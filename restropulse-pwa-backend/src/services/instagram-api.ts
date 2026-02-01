@@ -29,7 +29,7 @@ const OAUTH_SCOPES = [
     'instagram_basic',
     'instagram_content_publish',
     'pages_show_list',
-    'pages_read_engagement',
+    'pages_read_user_content',  // Replaced pages_read_engagement
     'public_profile'
 ].join(',');
 
@@ -98,29 +98,34 @@ function cleanupExpiredStateTokens(): void {
  * Uses Business Login for Instagram with extras parameter for simplified onboarding
  * See: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/business-login-for-instagram
  */
-export function generateOAuthUrl(restaurantId: string): { url: string; state: string } {
+export function generateOAuthUrl(restaurantId: string, useOnboarding: boolean = false): { url: string; state: string } {
     // Cleanup old tokens first
     cleanupExpiredStateTokens();
 
     const state = generateStateToken();
     stateTokenStore.set(state, { createdAt: Date.now(), restaurantId });
 
-    // extras parameter enables Business Login for Instagram onboarding flow
-    // This allows users to set up their Instagram Business account during OAuth
-    const extras = JSON.stringify({
-        setup: {
-            channel: 'IG_API_ONBOARDING'
-        }
-    });
-
     const params = new URLSearchParams({
         client_id: INSTAGRAM_APP_ID,
         redirect_uri: INSTAGRAM_REDIRECT_URI,
         scope: OAUTH_SCOPES,
         response_type: 'code',
-        state: state,
-        extras: extras
+        state: state
     });
+
+    // IG_API_ONBOARDING is for users who need to set up their Instagram Business account
+    // Standard OAuth (without extras) works better for users who already have everything configured
+    if (useOnboarding) {
+        const extras = JSON.stringify({
+            setup: {
+                channel: 'IG_API_ONBOARDING'
+            }
+        });
+        params.append('extras', extras);
+        console.log('[OAuth] Using IG_API_ONBOARDING flow for guided setup');
+    } else {
+        console.log('[OAuth] Using standard OAuth flow');
+    }
 
     return {
         url: `${META_OAUTH_URL}?${params.toString()}`,
@@ -187,6 +192,7 @@ function parseMetaApiError(error: unknown): { code: number | null; message: stri
  * Exchange authorization code for access token
  */
 async function exchangeCodeForToken(code: string): Promise<{ accessToken: string; expiresIn: number } | null> {
+    console.log('[OAuth] Step 1: Exchanging code for short-lived token...');
     try {
         const response = await metaApi.get('/oauth/access_token', {
             params: {
@@ -196,9 +202,11 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
                 code: code
             }
         });
+        console.log('[OAuth] Step 1 SUCCESS: Got short-lived token');
 
         // Exchange short-lived token for long-lived token
         const shortLivedToken = response.data.access_token;
+        console.log('[OAuth] Step 2: Exchanging for long-lived token...');
 
         const longLivedResponse = await metaApi.get('/oauth/access_token', {
             params: {
@@ -208,13 +216,14 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
                 fb_exchange_token: shortLivedToken
             }
         });
+        console.log('[OAuth] Step 2 SUCCESS: Got long-lived token, expires in', longLivedResponse.data.expires_in, 'seconds');
 
         return {
             accessToken: longLivedResponse.data.access_token,
             expiresIn: longLivedResponse.data.expires_in || 5184000 // Default 60 days
         };
     } catch (error) {
-        console.error('Token exchange error:', error instanceof AxiosError ? error.response?.data : error);
+        console.error('[OAuth] Token exchange FAILED:', error instanceof AxiosError ? error.response?.data : error);
         return null;
     }
 }
@@ -223,18 +232,144 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
  * Fetch user's managed Facebook Pages
  */
 async function getUserPages(accessToken: string): Promise<Array<{ id: string; name: string; access_token: string }>> {
+    console.log('[OAuth] Step 3: Fetching Facebook Pages...');
+
+    // First, let's see who we're authenticated as
     try {
+        const meResponse = await metaApi.get('/me', {
+            params: {
+                access_token: accessToken,
+                fields: 'id,name,email'
+            }
+        });
+        console.log('[OAuth] Authenticated as:', JSON.stringify(meResponse.data, null, 2));
+    } catch (err) {
+        console.error('[OAuth] Failed to get /me:', err);
+    }
+
+    // Debug: Check token info and extract granular_scopes
+    let granularPageIds: string[] = [];
+    let granularIgIds: string[] = [];
+
+    try {
+        const debugResponse = await metaApi.get('/debug_token', {
+            params: {
+                input_token: accessToken,
+                access_token: `${INSTAGRAM_APP_ID}|${INSTAGRAM_APP_SECRET}`
+            }
+        });
+        console.log('[OAuth] Token debug info:', JSON.stringify(debugResponse.data, null, 2));
+
+        // Extract page IDs from granular_scopes (fallback for Development mode)
+        const granularScopes = debugResponse.data.data?.granular_scopes || [];
+        const pageIdSet = new Set<string>();
+        const igIdSet = new Set<string>();
+
+        for (const scope of granularScopes) {
+            if (scope.scope === 'pages_show_list' || scope.scope === 'pages_read_user_content') {
+                (scope.target_ids || []).forEach((id: string) => pageIdSet.add(id));
+            }
+            if (scope.scope === 'instagram_basic') {
+                (scope.target_ids || []).forEach((id: string) => igIdSet.add(id));
+            }
+        }
+
+        granularPageIds = Array.from(pageIdSet);
+        granularIgIds = Array.from(igIdSet);
+        console.log('[OAuth] Extracted from granular_scopes - Page IDs:', granularPageIds, 'IG IDs:', granularIgIds);
+    } catch (err) {
+        console.log('[OAuth] Could not get token debug info');
+    }
+
+    try {
+        // Try /me/accounts first (standard approach)
+        console.log('[OAuth] Step 3a: Trying /me/accounts...');
         const response = await metaApi.get('/me/accounts', {
             params: {
                 access_token: accessToken,
-                fields: 'id,name,access_token'
+                fields: 'id,name,access_token,instagram_business_account'
             }
         });
 
-        return response.data.data || [];
+        let pages = response.data.data || [];
+        console.log('[OAuth] Step 3a Response - /me/accounts:', JSON.stringify(response.data, null, 2));
+
+        // If empty, try alternative endpoint with nested fields
+        if (pages.length === 0) {
+            console.log('[OAuth] Step 3b: /me/accounts empty, trying /me?fields=accounts...');
+            const altResponse = await metaApi.get('/me', {
+                params: {
+                    access_token: accessToken,
+                    fields: 'accounts{id,name,access_token,instagram_business_account}'
+                }
+            });
+            console.log('[OAuth] Step 3b Response - /me?fields=accounts:', JSON.stringify(altResponse.data, null, 2));
+            pages = altResponse.data.accounts?.data || [];
+        }
+
+        // If still empty, check business accounts
+        if (pages.length === 0) {
+            console.log('[OAuth] Step 3c: Still empty, trying /me/businesses...');
+            try {
+                const bizResponse = await metaApi.get('/me/businesses', {
+                    params: {
+                        access_token: accessToken,
+                        fields: 'id,name,owned_pages{id,name,access_token}'
+                    }
+                });
+                console.log('[OAuth] Step 3c Response - /me/businesses:', JSON.stringify(bizResponse.data, null, 2));
+
+                // Extract pages from businesses
+                const businesses = bizResponse.data.data || [];
+                for (const biz of businesses) {
+                    const bizPages = biz.owned_pages?.data || [];
+                    pages.push(...bizPages);
+                }
+            } catch (bizErr) {
+                console.log('[OAuth] Step 3c: /me/businesses failed (might need business_management permission)');
+            }
+        }
+
+        // FALLBACK: If still empty but we have page IDs from granular_scopes, fetch them directly
+        // This handles a Meta bug in Development mode where /me/accounts returns empty
+        // even though the user granted page permissions
+        if (pages.length === 0 && granularPageIds.length > 0) {
+            console.log('[OAuth] Step 3d: Using granular_scopes fallback - fetching pages directly by ID...');
+
+            for (const pageId of granularPageIds) {
+                try {
+                    // Fetch page details directly - we need a page access token
+                    // First, try to get page access token through the page endpoint
+                    const pageResponse = await metaApi.get(`/${pageId}`, {
+                        params: {
+                            access_token: accessToken,
+                            fields: 'id,name,access_token,instagram_business_account'
+                        }
+                    });
+                    console.log(`[OAuth] Step 3d: Fetched page ${pageId}:`, JSON.stringify(pageResponse.data, null, 2));
+
+                    if (pageResponse.data.id) {
+                        pages.push({
+                            id: pageResponse.data.id,
+                            name: pageResponse.data.name || 'Unknown Page',
+                            access_token: pageResponse.data.access_token || accessToken, // Use page token or user token
+                            instagram_business_account: pageResponse.data.instagram_business_account
+                        });
+                    }
+                } catch (pageErr) {
+                    console.log(`[OAuth] Step 3d: Could not fetch page ${pageId}:`, pageErr instanceof Error ? pageErr.message : pageErr);
+                }
+            }
+        }
+
+        console.log('[OAuth] Step 3 FINAL RESULT: Found', pages.length, 'pages:', pages.map((p: any) => ({ id: p.id, name: p.name })));
+        return pages;
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        console.error('Get pages error:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
+        console.error('[OAuth] Step 3 FAILED - Get pages error:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
+        if (error instanceof AxiosError) {
+            console.error('[OAuth] Full error response:', JSON.stringify(error.response?.data, null, 2));
+        }
         return [];
     }
 }
@@ -245,27 +380,33 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
 async function getInstagramBusinessAccount(pageId: string, pageAccessToken: string): Promise<InstagramAccount | null> {
     try {
         // Get Instagram Business Account ID linked to the page
+        console.log('[OAuth] Step 4b: Fetching IG account for page', pageId);
         const pageResponse = await metaApi.get(`/${pageId}`, {
             params: {
                 access_token: pageAccessToken,
                 fields: 'instagram_business_account,name'
             }
         });
+        console.log('[OAuth] Page response:', JSON.stringify(pageResponse.data, null, 2));
 
         const igAccountId = pageResponse.data.instagram_business_account?.id;
         const pageName = pageResponse.data.name;
 
         if (!igAccountId) {
+            console.log('[OAuth] No Instagram Business Account linked to page', pageName);
             return null;
         }
+        console.log('[OAuth] Found IG account ID:', igAccountId, 'for page:', pageName);
 
         // Get Instagram account details
+        console.log('[OAuth] Step 4c: Fetching IG account details...');
         const igResponse = await metaApi.get(`/${igAccountId}`, {
             params: {
                 access_token: pageAccessToken,
                 fields: 'id,username,name,profile_picture_url'
             }
         });
+        console.log('[OAuth] IG account details:', JSON.stringify(igResponse.data, null, 2));
 
         return {
             id: igResponse.data.id,
@@ -277,7 +418,10 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
         };
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        console.error('Get IG account error:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
+        console.error('[OAuth] Get IG account FAILED:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
+        if (error instanceof AxiosError) {
+            console.error('[OAuth] Full error:', JSON.stringify(error.response?.data, null, 2));
+        }
         return null;
     }
 }
@@ -286,20 +430,29 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
  * Validate Instagram permissions
  */
 async function validatePermissions(accessToken: string): Promise<boolean> {
+    console.log('[OAuth] Checking granted permissions...');
     try {
         const response = await metaApi.get('/me/permissions', {
             params: { access_token: accessToken }
         });
 
+        console.log('[OAuth] All permissions:', JSON.stringify(response.data.data, null, 2));
+
         const grantedPermissions = response.data.data
             .filter((p: any) => p.status === 'granted')
             .map((p: any) => p.permission);
 
-        const requiredPermissions = ['instagram_basic', 'pages_show_list', 'pages_read_engagement'];
-        return requiredPermissions.every(p => grantedPermissions.includes(p));
+        console.log('[OAuth] Granted permissions:', grantedPermissions);
+
+        // Only require the essential permissions
+        const requiredPermissions = ['instagram_basic', 'pages_show_list'];
+        const hasAll = requiredPermissions.every(p => grantedPermissions.includes(p));
+        console.log('[OAuth] Required permissions:', requiredPermissions, '| Has all:', hasAll);
+
+        return hasAll;
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        console.error('Permission validation error:', parsed.message);
+        console.error('[OAuth] Permission validation FAILED:', parsed.message);
         return false;
     }
 }
@@ -307,8 +460,9 @@ async function validatePermissions(accessToken: string): Promise<boolean> {
 /**
  * Main OAuth callback handler - runs the validation pipeline
  * Steps A-B-C-D from the integration spec
+ * @param skipStateValidation - Set to true if state was already validated by caller
  */
-export async function handleOAuthCallback(code: string, state: string): Promise<InstagramConnectionResult> {
+export async function handleOAuthCallback(code: string, state: string, skipStateValidation = false): Promise<InstagramConnectionResult> {
     // Validate configuration before proceeding
     if (!isInstagramConfigured()) {
         return {
@@ -318,14 +472,16 @@ export async function handleOAuthCallback(code: string, state: string): Promise<
         };
     }
 
-    // Validate state token (CSRF protection)
-    const stateValidation = validateStateToken(state);
-    if (!stateValidation.valid) {
-        return {
-            success: false,
-            error: 'INVALID_STATE',
-            errorMessage: 'Invalid or expired authorization request. Please try again.'
-        };
+    // Validate state token (CSRF protection) - skip if already validated by caller
+    if (!skipStateValidation) {
+        const stateValidation = validateStateToken(state);
+        if (!stateValidation.valid) {
+            return {
+                success: false,
+                error: 'INVALID_STATE',
+                errorMessage: 'Invalid or expired authorization request. Please try again.'
+            };
+        }
     }
 
     // Step A: Exchange code for long-lived token
@@ -360,10 +516,12 @@ export async function handleOAuthCallback(code: string, state: string): Promise<
 
     // Step C: Find Instagram Business Accounts linked to pages
     const instagramAccounts: InstagramAccount[] = [];
+    const seenIgAccountIds = new Set<string>();
 
     for (const page of pages) {
         const igAccount = await getInstagramBusinessAccount(page.id, page.access_token);
-        if (igAccount) {
+        if (igAccount && !seenIgAccountIds.has(igAccount.id)) {
+            seenIgAccountIds.add(igAccount.id);
             instagramAccounts.push(igAccount);
         }
     }
