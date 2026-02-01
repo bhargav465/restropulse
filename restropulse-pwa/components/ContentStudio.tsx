@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, CheckCircle, MessageCircle, RefreshCw, Send, Edit, Clock, Lock, Undo2, AlertTriangle, FileText, Image as ImageIcon, MoreHorizontal, CheckSquare, Square, AlertCircle, ChevronDown, LockKeyhole, History, Sparkles, Phone, Film, CircleDashed, Layers, Play, Video, ChevronLeft, ChevronRight, Pause, ScanEye, CalendarClock, Archive, X } from 'lucide-react';
+import { Calendar, CheckCircle, MessageCircle, RefreshCw, Send, Edit, Clock, Lock, Undo2, AlertTriangle, FileText, Image as ImageIcon, MoreHorizontal, CheckSquare, Square, AlertCircle, ChevronDown, LockKeyhole, History, Sparkles, Phone, Film, CircleDashed, Layers, Play, Video, ChevronLeft, ChevronRight, Pause, ScanEye, CalendarClock, Archive, X, Plus } from 'lucide-react';
 import { Post, Restaurant } from '../types';
 import { postsAPI, restaurantAPI } from '../api';
+import AdhocPostModal from './AdhocPostModal';
 
 // Constants for Feedback configuration
 const FEEDBACK_CATEGORIES = [
@@ -493,6 +494,18 @@ const ContentStudio: React.FC = () => {
     const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
     const [loading, setLoading] = useState(true);
 
+    // Adhoc Post Modal State
+    const [isAdhocModalOpen, setIsAdhocModalOpen] = useState(false);
+
+    const loadPosts = async () => {
+        try {
+            const postsData = await postsAPI.getAll();
+            setPosts(postsData);
+        } catch (error) {
+            console.error('Failed to load posts:', error);
+        }
+    };
+
     useEffect(() => {
         const loadData = async () => {
             try {
@@ -776,11 +789,29 @@ const ContentStudio: React.FC = () => {
 
     const activeTabData = TABS.find(t => t.id === activeTab) || TABS[0];
 
+    const handleAdhocPostSuccess = () => {
+        // Refresh posts list and switch to Review tab to show the new draft
+        loadPosts();
+        setActiveTab('REVIEW');
+    };
+
     return (
         <div className="p-4 min-h-full relative">
 
-            {/* 1. Segmented Control Navigation */}
+            {/* 1. Segmented Control Navigation with New Post Button */}
             <div className="sticky top-0 z-30 pt-1 pb-4 bg-[#f8fafc]/95 backdrop-blur-sm">
+                {/* New Post Button */}
+                <div className="flex justify-end mb-3">
+                    <button
+                        onClick={() => setIsAdhocModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-semibold text-sm shadow-lg shadow-orange-500/25 transition-all active:scale-[0.97]"
+                        data-testid="new-post-button"
+                    >
+                        <Plus size={18} />
+                        <span>New Post</span>
+                    </button>
+                </div>
+
                 <div className="bg-slate-200/60 p-1 rounded-2xl flex relative">
                     {TABS.map((tab) => {
                         const isActive = activeTab === tab.id;
@@ -1102,6 +1133,13 @@ const ContentStudio: React.FC = () => {
                     </div>
                 </div>
             )}
+
+            {/* Adhoc Post Modal */}
+            <AdhocPostModal
+                isOpen={isAdhocModalOpen}
+                onClose={() => setIsAdhocModalOpen(false)}
+                onSuccess={handleAdhocPostSuccess}
+            />
 
             <div className="h-12"></div>
         </div>

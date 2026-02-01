@@ -405,13 +405,13 @@ describe('Integration Tests - Complete Workflows', () => {
         });
 
         test('should validate required fields', async () => {
-            // These should still work as the backend doesn't enforce strict validation
-            // but we're testing the behavior
+            // Posts now require a caption - sending empty body should return 400
             const response = await request(app)
                 .post('/api/posts')
                 .send({});
 
-            expect(response.status).toBe(201);
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Caption is required');
         });
     });
 

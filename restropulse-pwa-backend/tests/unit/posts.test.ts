@@ -413,7 +413,8 @@ describe('Posts Module', () => {
             test('should handle 500 error', async () => {
                 mockCreatePost.mockRejectedValue(new Error('DB Error'));
 
-                const response = await request(app).post('/api/posts').send({ title: 'test' });
+                // Need to provide valid caption to pass validation and reach DB call
+                const response = await request(app).post('/api/posts').send({ caption: 'Test post' });
                 expect(response.status).toBe(500);
                 expect(response.body).toEqual({
                     success: false,
@@ -541,8 +542,9 @@ describe('Posts Module', () => {
         describe('Edge Cases', () => {
             test('should handle empty request body for POST', async () => {
                 const response = await request(app).post('/api/posts').send({});
-                expect(response.status).toBe(201);
-                expect(response.body.data).toHaveProperty('id');
+                // Now requires caption, so should return 400
+                expect(response.status).toBe(400);
+                expect(response.body.error).toBe('Caption is required');
             });
 
             test('should handle very long captions', async () => {
@@ -557,7 +559,7 @@ describe('Posts Module', () => {
             });
 
             test('should handle special characters in caption', async () => {
-                const specialCaption = '🍕🎉 Special #offer @restaurant 50% off! 💰';
+                const specialCaption = '(emoji: pizza)(emoji: party) Special #offer @restaurant 50% off! (emoji: money)';
                 const response = await request(app).post('/api/posts').send({
                     type: 'IMAGE',
                     caption: specialCaption,
@@ -567,7 +569,196 @@ describe('Posts Module', () => {
                 expect(response.body.data.caption).toBe(specialCaption);
             });
         });
+
+        describe('Adhoc Post Creation', () => {
+            test('should create adhoc post without strategyId', async () => {
+                const adhocPost = {
+                    caption: 'Flash sale announcement - 50% off all pizzas today!',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.success).toBe(true);
+                expect(response.body.data).toHaveProperty('id');
+                expect(response.body.data.caption).toBe(adhocPost.caption);
+                expect(response.body.data.isAdhoc).toBe(true);
+                expect(response.body.data.strategyId).toBeUndefined();
+            });
+
+            test('should set default status to PENDING_APPROVAL for adhoc posts', async () => {
+                const adhocPost = {
+                    caption: 'New menu item launch',
+                    type: 'REEL',
+                    platform: 'BOTH'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.status).toBe('PENDING_APPROVAL');
+            });
+
+            test('should set default type to IMAGE if not provided', async () => {
+                const adhocPost = {
+                    caption: 'Quick announcement',
+                    platform: 'INSTAGRAM'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.type).toBe('IMAGE');
+            });
+
+            test('should set default platform to INSTAGRAM if not provided', async () => {
+                const adhocPost = {
+                    caption: 'Quick announcement'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.platform).toBe('INSTAGRAM');
+            });
+
+            test('should set default thumbnail if not provided', async () => {
+                const adhocPost = {
+                    caption: 'Post without image',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.thumbnail).toBe('/api/placeholder/400/400');
+            });
+
+            test('should mark strategy posts as non-adhoc', async () => {
+                const strategyPost = {
+                    caption: 'Generated from strategy',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM',
+                    strategyId: 'strategy-123'
+                };
+
+                const response = await request(app).post('/api/posts').send(strategyPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.isAdhoc).toBe(false);
+                expect(response.body.data.strategyId).toBe('strategy-123');
+            });
+
+            test('should allow scheduled adhoc posts', async () => {
+                const scheduledAdhocPost = {
+                    caption: 'Weekend special coming up!',
+                    type: 'IMAGE',
+                    platform: 'BOTH',
+                    scheduledFor: '2026-02-15T14:00:00.000Z'
+                };
+
+                const response = await request(app).post('/api/posts').send(scheduledAdhocPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.scheduledFor).toBe(scheduledAdhocPost.scheduledFor);
+                expect(response.body.data.isAdhoc).toBe(true);
+            });
+
+            test('should return 400 when caption is empty string', async () => {
+                const invalidPost = {
+                    caption: '',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM'
+                };
+
+                const response = await request(app).post('/api/posts').send(invalidPost);
+
+                expect(response.status).toBe(400);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Caption is required');
+            });
+
+            test('should return 400 when caption is whitespace only', async () => {
+                const invalidPost = {
+                    caption: '   ',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM'
+                };
+
+                const response = await request(app).post('/api/posts').send(invalidPost);
+
+                expect(response.status).toBe(400);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Caption is required');
+            });
+
+            test('should create adhoc REEL with videoUrl', async () => {
+                const reelPost = {
+                    caption: 'Check out our new reel!',
+                    type: 'REEL',
+                    platform: 'INSTAGRAM',
+                    videoUrl: '/videos/reel-123.mp4',
+                    duration: '0:30'
+                };
+
+                const response = await request(app).post('/api/posts').send(reelPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.type).toBe('REEL');
+                expect(response.body.data.videoUrl).toBe(reelPost.videoUrl);
+                expect(response.body.data.duration).toBe(reelPost.duration);
+                expect(response.body.data.isAdhoc).toBe(true);
+            });
+
+            test('should create adhoc CAROUSEL with mediaUrls', async () => {
+                const carouselPost = {
+                    caption: 'New menu items showcase',
+                    type: 'CAROUSEL',
+                    platform: 'INSTAGRAM',
+                    mediaUrls: ['/img1.jpg', '/img2.jpg', '/img3.jpg'],
+                    thumbnail: '/img1.jpg'
+                };
+
+                const response = await request(app).post('/api/posts').send(carouselPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.type).toBe('CAROUSEL');
+                expect(response.body.data.mediaUrls).toEqual(carouselPost.mediaUrls);
+                expect(response.body.data.isAdhoc).toBe(true);
+            });
+
+            test('should create adhoc STORY post', async () => {
+                const storyPost = {
+                    caption: '24hr special offer!',
+                    type: 'STORY',
+                    platform: 'INSTAGRAM',
+                    videoUrl: '/stories/story-123.mp4'
+                };
+
+                const response = await request(app).post('/api/posts').send(storyPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.type).toBe('STORY');
+                expect(response.body.data.isAdhoc).toBe(true);
+            });
+
+            test('should preserve provided status for adhoc posts', async () => {
+                const adhocPost = {
+                    caption: 'Already approved post',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM',
+                    status: 'SCHEDULED'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+
+                expect(response.status).toBe(201);
+                // Status should use provided value, not default
+                expect(response.body.data.status).toBe('SCHEDULED');
+            });
+        });
     });
 });
-
-

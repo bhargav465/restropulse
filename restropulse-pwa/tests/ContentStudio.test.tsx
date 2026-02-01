@@ -775,8 +775,11 @@ describe('ContentStudio Component', () => {
             fireEvent.click(scheduledTab);
 
             await waitFor(() => {
-                const tabs = screen.getAllByRole('button');
-                expect(tabs[1]).toHaveClass('text-slate-800');
+                // Find the Scheduled tab button (contains 'Scheduled' text)
+                const scheduledButton = screen.getAllByRole('button').find(
+                    btn => btn.textContent?.includes('Scheduled')
+                );
+                expect(scheduledButton).toHaveClass('text-slate-800');
             });
         });
     });
@@ -1170,5 +1173,91 @@ describe('ContentStudio Component', () => {
             consoleSpy.mockRestore();
         });
     });
-});
 
+    describe('Adhoc Post Integration', () => {
+        it('should display New Post button', async () => {
+            render(<ContentStudio />);
+
+            await waitFor(() => {
+                expect(screen.getByTestId('new-post-button')).toBeInTheDocument();
+                expect(screen.getByText('New Post')).toBeInTheDocument();
+            });
+        });
+
+        it('should open AdhocPostModal when New Post button is clicked', async () => {
+            render(<ContentStudio />);
+
+            await waitFor(() => {
+                expect(screen.getByTestId('new-post-button')).toBeInTheDocument();
+            });
+
+            fireEvent.click(screen.getByTestId('new-post-button'));
+
+            await waitFor(() => {
+                expect(screen.getByTestId('adhoc-post-modal')).toBeInTheDocument();
+                expect(screen.getByText('Quick Post')).toBeInTheDocument();
+            });
+        });
+
+        it('should close AdhocPostModal when close button is clicked', async () => {
+            render(<ContentStudio />);
+
+            await waitFor(() => {
+                expect(screen.getByTestId('new-post-button')).toBeInTheDocument();
+            });
+
+            fireEvent.click(screen.getByTestId('new-post-button'));
+
+            await waitFor(() => {
+                expect(screen.getByTestId('adhoc-post-modal')).toBeInTheDocument();
+            });
+
+            fireEvent.click(screen.getByTestId('close-button'));
+
+            await waitFor(() => {
+                expect(screen.queryByTestId('adhoc-post-modal')).not.toBeInTheDocument();
+            });
+        });
+
+        it('should refresh posts and switch to Review tab after successful adhoc post creation', async () => {
+            vi.mocked(postsAPI.create).mockResolvedValue({
+                id: 'adhoc-1',
+                type: 'IMAGE',
+                status: 'PENDING_APPROVAL',
+                thumbnail: '/api/placeholder/400/400',
+                caption: 'New adhoc post',
+                platform: 'INSTAGRAM',
+                isAdhoc: true,
+            });
+
+            render(<ContentStudio />);
+
+            // Click Scheduled tab first
+            await waitFor(() => {
+                fireEvent.click(screen.getByText('Scheduled'));
+            });
+
+            // Open modal
+            fireEvent.click(screen.getByTestId('new-post-button'));
+
+            await waitFor(() => {
+                expect(screen.getByTestId('adhoc-post-modal')).toBeInTheDocument();
+            });
+
+            // Fill in concept
+            fireEvent.change(screen.getByTestId('concept-input'), {
+                target: { value: 'New adhoc post' }
+            });
+
+            // Submit
+            fireEvent.click(screen.getByTestId('submit-button'));
+
+            await waitFor(() => {
+                // Modal should close
+                expect(screen.queryByTestId('adhoc-post-modal')).not.toBeInTheDocument();
+                // Posts should be refreshed (getAll called again)
+                expect(postsAPI.getAll).toHaveBeenCalledTimes(2); // Initial + refresh
+            });
+        });
+    });
+});

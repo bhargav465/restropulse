@@ -47,10 +47,31 @@ router.get('/:id', async (req: Request, res: Response<ApiResponse<Post>>) => {
     }
 });
 
-// Create new post
+// Create new post (supports both strategy-generated and adhoc posts)
 router.post('/', async (req: Request, res: Response<ApiResponse<Post>>) => {
     try {
-        const newPost = await createPost(req.body);
+        const postData = req.body;
+        
+        // Validate required fields
+        if (!postData.caption || postData.caption.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Caption is required'
+            });
+        }
+        
+        // Set defaults for adhoc posts
+        const postWithDefaults = {
+            type: postData.type || 'IMAGE',
+            status: postData.status || 'PENDING_APPROVAL',
+            platform: postData.platform || 'INSTAGRAM',
+            thumbnail: postData.thumbnail || '/api/placeholder/400/400',
+            ...postData,
+            // Mark as adhoc if no strategyId
+            isAdhoc: !postData.strategyId,
+        };
+        
+        const newPost = await createPost(postWithDefaults);
         res.status(201).json({
             success: true,
             data: newPost,

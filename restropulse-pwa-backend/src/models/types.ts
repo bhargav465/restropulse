@@ -75,6 +75,8 @@ export interface Post {
     postedAt?: string;
     feedback?: string;
     duration?: string;
+    strategyId?: string;  // Optional - null/undefined for adhoc posts
+    isAdhoc?: boolean;    // True for manually created posts
     stats?: {
         likes: number;
         shares: number;
