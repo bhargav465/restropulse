@@ -1,5 +1,10 @@
+// Set INSTAGRAM_APP_SECRET before any module imports to ensure it's available 
+// when integrations.ts module is loaded
+process.env.INSTAGRAM_APP_SECRET = 'test-app-secret';
+
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import request from 'supertest';
+import crypto from 'crypto';
 
 // 1. Import Actual Connection
 import * as realConnection from '../../src/db/connection.js';
@@ -90,6 +95,28 @@ describe('Integration Routes', () => {
             expect(response.body.data.oauthUrl).toBe('https://instagram.com/oauth');
         });
 
+        test('should pass onboarding=false by default', async () => {
+            mockIsInstagramConfigured.mockReturnValue(true);
+            mockGenerateOAuthUrl.mockReturnValue({ url: 'https://test', state: 's' });
+
+            await request(app)
+                .get('/api/integrations/instagram/oauth-url')
+                .query({ restaurantId: 'r1' });
+
+            expect(mockGenerateOAuthUrl).toHaveBeenCalledWith('r1', false);
+        });
+
+        test('should pass onboarding=true when specified', async () => {
+            mockIsInstagramConfigured.mockReturnValue(true);
+            mockGenerateOAuthUrl.mockReturnValue({ url: 'https://test', state: 's' });
+
+            await request(app)
+                .get('/api/integrations/instagram/oauth-url')
+                .query({ restaurantId: 'r1', onboarding: 'true' });
+
+            expect(mockGenerateOAuthUrl).toHaveBeenCalledWith('r1', true);
+        });
+
         test('should return error if not configured', async () => {
             mockIsInstagramConfigured.mockReturnValue(false);
 
@@ -137,7 +164,55 @@ describe('Integration Routes', () => {
             expect(response.header.location).toContain('error=oauth_denied');
         });
 
+        test('should redirect on invalid state token', async () => {
+            mockValidateStateToken.mockReturnValue({ valid: false });
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/callback')
+                .query({ code: 'valid-code', state: 'invalid-state' });
+
+            expect(response.status).toBe(302);
+            expect(response.header.location).toContain('error=invalid_state');
+        });
+
         test('should process callback and show selection', async () => {
+            mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
+            const expires = new Date(Date.now() + 3600000);
+
+            mockHandleOAuthCallback.mockResolvedValue({
+                success: true,
+                account: { id: 'ig-123', name: 'IG Page', pageName: 'FB Page' },
+                accessToken: 'token-123',
+                tokenExpiresAt: expires,
+                restaurantId: 'r1'
+            });
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/callback')
+                .query({ code: 'valid-code', state: 'valid-state' });
+
+            expect(response.status).toBe(302);
+            expect(response.header.location).toContain('success=true');
+        });
+
+        test('should call handleOAuthCallback with skipStateValidation=true', async () => {
+            mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
+            mockHandleOAuthCallback.mockResolvedValue({
+                success: true,
+                account: { id: 'ig-1', username: 'test', pageName: 'Page' },
+                accessToken: 't',
+                tokenExpiresAt: new Date()
+            });
+
+            await request(app)
+                .get('/api/integrations/instagram/callback')
+                .query({ code: 'c', state: 's' });
+
+            // Verify skipStateValidation=true was passed
+            expect(mockHandleOAuthCallback).toHaveBeenCalledWith('c', 's', true);
+        });
+
+        test('should handle multiple accounts selection', async () => {
             mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
             const expires = new Date(Date.now() + 3600000);
 
@@ -434,6 +509,219 @@ describe('Integration Routes', () => {
 
             expect(response.status).toBe(200);
             expect(response.body.data.instagram.configured).toBe(true);
+        });
+    });
+
+    describe('POST /api/integrations/instagram/deauthorize', () => {
+        // Helper to create valid signed_request for testing
+        // Must use the same secret as set in tests/setup.ts
+        const createSignedRequest = (userId: string): string => {
+            const appSecret = 'test-app-secret';
+            const payload = Buffer.from(JSON.stringify({ user_id: userId })).toString('base64');
+            const sig = crypto
+                .createHmac('sha256', appSecret)
+                .update(payload)
+                .digest('base64')
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+            return `${sig}.${payload}`;
+        };
+
+        test('should fail without signed_request', async () => {
+            const response = await request(app)
+                .post('/api/integrations/instagram/deauthorize')
+                .send({});
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Missing signed_request');
+        });
+
+        test('should fail with invalid signed_request', async () => {
+            const response = await request(app)
+                .post('/api/integrations/instagram/deauthorize')
+                .send({ signed_request: 'invalid.payload' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Invalid signed_request');
+        });
+
+        test('should fail with malformed signed_request (no dot)', async () => {
+            const response = await request(app)
+                .post('/api/integrations/instagram/deauthorize')
+                .send({ signed_request: 'nodotseparator' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Invalid signed_request');
+        });
+
+        test('should successfully deauthorize with valid signed_request', async () => {
+            const mockUpdateMany = jest.fn<any>().mockResolvedValue({ modifiedCount: 1 });
+            mockGetRestaurantsCollection.mockReturnValue({ updateMany: mockUpdateMany });
+
+            const signedRequest = createSignedRequest('test-user-123');
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/deauthorize')
+                .send({ signed_request: signedRequest });
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(mockUpdateMany).toHaveBeenCalledWith(
+                { 'instagramCredentials.userId': 'test-user-123' },
+                expect.objectContaining({
+                    $set: expect.objectContaining({
+                        'integrations.instagram': false,
+                        'instagramCredentials.accessToken': null
+                    })
+                })
+            );
+        });
+
+        test('should return 200 even when database error occurs', async () => {
+            mockGetRestaurantsCollection.mockReturnValue({
+                updateMany: jest.fn<any>().mockRejectedValue(new Error('DB Error'))
+            });
+
+            const signedRequest = createSignedRequest('test-user-456');
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/deauthorize')
+                .send({ signed_request: signedRequest });
+
+            // Should still return 200 to acknowledge receipt
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+        });
+    });
+
+    describe('POST /api/integrations/instagram/data-deletion', () => {
+        // Helper to create valid signed_request for testing
+        // Must use the same secret as set in tests/setup.ts
+        const createSignedRequest = (userId: string): string => {
+            const appSecret = 'test-app-secret';
+            const payload = Buffer.from(JSON.stringify({ user_id: userId })).toString('base64');
+            const sig = crypto
+                .createHmac('sha256', appSecret)
+                .update(payload)
+                .digest('base64')
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+            return `${sig}.${payload}`;
+        };
+
+        test('should fail without signed_request', async () => {
+            const response = await request(app)
+                .post('/api/integrations/instagram/data-deletion')
+                .send({});
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Missing signed_request');
+        });
+
+        test('should fail with invalid signed_request', async () => {
+            const response = await request(app)
+                .post('/api/integrations/instagram/data-deletion')
+                .send({ signed_request: 'bad.data' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Invalid signed_request');
+        });
+
+        test('should successfully process data deletion with valid signed_request', async () => {
+            const mockUpdateMany = jest.fn<any>().mockResolvedValue({ modifiedCount: 1 });
+            mockGetRestaurantsCollection.mockReturnValue({ updateMany: mockUpdateMany });
+
+            const signedRequest = createSignedRequest('test-user-789');
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/data-deletion')
+                .send({ signed_request: signedRequest });
+
+            expect(response.status).toBe(200);
+            expect(response.body.confirmation_code).toBeDefined();
+            expect(response.body.url).toContain('/api/integrations/instagram/data-deletion-status');
+            expect(response.body.url).toContain(response.body.confirmation_code);
+            expect(mockUpdateMany).toHaveBeenCalledWith(
+                { 'instagramCredentials.userId': 'test-user-789' },
+                expect.objectContaining({
+                    $unset: { instagramCredentials: '' },
+                    $set: expect.objectContaining({ 'integrations.instagram': false })
+                })
+            );
+        });
+
+        test('should return 500 when database error occurs', async () => {
+            mockGetRestaurantsCollection.mockReturnValue({
+                updateMany: jest.fn<any>().mockRejectedValue(new Error('DB Error'))
+            });
+
+            const signedRequest = createSignedRequest('test-user-error');
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/data-deletion')
+                .send({ signed_request: signedRequest });
+
+            expect(response.status).toBe(500);
+            expect(response.body.error).toBe('Failed to process deletion request');
+        });
+    });
+
+    describe('GET /api/integrations/instagram/data-deletion-status', () => {
+        test('should fail without code', async () => {
+            const response = await request(app)
+                .get('/api/integrations/instagram/data-deletion-status');
+
+            expect(response.status).toBe(400);
+            expect(response.text).toContain('Missing confirmation code');
+        });
+
+        test('should return 404 for unknown code', async () => {
+            const response = await request(app)
+                .get('/api/integrations/instagram/data-deletion-status')
+                .query({ code: 'unknown-code' });
+
+            expect(response.status).toBe(404);
+            expect(response.text).toContain('Request Not Found');
+        });
+
+        test('should return status for valid confirmation code', async () => {
+            // First create a data deletion request
+            // Helper to create valid signed_request - must use same secret as tests/setup.ts
+            const createSignedRequest = (userId: string): string => {
+                const appSecret = 'test-app-secret';
+                const payload = Buffer.from(JSON.stringify({ user_id: userId })).toString('base64');
+                const sig = crypto
+                    .createHmac('sha256', appSecret)
+                    .update(payload)
+                    .digest('base64')
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=+$/, '');
+                return `${sig}.${payload}`;
+            };
+
+            mockGetRestaurantsCollection.mockReturnValue({
+                updateMany: jest.fn<any>().mockResolvedValue({ modifiedCount: 1 })
+            });
+
+            const signedRequest = createSignedRequest('status-test-user');
+            const createResponse = await request(app)
+                .post('/api/integrations/instagram/data-deletion')
+                .send({ signed_request: signedRequest });
+
+            const confirmationCode = createResponse.body.confirmation_code;
+
+            // Now check the status
+            const statusResponse = await request(app)
+                .get('/api/integrations/instagram/data-deletion-status')
+                .query({ code: confirmationCode });
+
+            expect(statusResponse.status).toBe(200);
+            expect(statusResponse.text).toContain('Data Deletion Status');
+            expect(statusResponse.text).toContain(confirmationCode);
+            expect(statusResponse.text).toContain('Completed');
         });
     });
 });

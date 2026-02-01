@@ -15,6 +15,8 @@ beforeAll(async () => {
     process.env.MONGODB_DB_NAME = 'restropulsev1-test';
     // Mock Encryption Key (64 hex characters)
     process.env.ENCRYPTION_KEY = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+    // Instagram App Secret for signed request verification in tests
+    process.env.INSTAGRAM_APP_SECRET = 'test-app-secret';
 
     // Suppress console.error and console.warn during tests (expected error handling logs)
     console.error = jest.fn();

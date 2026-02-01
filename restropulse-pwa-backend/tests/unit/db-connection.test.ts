@@ -197,6 +197,77 @@ describe('DB Connection', () => {
             expect(output).not.toHaveProperty('_id');
         });
 
+        test('toApiFormat should transform instagramCredentials to instagramConnection with valid token', () => {
+            const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+            const input = {
+                _id: 'r1',
+                name: 'Test Restaurant',
+                instagramCredentials: {
+                    username: 'test_user',
+                    userId: 'ig-123',
+                    pageName: 'Test Page',
+                    connectedAt: new Date('2025-01-01'),
+                    tokenExpiresAt: futureDate,
+                    accessToken: 'secret-token'
+                }
+            };
+            const output = dbModule.toApiFormat(input);
+
+            expect(output.id).toBe('r1');
+            expect(output).not.toHaveProperty('instagramCredentials'); // Sensitive data removed
+            expect(output.instagramConnection).toBeDefined();
+            expect(output.instagramConnection.connected).toBe(true);
+            expect(output.instagramConnection.username).toBe('test_user');
+            expect(output.instagramConnection.userId).toBe('ig-123');
+            expect(output.instagramConnection.pageName).toBe('Test Page');
+            expect(output.instagramConnection.tokenStatus).toBe('valid');
+            expect(output.instagramConnection.needsReauthorization).toBe(false);
+        });
+
+        test('toApiFormat should mark token as expiring_soon when within 7 days', () => {
+            const soonDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000); // 5 days from now
+            const input = {
+                _id: 'r1',
+                instagramCredentials: {
+                    username: 'test',
+                    tokenExpiresAt: soonDate
+                }
+            };
+            const output = dbModule.toApiFormat(input);
+
+            expect(output.instagramConnection.tokenStatus).toBe('expiring_soon');
+            expect(output.instagramConnection.needsReauthorization).toBe(false);
+        });
+
+        test('toApiFormat should mark token as expired when past expiration', () => {
+            const pastDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
+            const input = {
+                _id: 'r1',
+                instagramCredentials: {
+                    username: 'test',
+                    tokenExpiresAt: pastDate
+                }
+            };
+            const output = dbModule.toApiFormat(input);
+
+            expect(output.instagramConnection.tokenStatus).toBe('expired');
+            expect(output.instagramConnection.needsReauthorization).toBe(true);
+        });
+
+        test('toApiFormat should handle missing tokenExpiresAt', () => {
+            const input = {
+                _id: 'r1',
+                instagramCredentials: {
+                    username: 'test'
+                    // No tokenExpiresAt
+                }
+            };
+            const output = dbModule.toApiFormat(input);
+
+            expect(output.instagramConnection.tokenStatus).toBe('valid');
+            expect(output.instagramConnection.needsReauthorization).toBe(false);
+        });
+
         test('toApiFormatArray', () => {
             const input = [{ _id: '1', val: 'a' }, { _id: '2', val: 'b' }];
             const output = dbModule.toApiFormatArray(input);
