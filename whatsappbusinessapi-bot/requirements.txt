@@ -1,8 +1,0 @@
-pymongo==4.6.0
-requests==2.31.0
-python-dotenv==1.0.0
-jupyter==1.0.0
-ipykernel==6.27.0
-azure-storage-blob==12.19.0
-schedule==1.2.0
-protobuf==4.25.1

@@ -1,31 +1,22 @@
-import { describe, test, expect, jest, beforeEach, afterAll } from '@jest/globals';
+import { describe, it, test, expect, vi, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 
-// 1. Import Actuals
-import * as actualUsersDb from '../../src/db/users.js';
-import * as actualJwt from '../../src/services/jwt.js';
+// Define Mocks
+const mockFindUserByEmail = vi.fn();
+const mockFindUserByPhone = vi.fn();
+const mockFindUserById = vi.fn();
+const mockCreateUser = vi.fn();
+const mockFindUserByFirebaseUid = vi.fn();
+const mockUpdateUser = vi.fn();
 
+const mockGenerateTokens = vi.fn();
+const mockVerifyToken = vi.fn();
+const mockRefreshAccessToken = vi.fn();
 
-// 2. Define Mocks
-const mockFindUserByEmail = jest.fn<any>();
-const mockFindUserByPhone = jest.fn<any>();
-const mockFindUserById = jest.fn<any>();
-const mockCreateUser = jest.fn<any>();
-const mockFindUserByFirebaseUid = jest.fn<any>();
-const mockUpdateUser = jest.fn<any>();
+const mockVerifyFirebaseToken = vi.fn();
 
-const mockGenerateTokens = jest.fn<any>();
-const mockVerifyToken = jest.fn<any>();
-const mockRefreshAccessToken = jest.fn<any>();
-
-const mockVerifyFirebaseToken = jest.fn<any>();
-
-// 3. Mock Modules
-
-// DB Users - Pass-through pattern
-await jest.unstable_mockModule('../../src/db/users.js', () => ({
-    __esModule: true,
-    ...actualUsersDb,
+// Mock Modules - Vitest hoists these to the top
+vi.mock('../../src/db/users.js', () => ({
     findUserByEmail: mockFindUserByEmail,
     findUserByPhone: mockFindUserByPhone,
     findUserById: mockFindUserById,
@@ -34,25 +25,32 @@ await jest.unstable_mockModule('../../src/db/users.js', () => ({
     updateUser: mockUpdateUser
 }));
 
-// JWT Service - Pass-through pattern
-await jest.unstable_mockModule('../../src/services/jwt.js', () => ({
-    __esModule: true,
-    ...actualJwt,
+vi.mock('../../src/services/jwt.js', () => ({
     generateTokens: mockGenerateTokens,
     verifyToken: mockVerifyToken,
     refreshAccessToken: mockRefreshAccessToken
 }));
 
-// Firebase - Fully mocked (no real connection possible/desired)
-await jest.unstable_mockModule('../../src/services/firebase-admin.js', () => ({
+vi.mock('../../src/services/firebase-admin.js', () => ({
     verifyFirebaseToken: mockVerifyFirebaseToken,
-    isValidPhoneNumber: jest.fn(() => true),
-    initializeFirebaseAdmin: jest.fn(),
-    isFirebaseInitialized: jest.fn(() => true)
+    isValidPhoneNumber: vi.fn(() => true),
+    initializeFirebaseAdmin: vi.fn(),
+    isFirebaseInitialized: vi.fn(() => true)
 }));
 
-// 5. Helper to reset mocks
-const useActualImplementation = () => {
+// Import actual implementations USING vi.importActual to get real implementations
+let actualUsersDb: any;
+let actualJwt: any;
+
+// Helper to use actual implementations
+const useActualImplementation = async () => {
+    if (!actualUsersDb) {
+        actualUsersDb = await vi.importActual('../../src/db/users.js');
+    }
+    if (!actualJwt) {
+        actualJwt = await vi.importActual('../../src/services/jwt.js');
+    }
+
     mockFindUserByEmail.mockImplementation(actualUsersDb.findUserByEmail);
     mockFindUserByPhone.mockImplementation(actualUsersDb.findUserByPhone);
     mockFindUserById.mockImplementation(actualUsersDb.findUserById);
@@ -65,19 +63,19 @@ const useActualImplementation = () => {
     mockRefreshAccessToken.mockImplementation(actualJwt.refreshAccessToken);
 };
 
-// 5. Initialize App
+// Initialize App
 const { createTestApp, mockUser, generateAuthToken } = await import('../helpers/testHelper.js');
 const app = createTestApp();
 
 describe('Auth Routes - Combined Tests', () => {
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-        useActualImplementation();
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        await useActualImplementation();
     });
 
     describe('POST /api/auth/login', () => {
-        test('should successfully login with valid credentials', async () => {
+        it('should successfully login with valid credentials', async () => {
             const response = await request(app)
                 .post('/api/auth/login')
                 .send({
@@ -90,7 +88,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(response.body).toHaveProperty('token');
         });
 
-        test('should fail login with invalid email', async () => {
+        it('should fail login with invalid email', async () => {
             const response = await request(app)
                 .post('/api/auth/login')
                 .send({
@@ -102,7 +100,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(response.body).toHaveProperty('success', false);
         });
 
-        test('should fail login with missing password', async () => {
+        it('should fail login with missing password', async () => {
             const response = await request(app)
                 .post('/api/auth/login')
                 .send({ email: 'arjun@spicelounge.com' });
@@ -110,7 +108,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(response.status).toBe(400);
         });
 
-        test('should handle DB error', async () => {
+        it('should handle DB error', async () => {
             mockFindUserByEmail.mockRejectedValue(new Error('DB Error'));
             const res = await request(app).post('/api/auth/login').send({ email: 'e@e.com', password: 'p' });
             expect(res.status).toBe(500);
@@ -118,7 +116,7 @@ describe('Auth Routes - Combined Tests', () => {
     });
 
     describe('POST /api/auth/logout', () => {
-        test('should successfully logout', async () => {
+        it('should successfully logout', async () => {
             const response = await request(app).post('/api/auth/logout');
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
@@ -126,7 +124,7 @@ describe('Auth Routes - Combined Tests', () => {
     });
 
     describe('GET /api/auth/session', () => {
-        test('should return user with valid token', async () => {
+        it('should return user with valid token', async () => {
             const token = generateAuthToken();
             const response = await request(app)
                 .get('/api/auth/session')
@@ -137,7 +135,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(response.body.user.email).toBe(mockUser.email);
         });
 
-        test('should fail with invalid token', async () => {
+        it('should fail with invalid token', async () => {
             const response = await request(app)
                 .get('/api/auth/session')
                 .set('Authorization', 'Bearer invalid-token');
@@ -145,7 +143,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(response.status).toBe(401);
         });
 
-        test('should handle user not found (token valid but user gone)', async () => {
+        it('should handle user not found (token valid but user gone)', async () => {
             mockVerifyToken.mockReturnValue({ userId: 'u1', type: 'access' });
             mockFindUserById.mockResolvedValue(null);
 
@@ -156,7 +154,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(res.status).toBe(401);
         });
 
-        test('should handle db exception', async () => {
+        it('should handle db exception', async () => {
             mockVerifyToken.mockReturnValue({ userId: 'u1', type: 'access' });
             mockFindUserById.mockRejectedValue(new Error('DB Fail'));
 
@@ -169,12 +167,12 @@ describe('Auth Routes - Combined Tests', () => {
     });
 
     describe('POST /api/auth/refresh', () => {
-        test('should handle missing refresh token', async () => {
+        it('should handle missing refresh token', async () => {
             const res = await request(app).post('/api/auth/refresh').send({});
             expect(res.status).toBe(400);
         });
 
-        test('should handle invalid/expired refresh token', async () => {
+        it('should handle invalid/expired refresh token', async () => {
             // Override local verification logic if needed, or rely on actual
             // Since we mocked `refreshAccessToken` service, we can control it.
             mockRefreshAccessToken.mockReturnValue(null);
@@ -183,14 +181,14 @@ describe('Auth Routes - Combined Tests', () => {
             expect(res.status).toBe(401);
         });
 
-        test('should success on valid refresh token', async () => {
+        it('should success on valid refresh token', async () => {
             mockRefreshAccessToken.mockReturnValue('new-at');
             const res = await request(app).post('/api/auth/refresh').send({ refreshToken: 'good' });
             expect(res.status).toBe(200);
             expect(res.body.token).toBe('new-at');
         });
 
-        test('should handle exception', async () => {
+        it('should handle exception', async () => {
             mockRefreshAccessToken.mockImplementation(() => { throw new Error('Refresh error'); });
             const res = await request(app).post('/api/auth/refresh').send({ refreshToken: 'good' });
             expect(res.status).toBe(500);
@@ -198,7 +196,7 @@ describe('Auth Routes - Combined Tests', () => {
     });
 
     describe('POST /api/auth/firebase', () => {
-        test('should successfully login with valid firebase token', async () => {
+        it('should successfully login with valid firebase token', async () => {
             const mockFirebaseUser = { uid: 'firebase-123', phone_number: '+919876543210' };
             mockVerifyFirebaseToken.mockResolvedValue(mockFirebaseUser);
 
@@ -210,7 +208,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(response.body.success).toBe(true);
         });
 
-        test('should fail with invalid firebase token', async () => {
+        it('should fail with invalid firebase token', async () => {
             mockVerifyFirebaseToken.mockResolvedValue(null);
 
             const response = await request(app)
@@ -222,7 +220,7 @@ describe('Auth Routes - Combined Tests', () => {
     });
 
     describe('POST /api/auth/send-otp', () => {
-        test('should send otp for valid phone (dev mode)', async () => {
+        it('should send otp for valid phone (dev mode)', async () => {
             // Assuming NODE_ENV != production (setup.ts sets 'test')
             const response = await request(app)
                 .post('/api/auth/send-otp')
@@ -236,7 +234,7 @@ describe('Auth Routes - Combined Tests', () => {
     });
 
     describe('POST /api/auth/verify-otp', () => {
-        test('should verify valid OTP and login', async () => {
+        it('should verify valid OTP and login', async () => {
             const phone = '+919999988888';
             const sendResponse = await request(app).post('/api/auth/send-otp').send({ phone });
             const otp = sendResponse.body.devOtp;
@@ -249,7 +247,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(verifyResponse.body).toHaveProperty('token');
         });
 
-        test('should fail with invalid OTP', async () => {
+        it('should fail with invalid OTP', async () => {
             const phone = '+919999988888';
             await request(app).post('/api/auth/send-otp').send({ phone });
 
@@ -260,7 +258,7 @@ describe('Auth Routes - Combined Tests', () => {
             expect(response.status).toBe(401);
         });
 
-        test('should handle DB failure after OTP verification', async () => {
+        it('should handle DB failure after OTP verification', async () => {
             const phone = '+919999955555';
             const sendRes = await request(app).post('/api/auth/send-otp').send({ phone });
             const otp = sendRes.body.devOtp;

@@ -183,6 +183,20 @@ export const postsAPI = {
         return response.data!;
     },
 
+    // Generate post with AI-created content
+    generate: async (params: {
+        concept: string;
+        type: Post['type'];
+        platform: Post['platform'];
+        scheduledFor?: string;
+    }): Promise<Post> => {
+        const response = await fetchAPI<ApiResponse<Post>>('/posts/generate', {
+            method: 'POST',
+            body: JSON.stringify(params),
+        });
+        return response.data!;
+    },
+
     update: async (id: string, post: Partial<Post>): Promise<Post> => {
         const response = await fetchAPI<ApiResponse<Post>>(`/posts/${id}`, {
             method: 'PUT',

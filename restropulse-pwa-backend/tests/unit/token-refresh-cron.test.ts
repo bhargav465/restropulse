@@ -1,41 +1,42 @@
 
-import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
 
 // Create mocks
-const mockToArray = jest.fn();
-const mockFindOne = jest.fn();
-const mockFind = jest.fn(() => ({ toArray: mockToArray }));
-const mockUpdateOne = jest.fn();
+const mockToArray = vi.fn();
+const mockFindOne = vi.fn();
+const mockFind = vi.fn(() => ({ toArray: mockToArray }));
+const mockUpdateOne = vi.fn();
 const mockCollection = {
     find: mockFind,
     findOne: mockFindOne,
     updateOne: mockUpdateOne
 };
-const mockGetRestaurantsCollection = jest.fn(() => mockCollection);
+const mockGetRestaurantsCollection = vi.fn(() => mockCollection);
 
-const mockRefreshAccessToken = jest.fn();
-const mockEncrypt = jest.fn((val: string) => `encrypted_${val}`);
-const mockSchedule = jest.fn();
+const mockRefreshAccessToken = vi.fn();
+const mockEncrypt = vi.fn((val: string) => `encrypted_${val}`);
+const mockSchedule = vi.fn();
 
 // Mock modules BEFORE importing the subject
-// await jest.unstable_mockModule('../../src/db/connection.js', () => ({
-//    getRestaurantsCollection: mockGetRestaurantsCollection
-// }));
+vi.mock('../../src/db/connection.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        getRestaurantsCollection: mockGetRestaurantsCollection
+    };
+});
 
-await jest.unstable_mockModule('../../src/services/instagram-api.js', () => ({
+vi.mock('../../src/services/instagram-api.js', () => ({
     refreshAccessToken: mockRefreshAccessToken
 }));
 
-await jest.unstable_mockModule('../../src/services/encryption.js', () => ({
+vi.mock('../../src/services/encryption.js', () => ({
     encrypt: mockEncrypt
 }));
 
-await jest.unstable_mockModule('node-cron', () => ({
+vi.mock('node-cron', () => ({
     default: { schedule: mockSchedule }
 }));
-
-
-import { getRestaurantsCollection } from '../../src/db/connection.js';
 
 // Import subject
 const {
@@ -49,18 +50,16 @@ const {
 
 describe('Token Refresh Cron Service', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
-        // Setup default mock return for mock from manual mock file
-        (getRestaurantsCollection as unknown as jest.Mock).mockReturnValue(mockCollection);
+        vi.clearAllMocks();
     });
 
     describe('getRestaurantsNeedingRefresh', () => {
-        test('should query restaurants with expiring tokens', async () => {
+        it('should query restaurants with expiring tokens', async () => {
             (mockToArray as any).mockResolvedValue(['res1', 'res2']);
 
             const result = await getRestaurantsNeedingRefresh();
 
-            expect(getRestaurantsCollection).toHaveBeenCalled();
+            expect(mockGetRestaurantsCollection).toHaveBeenCalled();
             expect(mockFind).toHaveBeenCalledWith({
                 'instagramCredentials.accessToken': { $exists: true, $ne: null },
                 'instagramCredentials.tokenExpiresAt': { $lt: expect.any(Date) }
@@ -78,13 +77,13 @@ describe('Token Refresh Cron Service', () => {
             }
         };
 
-        test('should skip if no credentials', async () => {
+        it('should skip if no credentials', async () => {
             const result = await refreshRestaurantToken({ _id: 'res-123' });
             expect(result).toBe(false);
             expect(mockRefreshAccessToken).not.toHaveBeenCalled();
         });
 
-        test('should refresh token successfully', async () => {
+        it('should refresh token successfully', async () => {
             const now = new Date();
             (mockRefreshAccessToken as any).mockResolvedValue({
                 accessToken: 'new-token',
@@ -108,7 +107,7 @@ describe('Token Refresh Cron Service', () => {
             );
         });
 
-        test('should handle refresh failure', async () => {
+        it('should handle refresh failure', async () => {
             (mockRefreshAccessToken as any).mockResolvedValue(null);
 
             const result = await refreshRestaurantToken(mockRestaurant);
@@ -117,7 +116,7 @@ describe('Token Refresh Cron Service', () => {
             expect(mockUpdateOne).not.toHaveBeenCalled();
         });
 
-        test('should handle exception', async () => {
+        it('should handle exception', async () => {
             (mockRefreshAccessToken as any).mockRejectedValue(new Error('API Error'));
 
             const result = await refreshRestaurantToken(mockRestaurant);
@@ -136,7 +135,7 @@ describe('Token Refresh Cron Service', () => {
             }
         };
 
-        test('should return false if restaurant not found or no credentials', async () => {
+        it('should return false if restaurant not found or no credentials', async () => {
             (mockFindOne as any).mockResolvedValue(null);
             let result = await checkAndRefreshTokenIfNeeded('res-123');
             expect(result).toBe(false);
@@ -146,7 +145,7 @@ describe('Token Refresh Cron Service', () => {
             expect(result).toBe(false);
         });
 
-        test('should refresh if token expiring in < 7 days', async () => {
+        it('should refresh if token expiring in < 7 days', async () => {
             // Expires in 1 day
             (mockFindOne as any).mockResolvedValue(mockRestaurant);
             (mockRefreshAccessToken as any).mockResolvedValue({ accessToken: 'new', expiresAt: new Date() });
@@ -157,7 +156,7 @@ describe('Token Refresh Cron Service', () => {
             expect(mockRefreshAccessToken).toHaveBeenCalled();
         });
 
-        test('should NOT refresh if token valid for > 7 days', async () => {
+        it('should NOT refresh if token valid for > 7 days', async () => {
             (mockFindOne as any).mockResolvedValue({
                 ...mockRestaurant,
                 instagramCredentials: {
@@ -174,7 +173,7 @@ describe('Token Refresh Cron Service', () => {
     });
 
     describe('triggerManualRefresh', () => {
-        test('should trigger refresh for all needed restaurants', async () => {
+        it('should trigger refresh for all needed restaurants', async () => {
             const restaurants = [
                 { _id: 'r1', instagramCredentials: { accessToken: 't1' } },
                 { _id: 'r2', instagramCredentials: { accessToken: 't2' } }
@@ -192,7 +191,7 @@ describe('Token Refresh Cron Service', () => {
     });
 
     describe('getRecentRefreshAttempts', () => {
-        test('should return attempts list', () => {
+        it('should return attempts list', () => {
             const attempts = getRecentRefreshAttempts();
             expect(Array.isArray(attempts)).toBe(true);
         });
@@ -200,17 +199,16 @@ describe('Token Refresh Cron Service', () => {
 
     describe('startTokenRefreshCron', () => {
         beforeEach(() => {
-            jest.clearAllMocks();
-            (getRestaurantsCollection as unknown as jest.Mock).mockReturnValue(mockCollection);
+            vi.clearAllMocks();
         });
 
-        test('should schedule cron job', () => {
+        it('should schedule cron job', () => {
             startTokenRefreshCron();
             expect(mockSchedule).toHaveBeenCalledWith('0 2 * * *', expect.any(Function), expect.any(Object));
         });
 
-        test('should execute scheduled job callback with items', async () => {
-            jest.useFakeTimers();
+        it('should execute scheduled job callback with items', async () => {
+            vi.useFakeTimers();
 
             // Setup mock data for the job execution
             (mockToArray as any).mockResolvedValue([{
@@ -228,7 +226,7 @@ describe('Token Refresh Cron Service', () => {
             const callbackPromise = cronCallback(); // Execute it
 
             // Advance past the 1-second rate-limit delay between refreshes
-            await jest.advanceTimersByTimeAsync(1000);
+            await vi.advanceTimersByTimeAsync(1000);
 
             await callbackPromise;
 
@@ -240,10 +238,10 @@ describe('Token Refresh Cron Service', () => {
                 expect.any(Object)
             );
 
-            jest.useRealTimers();
+            vi.useRealTimers();
         });
 
-        test('should execute scheduled job callback with NO items', async () => {
+        it('should execute scheduled job callback with NO items', async () => {
             // Return empty list
             (mockToArray as any).mockResolvedValue([]);
 

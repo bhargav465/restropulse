@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll } from '@jest/globals';
+import { describe, test, expect, beforeAll } from 'vitest';
 import { encrypt, decrypt, generateStateToken, generateEncryptionKey } from '../../src/services/encryption.js';
 
 describe('Encryption Service', () => {
@@ -6,7 +6,7 @@ describe('Encryption Service', () => {
         process.env.ENCRYPTION_KEY = 'test-key-12345678901234567890123456789012'; // 32 chars or hex
     });
 
-    test('should encrypt and decrypt string successfully', () => {
+    it('should encrypt and decrypt string successfully', () => {
         const original = 'my-secret-token-123';
         const encrypted = encrypt(original);
         expect(encrypted).not.toBe(original);
@@ -16,20 +16,20 @@ describe('Encryption Service', () => {
         expect(decrypted).toBe(original);
     });
 
-    test('should return null for invalid encrypted string', () => {
+    it('should return null for invalid encrypted string', () => {
         // We expect null based on implementation
         expect(decrypt('invalid-string')).toBeNull();
         expect(decrypt('')).toBeNull();
         // expect(decrypt('invalid:hex')).toBeNull(); // This might crash or return null depending on iv length
     });
 
-    test('should generate state token', () => {
+    it('should generate state token', () => {
         const token = generateStateToken();
         expect(typeof token).toBe('string');
         expect(token.length).toBeGreaterThan(10);
     });
 
-    test('should generate encryption key', () => {
+    it('should generate encryption key', () => {
         const key = generateEncryptionKey();
         expect(key.length).toBe(64); // 32 bytes as hex
     });

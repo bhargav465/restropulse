@@ -5,11 +5,28 @@ import { postsAPI } from '../api';
 
 // Post type options for user selection
 const POST_TYPES = [
-    { id: 'IMAGE' as const, label: 'Image Post', icon: ImageIcon, desc: 'Single photo' },
-    { id: 'CAROUSEL' as const, label: 'Carousel', icon: ImageIcon, desc: 'Multiple photos' },
-    { id: 'REEL' as const, label: 'Reel', icon: Video, desc: 'Short video' },
-    { id: 'STORY' as const, label: 'Story', icon: Clock, desc: '24hr content' },
+    { id: 'IMAGE' as const, label: 'Image Post', icon: ImageIcon, desc: 'Single photo', platforms: ['INSTAGRAM', 'FACEBOOK'] },
+    { id: 'CAROUSEL' as const, label: 'Carousel', icon: ImageIcon, desc: 'Multiple photos', platforms: ['INSTAGRAM', 'FACEBOOK'] },
+    { id: 'REEL' as const, label: 'Reel', icon: Video, desc: 'Short video', platforms: ['INSTAGRAM', 'FACEBOOK'] },
+    { id: 'STORY' as const, label: 'Story', icon: Clock, desc: '24hr content', platforms: ['INSTAGRAM', 'FACEBOOK'] },
 ];
+
+// Helper to check if a content type is compatible with the selected platform
+function isContentTypeCompatible(contentType: Post['type'], platform: Post['platform']): { compatible: boolean; message?: string } {
+    const postType = POST_TYPES.find(t => t.id === contentType);
+    if (!postType) return { compatible: true };
+
+    if (platform === 'BOTH') {
+        // All content types are now supported on both platforms
+        return { compatible: true };
+    }
+
+    const supportsPlatform = postType.platforms.includes(platform as 'INSTAGRAM' | 'FACEBOOK');
+    return {
+        compatible: supportsPlatform,
+        message: supportsPlatform ? undefined : `${postType.label} is not supported on ${platform}`
+    };
+}
 
 interface AdhocPostModalProps {
     isOpen: boolean;
@@ -110,27 +127,18 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
         setError(null);
 
         try {
-            // Build the post object — default to 10 min from now for ASAP posts
+            // Build the scheduled time — default to 10 min from now for ASAP posts
             const scheduledFor = formData.scheduleType === 'later'
                 ? new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString()
                 : new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-            // Use picsum for placeholder images when no media is uploaded
-            const placeholderImage = `https://picsum.photos/seed/${Date.now()}/400/400`;
-
-            const newPost: Omit<Post, 'id'> = {
+            // Use the generate endpoint which will create the post with AI-generated content
+            await postsAPI.generate({
+                concept: formData.concept,
                 type: formData.postType,
-                status: 'PENDING_APPROVAL',
-                thumbnail: formData.mediaUrl || placeholderImage,
-                caption: formData.concept,
                 platform: formData.platform,
-                restaurantId: 'r1',
-                scheduledFor,
-                mediaUrls: formData.postType === 'CAROUSEL' && formData.mediaUrl ? [formData.mediaUrl] : undefined,
-                videoUrl: (formData.postType === 'REEL' || formData.postType === 'STORY' || formData.postType === 'VIDEO') && formData.mediaUrl ? formData.mediaUrl : undefined,
-            };
-
-            await postsAPI.create(newPost);
+                scheduledFor
+            });
 
             // Reset form
             setFormData(getDefaultFormData());
@@ -254,8 +262,23 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                     {/* Media Upload */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">
-                            Media (Optional)
+                            Media {(formData.postType === 'REEL' || formData.postType === 'STORY' || formData.postType === 'VIDEO' || formData.postType === 'CAROUSEL') && (
+                                <span className="text-red-500">*</span>
+                            )}
+                            {(formData.postType === 'IMAGE') && (
+                                <span className="text-slate-400 font-normal">(Optional)</span>
+                            )}
                         </label>
+                        {(formData.postType === 'REEL' || formData.postType === 'STORY' || formData.postType === 'VIDEO') && (
+                            <p className="text-xs text-orange-600 mb-2">
+                                {formData.postType === 'REEL' ? 'Reels' : formData.postType === 'STORY' ? 'Stories' : 'Videos'} require a video file
+                            </p>
+                        )}
+                        {formData.postType === 'CAROUSEL' && (
+                            <p className="text-xs text-orange-600 mb-2">
+                                Carousels require at least one image
+                            </p>
+                        )}
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -320,6 +343,14 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                     <span className="text-xs font-medium">{platform.label}</span>
                                 </button>
                             ))}
+                        </div>
+                        {/* Platform compatibility info */}
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                            <p className="text-xs text-blue-700 font-medium mb-1">Platform Support:</p>
+                            <ul className="text-xs text-blue-600 space-y-0.5">
+                                <li>• All content types (Image, Carousel, Reel, Story) are supported on both Instagram and Facebook</li>
+                                <li>• Choose "Both" to post to Instagram and Facebook simultaneously</li>
+                            </ul>
                         </div>
                     </div>
 

@@ -2,6 +2,42 @@
 
 Comprehensive test coverage for RestroPulse Backend API.
 
+## Test Database Strategy
+
+### Current Approach: Hybrid Testing
+
+**We use a combination of real MongoDB and mocked collections** for optimal reliability and speed.
+
+#### Real MongoDB Tests
+- `posts.test.ts`, `restaurant.test.ts`, `integrations.test.ts`
+- Uses MongoDB Atlas test database
+- **Why?** MongoDB operators (`$in`, `$or`) had compatibility issues with mocked collections
+- **Result:** 100% accurate MongoDB behavior, all operators work correctly
+
+#### Mocked Collection Tests  
+- `publishing-cron.test.ts`, `token-refresh-cron.test.ts`, `publishing-service.test.ts`
+- Fully mocked, no DB connection
+- **Why?** Pure logic tests, faster execution, complete isolation
+
+#### mongodb-memory-server Attempt
+
+We tried using `mongodb-memory-server` for true isolation but encountered:
+- Jest ESM (`--experimental-vm-modules`) incompatibility
+- Module resolution conflicts with bundled MongoDB driver
+- TypeScript source/compiled file conflicts
+
+**Decision:** Kept Atlas approach with environment variable configuration for flexibility.
+
+### Configuration
+
+Override test database via environment variables:
+
+```bash
+export TEST_MONGODB_URI="mongodb://localhost:27017"
+export TEST_MONGODB_DB_NAME="restropulse-ci-test"
+npm run test:unit
+```
+
 ## Test Structure
 
 ```

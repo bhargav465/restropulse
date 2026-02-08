@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { findAllPosts, findPostById, createPost, updatePost, deletePost } from '../db/posts.js';
-import { getPostsCollection, getRestaurantsCollection } from '../db/connection.js';
+import { getPostsCollection, getRestaurantsCollection, toObjectId } from '../db/connection.js';
 import { publishPost } from '../services/publishing-service.js';
 import { triggerManualPublish, getRecentPublishAttempts } from '../services/publishing-cron.js';
 import { ApiResponse, Post } from '../models/types.js';
@@ -130,6 +130,106 @@ router.post('/', async (req: Request, res: Response<ApiResponse<Post>>) => {
     }
 });
 
+// Generate post with AI-created content (for adhoc posts)
+router.post('/generate', async (req: Request, res: Response<ApiResponse<Post>>) => {
+    try {
+        const { concept, type, platform, scheduledFor } = req.body;
+
+        // Validate required fields
+        if (!concept || concept.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Concept/description is required'
+            });
+        }
+
+        if (!type) {
+            return res.status(400).json({
+                success: false,
+                error: 'Post type is required'
+            });
+        }
+
+        console.log(`[Content Generation] Creating ${type} post for: ${concept.substring(0, 50)}...`);
+
+        // TODO: Replace with actual AI content generation service
+        // For now, generate placeholder media based on type
+        const seed = Date.now();
+        const placeholderImage = `https://picsum.photos/seed/${seed}/1080/1080`;
+
+        // IMPORTANT: This placeholder video URL may not work with Facebook's API
+        // Facebook requires videos to be:
+        // 1. Publicly accessible
+        // 2. In supported formats (MP4, MOV)
+        // 3. Hosted on reliable servers
+        // Replace with actual video generation service in production
+        const placeholderVideo = `https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4`;
+
+        let thumbnail: string;
+        let videoUrl: string | undefined;
+        let mediaUrls: string[] | undefined;
+
+        switch (type) {
+            case 'REEL':
+            case 'STORY':
+            case 'VIDEO':
+                // Video content types - use actual video URL
+                thumbnail = placeholderImage;
+                videoUrl = placeholderVideo;
+                console.log(`[Content Generation] Generated video content with URL: ${videoUrl}`);
+                break;
+
+            case 'CAROUSEL':
+                // Multiple images for carousel
+                thumbnail = placeholderImage;
+                mediaUrls = [
+                    `https://picsum.photos/seed/${seed}/1080/1080`,
+                    `https://picsum.photos/seed/${seed + 1}/1080/1080`,
+                    `https://picsum.photos/seed/${seed + 2}/1080/1080`
+                ];
+                console.log(`[Content Generation] Generated carousel with ${mediaUrls.length} images`);
+                break;
+
+            case 'IMAGE':
+            default:
+                // Single image
+                thumbnail = placeholderImage;
+                console.log(`[Content Generation] Generated image content`);
+                break;
+        }
+
+        // Create the post with generated content
+        const postData = {
+            type: type as Post['type'],
+            status: 'PENDING_APPROVAL' as const,
+            platform: platform || 'INSTAGRAM',
+            caption: concept,
+            thumbnail,
+            videoUrl,
+            mediaUrls,
+            restaurantId: 'r1',
+            scheduledFor: scheduledFor || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+            isAdhoc: true
+        };
+
+        const newPost = await createPost(postData);
+
+        console.log(`[Content Generation] Post created successfully: ${newPost.id}`);
+
+        res.status(201).json({
+            success: true,
+            data: newPost,
+            message: 'Post generated with content successfully'
+        });
+    } catch (error) {
+        console.error('Generate post error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    }
+});
+
 // Update post
 router.put('/:id', async (req: Request, res: Response<ApiResponse<Post>>) => {
     try {
@@ -230,8 +330,12 @@ router.post('/:id/test-publish', async (req: Request, res: Response) => {
 
 // Publish a specific post immediately (manual trigger)
 router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => {
+    const postsCol = getPostsCollection();
+    let postId: string | null = null;
+
     try {
         const { id } = req.params;
+        postId = id;
         const post = await findPostById(id);
 
         if (!post) {
@@ -249,9 +353,62 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
             });
         }
 
+        // Atomically mark post as PUBLISHING to prevent race conditions with cron
+        // Try SCHEDULED first, then MISSED_DEADLINE (workaround for test DB operator issues)
+        let updateResult = await postsCol.findOneAndUpdate(
+            {
+                _id: toObjectId(id) as any,
+                status: 'SCHEDULED'
+            },
+            {
+                $set: {
+                    status: 'PUBLISHING',
+                    updatedAt: new Date()
+                }
+            },
+            { returnDocument: 'after' }
+        );
+
+        // If not SCHEDULED, try MISSED_DEADLINE
+        if (!updateResult) {
+            updateResult = await postsCol.findOneAndUpdate(
+                {
+                    _id: toObjectId(id) as any,
+                    status: 'MISSED_DEADLINE'
+                },
+                {
+                    $set: {
+                        status: 'PUBLISHING',
+                        updatedAt: new Date()
+                    }
+                },
+                { returnDocument: 'after' }
+            );
+        }
+
+        // If update failed, another process is already publishing this post
+        if (!updateResult) {
+            return res.status(409).json({
+                success: false,
+                error: 'Post is already being published or status changed'
+            });
+        }
+
         // Get restaurant credentials from the post's restaurantId
         const restaurantId = (post as any).restaurantId;
         if (!restaurantId) {
+            // Update DB with error before returning
+            await postsCol.updateOne(
+                { _id: toObjectId(id) as any },
+                {
+                    $set: {
+                        status: 'MISSED_DEADLINE',
+                        publishError: 'Post has no associated restaurant',
+                        updatedAt: new Date()
+                    },
+                    $inc: { publishAttempts: 1 }
+                }
+            );
             return res.status(400).json({
                 success: false,
                 error: 'Post has no associated restaurant'
@@ -262,6 +419,18 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
         const restaurant = await restaurantsCol.findOne({ _id: restaurantId as any });
 
         if (!restaurant?.instagramCredentials) {
+            // Update DB with error before returning
+            await postsCol.updateOne(
+                { _id: toObjectId(id) as any },
+                {
+                    $set: {
+                        status: 'SCHEDULED',
+                        publishError: 'Instagram not connected. Please connect Instagram in Settings first.',
+                        updatedAt: new Date()
+                    },
+                    $inc: { publishAttempts: 1 }
+                }
+            );
             return res.status(400).json({
                 success: false,
                 error: 'Instagram not connected. Please connect Instagram in Settings first.'
@@ -284,6 +453,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
             platform: post.platform
         };
 
+        // Publish the post
         const results = await publishPost(publishablePost, credentials);
 
         const igSuccess = !results.instagram || results.instagram.success;
@@ -292,9 +462,8 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
 
         if (overallSuccess) {
             // Update post status to POSTED
-            const postsCol = getPostsCollection();
             await postsCol.updateOne(
-                { _id: id as any },
+                { _id: toObjectId(id) as any },
                 {
                     $set: {
                         status: 'POSTED',
@@ -308,6 +477,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
                 }
             );
 
+            // Ensure DB update completes before responding
             const updatedPost = await findPostById(id);
             return res.json({
                 success: true,
@@ -315,21 +485,62 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
                 message: 'Post published successfully'
             });
         } else {
+            // Publishing failed - check if retryable
             const errors: string[] = [];
+            const retryableFailures: boolean[] = [];
+
             if (results.instagram && !results.instagram.success) {
                 errors.push(`Instagram: ${results.instagram.error}`);
+                retryableFailures.push(results.instagram.retryable || false);
             }
             if (results.facebook && !results.facebook.success) {
                 errors.push(`Facebook: ${results.facebook.error}`);
+                retryableFailures.push(results.facebook.retryable || false);
             }
+
+            const anyRetryable = retryableFailures.some(r => r);
+            const combinedError = errors.join('; ');
+
+            // Update DB with failure status
+            await postsCol.updateOne(
+                { _id: toObjectId(id) as any },
+                {
+                    $set: {
+                        status: anyRetryable ? 'SCHEDULED' : 'MISSED_DEADLINE',
+                        publishError: combinedError,
+                        updatedAt: new Date()
+                    },
+                    $inc: { publishAttempts: 1 }
+                }
+            );
 
             return res.status(502).json({
                 success: false,
-                error: `Publishing failed: ${errors.join('; ')}`
+                error: `Publishing failed: ${combinedError}. ${anyRetryable ? 'Will retry automatically.' : 'Manual intervention required.'}`
             });
         }
     } catch (error) {
         console.error('Publish post error:', error);
+
+        // Ensure we revert the PUBLISHING status on unexpected errors
+        if (postId) {
+            try {
+                await postsCol.updateOne(
+                    { _id: toObjectId(postId) as any, status: 'PUBLISHING' },
+                    {
+                        $set: {
+                            status: 'SCHEDULED',
+                            publishError: 'Unexpected error during publishing',
+                            updatedAt: new Date()
+                        },
+                        $inc: { publishAttempts: 1 }
+                    }
+                );
+            } catch (dbError) {
+                console.error('Failed to revert PUBLISHING status:', dbError);
+            }
+        }
+
         res.status(500).json({
             success: false,
             error: 'Internal server error'

@@ -1,4 +1,4 @@
-import { jest, describe, test, expect, beforeEach, afterAll, beforeAll } from '@jest/globals';
+import { jest, describe, test, expect, beforeEach, afterAll, beforeAll } from 'vitest';
 
 // Set Env vars BEFORE any imports
 process.env.INSTAGRAM_APP_ID = 'test-app-id';
@@ -6,8 +6,8 @@ process.env.INSTAGRAM_APP_SECRET = 'test-app-secret';
 process.env.INSTAGRAM_REDIRECT_URI = 'http://localhost/callback';
 
 // Mock axios
-const mockGet = jest.fn<any>();
-const mockPost = jest.fn<any>();
+const mockGet = vi.fn();
+const mockPost = vi.fn();
 
 // Create mock axios instance
 const mockAxiosInstance = {
@@ -16,12 +16,12 @@ const mockAxiosInstance = {
 };
 
 // Mock axios module using unstable_mockModule for ESM support
-await jest.unstable_mockModule('axios', () => ({
+vi.mock('axios', () => ({
     default: {
         get: mockGet,
         post: mockPost,
-        create: jest.fn(() => mockAxiosInstance),
-        isAxiosError: jest.fn()
+        create: vi.fn(() => mockAxiosInstance),
+        isAxiosError: vi.fn()
     },
     AxiosError: class extends Error {
         response: any;
@@ -41,17 +41,17 @@ const instagramService = await import('../../src/services/instagram-api.js');
 describe('Instagram API Service', () => {
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
     });
 
     describe('Environment Config', () => {
-        test('should detect configuration', () => {
+        it('should detect configuration', () => {
             expect(instagramService.isInstagramConfigured()).toBe(true);
         });
     });
 
     describe('generateOAuthUrl', () => {
-        test('should generate valid URL and state', () => {
+        it('should generate valid URL and state', () => {
             const { url, state } = instagramService.generateOAuthUrl('res-123');
 
             expect(url).toContain('https://www.facebook.com/v18.0/dialog/oauth');
@@ -62,7 +62,7 @@ describe('Instagram API Service', () => {
             expect(state.length).toBeGreaterThan(10);
         });
 
-        test('should generate URL without IG_API_ONBOARDING by default', () => {
+        it('should generate URL without IG_API_ONBOARDING by default', () => {
             const { url } = instagramService.generateOAuthUrl('res-123');
 
             // Should NOT contain extras parameter for standard flow
@@ -70,7 +70,7 @@ describe('Instagram API Service', () => {
             expect(url).not.toContain('IG_API_ONBOARDING');
         });
 
-        test('should include IG_API_ONBOARDING when useOnboarding is true', () => {
+        it('should include IG_API_ONBOARDING when useOnboarding is true', () => {
             const { url } = instagramService.generateOAuthUrl('res-123', true);
 
             // Should contain extras parameter with IG_API_ONBOARDING
@@ -78,7 +78,7 @@ describe('Instagram API Service', () => {
             expect(decodeURIComponent(url)).toContain('IG_API_ONBOARDING');
         });
 
-        test('should NOT include IG_API_ONBOARDING when useOnboarding is false', () => {
+        it('should NOT include IG_API_ONBOARDING when useOnboarding is false', () => {
             const { url } = instagramService.generateOAuthUrl('res-123', false);
 
             expect(url).not.toContain('extras');
@@ -87,7 +87,7 @@ describe('Instagram API Service', () => {
     });
 
     describe('validateStateToken', () => {
-        test('should return valid result for correct state', () => {
+        it('should return valid result for correct state', () => {
             // Setup state using real encryption logic (via service helper)
             const { state } = instagramService.generateOAuthUrl('res-123');
 
@@ -95,12 +95,12 @@ describe('Instagram API Service', () => {
             expect(result).toEqual({ valid: true, restaurantId: 'res-123' });
         });
 
-        test('should return invalid for unknown state', () => {
+        it('should return invalid for unknown state', () => {
             const result = instagramService.validateStateToken('invalid-state');
             expect(result).toEqual({ valid: false });
         });
 
-        test('should invalidate already used state token (one-time use)', () => {
+        it('should invalidate already used state token (one-time use)', () => {
             const { state } = instagramService.generateOAuthUrl('res-123');
 
             // First use - valid
@@ -117,13 +117,13 @@ describe('Instagram API Service', () => {
     });
 
     describe('handleOAuthCallback', () => {
-        test('should fail if state is invalid', async () => {
+        it('should fail if state is invalid', async () => {
             const result = await instagramService.handleOAuthCallback('code', 'invalid-state');
             expect(result.success).toBe(false);
             expect(result.error).toBe('INVALID_STATE');
         });
 
-        test('should skip state validation when skipStateValidation is true', async () => {
+        it('should skip state validation when skipStateValidation is true', async () => {
             // Mock token exchange to fail (to verify we got past state validation)
             mockGet.mockRejectedValueOnce(new Error('Token failed'));
 
@@ -134,7 +134,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('TOKEN_EXCHANGE_FAILED'); // Not INVALID_STATE
         });
 
-        test('should fail if token exchange fails', async () => {
+        it('should fail if token exchange fails', async () => {
             const { state } = instagramService.generateOAuthUrl('res-123');
             mockGet.mockRejectedValueOnce(new Error('Token failed'));
 
@@ -143,7 +143,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('TOKEN_EXCHANGE_FAILED');
         });
 
-        test('should fail if permissions are missing', async () => {
+        it('should fail if permissions are missing', async () => {
             const { state } = instagramService.generateOAuthUrl('res-123');
 
             // 1. Token exchange success (code -> short -> long)
@@ -174,7 +174,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('PERMISSIONS_MISSING');
         });
 
-        test('should fail if no pages found', async () => {
+        it('should fail if no pages found', async () => {
             const { state } = instagramService.generateOAuthUrl('res-123');
 
             mockGet.mockImplementation((url: any) => {
@@ -198,7 +198,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('NO_PAGES_FOUND');
         });
 
-        test('should fail if no IG account found on pages', async () => {
+        it('should fail if no IG account found on pages', async () => {
             const { state } = instagramService.generateOAuthUrl('res-123');
 
             mockGet.mockImplementation((url: any) => {
@@ -229,7 +229,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('NO_IG_ACCOUNT_FOUND');
         });
 
-        test('should succeed with multiple accounts', async () => {
+        it('should succeed with multiple accounts', async () => {
             const { state } = instagramService.generateOAuthUrl('res-123');
 
             mockGet.mockImplementation((url: any) => {
@@ -270,7 +270,7 @@ describe('Instagram API Service', () => {
             expect(result.account).toBeUndefined(); // No auto-select
         });
 
-        test('should auto-select single account', async () => {
+        it('should auto-select single account', async () => {
             const { state } = instagramService.generateOAuthUrl('res-single');
 
             mockGet.mockImplementation((url: any) => {
@@ -309,13 +309,13 @@ describe('Instagram API Service', () => {
             expect(result.accounts).toBeUndefined(); // Not multiple
         });
 
-        test('should handle config error when not configured', async () => {
+        it('should handle config error when not configured', async () => {
             // Temporarily clear config to test CONFIG_ERROR path
             const origAppId = process.env.INSTAGRAM_APP_ID;
             process.env.INSTAGRAM_APP_ID = '';
 
             // Re-import to pick up changed config
-            jest.resetModules();
+            vi.resetModules();
             const freshService = await import('../../src/services/instagram-api.js');
 
             const result = await freshService.handleOAuthCallback('code', 'state');
@@ -326,7 +326,7 @@ describe('Instagram API Service', () => {
             process.env.INSTAGRAM_APP_ID = origAppId;
         });
 
-        test('should handle page fetch error gracefully', async () => {
+        it('should handle page fetch error gracefully', async () => {
             const { state } = instagramService.generateOAuthUrl('res-page-err');
 
             mockGet.mockImplementation((url: any) => {
@@ -350,7 +350,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('NO_PAGES_FOUND');
         });
 
-        test('should handle IG account fetch error gracefully', async () => {
+        it('should handle IG account fetch error gracefully', async () => {
             const { state } = instagramService.generateOAuthUrl('res-ig-err');
 
             mockGet.mockImplementation((url: any) => {
@@ -379,7 +379,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('NO_IG_ACCOUNT_FOUND');
         });
 
-        test('should use granular_scopes fallback when /me/accounts is empty', async () => {
+        it('should use granular_scopes fallback when /me/accounts is empty', async () => {
             const { state } = instagramService.generateOAuthUrl('res-granular');
 
             mockGet.mockImplementation((url: any, config: any) => {
@@ -446,7 +446,7 @@ describe('Instagram API Service', () => {
             expect(result.account?.username).toBe('test_ig');
         });
 
-        test('should deduplicate pages from granular_scopes', async () => {
+        it('should deduplicate pages from granular_scopes', async () => {
             const { state } = instagramService.generateOAuthUrl('res-dedup');
 
             mockGet.mockImplementation((url: any, config: any) => {
@@ -494,7 +494,7 @@ describe('Instagram API Service', () => {
             expect(result.account?.username).toBe('single_user');
         });
 
-        test('should deduplicate Instagram accounts across multiple pages', async () => {
+        it('should deduplicate Instagram accounts across multiple pages', async () => {
             const { state } = instagramService.generateOAuthUrl('res-ig-dedup');
 
             mockGet.mockImplementation((url: any) => {
@@ -538,7 +538,7 @@ describe('Instagram API Service', () => {
     });
 
     describe('Token Management', () => {
-        test('should refresh access token success', async () => {
+        it('should refresh access token success', async () => {
             mockGet.mockImplementation((url: any, config: any) => {
                 if (config?.params?.grant_type === 'fb_exchange_token') {
                     return Promise.resolve({
@@ -554,38 +554,38 @@ describe('Instagram API Service', () => {
             expect(result?.accessToken).toBe('new-token');
         });
 
-        test('should handle refresh token failure (decrypt fail)', async () => {
+        it('should handle refresh token failure (decrypt fail)', async () => {
             const result = await instagramService.refreshAccessToken(''); // invalid enc
             expect(result).toBeNull();
         });
 
-        test('should handle refresh token failure (api fail)', async () => {
+        it('should handle refresh token failure (api fail)', async () => {
             mockGet.mockRejectedValue(new Error('API Error'));
             const encToken = encrypt('old-token');
             const result = await instagramService.refreshAccessToken(encToken);
             expect(result).toBeNull();
         });
 
-        test('should validate token success', async () => {
+        it('should validate token success', async () => {
             mockGet.mockResolvedValue({ data: { id: 'user-123' } });
             const encToken = encrypt('valid-token');
             const isValid = await instagramService.validateToken(encToken);
             expect(isValid).toBe(true);
         });
 
-        test('should validate token failure', async () => {
+        it('should validate token failure', async () => {
             mockGet.mockRejectedValue(new Error('Auth failed'));
             const encToken = encrypt('invalid');
             const isValid = await instagramService.validateToken(encToken);
             expect(isValid).toBe(false);
         });
 
-        test('should validate token fail logic (decrypt)', async () => {
+        it('should validate token fail logic (decrypt)', async () => {
             const isValid = await instagramService.validateToken('');
             expect(isValid).toBe(false);
         });
 
-        test('should handle rate limit error during token refresh', async () => {
+        it('should handle rate limit error during token refresh', async () => {
             // Simulate Meta rate limit error (code 4)
             const rateLimitError: any = new Error('Rate limited');
             rateLimitError.response = {
@@ -604,7 +604,7 @@ describe('Instagram API Service', () => {
             expect(result).toBeNull();
         });
 
-        test('should handle default expires_in when not provided', async () => {
+        it('should handle default expires_in when not provided', async () => {
             mockGet.mockImplementation((url: any, config: any) => {
                 if (config?.params?.grant_type === 'fb_exchange_token') {
                     return Promise.resolve({
@@ -624,7 +624,7 @@ describe('Instagram API Service', () => {
     });
 
     describe('Profile & Credentials', () => {
-        test('getInstagramProfile success', async () => {
+        it('getInstagramProfile success', async () => {
             mockGet.mockResolvedValue({
                 data: { id: 'ig-123', username: 'test', followers_count: 100 }
             });
@@ -634,19 +634,19 @@ describe('Instagram API Service', () => {
             expect(profile.username).toBe('test');
         });
 
-        test('getInstagramProfile failure (decrypt)', async () => {
+        it('getInstagramProfile failure (decrypt)', async () => {
             const profile = await instagramService.getInstagramProfile('', 'ig-123');
             expect(profile).toBeNull();
         });
 
-        test('getInstagramProfile failure (api)', async () => {
+        it('getInstagramProfile failure (api)', async () => {
             mockGet.mockRejectedValue(new Error('API Error'));
             const encToken = encrypt('token');
             const profile = await instagramService.getInstagramProfile(encToken, 'ig-123');
             expect(profile).toBeNull();
         });
 
-        test('prepareCredentialsForStorage', () => {
+        it('prepareCredentialsForStorage', () => {
             const account = {
                 id: 'ig-123',
                 username: 'my_ig',
@@ -665,7 +665,7 @@ describe('Instagram API Service', () => {
     });
 
     describe('Error Handling (parseMetaApiError)', () => {
-        test('should handle permission validation error', async () => {
+        it('should handle permission validation error', async () => {
             const { state } = instagramService.generateOAuthUrl('res-perm-err');
 
             mockGet.mockImplementation((url: any) => {
@@ -682,7 +682,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('PERMISSIONS_MISSING');
         });
 
-        test('should handle timeout errors during OAuth flow', async () => {
+        it('should handle timeout errors during OAuth flow', async () => {
             const { state } = instagramService.generateOAuthUrl('res-timeout');
 
             // Create a proper timeout-like AxiosError
@@ -702,7 +702,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('TOKEN_EXCHANGE_FAILED');
         });
 
-        test('should handle ETIMEDOUT error code', async () => {
+        it('should handle ETIMEDOUT error code', async () => {
             const { state } = instagramService.generateOAuthUrl('res-etimedout');
 
             const etimedoutError: any = new Error('connect ETIMEDOUT');
@@ -721,7 +721,7 @@ describe('Instagram API Service', () => {
             expect(result.error).toBe('TOKEN_EXCHANGE_FAILED');
         });
 
-        test('should handle Meta API error with code', async () => {
+        it('should handle Meta API error with code', async () => {
             const { state } = instagramService.generateOAuthUrl('res-meta-err');
 
             mockGet.mockImplementation((url: any) => {

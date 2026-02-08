@@ -594,14 +594,17 @@ export async function publishToInstagram(
 
 /**
  * Publish a post to Facebook Page.
- * Uses the Facebook Graph API to publish photos and videos to a Facebook Page.
+ * Uses the Facebook Graph API to publish photos, videos, reels, and stories to a Facebook Page.
  *
  * Supported types:
- *   - IMAGE/CAROUSEL: POST /{page-id}/photos
- *   - VIDEO/REEL: POST /{page-id}/videos
- *   - STORY: Skipped (Instagram-only feature)
+ *   - IMAGE: POST /{page-id}/photos
+ *   - CAROUSEL: POST /{page-id}/photos (multiple)
+ *   - VIDEO: POST /{page-id}/videos
+ *   - REEL: POST /{page-id}/video_reels (two-phase upload)
+ *   - STORY: POST /{page-id}/photo_stories or /{page-id}/video_stories
  *
  * See: https://developers.facebook.com/docs/pages-api/posts
+ * See: https://developers.facebook.com/docs/video-api/guides/reels-publishing
  */
 export async function publishToFacebook(
     post: PublishablePost,
@@ -722,16 +725,25 @@ export async function publishToFacebook(
             }
 
             // Create multi-photo post using the feed endpoint
-            const attachedMedia = photoIds.reduce((acc: Record<string, { media_fbid: string }>, id, index) => {
-                acc[`attached_media[${index}]`] = { media_fbid: id };
-                return acc;
-            }, {});
-
-            const feedResponse = await metaApi.post(`/${pageId}/feed`, {
+            // Facebook requires attached_media as URL parameters with specific format
+            const params = new URLSearchParams({
                 message: post.caption,
-                ...attachedMedia,
                 access_token: accessToken
             });
+
+            // Add each photo as attached_media[index]
+            photoIds.forEach((id, index) => {
+                params.append(`attached_media[${index}]`, JSON.stringify({ media_fbid: id }));
+            });
+
+            const feedResponse = await axios.post(
+                `${META_GRAPH_API}/${pageId}/feed`,
+                params.toString(),
+                {
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    timeout: API_TIMEOUT_MS
+                }
+            );
 
             console.log(`[Publishing] Facebook multi-photo carousel posted: ${feedResponse.data.id}`);
             return {
@@ -741,8 +753,105 @@ export async function publishToFacebook(
             };
         }
 
-        // For video types, use the page videos endpoint
-        if (post.type === 'VIDEO' || post.type === 'REEL') {
+        // Facebook Reels - use video_reels endpoint
+        if (post.type === 'REEL') {
+            if (!post.videoUrl) {
+                // Graceful fallback: If no video but has thumbnail, post as image instead
+                if (post.thumbnail) {
+                    console.log(`[Publishing] REEL has no videoUrl, falling back to IMAGE for Facebook: ${post.id}`);
+                    const fbImageUrl = await uploadImageToFacebook(post.thumbnail, pageId, accessToken);
+
+                    const response = await metaApi.post(`/${pageId}/photos`, null, {
+                        params: {
+                            url: fbImageUrl,
+                            message: post.caption,
+                            access_token: accessToken
+                        }
+                    });
+
+                    console.log(`[Publishing] Facebook photo posted (REEL fallback): ${response.data.post_id || response.data.id}`);
+                    return {
+                        success: true,
+                        facebookPostId: response.data.post_id || response.data.id,
+                        retryable: false
+                    };
+                }
+
+                return {
+                    success: false,
+                    error: 'Reel posts require a videoUrl',
+                    errorCode: 'MISSING_VIDEO',
+                    retryable: false
+                };
+            }
+
+            const response = await metaApi.post(`/${pageId}/video_reels`, null, {
+                params: {
+                    upload_phase: 'start',
+                    access_token: accessToken
+                }
+            });
+
+            const videoId = response.data.video_id;
+
+            // Upload the video
+            await metaApi.post(`/${videoId}`, null, {
+                params: {
+                    file_url: post.videoUrl,
+                    upload_phase: 'finish',
+                    description: post.caption,
+                    access_token: accessToken
+                }
+            });
+
+            console.log(`[Publishing] Facebook Reel posted: ${videoId}`);
+            return {
+                success: true,
+                facebookPostId: videoId,
+                retryable: false
+            };
+        }
+
+        // Facebook Stories
+        if (post.type === 'STORY') {
+            // Stories can be either photo or video
+            if (post.videoUrl) {
+                // Video story
+                const response = await metaApi.post(`/${pageId}/video_stories`, null, {
+                    params: {
+                        file_url: post.videoUrl,
+                        access_token: accessToken
+                    }
+                });
+
+                console.log(`[Publishing] Facebook video story posted: ${response.data.id}`);
+                return {
+                    success: true,
+                    facebookPostId: response.data.id,
+                    retryable: false
+                };
+            } else {
+                // Photo story - upload image first
+                const fbImageUrl = await uploadImageToFacebook(post.thumbnail, pageId, accessToken);
+
+                const response = await metaApi.post(`/${pageId}/photo_stories`, null, {
+                    params: {
+                        photo_url: fbImageUrl,
+                        access_token: accessToken
+                    }
+                });
+
+                console.log(`[Publishing] Facebook photo story posted: ${response.data.id}`);
+                return {
+                    success: true,
+                    facebookPostId: response.data.id,
+                    retryable: false
+                };
+            }
+        }
+
+        // For regular video posts, use the page videos endpoint
+        if (post.type === 'VIDEO') {
             if (!post.videoUrl) {
                 return {
                     success: false,
@@ -764,15 +873,6 @@ export async function publishToFacebook(
             return {
                 success: true,
                 facebookPostId: response.data.id,
-                retryable: false
-            };
-        }
-
-        // Stories are Instagram-only, skip silently for Facebook
-        if (post.type === 'STORY') {
-            console.log(`[Publishing] Skipping story for Facebook (Instagram-only): ${post.id}`);
-            return {
-                success: true,
                 retryable: false
             };
         }

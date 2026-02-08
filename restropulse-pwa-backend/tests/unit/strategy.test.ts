@@ -1,22 +1,16 @@
-import { describe, test, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, test, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 
-// Import Actual Implementation
-import * as actualStrategyDb from '../../src/db/strategy.js';
-
 // Define Mock Functions
-const mockFindContentStrategy = jest.fn<any>();
-const mockUpdateContentStrategy = jest.fn<any>();
-const mockFindAllCycles = jest.fn<any>();
-const mockFindCycleById = jest.fn<any>();
-const mockCreateCycle = jest.fn<any>();
-const mockUpdateCycle = jest.fn<any>();
+const mockFindContentStrategy = vi.fn();
+const mockUpdateContentStrategy = vi.fn();
+const mockFindAllCycles = vi.fn();
+const mockFindCycleById = vi.fn();
+const mockCreateCycle = vi.fn();
+const mockUpdateCycle = vi.fn();
 
 // Mock the module
-await jest.unstable_mockModule('../../src/db/strategy.js', () => ({
-    // Retain other exports if any (though we are mocking all)
-    __esModule: true, // Specific for ESM interop in Jest
-    ...actualStrategyDb,
+vi.mock('../../src/db/strategy.js', () => ({
     findContentStrategy: mockFindContentStrategy,
     updateContentStrategy: mockUpdateContentStrategy,
     findAllCycles: mockFindAllCycles,
@@ -25,8 +19,14 @@ await jest.unstable_mockModule('../../src/db/strategy.js', () => ({
     updateCycle: mockUpdateCycle
 }));
 
+// Import actual implementation using vi.importActual to get real implementations
+let actualStrategyDb: any;
+
 // Helper to reset to actual implementation
-const useActualImplementation = () => {
+const useActualImplementation = async () => {
+    if (!actualStrategyDb) {
+        actualStrategyDb = await vi.importActual('../../src/db/strategy.js');
+    }
     mockFindContentStrategy.mockImplementation(actualStrategyDb.findContentStrategy);
     mockUpdateContentStrategy.mockImplementation(actualStrategyDb.updateContentStrategy);
     mockFindAllCycles.mockImplementation(actualStrategyDb.findAllCycles);
@@ -41,13 +41,13 @@ const { createTestApp, mockStrategyCycle } = await import('../helpers/testHelper
 const app = createTestApp();
 
 describe('Strategy Routes - Unit Tests', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        useActualImplementation();
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        await useActualImplementation();
     });
 
     describe('GET /api/strategy', () => {
-        test('should get content strategy', async () => {
+        it('should get content strategy', async () => {
             const response = await request(app)
                 .get('/api/strategy');
 
@@ -56,7 +56,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body).toHaveProperty('data');
         });
 
-        test('should return strategy with correct structure', async () => {
+        it('should return strategy with correct structure', async () => {
             const response = await request(app)
                 .get('/api/strategy');
 
@@ -66,14 +66,14 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data).toHaveProperty('theme');
         });
 
-        test('should return array for focusCategories', async () => {
+        it('should return array for focusCategories', async () => {
             const response = await request(app)
                 .get('/api/strategy');
 
             expect(Array.isArray(response.body.data.focusCategories)).toBe(true);
         });
 
-        test('should handle database error', async () => {
+        it('should handle database error', async () => {
             mockFindContentStrategy.mockRejectedValue(new Error('DB Error'));
 
             const response = await request(app).get('/api/strategy');
@@ -85,7 +85,7 @@ describe('Strategy Routes - Unit Tests', () => {
             });
         });
 
-        test('should return default strategy if none exists', async () => {
+        it('should return default strategy if none exists', async () => {
             mockFindContentStrategy.mockResolvedValue(null);
 
             const response = await request(app).get('/api/strategy');
@@ -98,7 +98,7 @@ describe('Strategy Routes - Unit Tests', () => {
     });
 
     describe('PUT /api/strategy', () => {
-        test('should update content strategy', async () => {
+        it('should update content strategy', async () => {
             const updateData = {
                 postsPerWeek: 7,
                 theme: 'Updated Theme'
@@ -114,7 +114,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.theme).toBe('Updated Theme');
         });
 
-        test('should handle partial updates', async () => {
+        it('should handle partial updates', async () => {
             const response = await request(app)
                 .put('/api/strategy')
                 .send({ postsPerWeek: 10 });
@@ -123,7 +123,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.postsPerWeek).toBe(10);
         });
 
-        test('should update focusCategories array', async () => {
+        it('should update focusCategories array', async () => {
             const newCategories = ['Videos', 'Stories', 'Reels'];
             const response = await request(app)
                 .put('/api/strategy')
@@ -132,7 +132,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.focusCategories).toEqual(newCategories);
         });
 
-        test('should return success message', async () => {
+        it('should return success message', async () => {
             const response = await request(app)
                 .put('/api/strategy')
                 .send({ bestTime: '7:00 PM - 9:00 PM' });
@@ -140,7 +140,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body).toHaveProperty('message', 'Content strategy updated successfully');
         });
 
-        test('should handle database error', async () => {
+        it('should handle database error', async () => {
             mockUpdateContentStrategy.mockRejectedValue(new Error('Update Error'));
 
             const response = await request(app)
@@ -156,7 +156,7 @@ describe('Strategy Routes - Unit Tests', () => {
     });
 
     describe('GET /api/strategy/cycles', () => {
-        test('should get all strategy cycles', async () => {
+        it('should get all strategy cycles', async () => {
             const response = await request(app)
                 .get('/api/strategy/cycles');
 
@@ -165,7 +165,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(Array.isArray(response.body.data)).toBe(true);
         });
 
-        test('should return cycles with correct structure', async () => {
+        it('should return cycles with correct structure', async () => {
             const response = await request(app)
                 .get('/api/strategy/cycles');
 
@@ -180,7 +180,7 @@ describe('Strategy Routes - Unit Tests', () => {
             }
         });
 
-        test('should handle database error', async () => {
+        it('should handle database error', async () => {
             mockFindAllCycles.mockRejectedValue(new Error('DB Error'));
 
             const response = await request(app).get('/api/strategy/cycles');
@@ -194,7 +194,7 @@ describe('Strategy Routes - Unit Tests', () => {
     });
 
     describe('GET /api/strategy/cycles/:id', () => {
-        test('should get cycle by valid ID', async () => {
+        it('should get cycle by valid ID', async () => {
             const response = await request(app)
                 .get('/api/strategy/cycles/sc1');
 
@@ -203,7 +203,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data).toHaveProperty('id', 'sc1');
         });
 
-        test('should return 404 for non-existent cycle', async () => {
+        it('should return 404 for non-existent cycle', async () => {
             const response = await request(app)
                 .get('/api/strategy/cycles/non-existent');
 
@@ -212,7 +212,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body).toHaveProperty('error', 'Strategy cycle not found');
         });
 
-        test('should return complete cycle data', async () => {
+        it('should return complete cycle data', async () => {
             const response = await request(app)
                 .get('/api/strategy/cycles/sc1');
 
@@ -222,7 +222,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(Array.isArray(response.body.data.plannedPosts)).toBe(true);
         });
 
-        test('should handle database error', async () => {
+        it('should handle database error', async () => {
             mockFindCycleById.mockRejectedValue(new Error('DB Error'));
 
             const response = await request(app).get('/api/strategy/cycles/123');
@@ -236,7 +236,7 @@ describe('Strategy Routes - Unit Tests', () => {
     });
 
     describe('POST /api/strategy/cycles', () => {
-        test('should create new strategy cycle', async () => {
+        it('should create new strategy cycle', async () => {
             const newCycle = {
                 period: 'July 2024',
                 startDate: '2024-07-01',
@@ -261,7 +261,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.summary).toBe(newCycle.summary);
         });
 
-        test('should auto-generate ID for new cycle', async () => {
+        it('should auto-generate ID for new cycle', async () => {
             const newCycle = {
                 period: 'August 2024',
                 startDate: '2024-08-01',
@@ -281,7 +281,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.id).toMatch(/^[a-f0-9]{24}$/);
         });
 
-        test('should handle cycle with feedback', async () => {
+        it('should handle cycle with feedback', async () => {
             const newCycle = {
                 period: 'September 2024',
                 startDate: '2024-09-01',
@@ -301,7 +301,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.feedback).toBe(newCycle.feedback);
         });
 
-        test('should return success message', async () => {
+        it('should return success message', async () => {
             const newCycle = {
                 period: 'Test Period',
                 startDate: '2024-10-01',
@@ -319,7 +319,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body).toHaveProperty('message', 'Strategy cycle created successfully');
         });
 
-        test('should handle database error', async () => {
+        it('should handle database error', async () => {
             mockCreateCycle.mockRejectedValue(new Error('Create Error'));
 
             const response = await request(app)
@@ -339,7 +339,7 @@ describe('Strategy Routes - Unit Tests', () => {
     });
 
     describe('PUT /api/strategy/cycles/:id', () => {
-        test('should update existing cycle', async () => {
+        it('should update existing cycle', async () => {
             const updateData = {
                 summary: 'Updated summary',
                 status: 'APPROVED'
@@ -355,7 +355,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.status).toBe(updateData.status);
         });
 
-        test('should return 404 for non-existent cycle', async () => {
+        it('should return 404 for non-existent cycle', async () => {
             const response = await request(app)
                 .put('/api/strategy/cycles/non-existent')
                 .send({ summary: 'test' });
@@ -364,7 +364,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.success).toBe(false);
         });
 
-        test('should preserve cycle ID when updating', async () => {
+        it('should preserve cycle ID when updating', async () => {
             const response = await request(app)
                 .put('/api/strategy/cycles/sc1')
                 .send({ id: 'different-id', summary: 'test' });
@@ -372,7 +372,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.id).toBe('sc1');
         });
 
-        test('should update plannedPosts array', async () => {
+        it('should update plannedPosts array', async () => {
             const newPlannedPosts = [
                 { category: 'Stories', count: 20 },
                 { category: 'Reels', count: 15 }
@@ -385,7 +385,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.plannedPosts).toEqual(newPlannedPosts);
         });
 
-        test('should update focus array', async () => {
+        it('should update focus array', async () => {
             const newFocus = ['New Focus 1', 'New Focus 2'];
 
             const response = await request(app)
@@ -395,7 +395,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.focus).toEqual(newFocus);
         });
 
-        test('should handle feedback updates', async () => {
+        it('should handle feedback updates', async () => {
             const response = await request(app)
                 .put('/api/strategy/cycles/sc1')
                 .send({ feedback: 'Looks great, approved!' });
@@ -403,7 +403,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.feedback).toBe('Looks great, approved!');
         });
 
-        test('should handle database error', async () => {
+        it('should handle database error', async () => {
             mockUpdateCycle.mockRejectedValue(new Error('Update Error'));
 
             const response = await request(app)
@@ -419,7 +419,7 @@ describe('Strategy Routes - Unit Tests', () => {
     });
 
     describe('Edge Cases', () => {
-        test('should handle empty plannedPosts array', async () => {
+        it('should handle empty plannedPosts array', async () => {
             const newCycle = {
                 period: 'Test',
                 startDate: '2024-11-01',
@@ -438,7 +438,7 @@ describe('Strategy Routes - Unit Tests', () => {
             expect(response.body.data.plannedPosts).toEqual([]);
         });
 
-        test('should handle empty focus array', async () => {
+        it('should handle empty focus array', async () => {
             const newCycle = {
                 period: 'Test',
                 startDate: '2024-11-01',

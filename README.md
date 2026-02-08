@@ -30,12 +30,8 @@ npm run dev
 
 See [restropulse-pwa-backend/README.md](restropulse-pwa-backend/README.md) for details.
 
-### Other Directories
-
-- `whatsappbusinessapi-bot/` - Python bot for WhatsApp Business API integration
-- `whatsappbusinessapi-webhook/` - Azure Function webhook handler
-- `shared-schemas/` - Protocol Buffers schema definitions
-- `scripts/` - Build and generation scripts
+### `restropulse-pwa-database/`
+Database management scripts and seed data.
 
 ## Architecture
 
@@ -133,7 +129,7 @@ See [restropulse-pwa-backend/README.md](restropulse-pwa-backend/README.md) for d
 - Token refresh cron for long-lived access tokens
 - Strategy planning and cycles
 - Offer and special management
-- Multi-platform support (Instagram, Facebook, WhatsApp)
+- Multi-platform support (Instagram, Facebook)
 - Comprehensive test suites (650+ tests across frontend and backend)
 
 ## Tech Stack

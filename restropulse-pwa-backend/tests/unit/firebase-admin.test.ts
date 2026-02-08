@@ -1,14 +1,14 @@
-import { jest, describe, test, expect, beforeEach, afterAll } from '@jest/globals';
+import { vi, describe, it, expect, beforeEach, afterAll, Mock } from 'vitest';
 
 // Define mocks first
-const mockInitializeApp = jest.fn();
-const mockCert = jest.fn();
-const mockApplicationDefault = jest.fn();
-const mockVerifyIdToken = jest.fn();
-const mockGetUser = jest.fn();
+const mockInitializeApp = vi.fn();
+const mockCert = vi.fn();
+const mockApplicationDefault = vi.fn();
+const mockVerifyIdToken = vi.fn();
+const mockGetUser = vi.fn();
 
 // Mock the external library using unstable_mockModule for ESM
-await jest.unstable_mockModule('firebase-admin', () => ({
+vi.mock('firebase-admin', () => ({
     __esModule: true,
     default: {
         initializeApp: mockInitializeApp,
@@ -16,7 +16,7 @@ await jest.unstable_mockModule('firebase-admin', () => ({
             cert: mockCert,
             applicationDefault: mockApplicationDefault
         },
-        auth: jest.fn(() => ({
+        auth: vi.fn(() => ({
             verifyIdToken: mockVerifyIdToken,
             getUser: mockGetUser
         }))
@@ -33,14 +33,14 @@ describe('Firebase Admin Service', () => {
     const originalConsoleLog = console.log;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         process.env = { ...originalEnv };
         // Reset initialization state
         if ((firebaseService as any).resetFirebaseConfigForTesting) {
             (firebaseService as any).resetFirebaseConfigForTesting();
         }
-        console.warn = jest.fn();
-        console.log = jest.fn();
+        console.warn = vi.fn();
+        console.log = vi.fn();
     });
 
     afterAll(() => {
@@ -50,7 +50,7 @@ describe('Firebase Admin Service', () => {
     });
 
     describe('Initialization', () => {
-        test('should initialize with service account key (Option 1)', () => {
+        it('should initialize with service account key (Option 1)', () => {
             process.env.FIREBASE_SERVICE_ACCOUNT_KEY = '{"project_id": "test-sa"}';
 
             firebaseService.initializeFirebaseAdmin();
@@ -60,7 +60,7 @@ describe('Firebase Admin Service', () => {
             expect(firebaseService.isFirebaseInitialized()).toBe(true);
         });
 
-        test('should initialize with application default credentials (Option 2)', () => {
+        it('should initialize with application default credentials (Option 2)', () => {
             delete process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
             process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/creds.json';
 
@@ -71,7 +71,7 @@ describe('Firebase Admin Service', () => {
             expect(firebaseService.isFirebaseInitialized()).toBe(true);
         });
 
-        test('should initialize in development mode with project ID (Option 3)', () => {
+        it('should initialize in development mode with project ID (Option 3)', () => {
             delete process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
             delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
             process.env.FIREBASE_PROJECT_ID = 'dev-project';
@@ -82,7 +82,7 @@ describe('Firebase Admin Service', () => {
             expect(firebaseService.isFirebaseInitialized()).toBe(true);
         });
 
-        test('should NOT initialize if no config provided', () => {
+        it('should NOT initialize if no config provided', () => {
             delete process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
             delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
             delete process.env.FIREBASE_PROJECT_ID;
@@ -94,7 +94,7 @@ describe('Firebase Admin Service', () => {
             expect(console.warn).toHaveBeenCalled();
         });
 
-        test('should not re-initialize if already initialized', () => {
+        it('should not re-initialize if already initialized', () => {
             process.env.FIREBASE_SERVICE_ACCOUNT_KEY = '{"project_id": "test"}';
 
             firebaseService.initializeFirebaseAdmin();
@@ -105,7 +105,7 @@ describe('Firebase Admin Service', () => {
             expect(mockInitializeApp).toHaveBeenCalledTimes(1);
         });
 
-        test('should handle invalid JSON in service account key', () => {
+        it('should handle invalid JSON in service account key', () => {
             process.env.FIREBASE_SERVICE_ACCOUNT_KEY = '{invalid-json}';
 
             // Should catch error internally
@@ -118,12 +118,12 @@ describe('Firebase Admin Service', () => {
         beforeEach(() => {
             process.env.FIREBASE_SERVICE_ACCOUNT_KEY = '{"project_id": "test"}';
             firebaseService.initializeFirebaseAdmin();
-            jest.clearAllMocks(); // Clear calls from init
+            vi.clearAllMocks(); // Clear calls from init
         });
 
-        test('verifyFirebaseToken should call admin.auth().verifyIdToken', async () => {
+        it('verifyFirebaseToken should call admin.auth().verifyIdToken', async () => {
             const mockUid = 'test-uid-123';
-            (mockVerifyIdToken as jest.Mock<any>).mockResolvedValue({ uid: mockUid });
+            (mockVerifyIdToken as Mock<any>).mockResolvedValue({ uid: mockUid });
 
             const result = await firebaseService.verifyFirebaseToken('valid-token');
 
@@ -131,15 +131,15 @@ describe('Firebase Admin Service', () => {
             expect(result).toEqual({ uid: mockUid });
         });
 
-        test('verifyFirebaseToken should return null on error', async () => {
-            (mockVerifyIdToken as jest.Mock<any>).mockRejectedValue(new Error('Auth error'));
+        it('verifyFirebaseToken should return null on error', async () => {
+            (mockVerifyIdToken as Mock<any>).mockRejectedValue(new Error('Auth error'));
 
             const result = await firebaseService.verifyFirebaseToken('invalid-token');
 
             expect(result).toBeNull();
         });
 
-        test('verifyFirebaseToken should return null if not initialized', async () => {
+        it('verifyFirebaseToken should return null if not initialized', async () => {
             (firebaseService as any).resetFirebaseConfigForTesting();
             const result = await firebaseService.verifyFirebaseToken('token');
             expect(result).toBeNull();
@@ -152,22 +152,22 @@ describe('Firebase Admin Service', () => {
             firebaseService.initializeFirebaseAdmin();
         });
 
-        test('should get user by uid', async () => {
-            const mockUser = { uid: 'u1', email: 'test@test.com' };
-            (mockGetUser as jest.Mock<any>).mockResolvedValue(mockUser);
+        it('should get user by uid', async () => {
+            const mockUser = { uid: 'u1', email: 'test@it.com' };
+            (mockGetUser as Mock<any>).mockResolvedValue(mockUser);
 
             const result = await firebaseService.getFirebaseUser('u1');
             expect(result).toEqual(mockUser);
             expect(mockGetUser).toHaveBeenCalledWith('u1');
         });
 
-        test('should return null on error', async () => {
+        it('should return null on error', async () => {
             (mockGetUser as jest.Mock<any>).mockRejectedValue(new Error('Ooops'));
             const result = await firebaseService.getFirebaseUser('u1');
             expect(result).toBeNull();
         });
 
-        test('should return null if not initialized', async () => {
+        it('should return null if not initialized', async () => {
             (firebaseService as any).resetFirebaseConfigForTesting();
             const result = await firebaseService.getFirebaseUser('u1');
             expect(result).toBeNull();

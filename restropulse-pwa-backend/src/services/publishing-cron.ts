@@ -37,6 +37,7 @@ const publishAttempts: PublishAttempt[] = [];
 /**
  * Get scheduled posts that are due for publishing.
  * Returns posts with status SCHEDULED whose scheduledFor time has passed.
+ * Excludes posts with PUBLISHING status to avoid race conditions.
  */
 export async function getPostsDueForPublishing(): Promise<any[]> {
     const col = getPostsCollection();
@@ -79,6 +80,27 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
     const currentAttempts = postDoc.publishAttempts || 0;
 
     console.log(`[Publishing Cron] Processing post ${postId} (attempt ${currentAttempts + 1}/${MAX_PUBLISH_ATTEMPTS})`);
+
+    // Atomically mark post as PUBLISHING to prevent race conditions
+    const updateResult = await postsCol.findOneAndUpdate(
+        {
+            _id: postDoc._id,
+            status: 'SCHEDULED'
+        },
+        {
+            $set: {
+                status: 'PUBLISHING',
+                updatedAt: new Date()
+            }
+        },
+        { returnDocument: 'after' }
+    );
+
+    // If update failed, post is already being processed or status changed
+    if (!updateResult) {
+        console.log(`[Publishing Cron] Post ${postId} is already being processed or status changed, skipping`);
+        return false;
+    }
 
     // Validate restaurant ID exists
     if (!restaurantId) {
@@ -166,7 +188,8 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
         // Success - update post status
         console.log(`[Publishing Cron] Post ${postId} published successfully`);
 
-        await postsCol.updateOne(
+        // Ensure database update completes before returning
+        const updateResult = await postsCol.updateOne(
             { _id: postDoc._id },
             {
                 $set: {
@@ -180,6 +203,10 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
                 }
             }
         );
+
+        if (updateResult.modifiedCount === 0) {
+            console.warn(`[Publishing Cron] Warning: Post ${postId} database update may have failed`);
+        }
 
         publishAttempts.push({
             postId,
@@ -208,17 +235,22 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
         // If not retryable or final attempt, mark as MISSED_DEADLINE
         const shouldFail = isFinalAttempt || !anyRetryable;
 
-        await postsCol.updateOne(
+        // Ensure database update completes before returning
+        const updateResult = await postsCol.updateOne(
             { _id: postDoc._id },
             {
                 $set: {
-                    ...(shouldFail ? { status: 'MISSED_DEADLINE' } : {}),
+                    status: shouldFail ? 'MISSED_DEADLINE' : 'SCHEDULED',
                     publishError: combinedError,
                     updatedAt: new Date()
                 },
                 $inc: { publishAttempts: 1 }
             }
         );
+
+        if (updateResult.modifiedCount === 0) {
+            console.warn(`[Publishing Cron] Warning: Post ${postId} failure status update may have failed`);
+        }
 
         if (shouldFail) {
             console.error(`[Publishing Cron] Post ${postId} permanently failed after ${newAttempts} attempts`);

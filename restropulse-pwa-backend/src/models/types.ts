@@ -65,7 +65,7 @@ export interface Restaurant {
 export interface Post {
     id: string;
     type: 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'STORY' | 'REEL';
-    status: 'POSTED' | 'PENDING_APPROVAL' | 'CHANGES_REQUESTED' | 'SCHEDULED' | 'MISSED_DEADLINE';
+    status: 'POSTED' | 'PENDING_APPROVAL' | 'CHANGES_REQUESTED' | 'SCHEDULED' | 'PUBLISHING' | 'MISSED_DEADLINE';
     thumbnail: string;
     mediaUrls?: string[];
     videoUrl?: string;

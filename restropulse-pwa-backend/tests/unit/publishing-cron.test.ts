@@ -1,37 +1,49 @@
-import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
 
 // -- Mock Setup --
 
-const mockToArray = jest.fn<any>();
-const mockSort = jest.fn<any>(() => ({ toArray: mockToArray }));
-const mockFind = jest.fn<any>(() => ({ sort: mockSort }));
-const mockFindOne = jest.fn<any>();
-const mockUpdateOne = jest.fn<any>();
+const mockToArray = vi.fn();
+const mockSort = vi.fn<any>(() => ({ toArray: mockToArray }));
+const mockFind = vi.fn<any>(() => ({ sort: mockSort }));
+const mockFindOne = vi.fn();
+const mockFindOneAndUpdate = vi.fn();
+const mockUpdateOne = vi.fn();
 const mockPostsCollection = {
     find: mockFind,
     findOne: mockFindOne,
+    findOneAndUpdate: mockFindOneAndUpdate,
     updateOne: mockUpdateOne
 };
 
-const mockRestFindOne = jest.fn<any>();
+const mockRestFindOne = vi.fn();
 const mockRestaurantsCollection = {
     findOne: mockRestFindOne
 };
 
-const mockPublishPost = jest.fn<any>();
-const mockSchedule = jest.fn<any>();
+const mockPublishPost = vi.fn();
+const mockSchedule = vi.fn();
+
+// Mock the DB connection module to return our mock collections
+const mockGetPostsCollection = vi.fn(() => mockPostsCollection);
+const mockGetRestaurantsCollection = vi.fn(() => mockRestaurantsCollection);
+
+vi.mock('../../src/db/connection.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        getPostsCollection: mockGetPostsCollection,
+        getRestaurantsCollection: mockGetRestaurantsCollection
+    };
+});
 
 // Mock modules before importing subject
-await jest.unstable_mockModule('../../src/services/publishing-service.js', () => ({
+vi.mock('../../src/services/publishing-service.js', () => ({
     publishPost: mockPublishPost
 }));
 
-await jest.unstable_mockModule('node-cron', () => ({
+vi.mock('node-cron', () => ({
     default: { schedule: mockSchedule }
 }));
-
-// Import actual connection module so we can override collection getters
-import { getPostsCollection, getRestaurantsCollection } from '../../src/db/connection.js';
 
 // Import subject
 const {
@@ -46,21 +58,20 @@ const {
 
 describe('Publishing Cron Service', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
+        vi.clearAllMocks();
         mockToArray.mockResolvedValue([]);
         mockUpdateOne.mockResolvedValue({ modifiedCount: 1 });
-        // Override the collection getters to return our mocks
-        (getPostsCollection as unknown as jest.Mock).mockReturnValue(mockPostsCollection);
-        (getRestaurantsCollection as unknown as jest.Mock).mockReturnValue(mockRestaurantsCollection);
+        // Mock findOneAndUpdate to return a successful update (the post doc)
+        mockFindOneAndUpdate.mockResolvedValue({ _id: 'post-1', status: 'PUBLISHING' });
     });
 
     describe('getPostsDueForPublishing', () => {
-        test('should query scheduled posts with scheduledFor in the past', async () => {
+        it('should query scheduled posts with scheduledFor in the past', async () => {
             mockToArray.mockResolvedValue([{ _id: 'p1', status: 'SCHEDULED' }]);
 
             const result = await getPostsDueForPublishing();
 
-            expect(getPostsCollection).toHaveBeenCalled();
+            expect(mockGetPostsCollection).toHaveBeenCalled();
             expect(mockFind).toHaveBeenCalledWith(
                 expect.objectContaining({
                     status: 'SCHEDULED',
@@ -70,7 +81,7 @@ describe('Publishing Cron Service', () => {
             expect(result).toHaveLength(1);
         });
 
-        test('should return empty array when no posts are due', async () => {
+        it('should return empty array when no posts are due', async () => {
             mockToArray.mockResolvedValue([]);
 
             const result = await getPostsDueForPublishing();
@@ -80,7 +91,7 @@ describe('Publishing Cron Service', () => {
     });
 
     describe('getRestaurantCredentials', () => {
-        test('should find restaurant with Instagram credentials', async () => {
+        it('should find restaurant with Instagram credentials', async () => {
             const mockRestaurant = {
                 _id: 'rest-1',
                 instagramCredentials: {
@@ -101,7 +112,7 @@ describe('Publishing Cron Service', () => {
             );
         });
 
-        test('should return null when restaurant has no credentials', async () => {
+        it('should return null when restaurant has no credentials', async () => {
             mockRestFindOne.mockResolvedValue(null);
 
             const result = await getRestaurantCredentials('rest-2');
@@ -130,7 +141,7 @@ describe('Publishing Cron Service', () => {
             }
         };
 
-        test('should publish a post successfully', async () => {
+        it('should publish a post successfully', async () => {
             mockRestFindOne.mockResolvedValue(mockRestaurant);
             mockPublishPost.mockResolvedValue({
                 instagram: { success: true, instagramMediaId: 'media-999', retryable: false }
@@ -139,6 +150,19 @@ describe('Publishing Cron Service', () => {
             const result = await processPostForPublishing(mockPostDoc);
 
             expect(result).toBe(true);
+
+            // Expect atomic status lock with findOneAndUpdate
+            expect(mockFindOneAndUpdate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    _id: 'post-1',
+                    status: 'SCHEDULED'
+                }),
+                expect.objectContaining({
+                    $set: expect.objectContaining({ status: 'PUBLISHING' })
+                }),
+                expect.any(Object)
+            );
+
             expect(mockPublishPost).toHaveBeenCalledWith(
                 expect.objectContaining({
                     id: 'post-1',
@@ -164,12 +188,16 @@ describe('Publishing Cron Service', () => {
             );
         });
 
-        test('should fail when post has no restaurantId', async () => {
+        it('should fail when post has no restaurantId', async () => {
             const postWithoutRestaurant = { _id: 'post-2', publishAttempts: 0 };
 
             const result = await processPostForPublishing(postWithoutRestaurant);
 
             expect(result).toBe(false);
+
+            // Should still try atomic lock first
+            expect(mockFindOneAndUpdate).toHaveBeenCalled();
+
             expect(mockUpdateOne).toHaveBeenCalledWith(
                 { _id: 'post-2' },
                 expect.objectContaining({
@@ -181,7 +209,7 @@ describe('Publishing Cron Service', () => {
             );
         });
 
-        test('should fail when restaurant has no Instagram credentials', async () => {
+        it('should fail when restaurant has no Instagram credentials', async () => {
             mockRestFindOne.mockResolvedValue(null);
 
             const result = await processPostForPublishing(mockPostDoc);
@@ -190,7 +218,7 @@ describe('Publishing Cron Service', () => {
             expect(mockPublishPost).not.toHaveBeenCalled();
         });
 
-        test('should mark as MISSED_DEADLINE after max attempts with no credentials', async () => {
+        it('should mark as MISSED_DEADLINE after max attempts with no credentials', async () => {
             mockRestFindOne.mockResolvedValue(null);
             const postWithMaxAttempts = { ...mockPostDoc, publishAttempts: 2 };
 
@@ -207,7 +235,7 @@ describe('Publishing Cron Service', () => {
             );
         });
 
-        test('should handle retryable publishing failure', async () => {
+        it('should handle retryable publishing failure', async () => {
             mockRestFindOne.mockResolvedValue(mockRestaurant);
             mockPublishPost.mockResolvedValue({
                 instagram: { success: false, error: 'Rate limited', retryable: true }
@@ -217,14 +245,14 @@ describe('Publishing Cron Service', () => {
 
             expect(result).toBe(false);
 
-            // Should NOT set status to MISSED_DEADLINE (retryable and not max attempts)
+            // Should set status to SCHEDULED (retryable and not max attempts)
             const updateCall = mockUpdateOne.mock.calls[0] as any[];
             const setOps = updateCall[1].$set;
-            expect(setOps.status).toBeUndefined();
+            expect(setOps.status).toBe('SCHEDULED');
             expect(setOps.publishError).toContain('Rate limited');
         });
 
-        test('should mark as MISSED_DEADLINE on non-retryable failure', async () => {
+        it('should mark as MISSED_DEADLINE on non-retryable failure', async () => {
             mockRestFindOne.mockResolvedValue(mockRestaurant);
             mockPublishPost.mockResolvedValue({
                 instagram: { success: false, error: 'Invalid media', retryable: false }
@@ -243,7 +271,7 @@ describe('Publishing Cron Service', () => {
             );
         });
 
-        test('should mark as MISSED_DEADLINE when max retries reached even if retryable', async () => {
+        it('should mark as MISSED_DEADLINE when max retries reached even if retryable', async () => {
             mockRestFindOne.mockResolvedValue(mockRestaurant);
             mockPublishPost.mockResolvedValue({
                 instagram: { success: false, error: 'Rate limited', retryable: true }
@@ -265,7 +293,7 @@ describe('Publishing Cron Service', () => {
     });
 
     describe('runPublishingJob', () => {
-        test('should return zero stats when no posts are due', async () => {
+        it('should return zero stats when no posts are due', async () => {
             mockToArray.mockResolvedValue([]);
 
             const stats = await runPublishingJob();
@@ -273,8 +301,8 @@ describe('Publishing Cron Service', () => {
             expect(stats).toEqual({ published: 0, failed: 0, skipped: 0 });
         });
 
-        test('should process multiple posts', async () => {
-            jest.useFakeTimers();
+        it('should process multiple posts', async () => {
+            vi.useFakeTimers();
 
             const posts = [
                 {
@@ -315,19 +343,19 @@ describe('Publishing Cron Service', () => {
             const resultPromise = runPublishingJob();
 
             // Advance past the 2-second rate-limit delays between posts
-            await jest.advanceTimersByTimeAsync(4000);
+            await vi.advanceTimersByTimeAsync(4000);
 
             const stats = await resultPromise;
 
             expect(stats.published).toBe(1);
             expect(stats.failed).toBe(1);
 
-            jest.useRealTimers();
+            vi.useRealTimers();
         });
     });
 
     describe('startPublishingCron', () => {
-        test('should schedule cron job every 5 minutes', () => {
+        it('should schedule cron job every 5 minutes', () => {
             startPublishingCron();
 
             expect(mockSchedule).toHaveBeenCalledWith(
@@ -339,14 +367,14 @@ describe('Publishing Cron Service', () => {
     });
 
     describe('getRecentPublishAttempts', () => {
-        test('should return an array (initially empty)', () => {
+        it('should return an array (initially empty)', () => {
             const attempts = getRecentPublishAttempts();
             expect(Array.isArray(attempts)).toBe(true);
         });
     });
 
     describe('triggerManualPublish', () => {
-        test('should call runPublishingJob and return stats', async () => {
+        it('should call runPublishingJob and return stats', async () => {
             mockToArray.mockResolvedValue([]);
 
             const stats = await triggerManualPublish();

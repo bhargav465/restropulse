@@ -1,5 +1,5 @@
 
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect } from 'vitest';
 import { generateTokens, verifyToken, refreshAccessToken } from '../../src/services/jwt.js';
 import jwt from 'jsonwebtoken';
 
@@ -8,7 +8,7 @@ describe('JWT Service', () => {
     const phone = '1234567890';
 
     describe('generateTokens', () => {
-        test('should generate access and refresh tokens', () => {
+        it('should generate access and refresh tokens', () => {
             const tokens = generateTokens(userId, phone);
 
             expect(tokens.accessToken).toBeDefined();
@@ -25,7 +25,7 @@ describe('JWT Service', () => {
     });
 
     describe('verifyToken', () => {
-        test('should verify valid token', () => {
+        it('should verify valid token', () => {
             const { accessToken } = generateTokens(userId, phone);
             const decoded = verifyToken(accessToken);
 
@@ -33,14 +33,14 @@ describe('JWT Service', () => {
             expect(decoded?.userId).toBe(userId);
         });
 
-        test('should return null for invalid token', () => {
+        it('should return null for invalid token', () => {
             const decoded = verifyToken('invalid-token');
             expect(decoded).toBeNull();
         });
     });
 
     describe('refreshAccessToken', () => {
-        test('should issue new access token with valid refresh token', () => {
+        it('should issue new access token with valid refresh token', () => {
             const { refreshToken } = generateTokens(userId, phone);
             const newAccessToken = refreshAccessToken(refreshToken);
 
@@ -50,12 +50,12 @@ describe('JWT Service', () => {
             expect(decoded?.userId).toBe(userId);
         });
 
-        test('should return null for invalid refresh token', () => {
+        it('should return null for invalid refresh token', () => {
             const result = refreshAccessToken('invalid-token');
             expect(result).toBeNull();
         });
 
-        test('should return null for access token passed as refresh token', () => {
+        it('should return null for access token passed as refresh token', () => {
             const { accessToken } = generateTokens(userId, phone);
             const result = refreshAccessToken(accessToken);
             expect(result).toBeNull();

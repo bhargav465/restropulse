@@ -2,68 +2,72 @@
 // when integrations.ts module is loaded
 process.env.INSTAGRAM_APP_SECRET = 'test-app-secret';
 
-import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import { describe, it, test, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import crypto from 'crypto';
 
-// 1. Import Actual Connection
-import * as realConnection from '../../src/db/connection.js';
+// Define Mocks for Services
+const mockGenerateOAuthUrl = vi.fn();
+const mockHandleOAuthCallback = vi.fn();
+const mockIsInstagramConfigured = vi.fn();
+const mockGetInstagramProfile = vi.fn();
+const mockValidateStateToken = vi.fn();
+const mockCheckAndRefreshTokenIfNeeded = vi.fn();
+const mockValidateToken = vi.fn();
+const mockGetRestaurantsCollection = vi.fn();
 
-// 2. Define Mocks for Services
-const mockGenerateOAuthUrl = jest.fn<any>();
-const mockHandleOAuthCallback = jest.fn<any>();
-const mockIsInstagramConfigured = jest.fn<any>();
-const mockGetInstagramProfile = jest.fn<any>();
-const mockValidateStateToken = jest.fn<any>();
-const mockCheckAndRefreshTokenIfNeeded = jest.fn<any>();
-const mockValidateToken = jest.fn<any>();
-
-// 3. Mock Services
-await jest.unstable_mockModule('../../src/services/instagram-api.js', () => ({
+// Mock Services
+vi.mock('../../src/services/instagram-api.js', () => ({
     generateOAuthUrl: mockGenerateOAuthUrl,
     handleOAuthCallback: mockHandleOAuthCallback,
     isInstagramConfigured: mockIsInstagramConfigured,
     getInstagramProfile: mockGetInstagramProfile,
     validateStateToken: mockValidateStateToken,
-    prepareCredentialsForStorage: jest.fn((account: any, token, expiresAt) => ({
+    prepareCredentialsForStorage: vi.fn((account: any, token, expiresAt) => ({
         userId: account.id,
         accessToken: 'encrypted_token',
         tokenExpiresAt: expiresAt,
         username: account.username,
         name: account.name
     })),
-    refreshAccessToken: jest.fn(),
+    refreshAccessToken: vi.fn(),
     validateToken: mockValidateToken
 }));
 
-await jest.unstable_mockModule('../../src/services/token-refresh-cron.js', () => ({
+vi.mock('../../src/services/token-refresh-cron.js', () => ({
     checkAndRefreshTokenIfNeeded: mockCheckAndRefreshTokenIfNeeded,
-    triggerManualRefresh: jest.fn()
+    triggerManualRefresh: vi.fn()
 }));
 
-// 4. Mock Database Connection with Spy
-const mockGetRestaurantsCollection = jest.fn<any>();
+// Mock Database Connection
+vi.mock('../../src/db/connection.js', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        getRestaurantsCollection: mockGetRestaurantsCollection
+    };
+});
 
-await jest.unstable_mockModule('../../src/db/connection.js', () => ({
-    __esModule: true,
-    ...realConnection,
-    getRestaurantsCollection: mockGetRestaurantsCollection
-}));
+// Import actual implementation using vi.importActual to get real implementations
+let realConnection: any;
 
-// 5. Helper to reset mocks
-const useActualImplementation = () => {
+// Helper to reset mocks
+const useActualImplementation = async () => {
+    if (!realConnection) {
+        realConnection = await vi.importActual('../../src/db/connection.js');
+    }
     mockGetRestaurantsCollection.mockImplementation(realConnection.getRestaurantsCollection);
 };
 
-// 6. Import App (Dynamic)
+// Import App (Dynamic)
 const { createTestApp } = await import('../helpers/testHelper.js');
 const app = createTestApp();
 
 describe('Integration Routes', () => {
 
     beforeEach(async () => {
-        jest.clearAllMocks();
-        useActualImplementation(); // Default to real DB
+        vi.clearAllMocks();
+        await useActualImplementation(); // Default to real DB
 
         // Seed Data
         const col = realConnection.getRestaurantsCollection();
@@ -80,7 +84,7 @@ describe('Integration Routes', () => {
     });
 
     describe('GET /api/integrations/instagram/oauth-url', () => {
-        test('should return oauth url', async () => {
+        it('should return oauth url', async () => {
             mockIsInstagramConfigured.mockReturnValue(true);
             mockGenerateOAuthUrl.mockReturnValue({
                 url: 'https://instagram.com/oauth',
@@ -95,7 +99,7 @@ describe('Integration Routes', () => {
             expect(response.body.data.oauthUrl).toBe('https://instagram.com/oauth');
         });
 
-        test('should pass onboarding=false by default', async () => {
+        it('should pass onboarding=false by default', async () => {
             mockIsInstagramConfigured.mockReturnValue(true);
             mockGenerateOAuthUrl.mockReturnValue({ url: 'https://test', state: 's' });
 
@@ -106,7 +110,7 @@ describe('Integration Routes', () => {
             expect(mockGenerateOAuthUrl).toHaveBeenCalledWith('r1', false);
         });
 
-        test('should pass onboarding=true when specified', async () => {
+        it('should pass onboarding=true when specified', async () => {
             mockIsInstagramConfigured.mockReturnValue(true);
             mockGenerateOAuthUrl.mockReturnValue({ url: 'https://test', state: 's' });
 
@@ -117,7 +121,7 @@ describe('Integration Routes', () => {
             expect(mockGenerateOAuthUrl).toHaveBeenCalledWith('r1', true);
         });
 
-        test('should return error if not configured', async () => {
+        it('should return error if not configured', async () => {
             mockIsInstagramConfigured.mockReturnValue(false);
 
             const response = await request(app)
@@ -127,14 +131,14 @@ describe('Integration Routes', () => {
             expect(response.status).toBe(503);
         });
 
-        test('should fail without restaurantId', async () => {
+        it('should fail without restaurantId', async () => {
             const response = await request(app)
                 .get('/api/integrations/instagram/oauth-url');
 
             expect(response.status).toBe(400);
         });
 
-        test('should handle generation error', async () => {
+        it('should handle generation error', async () => {
             mockIsInstagramConfigured.mockReturnValue(true);
             mockGenerateOAuthUrl.mockImplementation(() => { throw new Error('Gen failed'); });
 
@@ -147,7 +151,7 @@ describe('Integration Routes', () => {
     });
 
     describe('GET /api/integrations/instagram/callback', () => {
-        test('should redirect on missing params', async () => {
+        it('should redirect on missing params', async () => {
             const response = await request(app)
                 .get('/api/integrations/instagram/callback');
 
@@ -155,7 +159,7 @@ describe('Integration Routes', () => {
             expect(response.header.location).toContain('error=missing_params');
         });
 
-        test('should redirect on oauth error', async () => {
+        it('should redirect on oauth error', async () => {
             const response = await request(app)
                 .get('/api/integrations/instagram/callback')
                 .query({ error: 'access_denied', error_description: 'User denied' });
@@ -164,7 +168,7 @@ describe('Integration Routes', () => {
             expect(response.header.location).toContain('error=oauth_denied');
         });
 
-        test('should redirect on invalid state token', async () => {
+        it('should redirect on invalid state token', async () => {
             mockValidateStateToken.mockReturnValue({ valid: false });
 
             const response = await request(app)
@@ -175,7 +179,7 @@ describe('Integration Routes', () => {
             expect(response.header.location).toContain('error=invalid_state');
         });
 
-        test('should process callback and show selection', async () => {
+        it('should process callback and show selection', async () => {
             mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
             const expires = new Date(Date.now() + 3600000);
 
@@ -195,7 +199,7 @@ describe('Integration Routes', () => {
             expect(response.header.location).toContain('success=true');
         });
 
-        test('should call handleOAuthCallback with skipStateValidation=true', async () => {
+        it('should call handleOAuthCallback with skipStateValidation=true', async () => {
             mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
             mockHandleOAuthCallback.mockResolvedValue({
                 success: true,
@@ -212,7 +216,7 @@ describe('Integration Routes', () => {
             expect(mockHandleOAuthCallback).toHaveBeenCalledWith('c', 's', true);
         });
 
-        test('should handle multiple accounts selection', async () => {
+        it('should handle multiple accounts selection', async () => {
             mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
             const expires = new Date(Date.now() + 3600000);
 
@@ -232,7 +236,7 @@ describe('Integration Routes', () => {
             expect(response.header.location).toContain('success=true');
         });
 
-        test('should handle multiple accounts selection', async () => {
+        it('should handle multiple accounts selection', async () => {
             mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
 
             mockHandleOAuthCallback.mockResolvedValue({
@@ -254,7 +258,7 @@ describe('Integration Routes', () => {
             expect(response.header.location).toContain('select=true');
         });
 
-        test('should handle failure from service', async () => {
+        it('should handle failure from service', async () => {
             mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
             mockHandleOAuthCallback.mockReturnValue({
                 success: false,
@@ -269,7 +273,7 @@ describe('Integration Routes', () => {
             expect(response.header.location).toContain('error=connection_failed');
         });
 
-        test('should handle exception during callback', async () => {
+        it('should handle exception during callback', async () => {
             mockValidateStateToken.mockImplementation(() => { throw new Error('Boom'); });
 
             const response = await request(app)
@@ -282,13 +286,13 @@ describe('Integration Routes', () => {
     });
 
     describe('POST /api/integrations/instagram/callback', () => {
-        test('should handle missing params', async () => {
+        it('should handle missing params', async () => {
             const res = await request(app).post('/api/integrations/instagram/callback').send({});
             expect(res.status).toBe(400);
             expect(res.body.error).toBe('MISSING_PARAMS');
         });
 
-        test('should handle service failure', async () => {
+        it('should handle service failure', async () => {
             mockHandleOAuthCallback.mockResolvedValue({ success: false, error: 'fail' });
             const res = await request(app).post('/api/integrations/instagram/callback').send({ code: 'c', state: 's' });
             expect(res.status).toBe(400);
@@ -297,7 +301,7 @@ describe('Integration Routes', () => {
     });
 
     describe('GET /api/integrations/instagram/status/:restaurantId', () => {
-        test('should return status', async () => {
+        it('should return status', async () => {
             // Setup DB state
             const col = realConnection.getRestaurantsCollection();
             await col.updateOne({ _id: 'r1' } as any, {
@@ -311,9 +315,9 @@ describe('Integration Routes', () => {
             expect(response.body.data.connected).toBe(true);
         });
 
-        test('should handle database error', async () => {
+        it('should handle database error', async () => {
             mockGetRestaurantsCollection.mockReturnValue({
-                findOne: jest.fn<any>().mockRejectedValue(new Error('DB Fail'))
+                findOne: vi.fn().mockRejectedValue(new Error('DB Fail'))
             });
 
             const response = await request(app)
@@ -322,7 +326,7 @@ describe('Integration Routes', () => {
             expect(response.status).toBe(500);
         });
 
-        test('should handle restaurant not found', async () => {
+        it('should handle restaurant not found', async () => {
             // We can let the real DB handle not found, or mock it.
             // Real DB returns null for invalid ID
             const response = await request(app).get('/api/integrations/instagram/status/bad-id');
@@ -331,7 +335,7 @@ describe('Integration Routes', () => {
     });
 
     describe('DELETE /api/integrations/instagram/disconnect/:restaurantId', () => {
-        test('should disconnect integration', async () => {
+        it('should disconnect integration', async () => {
             const col = realConnection.getRestaurantsCollection();
             await col.updateOne({ _id: 'r1' } as any, {
                 $set: { integrations: { instagram: true }, instagramCredentials: { token: 'abc' } }
@@ -346,9 +350,9 @@ describe('Integration Routes', () => {
             expect(r?.instagramCredentials).toBeUndefined();
         });
 
-        test('should handle database error', async () => {
+        it('should handle database error', async () => {
             mockGetRestaurantsCollection.mockReturnValue({
-                updateOne: jest.fn<any>().mockRejectedValue(new Error('DB Fail'))
+                updateOne: vi.fn().mockRejectedValue(new Error('DB Fail'))
             });
 
             const response = await request(app)
@@ -359,7 +363,7 @@ describe('Integration Routes', () => {
     });
 
     describe('POST /api/integrations/instagram/select-account', () => {
-        test('should successfully select account flow', async () => {
+        it('should successfully select account flow', async () => {
             // 1. Setup Mock
             mockHandleOAuthCallback.mockReturnValue({
                 success: true,
@@ -389,7 +393,7 @@ describe('Integration Routes', () => {
             expect(response.body.data.username).toBe('user1');
         });
 
-        test('should fail with invalid selectionId', async () => {
+        it('should fail with invalid selectionId', async () => {
             const response = await request(app)
                 .post('/api/integrations/instagram/select-account')
                 .send({ selectionId: 'invalid', accountId: 'acc1' });
@@ -397,7 +401,7 @@ describe('Integration Routes', () => {
             expect(response.status).toBe(404);
         });
 
-        test('should handle database error during save', async () => {
+        it('should handle database error during save', async () => {
             // 1. Start Session (Real DB)
             mockHandleOAuthCallback.mockReturnValue({
                 success: true,
@@ -415,7 +419,7 @@ describe('Integration Routes', () => {
 
             // 2. Switch to Mock DB for error
             mockGetRestaurantsCollection.mockReturnValue({
-                updateOne: jest.fn<any>().mockRejectedValue(new Error('Save failed'))
+                updateOne: vi.fn().mockRejectedValue(new Error('Save failed'))
             });
 
             const response = await request(app)
@@ -427,7 +431,7 @@ describe('Integration Routes', () => {
     });
 
     describe('POST /api/integrations/instagram/refresh/:restaurantId', () => {
-        test('should refresh token successfully', async () => {
+        it('should refresh token successfully', async () => {
             mockCheckAndRefreshTokenIfNeeded.mockResolvedValue(true);
 
             const response = await request(app)
@@ -436,7 +440,7 @@ describe('Integration Routes', () => {
             expect(response.status).toBe(200);
         });
 
-        test('should handle refresh failure', async () => {
+        it('should handle refresh failure', async () => {
             mockCheckAndRefreshTokenIfNeeded.mockResolvedValue(false);
 
             const response = await request(app)
@@ -445,7 +449,7 @@ describe('Integration Routes', () => {
             expect(response.status).toBe(400);
         });
 
-        test('should handle exception', async () => {
+        it('should handle exception', async () => {
             mockCheckAndRefreshTokenIfNeeded.mockRejectedValue(new Error('Fail'));
             const response = await request(app).post('/api/integrations/instagram/refresh/r1');
             expect(response.status).toBe(500);
@@ -453,14 +457,14 @@ describe('Integration Routes', () => {
     });
 
     describe('POST /api/integrations/instagram/validate/:restaurantId', () => {
-        test('should validate valid token', async () => {
+        it('should validate valid token', async () => {
             mockValidateToken.mockResolvedValue(true);
             const response = await request(app).post('/api/integrations/instagram/validate/r1');
             expect(response.status).toBe(200);
             expect(response.body.data.valid).toBe(true);
         });
 
-        test('should handle invalid token (updates DB)', async () => {
+        it('should handle invalid token (updates DB)', async () => {
             mockValidateToken.mockResolvedValue(false);
             const response = await request(app).post('/api/integrations/instagram/validate/r1');
             expect(response.status).toBe(200);
@@ -472,7 +476,7 @@ describe('Integration Routes', () => {
             expect(r?.integrations?.instagram).toBe(false);
         });
 
-        test('should error if no credentials', async () => {
+        it('should error if no credentials', async () => {
             const col = realConnection.getRestaurantsCollection();
             await col.updateOne({ _id: 'r1' } as any, { $unset: { instagramCredentials: '' } });
 
@@ -482,7 +486,7 @@ describe('Integration Routes', () => {
     });
 
     describe('GET /api/integrations/instagram/profile/:restaurantId', () => {
-        test('should get profile', async () => {
+        it('should get profile', async () => {
             mockGetInstagramProfile.mockResolvedValue({ username: 'my_profile', name: 'My Profile' });
             mockCheckAndRefreshTokenIfNeeded.mockResolvedValue(true);
 
@@ -492,7 +496,7 @@ describe('Integration Routes', () => {
             expect(response.body.data.username).toBe('my_profile');
         });
 
-        test('should error if profile fetch fails', async () => {
+        it('should error if profile fetch fails', async () => {
             mockGetInstagramProfile.mockResolvedValue(null);
             mockCheckAndRefreshTokenIfNeeded.mockResolvedValue(true); // Token ok, but profile fetch failed
 
@@ -503,7 +507,7 @@ describe('Integration Routes', () => {
     });
 
     describe('GET /api/integrations/config', () => {
-        test('should return config status', async () => {
+        it('should return config status', async () => {
             mockIsInstagramConfigured.mockReturnValue(true);
             const response = await request(app).get('/api/integrations/config');
 
@@ -528,7 +532,7 @@ describe('Integration Routes', () => {
             return `${sig}.${payload}`;
         };
 
-        test('should fail without signed_request', async () => {
+        it('should fail without signed_request', async () => {
             const response = await request(app)
                 .post('/api/integrations/instagram/deauthorize')
                 .send({});
@@ -537,7 +541,7 @@ describe('Integration Routes', () => {
             expect(response.body.error).toBe('Missing signed_request');
         });
 
-        test('should fail with invalid signed_request', async () => {
+        it('should fail with invalid signed_request', async () => {
             const response = await request(app)
                 .post('/api/integrations/instagram/deauthorize')
                 .send({ signed_request: 'invalid.payload' });
@@ -546,7 +550,7 @@ describe('Integration Routes', () => {
             expect(response.body.error).toBe('Invalid signed_request');
         });
 
-        test('should fail with malformed signed_request (no dot)', async () => {
+        it('should fail with malformed signed_request (no dot)', async () => {
             const response = await request(app)
                 .post('/api/integrations/instagram/deauthorize')
                 .send({ signed_request: 'nodotseparator' });
@@ -555,8 +559,8 @@ describe('Integration Routes', () => {
             expect(response.body.error).toBe('Invalid signed_request');
         });
 
-        test('should successfully deauthorize with valid signed_request', async () => {
-            const mockUpdateMany = jest.fn<any>().mockResolvedValue({ modifiedCount: 1 });
+        it('should successfully deauthorize with valid signed_request', async () => {
+            const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
             mockGetRestaurantsCollection.mockReturnValue({ updateMany: mockUpdateMany });
 
             const signedRequest = createSignedRequest('test-user-123');
@@ -578,9 +582,9 @@ describe('Integration Routes', () => {
             );
         });
 
-        test('should return 200 even when database error occurs', async () => {
+        it('should return 200 even when database error occurs', async () => {
             mockGetRestaurantsCollection.mockReturnValue({
-                updateMany: jest.fn<any>().mockRejectedValue(new Error('DB Error'))
+                updateMany: vi.fn().mockRejectedValue(new Error('DB Error'))
             });
 
             const signedRequest = createSignedRequest('test-user-456');
@@ -611,7 +615,7 @@ describe('Integration Routes', () => {
             return `${sig}.${payload}`;
         };
 
-        test('should fail without signed_request', async () => {
+        it('should fail without signed_request', async () => {
             const response = await request(app)
                 .post('/api/integrations/instagram/data-deletion')
                 .send({});
@@ -620,7 +624,7 @@ describe('Integration Routes', () => {
             expect(response.body.error).toBe('Missing signed_request');
         });
 
-        test('should fail with invalid signed_request', async () => {
+        it('should fail with invalid signed_request', async () => {
             const response = await request(app)
                 .post('/api/integrations/instagram/data-deletion')
                 .send({ signed_request: 'bad.data' });
@@ -629,8 +633,8 @@ describe('Integration Routes', () => {
             expect(response.body.error).toBe('Invalid signed_request');
         });
 
-        test('should successfully process data deletion with valid signed_request', async () => {
-            const mockUpdateMany = jest.fn<any>().mockResolvedValue({ modifiedCount: 1 });
+        it('should successfully process data deletion with valid signed_request', async () => {
+            const mockUpdateMany = vi.fn().mockResolvedValue({ modifiedCount: 1 });
             mockGetRestaurantsCollection.mockReturnValue({ updateMany: mockUpdateMany });
 
             const signedRequest = createSignedRequest('test-user-789');
@@ -652,9 +656,9 @@ describe('Integration Routes', () => {
             );
         });
 
-        test('should return 500 when database error occurs', async () => {
+        it('should return 500 when database error occurs', async () => {
             mockGetRestaurantsCollection.mockReturnValue({
-                updateMany: jest.fn<any>().mockRejectedValue(new Error('DB Error'))
+                updateMany: vi.fn().mockRejectedValue(new Error('DB Error'))
             });
 
             const signedRequest = createSignedRequest('test-user-error');
@@ -669,7 +673,7 @@ describe('Integration Routes', () => {
     });
 
     describe('GET /api/integrations/instagram/data-deletion-status', () => {
-        test('should fail without code', async () => {
+        it('should fail without code', async () => {
             const response = await request(app)
                 .get('/api/integrations/instagram/data-deletion-status');
 
@@ -677,7 +681,7 @@ describe('Integration Routes', () => {
             expect(response.text).toContain('Missing confirmation code');
         });
 
-        test('should return 404 for unknown code', async () => {
+        it('should return 404 for unknown code', async () => {
             const response = await request(app)
                 .get('/api/integrations/instagram/data-deletion-status')
                 .query({ code: 'unknown-code' });
@@ -686,7 +690,7 @@ describe('Integration Routes', () => {
             expect(response.text).toContain('Request Not Found');
         });
 
-        test('should return status for valid confirmation code', async () => {
+        it('should return status for valid confirmation code', async () => {
             // First create a data deletion request
             // Helper to create valid signed_request - must use same secret as tests/setup.ts
             const createSignedRequest = (userId: string): string => {
@@ -703,7 +707,7 @@ describe('Integration Routes', () => {
             };
 
             mockGetRestaurantsCollection.mockReturnValue({
-                updateMany: jest.fn<any>().mockResolvedValue({ modifiedCount: 1 })
+                updateMany: vi.fn().mockResolvedValue({ modifiedCount: 1 })
             });
 
             const signedRequest = createSignedRequest('status-test-user');

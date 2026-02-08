@@ -1,4 +1,4 @@
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect } from 'vitest';
 import request from 'supertest';
 import { createTestApp } from '../helpers/testHelper.js';
 
@@ -6,7 +6,7 @@ const app = createTestApp();
 
 describe('Integration Tests - Complete Workflows', () => {
     describe('User Authentication Flow', () => {
-        test('should complete full login-session-logout flow', async () => {
+        it('should complete full login-session-logout flow', async () => {
             // 1. Login
             const loginResponse = await request(app)
                 .post('/api/auth/login')
@@ -35,7 +35,7 @@ describe('Integration Tests - Complete Workflows', () => {
             expect(logoutResponse.body.success).toBe(true);
         });
 
-        test('should fail to access protected routes without auth', async () => {
+        it('should fail to access protected routes without auth', async () => {
             const response = await request(app)
                 .get('/api/auth/session');
 
@@ -44,7 +44,7 @@ describe('Integration Tests - Complete Workflows', () => {
     });
 
     describe('Restaurant Management Flow', () => {
-        test('should complete CRUD operations on restaurant', async () => {
+        it('should complete CRUD operations on restaurant', async () => {
             // 1. Get initial restaurant data
             const getResponse = await request(app)
                 .get('/api/restaurant/r1');
@@ -84,7 +84,7 @@ describe('Integration Tests - Complete Workflows', () => {
             expect(menuResponse.body.data.menuLastUpdated).toBeDefined();
         });
 
-        test('should manage multiple offers lifecycle', async () => {
+        it('should manage multiple offers lifecycle', async () => {
             // Get initial count
             const initialResponse = await request(app)
                 .get('/api/restaurant/r1');
@@ -117,14 +117,14 @@ describe('Integration Tests - Complete Workflows', () => {
     });
 
     describe('Posts Management Flow', () => {
-        test('should complete full post lifecycle', async () => {
+        it('should complete full post lifecycle', async () => {
             // 1. Create post
             const createResponse = await request(app)
                 .post('/api/posts')
                 .send({
                     type: 'IMAGE',
                     status: 'PENDING_APPROVAL',
-                    thumbnail: '/test.jpg',
+                    thumbnail: '/it.jpg',
                     caption: 'Test Post',
                     platform: 'INSTAGRAM'
                 });
@@ -163,7 +163,7 @@ describe('Integration Tests - Complete Workflows', () => {
             expect(verifyResponse.status).toBe(404);
         });
 
-        test('should handle post approval workflow', async () => {
+        it('should handle post approval workflow', async () => {
             // Create pending post
             const createResponse = await request(app)
                 .post('/api/posts')
@@ -209,7 +209,7 @@ describe('Integration Tests - Complete Workflows', () => {
             expect(getResponse.body.data.status).toBe('SCHEDULED');
         });
 
-        test('should get all posts and filter results', async () => {
+        it('should get all posts and filter results', async () => {
             // Create multiple posts
             await request(app).post('/api/posts').send({
                 type: 'IMAGE',
@@ -235,7 +235,7 @@ describe('Integration Tests - Complete Workflows', () => {
     });
 
     describe('Strategy Management Flow', () => {
-        test('should manage content strategy and cycles', async () => {
+        it('should manage content strategy and cycles', async () => {
             // 1. Get current strategy
             const strategyResponse = await request(app)
                 .get('/api/strategy');
@@ -285,7 +285,7 @@ describe('Integration Tests - Complete Workflows', () => {
             expect(cyclesResponse.body.data.length).toBeGreaterThanOrEqual(1);
         });
 
-        test('should handle cycle approval workflow', async () => {
+        it('should handle cycle approval workflow', async () => {
             // Create cycle
             const createResponse = await request(app)
                 .post('/api/strategy/cycles')
@@ -339,7 +339,7 @@ describe('Integration Tests - Complete Workflows', () => {
     });
 
     describe('Cross-Entity Integration', () => {
-        test('should coordinate restaurant updates with content strategy', async () => {
+        it('should coordinate restaurant updates with content strategy', async () => {
             // Update restaurant offers
             await request(app)
                 .patch('/api/restaurant/r1/offers')
@@ -369,7 +369,7 @@ describe('Integration Tests - Complete Workflows', () => {
             expect(strategyResponse.status).toBe(200);
         });
 
-        test('should handle concurrent operations', async () => {
+        it('should handle concurrent operations', async () => {
             // Simulate multiple concurrent requests
             const promises = [
                 request(app).get('/api/posts'),
@@ -388,14 +388,14 @@ describe('Integration Tests - Complete Workflows', () => {
     });
 
     describe('Error Handling Integration', () => {
-        test('should handle invalid routes gracefully', async () => {
+        it('should handle invalid routes gracefully', async () => {
             const response = await request(app)
                 .get('/api/invalid/route');
 
             expect(response.status).toBe(404);
         });
 
-        test('should handle malformed JSON', async () => {
+        it('should handle malformed JSON', async () => {
             const response = await request(app)
                 .post('/api/posts')
                 .set('Content-Type', 'application/json')
@@ -404,7 +404,7 @@ describe('Integration Tests - Complete Workflows', () => {
             expect(response.status).toBeGreaterThanOrEqual(400);
         });
 
-        test('should validate required fields', async () => {
+        it('should validate required fields', async () => {
             // Posts now require a caption - sending empty body should return 400
             const response = await request(app)
                 .post('/api/posts')
@@ -416,7 +416,7 @@ describe('Integration Tests - Complete Workflows', () => {
     });
 
     describe('Health Check Integration', () => {
-        test('should respond to health check', async () => {
+        it('should respond to health check', async () => {
             const response = await request(app)
                 .get('/health');
 

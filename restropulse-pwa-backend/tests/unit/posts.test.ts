@@ -1,26 +1,21 @@
-import { describe, test, expect, jest, beforeEach } from '@jest/globals';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 
-// Import Actual Implementation
-import * as actualPostsDb from '../../src/db/posts.js';
-
 // Define Mocks
-const mockFindAllPosts = jest.fn<any>();
-const mockFindPostById = jest.fn<any>();
-const mockCreatePost = jest.fn<any>();
-const mockUpdatePost = jest.fn<any>();
-const mockDeletePost = jest.fn<any>();
-const mockFindPostsByStatus = jest.fn<any>();
+const mockFindAllPosts = vi.fn();
+const mockFindPostById = vi.fn();
+const mockCreatePost = vi.fn();
+const mockUpdatePost = vi.fn();
+const mockDeletePost = vi.fn();
+const mockFindPostsByStatus = vi.fn();
 
 // Mock publishPost and cron functions used by routes/posts.ts
-const mockPublishPost = jest.fn<any>();
-const mockTriggerManualPublish = jest.fn<any>();
-const mockGetRecentPublishAttempts = jest.fn<any>();
+const mockPublishPost = vi.fn();
+const mockTriggerManualPublish = vi.fn();
+const mockGetRecentPublishAttempts = vi.fn();
 
 // Mock Module
-await jest.unstable_mockModule('../../src/db/posts.js', () => ({
-    __esModule: true,
-    ...actualPostsDb,
+vi.mock('../../src/db/posts.js', () => ({
     findAllPosts: mockFindAllPosts,
     findPostById: mockFindPostById,
     createPost: mockCreatePost,
@@ -29,22 +24,28 @@ await jest.unstable_mockModule('../../src/db/posts.js', () => ({
     findPostsByStatus: mockFindPostsByStatus
 }));
 
-await jest.unstable_mockModule('../../src/services/publishing-service.js', () => ({
+vi.mock('../../src/services/publishing-service.js', () => ({
     publishPost: mockPublishPost
 }));
 
-await jest.unstable_mockModule('../../src/services/publishing-cron.js', () => ({
+vi.mock('../../src/services/publishing-cron.js', () => ({
     triggerManualPublish: mockTriggerManualPublish,
     getRecentPublishAttempts: mockGetRecentPublishAttempts,
-    startPublishingCron: jest.fn()
+    startPublishingCron: vi.fn()
 }));
+
+// Import actual implementation using vi.importActual to get real implementations
+let actualPostsDb: any;
 
 // Import Helpers
 const { createTestApp, mockPost } = await import('../helpers/testHelper.js');
 const { getPostsCollection, getRestaurantsCollection } = await import('../../src/db/connection.js');
 
 // Reset Mocks Helper
-const useActualImplementation = () => {
+const useActualImplementation = async () => {
+    if (!actualPostsDb) {
+        actualPostsDb = await vi.importActual('../../src/db/posts.js');
+    }
     mockFindAllPosts.mockImplementation(actualPostsDb.findAllPosts);
     mockFindPostById.mockImplementation(actualPostsDb.findPostById);
     mockCreatePost.mockImplementation(actualPostsDb.createPost);
@@ -58,8 +59,8 @@ const app = createTestApp();
 describe('Posts Module', () => {
 
     beforeEach(async () => {
-        jest.clearAllMocks();
-        useActualImplementation();
+        vi.clearAllMocks();
+        await useActualImplementation();
         // Clear the mock collection
         const col = getPostsCollection();
         await col.deleteMany({});
@@ -68,7 +69,7 @@ describe('Posts Module', () => {
     describe('DB Helpers (src/db/posts.ts)', () => {
 
         describe('findPostsByStatus', () => {
-            test('should return posts filtered by status', async () => {
+            it('should return posts filtered by status', async () => {
                 const col = getPostsCollection();
                 await col.insertOne({
                     _id: 'p1',
@@ -89,7 +90,7 @@ describe('Posts Module', () => {
                 expect(drafts[0].status).toBe('SCHEDULED');
             });
 
-            test('should filter by restaurantId if provided', async () => {
+            it('should filter by restaurantId if provided', async () => {
                 const col = getPostsCollection();
                 await col.insertOne({
                     _id: 'p3',
@@ -107,12 +108,12 @@ describe('Posts Module', () => {
                 expect(r1Published[0].id).toBe('p3');
             });
 
-            test('should return empty array if no matches', async () => {
+            it('should return empty array if no matches', async () => {
                 const results = await actualPostsDb.findPostsByStatus('ARCHIVED');
                 expect(results).toEqual([]);
             });
 
-            test('should sort by scheduledFor', async () => {
+            it('should sort by scheduledFor', async () => {
                 const col = getPostsCollection();
                 await col.insertOne({
                     _id: 'p5',
@@ -134,7 +135,7 @@ describe('Posts Module', () => {
         });
 
         describe('Core CRUD Operations', () => {
-            test('findAllPosts should return all posts', async () => {
+            it('findAllPosts should return all posts', async () => {
                 await actualPostsDb.createPost({
                     caption: 'Post 1',
                     status: 'SCHEDULED',
@@ -156,7 +157,7 @@ describe('Posts Module', () => {
                 expect(posts).toHaveLength(2);
             });
 
-            test('findAllPosts should filter by restaurantId', async () => {
+            it('findAllPosts should filter by restaurantId', async () => {
                 await actualPostsDb.createPost({
                     caption: 'P1',
                     status: 'SCHEDULED',
@@ -179,7 +180,7 @@ describe('Posts Module', () => {
                 expect(results[0].caption).toBe('P1');
             });
 
-            test('findPostById should return post if exists', async () => {
+            it('findPostById should return post if exists', async () => {
                 const newPost = await actualPostsDb.createPost({
                     caption: 'Target Post',
                     status: 'SCHEDULED',
@@ -195,12 +196,12 @@ describe('Posts Module', () => {
                 expect(found?.caption).toBe('Target Post');
             });
 
-            test('findPostById should return null if not exists', async () => {
+            it('findPostById should return null if not exists', async () => {
                 const found = await actualPostsDb.findPostById('non-existent-id');
                 expect(found).toBeNull();
             });
 
-            test('createPost should add createdAt/updatedAt', async () => {
+            it('createPost should add createdAt/updatedAt', async () => {
                 const post = await actualPostsDb.createPost({
                     caption: 'New Post',
                     status: 'SCHEDULED',
@@ -218,7 +219,7 @@ describe('Posts Module', () => {
                 expect((stored as any).updatedAt).toBeDefined();
             });
 
-            test('updatePost should modify post', async () => {
+            it('updatePost should modify post', async () => {
                 const post = await actualPostsDb.createPost({
                     caption: 'Original',
                     status: 'SCHEDULED',
@@ -233,7 +234,7 @@ describe('Posts Module', () => {
                 expect((updated as any)?.updatedAt).not.toBe((post as any).updatedAt);
             });
 
-            test('deletePost should remove post', async () => {
+            it('deletePost should remove post', async () => {
                 const post = await actualPostsDb.createPost({
                     caption: 'To Delete',
                     status: 'SCHEDULED',
@@ -259,7 +260,7 @@ describe('Posts Module', () => {
         });
 
         describe('GET /api/posts', () => {
-            test('should get all posts', async () => {
+            it('should get all posts', async () => {
                 const response = await request(app).get('/api/posts');
 
                 expect(response.status).toBe(200);
@@ -268,7 +269,7 @@ describe('Posts Module', () => {
                 expect(Array.isArray(response.body.data)).toBe(true);
             });
 
-            test('should return posts with correct structure', async () => {
+            it('should return posts with correct structure', async () => {
                 const response = await request(app).get('/api/posts');
 
                 if (response.body.data.length > 0) {
@@ -281,12 +282,12 @@ describe('Posts Module', () => {
                 }
             });
 
-            test('should return JSON content type', async () => {
+            it('should return JSON content type', async () => {
                 const response = await request(app).get('/api/posts');
                 expect(response.headers['content-type']).toMatch(/json/);
             });
 
-            test('should handle 500 error', async () => {
+            it('should handle 500 error', async () => {
                 mockFindAllPosts.mockRejectedValue(new Error('DB Error'));
 
                 const response = await request(app).get('/api/posts');
@@ -299,7 +300,7 @@ describe('Posts Module', () => {
         });
 
         describe('GET /api/posts/:id', () => {
-            test('should get post by valid ID', async () => {
+            it('should get post by valid ID', async () => {
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
 
@@ -310,7 +311,7 @@ describe('Posts Module', () => {
                 expect(response.body.data).toHaveProperty('id', postId);
             });
 
-            test('should return 404 for non-existent post', async () => {
+            it('should return 404 for non-existent post', async () => {
                 const response = await request(app).get('/api/posts/non-existent-id');
 
                 expect(response.status).toBe(404);
@@ -318,7 +319,7 @@ describe('Posts Module', () => {
                 expect(response.body).toHaveProperty('error', 'Post not found');
             });
 
-            test('should return complete post data', async () => {
+            it('should return complete post data', async () => {
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
 
@@ -329,7 +330,7 @@ describe('Posts Module', () => {
                 expect(response.body.data).toHaveProperty('type');
             });
 
-            test('should handle 500 error', async () => {
+            it('should handle 500 error', async () => {
                 mockFindPostById.mockRejectedValue(new Error('DB Error'));
 
                 const response = await request(app).get('/api/posts/123');
@@ -342,11 +343,11 @@ describe('Posts Module', () => {
         });
 
         describe('POST /api/posts', () => {
-            test('should create new post with valid data', async () => {
+            it('should create new post with valid data', async () => {
                 const newPost = {
                     type: 'IMAGE',
                     status: 'PENDING_APPROVAL',
-                    thumbnail: '/test.jpg',
+                    thumbnail: '/it.jpg',
                     caption: 'Test post caption',
                     platform: 'INSTAGRAM'
                 };
@@ -360,7 +361,7 @@ describe('Posts Module', () => {
                 expect(response.body).toHaveProperty('message', 'Post created successfully');
             });
 
-            test('should auto-generate ID for new post', async () => {
+            it('should auto-generate ID for new post', async () => {
                 const newPost = {
                     type: 'VIDEO',
                     status: 'SCHEDULED',
@@ -375,7 +376,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.id).toMatch(/^[a-f0-9]{24}$/);
             });
 
-            test('should handle post with stats', async () => {
+            it('should handle post with stats', async () => {
                 const newPost = {
                     type: 'CAROUSEL',
                     status: 'POSTED',
@@ -391,7 +392,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.stats).toMatchObject(newPost.stats);
             });
 
-            test('should handle post with mediaUrls', async () => {
+            it('should handle post with mediaUrls', async () => {
                 const newPost = {
                     type: 'CAROUSEL',
                     status: 'SCHEDULED',
@@ -407,7 +408,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.mediaUrls).toEqual(newPost.mediaUrls);
             });
 
-            test('should handle video posts', async () => {
+            it('should handle video posts', async () => {
                 const newPost = {
                     type: 'REEL',
                     status: 'PENDING_APPROVAL',
@@ -425,7 +426,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.duration).toBe(newPost.duration);
             });
 
-            test('should handle 500 error', async () => {
+            it('should handle 500 error', async () => {
                 mockCreatePost.mockRejectedValue(new Error('DB Error'));
 
                 // Need to provide valid caption to pass validation and reach DB call
@@ -439,7 +440,7 @@ describe('Posts Module', () => {
         });
 
         describe('PUT /api/posts/:id', () => {
-            test('should update existing post', async () => {
+            it('should update existing post', async () => {
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
 
@@ -453,14 +454,14 @@ describe('Posts Module', () => {
                 expect(response.body.data.id).toBe(postId);
             });
 
-            test('should return 404 for non-existent post', async () => {
+            it('should return 404 for non-existent post', async () => {
                 const response = await request(app).put('/api/posts/non-existent').send({ caption: 'test' });
 
                 expect(response.status).toBe(404);
                 expect(response.body.success).toBe(false);
             });
 
-            test('should preserve post ID when updating', async () => {
+            it('should preserve post ID when updating', async () => {
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
 
@@ -469,7 +470,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.id).toBe(postId);
             });
 
-            test('should handle partial updates', async () => {
+            it('should handle partial updates', async () => {
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
 
@@ -479,7 +480,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.status).toBe('CHANGES_REQUESTED');
             });
 
-            test('should update stats', async () => {
+            it('should update stats', async () => {
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
 
@@ -490,7 +491,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.stats).toMatchObject(newStats.stats);
             });
 
-            test('should update feedback field', async () => {
+            it('should update feedback field', async () => {
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
                 const feedback = { feedback: JSON.stringify({ tags: ['Caption'], note: 'Please improve' }) };
@@ -500,7 +501,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.feedback).toBe(feedback.feedback);
             });
 
-            test('should handle 500 error', async () => {
+            it('should handle 500 error', async () => {
                 mockUpdatePost.mockRejectedValue(new Error('DB Error'));
 
                 const response = await request(app).put('/api/posts/123').send({ title: 'updated' });
@@ -513,7 +514,7 @@ describe('Posts Module', () => {
         });
 
         describe('DELETE /api/posts/:id', () => {
-            test('should delete existing post', async () => {
+            it('should delete existing post', async () => {
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
 
@@ -524,14 +525,14 @@ describe('Posts Module', () => {
                 expect(response.body).toHaveProperty('message', 'Post deleted successfully');
             });
 
-            test('should return 404 for non-existent post', async () => {
+            it('should return 404 for non-existent post', async () => {
                 const response = await request(app).delete('/api/posts/non-existent-id');
 
                 expect(response.status).toBe(404);
                 expect(response.body.success).toBe(false);
             });
 
-            test('should actually remove post from list', async () => {
+            it('should actually remove post from list', async () => {
                 await request(app).post('/api/posts').send(mockPost);
                 const getRes = await request(app).get('/api/posts');
                 const postId = getRes.body.data[0].id;
@@ -542,7 +543,7 @@ describe('Posts Module', () => {
                 expect(getResponse.status).toBe(404);
             });
 
-            test('should handle 500 error', async () => {
+            it('should handle 500 error', async () => {
                 mockDeletePost.mockRejectedValue(new Error('DB Error'));
 
                 const response = await request(app).delete('/api/posts/123');
@@ -555,14 +556,14 @@ describe('Posts Module', () => {
         });
 
         describe('Edge Cases', () => {
-            test('should handle empty request body for POST', async () => {
+            it('should handle empty request body for POST', async () => {
                 const response = await request(app).post('/api/posts').send({});
                 // Now requires caption, so should return 400
                 expect(response.status).toBe(400);
                 expect(response.body.error).toBe('Caption is required');
             });
 
-            test('should handle very long captions', async () => {
+            it('should handle very long captions', async () => {
                 const longCaption = 'A'.repeat(5000);
                 const response = await request(app).post('/api/posts').send({
                     type: 'IMAGE',
@@ -573,7 +574,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.caption).toBe(longCaption);
             });
 
-            test('should handle special characters in caption', async () => {
+            it('should handle special characters in caption', async () => {
                 const specialCaption = '(emoji: pizza)(emoji: party) Special #offer @restaurant 50% off! (emoji: money)';
                 const response = await request(app).post('/api/posts').send({
                     type: 'IMAGE',
@@ -586,7 +587,7 @@ describe('Posts Module', () => {
         });
 
         describe('Adhoc Post Creation', () => {
-            test('should create adhoc post without strategyId', async () => {
+            it('should create adhoc post without strategyId', async () => {
                 const adhocPost = {
                     caption: 'Flash sale announcement - 50% off all pizzas today!',
                     type: 'IMAGE',
@@ -603,7 +604,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.strategyId).toBeUndefined();
             });
 
-            test('should set default status to PENDING_APPROVAL for adhoc posts', async () => {
+            it('should set default status to PENDING_APPROVAL for adhoc posts', async () => {
                 const adhocPost = {
                     caption: 'New menu item launch',
                     type: 'REEL',
@@ -616,7 +617,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.status).toBe('PENDING_APPROVAL');
             });
 
-            test('should set default type to IMAGE if not provided', async () => {
+            it('should set default type to IMAGE if not provided', async () => {
                 const adhocPost = {
                     caption: 'Quick announcement',
                     platform: 'INSTAGRAM'
@@ -628,7 +629,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.type).toBe('IMAGE');
             });
 
-            test('should set default platform to INSTAGRAM if not provided', async () => {
+            it('should set default platform to INSTAGRAM if not provided', async () => {
                 const adhocPost = {
                     caption: 'Quick announcement'
                 };
@@ -639,7 +640,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.platform).toBe('INSTAGRAM');
             });
 
-            test('should set default thumbnail if not provided', async () => {
+            it('should set default thumbnail if not provided', async () => {
                 const adhocPost = {
                     caption: 'Post without image',
                     type: 'IMAGE',
@@ -652,7 +653,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\/\d+\/400\/400$/);
             });
 
-            test('should set default restaurantId to r1 when not provided', async () => {
+            it('should set default restaurantId to r1 when not provided', async () => {
                 const adhocPost = {
                     caption: 'Post without restaurantId',
                     type: 'IMAGE',
@@ -665,7 +666,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.restaurantId).toBe('r1');
             });
 
-            test('should preserve provided restaurantId', async () => {
+            it('should preserve provided restaurantId', async () => {
                 const adhocPost = {
                     caption: 'Post for specific restaurant',
                     type: 'IMAGE',
@@ -679,7 +680,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.restaurantId).toBe('r-custom');
             });
 
-            test('should set all required defaults on minimal post creation', async () => {
+            it('should set all required defaults on minimal post creation', async () => {
                 // Send only the required field (caption)
                 const minimalPost = { caption: 'Bare minimum post' };
 
@@ -699,7 +700,7 @@ describe('Posts Module', () => {
                 expect(data.id).toBeDefined();
             });
 
-            test('should persist restaurantId to the database', async () => {
+            it('should persist restaurantId to the database', async () => {
                 const adhocPost = {
                     caption: 'DB persistence check',
                     type: 'IMAGE',
@@ -716,7 +717,7 @@ describe('Posts Module', () => {
                 expect(dbDoc!.restaurantId).toBe('r1');
             });
 
-            test('should mark strategy posts as non-adhoc', async () => {
+            it('should mark strategy posts as non-adhoc', async () => {
                 const strategyPost = {
                     caption: 'Generated from strategy',
                     type: 'IMAGE',
@@ -731,7 +732,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.strategyId).toBe('strategy-123');
             });
 
-            test('should allow scheduled adhoc posts', async () => {
+            it('should allow scheduled adhoc posts', async () => {
                 const scheduledAdhocPost = {
                     caption: 'Weekend special coming up!',
                     type: 'IMAGE',
@@ -747,7 +748,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
-            test('should return 400 when caption is empty string', async () => {
+            it('should return 400 when caption is empty string', async () => {
                 const invalidPost = {
                     caption: '',
                     type: 'IMAGE',
@@ -761,7 +762,7 @@ describe('Posts Module', () => {
                 expect(response.body.error).toBe('Caption is required');
             });
 
-            test('should return 400 when caption is whitespace only', async () => {
+            it('should return 400 when caption is whitespace only', async () => {
                 const invalidPost = {
                     caption: '   ',
                     type: 'IMAGE',
@@ -775,7 +776,7 @@ describe('Posts Module', () => {
                 expect(response.body.error).toBe('Caption is required');
             });
 
-            test('should create adhoc REEL with videoUrl', async () => {
+            it('should create adhoc REEL with videoUrl', async () => {
                 const reelPost = {
                     caption: 'Check out our new reel!',
                     type: 'REEL',
@@ -794,7 +795,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
-            test('should create adhoc CAROUSEL with mediaUrls', async () => {
+            it('should create adhoc CAROUSEL with mediaUrls', async () => {
                 const carouselPost = {
                     caption: 'New menu items showcase',
                     type: 'CAROUSEL',
@@ -812,7 +813,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
-            test('should create adhoc STORY post', async () => {
+            it('should create adhoc STORY post', async () => {
                 const storyPost = {
                     caption: '24hr special offer!',
                     type: 'STORY',
@@ -828,7 +829,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
-            test('should preserve provided status for adhoc posts', async () => {
+            it('should preserve provided status for adhoc posts', async () => {
                 const adhocPost = {
                     caption: 'Already approved post',
                     type: 'IMAGE',
@@ -845,7 +846,7 @@ describe('Posts Module', () => {
         });
 
         describe('POST /api/posts/actions/publish-all', () => {
-            test('should trigger manual publish and return stats', async () => {
+            it('should trigger manual publish and return stats', async () => {
                 mockTriggerManualPublish.mockResolvedValue({ published: 2, failed: 1, skipped: 0 });
 
                 const response = await request(app).post('/api/posts/actions/publish-all');
@@ -857,7 +858,7 @@ describe('Posts Module', () => {
                 expect(response.body.message).toContain('1 failed');
             });
 
-            test('should handle publish-all error', async () => {
+            it('should handle publish-all error', async () => {
                 mockTriggerManualPublish.mockRejectedValue(new Error('Cron failure'));
 
                 const response = await request(app).post('/api/posts/actions/publish-all');
@@ -868,7 +869,7 @@ describe('Posts Module', () => {
         });
 
         describe('GET /api/posts/actions/publish-log', () => {
-            test('should return recent publish attempts', async () => {
+            it('should return recent publish attempts', async () => {
                 const mockAttempts = [
                     { postId: 'p1', success: true, timestamp: new Date().toISOString() },
                     { postId: 'p2', success: false, timestamp: new Date().toISOString() }
@@ -882,7 +883,7 @@ describe('Posts Module', () => {
                 expect(response.body.data).toHaveLength(2);
             });
 
-            test('should handle publish-log error', async () => {
+            it('should handle publish-log error', async () => {
                 mockGetRecentPublishAttempts.mockImplementation(() => { throw new Error('Log error'); });
 
                 const response = await request(app).get('/api/posts/actions/publish-log');
@@ -893,7 +894,7 @@ describe('Posts Module', () => {
         });
 
         describe('POST /api/posts/:id/publish', () => {
-            test('should publish a scheduled post successfully', async () => {
+            it('should publish a scheduled post successfully', async () => {
                 const col = getPostsCollection();
                 await col.insertOne({
                     _id: 'pub-1',
@@ -929,7 +930,7 @@ describe('Posts Module', () => {
                 expect(mockPublishPost).toHaveBeenCalled();
             });
 
-            test('should return 404 when post not found', async () => {
+            it('should return 404 when post not found', async () => {
                 mockFindPostById.mockResolvedValue(null);
 
                 const response = await request(app).post('/api/posts/nonexistent/publish');
@@ -938,7 +939,7 @@ describe('Posts Module', () => {
                 expect(response.body.error).toBe('Post not found');
             });
 
-            test('should return 400 when post status is not publishable', async () => {
+            it('should return 400 when post status is not publishable', async () => {
                 mockFindPostById.mockResolvedValue({
                     id: 'pub-2',
                     status: 'PENDING_APPROVAL',
@@ -955,15 +956,18 @@ describe('Posts Module', () => {
                 expect(response.body.error).toContain('PENDING_APPROVAL');
             });
 
-            test('should return 400 when post has no restaurantId', async () => {
-                mockFindPostById.mockResolvedValue({
-                    id: 'pub-3',
+            it('should return 400 when post has no restaurantId', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'pub-3',
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     caption: 'No restaurant',
                     thumbnail: '/img.jpg',
                     platform: 'INSTAGRAM'
-                });
+                } as any);
+
+                mockFindPostById.mockImplementation(actualPostsDb.findPostById);
 
                 const response = await request(app).post('/api/posts/pub-3/publish');
 
@@ -971,7 +975,7 @@ describe('Posts Module', () => {
                 expect(response.body.error).toContain('no associated restaurant');
             });
 
-            test('should return 400 when restaurant has no Instagram credentials', async () => {
+            it('should return 400 when restaurant has no Instagram credentials', async () => {
                 const col = getPostsCollection();
                 await col.insertOne({
                     _id: 'pub-4',
@@ -996,7 +1000,7 @@ describe('Posts Module', () => {
                 expect(response.body.error).toContain('Instagram not connected');
             });
 
-            test('should return 502 when publishing fails', async () => {
+            it('should return 502 when publishing fails', async () => {
                 const col = getPostsCollection();
                 await col.insertOne({
                     _id: 'pub-5',
@@ -1031,16 +1035,17 @@ describe('Posts Module', () => {
                 expect(response.body.error).toContain('Rate limited');
             });
 
-            test('should allow publishing MISSED_DEADLINE posts', async () => {
-                mockFindPostById.mockResolvedValue({
-                    id: 'pub-6',
+            it('should allow publishing MISSED_DEADLINE posts', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'pub-6',
                     status: 'MISSED_DEADLINE',
                     type: 'IMAGE',
                     caption: 'Retry',
                     thumbnail: '/img.jpg',
                     platform: 'FACEBOOK',
                     restaurantId: 'r1-retry'
-                });
+                } as any);
 
                 const restCol = getRestaurantsCollection();
                 await restCol.insertOne({
@@ -1056,13 +1061,15 @@ describe('Posts Module', () => {
                     facebook: { success: true, facebookPostId: 'fb-1', retryable: false }
                 });
 
+                mockFindPostById.mockImplementation(actualPostsDb.findPostById);
+
                 const response = await request(app).post('/api/posts/pub-6/publish');
 
                 expect(response.status).toBe(200);
                 expect(response.body.success).toBe(true);
             });
 
-            test('should handle publish route internal error', async () => {
+            it('should handle publish route internal error', async () => {
                 mockFindPostById.mockRejectedValue(new Error('Database error'));
 
                 const response = await request(app).post('/api/posts/pub-err/publish');
