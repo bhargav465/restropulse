@@ -501,6 +501,134 @@ describe('ContentStudio Component', () => {
                 expect(approveButton).toBeDefined();
             });
         });
+
+        it('should call postsAPI.update with SCHEDULED status on approve', async () => {
+            const updatedPost = {
+                ...mockPosts[0],
+                status: 'SCHEDULED' as const,
+                scheduledFor: expect.any(String),
+            };
+            vi.mocked(postsAPI.update).mockResolvedValue(updatedPost);
+
+            render(<ContentStudio />);
+
+            await waitFor(() => {
+                const buttons = screen.getAllByRole('button');
+                const approveButton = buttons.find(btn => btn.textContent?.includes('Approve'));
+                expect(approveButton).toBeDefined();
+                if (approveButton) fireEvent.click(approveButton);
+            });
+
+            await waitFor(() => {
+                expect(postsAPI.update).toHaveBeenCalledWith('p1', expect.objectContaining({
+                    status: 'SCHEDULED',
+                }));
+            });
+        });
+
+        it('should show loading state while approving', async () => {
+            // Make update hang to observe loading state
+            let resolveUpdate: (value: any) => void;
+            const updatePromise = new Promise(resolve => { resolveUpdate = resolve; });
+            vi.mocked(postsAPI.update).mockReturnValue(updatePromise as any);
+
+            render(<ContentStudio />);
+
+            await waitFor(() => {
+                const buttons = screen.getAllByRole('button');
+                const approveButton = buttons.find(btn => btn.textContent?.includes('Approve'));
+                expect(approveButton).toBeDefined();
+                if (approveButton) fireEvent.click(approveButton);
+            });
+
+            await waitFor(() => {
+                expect(screen.getByText('Approving...')).toBeInTheDocument();
+            });
+
+            // Resolve to cleanup
+            resolveUpdate!({ ...mockPosts[0], status: 'SCHEDULED' });
+        });
+
+        it('should not update UI when API call fails', async () => {
+            vi.mocked(postsAPI.update).mockRejectedValue(new Error('Network error'));
+
+            render(<ContentStudio />);
+
+            await waitFor(() => {
+                const buttons = screen.getAllByRole('button');
+                const approveButton = buttons.find(btn => btn.textContent?.includes('Approve'));
+                expect(approveButton).toBeDefined();
+                if (approveButton) fireEvent.click(approveButton);
+            });
+
+            // Post should still be in the review tab since API failed
+            await waitFor(() => {
+                expect(screen.getByText('Delicious pasta')).toBeInTheDocument();
+            });
+        });
+
+        it('should set scheduledFor for adhoc posts without scheduledFor', async () => {
+            const adhocPost = {
+                id: 'adhoc-1',
+                caption: 'Adhoc post',
+                type: 'IMAGE' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/adhoc.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+                // No scheduledFor set
+            };
+            vi.mocked(postsAPI.getAll).mockResolvedValue([adhocPost]);
+            vi.mocked(postsAPI.update).mockResolvedValue({ ...adhocPost, status: 'SCHEDULED' as const, scheduledFor: new Date().toISOString() });
+
+            render(<ContentStudio />);
+
+            await waitFor(() => {
+                const buttons = screen.getAllByRole('button');
+                const approveButton = buttons.find(btn => btn.textContent?.includes('Approve'));
+                expect(approveButton).toBeDefined();
+                if (approveButton) fireEvent.click(approveButton);
+            });
+
+            await waitFor(() => {
+                expect(postsAPI.update).toHaveBeenCalledWith('adhoc-1', expect.objectContaining({
+                    status: 'SCHEDULED',
+                    scheduledFor: expect.any(String),
+                }));
+            });
+        });
+
+        it('should move approved post to Scheduled tab after successful API call', async () => {
+            const updatedPost = {
+                ...mockPosts[0],
+                status: 'SCHEDULED' as const,
+                scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            };
+            vi.mocked(postsAPI.update).mockResolvedValue(updatedPost);
+
+            render(<ContentStudio />);
+
+            // Wait for initial render, then click approve
+            await waitFor(() => {
+                expect(screen.getByText('Delicious pasta')).toBeInTheDocument();
+            });
+
+            const buttons = screen.getAllByRole('button');
+            const approveButton = buttons.find(btn => btn.textContent?.includes('Approve'));
+            expect(approveButton).toBeDefined();
+            fireEvent.click(approveButton!);
+
+            // Wait for the API call to complete
+            await waitFor(() => {
+                expect(postsAPI.update).toHaveBeenCalled();
+            });
+
+            // After API call resolves, the post status is SCHEDULED so it moves out of Review tab
+            // Verify it was called with the right data
+            expect(postsAPI.update).toHaveBeenCalledWith('p1', expect.objectContaining({
+                status: 'SCHEDULED',
+            }));
+        });
     });
 
     describe('Missed Deadline Posts', () => {

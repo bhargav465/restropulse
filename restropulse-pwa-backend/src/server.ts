@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { connectDB, disconnectDB } from './db/connection.js';
 import { initializeFirebaseAdmin } from './services/firebase-admin.js';
 import { startTokenRefreshCron } from './services/token-refresh-cron.js';
+import { startPublishingCron } from './services/publishing-cron.js';
 import authRoutes from './routes/auth.js';
 import restaurantRoutes from './routes/restaurant.js';
 import postsRoutes from './routes/posts.js';
@@ -77,6 +78,9 @@ const startServer = async () => {
 
         // Start Instagram token refresh cron job
         startTokenRefreshCron();
+
+        // Start publishing cron job (checks every 5 minutes for scheduled posts)
+        startPublishingCron();
 
         app.listen(PORT, () => {
             console.log(`

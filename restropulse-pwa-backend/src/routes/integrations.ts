@@ -16,6 +16,7 @@ import {
     isInstagramConfigured,
     InstagramAccount
 } from '../services/instagram-api.js';
+import { decrypt, encrypt } from '../services/encryption.js';
 import { getRestaurantsCollection } from '../db/connection.js';
 import { checkAndRefreshTokenIfNeeded } from '../services/token-refresh-cron.js';
 
@@ -382,9 +383,13 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
     }
 
     try {
+        // Prefer page access token for Content Publishing API; fall back to user token
+        const publishToken = selectedAccount.pageAccessToken || pending.accessToken;
+        console.log('[DEBUG] select-account: Using', selectedAccount.pageAccessToken ? 'page' : 'user', 'access token');
+
         const credentials = prepareCredentialsForStorage(
             selectedAccount,
-            pending.accessToken,
+            publishToken,
             pending.tokenExpiresAt
         );
 
@@ -848,6 +853,217 @@ router.get('/instagram/data-deletion-status', async (req: Request, res: Response
             </body>
         </html>
     `);
+});
+
+// ============================================
+// Debug (Development Only)
+// ============================================
+
+/**
+ * GET /api/integrations/instagram/debug-token/:restaurantId
+ * Debug the stored token to check scopes and permissions (dev only)
+ */
+router.get('/instagram/debug-token/:restaurantId', async (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(404).json({ error: 'Not available' });
+    }
+
+    const { restaurantId } = req.params;
+
+    try {
+        const col = getRestaurantsCollection();
+        const restaurant = await col.findOne({ _id: restaurantId as any });
+
+        if (!restaurant?.instagramCredentials?.accessToken) {
+            return res.status(400).json({ success: false, error: 'No credentials found' });
+        }
+
+        const token = decrypt(restaurant.instagramCredentials.accessToken);
+        if (!token) {
+            return res.status(500).json({ success: false, error: 'Failed to decrypt token' });
+        }
+
+        const appId = process.env.INSTAGRAM_APP_ID || '';
+        const appSecret = process.env.INSTAGRAM_APP_SECRET || '';
+
+        // Call Meta debug_token API
+        const axios = (await import('axios')).default;
+        const debugRes = await axios.get(`https://graph.facebook.com/v18.0/debug_token`, {
+            params: {
+                input_token: token,
+                access_token: `${appId}|${appSecret}`
+            }
+        });
+
+        const debugData = debugRes.data.data;
+
+        // Also try /me to see who the token belongs to
+        let meData = null;
+        try {
+            const meRes = await axios.get(`https://graph.facebook.com/v18.0/me`, {
+                params: { access_token: token, fields: 'id,name,email' }
+            });
+            meData = meRes.data;
+        } catch (err: any) {
+            meData = { error: err.response?.data?.error?.message || err.message };
+        }
+
+        res.json({
+            success: true,
+            data: {
+                storedCredentials: {
+                    userId: restaurant.instagramCredentials.userId,
+                    pageId: restaurant.instagramCredentials.pageId,
+                    username: restaurant.instagramCredentials.username,
+                    scopes: restaurant.instagramCredentials.scopes,
+                    connectedAt: restaurant.instagramCredentials.connectedAt,
+                    tokenExpiresAt: restaurant.instagramCredentials.tokenExpiresAt,
+                },
+                tokenDebug: {
+                    appId: debugData.app_id,
+                    userId: debugData.user_id,
+                    type: debugData.type,
+                    isValid: debugData.is_valid,
+                    expiresAt: debugData.expires_at ? new Date(debugData.expires_at * 1000).toISOString() : 'never',
+                    scopes: debugData.scopes,
+                    granularScopes: debugData.granular_scopes,
+                },
+                me: meData
+            }
+        });
+    } catch (error: any) {
+        console.error('Debug token error:', error.response?.data || error.message);
+        res.status(500).json({
+            success: false,
+            error: error.response?.data?.error?.message || error.message
+        });
+    }
+});
+
+/**
+ * POST /api/integrations/instagram/migrate-to-page-token/:restaurantId
+ * One-time migration: convert stored User Access Token to Page Access Token.
+ * The Content Publishing API requires a Page token, not a User token.
+ * Dev only.
+ */
+router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === 'production') {
+        return res.status(404).json({ error: 'Not available' });
+    }
+
+    const { restaurantId } = req.params;
+
+    try {
+        const col = getRestaurantsCollection();
+        const restaurant = await col.findOne({ _id: restaurantId as any });
+
+        if (!restaurant?.instagramCredentials?.accessToken) {
+            return res.status(400).json({ success: false, error: 'No credentials found' });
+        }
+
+        const userToken = decrypt(restaurant.instagramCredentials.accessToken);
+        if (!userToken) {
+            return res.status(500).json({ success: false, error: 'Failed to decrypt stored token' });
+        }
+
+        const storedPageId = restaurant.instagramCredentials.pageId;
+        console.log(`[Token Migration] Looking for page token for page ${storedPageId}...`);
+
+        // Use the user token to get page access tokens via /me/accounts
+        const axios = (await import('axios')).default;
+        const pagesRes = await axios.get(`https://graph.facebook.com/v18.0/me/accounts`, {
+            params: {
+                access_token: userToken,
+                fields: 'id,name,access_token'
+            }
+        });
+
+        const pages = pagesRes.data.data || [];
+        console.log(`[Token Migration] Found ${pages.length} pages:`, pages.map((p: any) => ({ id: p.id, name: p.name })));
+
+        // Find the page matching the stored pageId
+        const matchingPage = pages.find((p: any) => p.id === storedPageId);
+
+        if (!matchingPage) {
+            // If /me/accounts returned empty (Dev mode bug), try fetching page directly
+            console.log(`[Token Migration] Page ${storedPageId} not in /me/accounts, trying direct fetch...`);
+            try {
+                const directRes = await axios.get(`https://graph.facebook.com/v18.0/${storedPageId}`, {
+                    params: {
+                        access_token: userToken,
+                        fields: 'id,name,access_token'
+                    }
+                });
+                if (directRes.data.access_token) {
+                    pages.push(directRes.data);
+                }
+            } catch (directErr: any) {
+                console.error(`[Token Migration] Direct page fetch failed:`, directErr.response?.data?.error?.message || directErr.message);
+            }
+        }
+
+        const page = pages.find((p: any) => p.id === storedPageId);
+
+        if (!page || !page.access_token) {
+            return res.status(400).json({
+                success: false,
+                error: `Could not get page access token for page ${storedPageId}. Found pages: ${pages.map((p: any) => p.id).join(', ') || 'none'}`
+            });
+        }
+
+        const pageToken = page.access_token;
+
+        // Verify the page token works by debugging it
+        const debugRes = await axios.get(`https://graph.facebook.com/v18.0/debug_token`, {
+            params: {
+                input_token: pageToken,
+                access_token: `${process.env.INSTAGRAM_APP_ID}|${process.env.INSTAGRAM_APP_SECRET}`
+            }
+        });
+        const debugData = debugRes.data.data;
+
+        console.log(`[Token Migration] Page token debug:`, JSON.stringify({
+            type: debugData.type,
+            isValid: debugData.is_valid,
+            scopes: debugData.scopes,
+            expiresAt: debugData.expires_at
+        }));
+
+        if (!debugData.is_valid) {
+            return res.status(400).json({ success: false, error: 'Page token is not valid' });
+        }
+
+        // Update the stored token to the page token
+        const encryptedPageToken = encrypt(pageToken);
+        await col.updateOne(
+            { _id: restaurantId as any },
+            {
+                $set: {
+                    'instagramCredentials.accessToken': encryptedPageToken,
+                    'instagramCredentials.tokenMigratedAt': new Date(),
+                    updatedAt: new Date()
+                }
+            }
+        );
+
+        console.log(`[Token Migration] Successfully migrated to page token for restaurant ${restaurantId}`);
+
+        res.json({
+            success: true,
+            data: {
+                message: 'Migrated from User token to Page token',
+                tokenType: debugData.type,
+                scopes: debugData.scopes,
+                expiresAt: debugData.expires_at ? new Date(debugData.expires_at * 1000).toISOString() : 'never'
+            }
+        });
+    } catch (error: any) {
+        console.error('Token migration error:', error.response?.data || error.message);
+        res.status(500).json({
+            success: false,
+            error: error.response?.data?.error?.message || error.message
+        });
+    }
 });
 
 // ============================================

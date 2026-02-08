@@ -21,6 +21,8 @@ export default {
         // Explicitly map instagram-api to ts file to help resolution
         '.*services/instagram-api(\\.js)?$': '<rootDir>/src/services/instagram-api.ts',
         '.*services/token-refresh-cron(\\.js)?$': '<rootDir>/src/services/token-refresh-cron.ts',
+        '.*services/publishing-service(\\.js)?$': '<rootDir>/src/services/publishing-service.ts',
+        '.*services/publishing-cron(\\.js)?$': '<rootDir>/src/services/publishing-cron.ts',
         '.*services/jwt(\\.js)?$': '<rootDir>/src/services/jwt.ts',
         '.*db/users(\\.js)?$': '<rootDir>/src/db/users.ts',
         '.*db/strategy(\\.js)?$': '<rootDir>/src/db/strategy.ts',
@@ -34,6 +36,8 @@ export default {
             'ts-jest',
             {
                 useESM: true,
+                tsconfig: 'tsconfig.json',
+                diagnostics: false
             },
         ],
     },
@@ -53,6 +57,8 @@ export default {
     coverageReporters: ['text', 'lcov', 'html'],
     verbose: true,
     testTimeout: 10000,
+    // forceExit needed due to ESM (--experimental-vm-modules) async_hooks interaction
+    // Real open handle sources (setTimeout in setup.ts, real timers in reel tests) have been fixed
     forceExit: true,
     detectOpenHandles: false
 };

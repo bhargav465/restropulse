@@ -130,9 +130,10 @@ interface PostCardProps {
     tab: 'REVIEW' | 'SCHEDULED' | 'HISTORY';
     onApprove: (id: string) => void;
     onFeedback: (id: string, type: 'EDIT' | 'REVERT') => void;
+    approving?: string | null;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback }) => {
+const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, approving }) => {
     // Local state for Carousel
     const [currentSlide, setCurrentSlide] = useState(0);
     const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -352,10 +353,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback })
                     </div>
                 )}
 
-                {/* Status Overlay for Missed Deadline */}
+                {/* Status Overlay for Missed Deadline / Publish Failed */}
                 {post.status === 'MISSED_DEADLINE' && (
                     <div className="absolute bottom-4 left-4 bg-red-500/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 z-20">
-                        <AlertTriangle size={14} className="stroke-white" /> Missed Deadline
+                        <AlertTriangle size={14} className="stroke-white" /> {post.publishError ? 'Publish Failed' : 'Missed Deadline'}
                     </div>
                 )}
             </div>
@@ -416,9 +417,10 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback })
                                 </button>
                                 <button
                                     onClick={() => onApprove(post.id)}
-                                    className="text-[10px] font-bold text-slate-400 hover:text-green-600 uppercase tracking-wide transition-colors"
+                                    disabled={approving === post.id}
+                                    className={`text-[10px] font-bold uppercase tracking-wide transition-colors ${approving === post.id ? 'text-slate-300 cursor-wait' : 'text-slate-400 hover:text-green-600'}`}
                                 >
-                                    Approve
+                                    {approving === post.id ? 'Approving...' : 'Approve'}
                                 </button>
                             </div>
                         </div>
@@ -432,9 +434,14 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback })
                             </button>
                             <button
                                 onClick={() => onApprove(post.id)}
-                                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-orange-600 text-white font-bold text-sm shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98] transition-all"
+                                disabled={approving === post.id}
+                                className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm transition-all ${approving === post.id ? 'bg-orange-400 text-white/80 cursor-wait' : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'}`}
                             >
-                                <CheckCircle size={16} /> Approve
+                                {approving === post.id ? (
+                                    <><RefreshCw size={16} className="animate-spin" /> Approving...</>
+                                ) : (
+                                    <><CheckCircle size={16} /> Approve</>
+                                )}
                             </button>
                         </div>
                     )
@@ -466,9 +473,16 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback })
                 {tab === 'HISTORY' && (
                     <div className="pt-3 flex justify-between items-center border-t border-slate-50">
                         {post.status === 'MISSED_DEADLINE' ? (
-                            <span className="w-full text-center text-xs text-red-500 font-bold bg-red-50 py-2 rounded-lg">
-                                Not Approved in Time
-                            </span>
+                            <div className="w-full text-center text-xs text-red-500 font-bold bg-red-50 py-2 px-3 rounded-lg">
+                                {post.publishError ? (
+                                    <>
+                                        <span className="block">Publish Failed</span>
+                                        <span className="block text-[10px] font-medium text-red-400 mt-1 truncate" title={post.publishError}>{post.publishError}</span>
+                                    </>
+                                ) : (
+                                    'Not Approved in Time'
+                                )}
+                            </div>
                         ) : (
                             <>
                                 <div className="flex items-center gap-4 text-slate-500 text-xs font-bold">
@@ -652,8 +666,28 @@ const ContentStudio: React.FC = () => {
 
     const displayPosts = activeTab === 'REVIEW' ? reviewPosts : activeTab === 'SCHEDULED' ? scheduledPosts : historyPosts;
 
-    const handleApprove = (id: string) => {
-        setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'SCHEDULED' } : p));
+    const [approving, setApproving] = useState<string | null>(null);
+
+    const handleApprove = async (id: string) => {
+        if (approving) return; // Prevent double-clicks
+        setApproving(id);
+
+        try {
+            const post = posts.find(p => p.id === id);
+            const updateData: Partial<Post> = {
+                status: 'SCHEDULED',
+                // If no scheduledFor set (e.g. adhoc posts), schedule for now so publishing cron picks it up
+                ...(!post?.scheduledFor ? { scheduledFor: new Date().toISOString() } : {})
+            };
+
+            // Persist to backend first, then update UI with the real response
+            const updatedPost = await postsAPI.update(id, updateData);
+            setPosts(prev => prev.map(p => p.id === id ? updatedPost : p));
+        } catch (err) {
+            console.error('Failed to approve post:', err);
+        } finally {
+            setApproving(null);
+        }
     };
 
     // Improved Logic: Toggling a chip also ensures the parent category is selected
@@ -862,6 +896,7 @@ const ContentStudio: React.FC = () => {
                             tab={activeTab}
                             onApprove={handleApprove}
                             onFeedback={openFeedbackModal}
+                            approving={approving}
                         />
                     ))
                 ) : (

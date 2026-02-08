@@ -12,6 +12,11 @@ const mockUpdatePost = jest.fn<any>();
 const mockDeletePost = jest.fn<any>();
 const mockFindPostsByStatus = jest.fn<any>();
 
+// Mock publishPost and cron functions used by routes/posts.ts
+const mockPublishPost = jest.fn<any>();
+const mockTriggerManualPublish = jest.fn<any>();
+const mockGetRecentPublishAttempts = jest.fn<any>();
+
 // Mock Module
 await jest.unstable_mockModule('../../src/db/posts.js', () => ({
     __esModule: true,
@@ -24,9 +29,19 @@ await jest.unstable_mockModule('../../src/db/posts.js', () => ({
     findPostsByStatus: mockFindPostsByStatus
 }));
 
+await jest.unstable_mockModule('../../src/services/publishing-service.js', () => ({
+    publishPost: mockPublishPost
+}));
+
+await jest.unstable_mockModule('../../src/services/publishing-cron.js', () => ({
+    triggerManualPublish: mockTriggerManualPublish,
+    getRecentPublishAttempts: mockGetRecentPublishAttempts,
+    startPublishingCron: jest.fn()
+}));
+
 // Import Helpers
 const { createTestApp, mockPost } = await import('../helpers/testHelper.js');
-const { getPostsCollection } = await import('../../src/db/connection.js');
+const { getPostsCollection, getRestaurantsCollection } = await import('../../src/db/connection.js');
 
 // Reset Mocks Helper
 const useActualImplementation = () => {
@@ -634,7 +649,71 @@ describe('Posts Module', () => {
                 const response = await request(app).post('/api/posts').send(adhocPost);
 
                 expect(response.status).toBe(201);
-                expect(response.body.data.thumbnail).toBe('/api/placeholder/400/400');
+                expect(response.body.data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\/\d+\/400\/400$/);
+            });
+
+            test('should set default restaurantId to r1 when not provided', async () => {
+                const adhocPost = {
+                    caption: 'Post without restaurantId',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.restaurantId).toBe('r1');
+            });
+
+            test('should preserve provided restaurantId', async () => {
+                const adhocPost = {
+                    caption: 'Post for specific restaurant',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM',
+                    restaurantId: 'r-custom'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.restaurantId).toBe('r-custom');
+            });
+
+            test('should set all required defaults on minimal post creation', async () => {
+                // Send only the required field (caption)
+                const minimalPost = { caption: 'Bare minimum post' };
+
+                const response = await request(app).post('/api/posts').send(minimalPost);
+
+                expect(response.status).toBe(201);
+                const data = response.body.data;
+
+                // Every field the publishing pipeline depends on
+                expect(data.restaurantId).toBe('r1');
+                expect(data.type).toBe('IMAGE');
+                expect(data.status).toBe('PENDING_APPROVAL');
+                expect(data.platform).toBe('INSTAGRAM');
+                expect(data.caption).toBe('Bare minimum post');
+                expect(data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\/\d+\/400\/400$/);
+                expect(data.isAdhoc).toBe(true);
+                expect(data.id).toBeDefined();
+            });
+
+            test('should persist restaurantId to the database', async () => {
+                const adhocPost = {
+                    caption: 'DB persistence check',
+                    type: 'IMAGE',
+                    platform: 'INSTAGRAM'
+                };
+
+                const response = await request(app).post('/api/posts').send(adhocPost);
+                expect(response.status).toBe(201);
+
+                // Verify directly in the DB
+                const col = getPostsCollection();
+                const dbDoc = await col.findOne({ caption: 'DB persistence check' });
+                expect(dbDoc).not.toBeNull();
+                expect(dbDoc!.restaurantId).toBe('r1');
             });
 
             test('should mark strategy posts as non-adhoc', async () => {
@@ -664,6 +743,7 @@ describe('Posts Module', () => {
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.scheduledFor).toBe(scheduledAdhocPost.scheduledFor);
+                expect(response.body.data.restaurantId).toBe('r1');
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
@@ -710,6 +790,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.type).toBe('REEL');
                 expect(response.body.data.videoUrl).toBe(reelPost.videoUrl);
                 expect(response.body.data.duration).toBe(reelPost.duration);
+                expect(response.body.data.restaurantId).toBe('r1');
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
@@ -727,6 +808,7 @@ describe('Posts Module', () => {
                 expect(response.status).toBe(201);
                 expect(response.body.data.type).toBe('CAROUSEL');
                 expect(response.body.data.mediaUrls).toEqual(carouselPost.mediaUrls);
+                expect(response.body.data.restaurantId).toBe('r1');
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
@@ -742,6 +824,7 @@ describe('Posts Module', () => {
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.type).toBe('STORY');
+                expect(response.body.data.restaurantId).toBe('r1');
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
@@ -758,6 +841,234 @@ describe('Posts Module', () => {
                 expect(response.status).toBe(201);
                 // Status should use provided value, not default
                 expect(response.body.data.status).toBe('SCHEDULED');
+            });
+        });
+
+        describe('POST /api/posts/actions/publish-all', () => {
+            test('should trigger manual publish and return stats', async () => {
+                mockTriggerManualPublish.mockResolvedValue({ published: 2, failed: 1, skipped: 0 });
+
+                const response = await request(app).post('/api/posts/actions/publish-all');
+
+                expect(response.status).toBe(200);
+                expect(response.body.success).toBe(true);
+                expect(response.body.data).toEqual({ published: 2, failed: 1, skipped: 0 });
+                expect(response.body.message).toContain('2 published');
+                expect(response.body.message).toContain('1 failed');
+            });
+
+            test('should handle publish-all error', async () => {
+                mockTriggerManualPublish.mockRejectedValue(new Error('Cron failure'));
+
+                const response = await request(app).post('/api/posts/actions/publish-all');
+
+                expect(response.status).toBe(500);
+                expect(response.body.success).toBe(false);
+            });
+        });
+
+        describe('GET /api/posts/actions/publish-log', () => {
+            test('should return recent publish attempts', async () => {
+                const mockAttempts = [
+                    { postId: 'p1', success: true, timestamp: new Date().toISOString() },
+                    { postId: 'p2', success: false, timestamp: new Date().toISOString() }
+                ];
+                mockGetRecentPublishAttempts.mockReturnValue(mockAttempts);
+
+                const response = await request(app).get('/api/posts/actions/publish-log');
+
+                expect(response.status).toBe(200);
+                expect(response.body.success).toBe(true);
+                expect(response.body.data).toHaveLength(2);
+            });
+
+            test('should handle publish-log error', async () => {
+                mockGetRecentPublishAttempts.mockImplementation(() => { throw new Error('Log error'); });
+
+                const response = await request(app).get('/api/posts/actions/publish-log');
+
+                expect(response.status).toBe(500);
+                expect(response.body.success).toBe(false);
+            });
+        });
+
+        describe('POST /api/posts/:id/publish', () => {
+            test('should publish a scheduled post successfully', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'pub-1',
+                    status: 'SCHEDULED',
+                    type: 'IMAGE',
+                    caption: 'Publish me',
+                    thumbnail: 'https://example.com/img.jpg',
+                    platform: 'INSTAGRAM',
+                    restaurantId: 'r1-pub'
+                } as any);
+
+                // Setup restaurant with credentials (unique ID to avoid seeded data conflict)
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({
+                    _id: 'r1-pub',
+                    instagramCredentials: {
+                        userId: 'ig-123',
+                        pageId: 'page-456',
+                        accessToken: 'enc-token'
+                    }
+                } as any);
+
+                mockPublishPost.mockResolvedValue({
+                    instagram: { success: true, instagramMediaId: 'media-1', retryable: false }
+                });
+
+                mockFindPostById.mockImplementation(actualPostsDb.findPostById);
+
+                const response = await request(app).post('/api/posts/pub-1/publish');
+
+                expect(response.status).toBe(200);
+                expect(response.body.success).toBe(true);
+                expect(mockPublishPost).toHaveBeenCalled();
+            });
+
+            test('should return 404 when post not found', async () => {
+                mockFindPostById.mockResolvedValue(null);
+
+                const response = await request(app).post('/api/posts/nonexistent/publish');
+
+                expect(response.status).toBe(404);
+                expect(response.body.error).toBe('Post not found');
+            });
+
+            test('should return 400 when post status is not publishable', async () => {
+                mockFindPostById.mockResolvedValue({
+                    id: 'pub-2',
+                    status: 'PENDING_APPROVAL',
+                    type: 'IMAGE',
+                    caption: 'Not ready',
+                    thumbnail: '/img.jpg',
+                    platform: 'INSTAGRAM'
+                });
+
+                const response = await request(app).post('/api/posts/pub-2/publish');
+
+                expect(response.status).toBe(400);
+                expect(response.body.error).toContain('Cannot publish');
+                expect(response.body.error).toContain('PENDING_APPROVAL');
+            });
+
+            test('should return 400 when post has no restaurantId', async () => {
+                mockFindPostById.mockResolvedValue({
+                    id: 'pub-3',
+                    status: 'SCHEDULED',
+                    type: 'IMAGE',
+                    caption: 'No restaurant',
+                    thumbnail: '/img.jpg',
+                    platform: 'INSTAGRAM'
+                });
+
+                const response = await request(app).post('/api/posts/pub-3/publish');
+
+                expect(response.status).toBe(400);
+                expect(response.body.error).toContain('no associated restaurant');
+            });
+
+            test('should return 400 when restaurant has no Instagram credentials', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'pub-4',
+                    status: 'SCHEDULED',
+                    type: 'IMAGE',
+                    caption: 'No creds',
+                    thumbnail: '/img.jpg',
+                    platform: 'INSTAGRAM',
+                    restaurantId: 'r-no-creds'
+                } as any);
+
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({
+                    _id: 'r-no-creds'
+                } as any);
+
+                mockFindPostById.mockImplementation(actualPostsDb.findPostById);
+
+                const response = await request(app).post('/api/posts/pub-4/publish');
+
+                expect(response.status).toBe(400);
+                expect(response.body.error).toContain('Instagram not connected');
+            });
+
+            test('should return 502 when publishing fails', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'pub-5',
+                    status: 'SCHEDULED',
+                    type: 'IMAGE',
+                    caption: 'Fail publish',
+                    thumbnail: '/img.jpg',
+                    platform: 'INSTAGRAM',
+                    restaurantId: 'r1-fail'
+                } as any);
+
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({
+                    _id: 'r1-fail',
+                    instagramCredentials: {
+                        userId: 'ig-123',
+                        pageId: 'page-456',
+                        accessToken: 'enc-token'
+                    }
+                } as any);
+
+                mockPublishPost.mockResolvedValue({
+                    instagram: { success: false, error: 'Rate limited', retryable: true }
+                });
+
+                mockFindPostById.mockImplementation(actualPostsDb.findPostById);
+
+                const response = await request(app).post('/api/posts/pub-5/publish');
+
+                expect(response.status).toBe(502);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toContain('Rate limited');
+            });
+
+            test('should allow publishing MISSED_DEADLINE posts', async () => {
+                mockFindPostById.mockResolvedValue({
+                    id: 'pub-6',
+                    status: 'MISSED_DEADLINE',
+                    type: 'IMAGE',
+                    caption: 'Retry',
+                    thumbnail: '/img.jpg',
+                    platform: 'FACEBOOK',
+                    restaurantId: 'r1-retry'
+                });
+
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({
+                    _id: 'r1-retry',
+                    instagramCredentials: {
+                        userId: 'ig-123',
+                        pageId: 'page-456',
+                        accessToken: 'enc-token'
+                    }
+                } as any);
+
+                mockPublishPost.mockResolvedValue({
+                    facebook: { success: true, facebookPostId: 'fb-1', retryable: false }
+                });
+
+                const response = await request(app).post('/api/posts/pub-6/publish');
+
+                expect(response.status).toBe(200);
+                expect(response.body.success).toBe(true);
+            });
+
+            test('should handle publish route internal error', async () => {
+                mockFindPostById.mockRejectedValue(new Error('Database error'));
+
+                const response = await request(app).post('/api/posts/pub-err/publish');
+
+                expect(response.status).toBe(500);
+                expect(response.body.success).toBe(false);
             });
         });
     });

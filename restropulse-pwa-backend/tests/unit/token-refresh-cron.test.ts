@@ -210,6 +210,8 @@ describe('Token Refresh Cron Service', () => {
         });
 
         test('should execute scheduled job callback with items', async () => {
+            jest.useFakeTimers();
+
             // Setup mock data for the job execution
             (mockToArray as any).mockResolvedValue([{
                 _id: 'cron-res',
@@ -223,7 +225,12 @@ describe('Token Refresh Cron Service', () => {
             const calls = mockSchedule.mock.calls;
             const cronCallback = calls[calls.length - 1][1] as any;
 
-            await cronCallback(); // Execute it
+            const callbackPromise = cronCallback(); // Execute it
+
+            // Advance past the 1-second rate-limit delay between refreshes
+            await jest.advanceTimersByTimeAsync(1000);
+
+            await callbackPromise;
 
             // Verify it did work
             expect(mockFind).toHaveBeenCalled();
@@ -232,6 +239,8 @@ describe('Token Refresh Cron Service', () => {
                 { _id: 'cron-res' },
                 expect.any(Object)
             );
+
+            jest.useRealTimers();
         });
 
         test('should execute scheduled job callback with NO items', async () => {

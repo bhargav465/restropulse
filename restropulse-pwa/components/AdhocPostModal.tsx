@@ -27,16 +27,35 @@ interface FormData {
     mediaUrl: string;
 }
 
-const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSuccess }) => {
-    const [formData, setFormData] = useState<FormData>({
+/** Returns scheduledDate and scheduledTime strings for 10 minutes from now in local time. */
+function getDefaultSchedule(): { scheduledDate: string; scheduledTime: string } {
+    const d = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return {
+        scheduledDate: `${year}-${month}-${day}`,
+        scheduledTime: `${hours}:${minutes}`,
+    };
+}
+
+function getDefaultFormData(): FormData {
+    const { scheduledDate, scheduledTime } = getDefaultSchedule();
+    return {
         concept: '',
         postType: 'IMAGE',
         platform: 'INSTAGRAM',
-        scheduleType: 'now',
-        scheduledDate: '',
-        scheduledTime: '',
+        scheduleType: 'later',
+        scheduledDate,
+        scheduledTime,
         mediaUrl: '',
-    });
+    };
+}
+
+const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSuccess }) => {
+    const [formData, setFormData] = useState<FormData>(getDefaultFormData);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -91,36 +110,32 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
         setError(null);
 
         try {
-            // Build the post object
+            // Build the post object — default to 10 min from now for ASAP posts
             const scheduledFor = formData.scheduleType === 'later'
                 ? new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString()
-                : undefined;
+                : new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+            // Use picsum for placeholder images when no media is uploaded
+            const placeholderImage = `https://picsum.photos/seed/${Date.now()}/400/400`;
 
             const newPost: Omit<Post, 'id'> = {
                 type: formData.postType,
                 status: 'PENDING_APPROVAL',
-                thumbnail: formData.mediaUrl || '/api/placeholder/400/400',
+                thumbnail: formData.mediaUrl || placeholderImage,
                 caption: formData.concept,
                 platform: formData.platform,
+                restaurantId: 'r1',
                 scheduledFor,
                 mediaUrls: formData.postType === 'CAROUSEL' && formData.mediaUrl ? [formData.mediaUrl] : undefined,
                 videoUrl: (formData.postType === 'REEL' || formData.postType === 'STORY' || formData.postType === 'VIDEO') && formData.mediaUrl ? formData.mediaUrl : undefined,
             };
 
             await postsAPI.create(newPost);
-            
+
             // Reset form
-            setFormData({
-                concept: '',
-                postType: 'IMAGE',
-                platform: 'INSTAGRAM',
-                scheduleType: 'now',
-                scheduledDate: '',
-                scheduledTime: '',
-                mediaUrl: '',
-            });
+            setFormData(getDefaultFormData());
             setPreviewUrl(null);
-            
+
             onSuccess();
             onClose();
         } catch (err) {
@@ -132,15 +147,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
     };
 
     const resetForm = () => {
-        setFormData({
-            concept: '',
-            postType: 'IMAGE',
-            platform: 'INSTAGRAM',
-            scheduleType: 'now',
-            scheduledDate: '',
-            scheduledTime: '',
-            mediaUrl: '',
-        });
+        setFormData(getDefaultFormData());
         setPreviewUrl(null);
         setError(null);
     };
@@ -231,11 +238,10 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                 <button
                                     key={type.id}
                                     onClick={() => setFormData(prev => ({ ...prev, postType: type.id }))}
-                                    className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${
-                                        formData.postType === type.id
-                                            ? 'border-orange-500 bg-orange-50 text-orange-700'
-                                            : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                                    }`}
+                                    className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${formData.postType === type.id
+                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                        : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                                        }`}
                                     data-testid={`type-${type.id.toLowerCase()}`}
                                 >
                                     <type.icon size={20} />
@@ -304,11 +310,10 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                 <button
                                     key={platform.id}
                                     onClick={() => setFormData(prev => ({ ...prev, platform: platform.id }))}
-                                    className={`flex-1 p-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
-                                        formData.platform === platform.id
-                                            ? 'border-orange-500 bg-orange-50 text-orange-700'
-                                            : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                                    }`}
+                                    className={`flex-1 p-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${formData.platform === platform.id
+                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                        : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                                        }`}
                                     data-testid={`platform-${platform.id.toLowerCase()}`}
                                 >
                                     <platform.icon size={16} />
@@ -326,11 +331,10 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                         <div className="flex gap-2 mb-3">
                             <button
                                 onClick={() => setFormData(prev => ({ ...prev, scheduleType: 'now' }))}
-                                className={`flex-1 p-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
-                                    formData.scheduleType === 'now'
-                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                                        : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                                }`}
+                                className={`flex-1 p-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${formData.scheduleType === 'now'
+                                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                    : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                                    }`}
                                 data-testid="schedule-now"
                             >
                                 <Send size={16} />
@@ -338,11 +342,10 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                             </button>
                             <button
                                 onClick={() => setFormData(prev => ({ ...prev, scheduleType: 'later' }))}
-                                className={`flex-1 p-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
-                                    formData.scheduleType === 'later'
-                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                                        : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                                }`}
+                                className={`flex-1 p-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${formData.scheduleType === 'later'
+                                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                    : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                                    }`}
                                 data-testid="schedule-later"
                             >
                                 <Calendar size={16} />
@@ -377,11 +380,10 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                     <button
                         onClick={handleSubmit}
                         disabled={isSubmitting || !formData.concept.trim()}
-                        className={`w-full py-3.5 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 ${
-                            isSubmitting || !formData.concept.trim()
-                                ? 'bg-slate-300 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 active:scale-[0.98] shadow-lg shadow-orange-500/25'
-                        }`}
+                        className={`w-full py-3.5 rounded-xl font-bold text-white transition-all flex items-center justify-center gap-2 ${isSubmitting || !formData.concept.trim()
+                            ? 'bg-slate-300 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 active:scale-[0.98] shadow-lg shadow-orange-500/25'
+                            }`}
                         data-testid="submit-button"
                     >
                         {isSubmitting ? (

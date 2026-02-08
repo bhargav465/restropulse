@@ -29,7 +29,8 @@ const OAUTH_SCOPES = [
     'instagram_basic',
     'instagram_content_publish',
     'pages_show_list',
-    'pages_read_user_content',  // Replaced pages_read_engagement
+    'pages_read_user_content',
+    'pages_manage_posts',  // Required for uploading photos to Facebook Page (CDN upload)
     'public_profile'
 ].join(',');
 
@@ -57,6 +58,7 @@ export interface InstagramAccount {
     profilePictureUrl?: string;
     pageId: string;
     pageName: string;
+    pageAccessToken?: string; // Page token needed for Content Publishing API
 }
 
 export interface InstagramConnectionResult {
@@ -414,7 +416,8 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
             name: igResponse.data.name,
             profilePictureUrl: igResponse.data.profile_picture_url,
             pageId: pageId,
-            pageName: pageName
+            pageName: pageName,
+            pageAccessToken: pageAccessToken // Carry the page token for publishing
         };
     } catch (error) {
         const parsed = parseMetaApiError(error);
@@ -540,10 +543,13 @@ export async function handleOAuthCallback(code: string, state: string, skipState
 
     // Auto-select if single account, otherwise return list for picker
     if (instagramAccounts.length === 1) {
+        // Prefer page access token for Content Publishing API; fall back to user token
+        const publishToken = instagramAccounts[0].pageAccessToken || tokenResult.accessToken;
+        console.log('[OAuth] Using', instagramAccounts[0].pageAccessToken ? 'page' : 'user', 'access token for publishing');
         return {
             success: true,
             account: instagramAccounts[0],
-            accessToken: tokenResult.accessToken,
+            accessToken: publishToken,
             tokenExpiresAt
         };
     }

@@ -77,6 +77,15 @@ The Content Studio is the central hub for managing social media posts.
 *   **Locking Mechanism:** Posts scheduled within **3 hours** of the publication time are "Locked" and cannot be reverted/edited.
 *   **Revert:** Users can revert a non-locked scheduled post back to the `Review` tab to request further edits.
 
+#### 3.6. Publishing
+*   **Automated Publishing:** A backend cron job runs every 5 minutes to publish due posts.
+*   **Manual Publish:** Individual posts can be published on-demand via the publish button.
+*   **Platform Support:**
+    *   **Instagram:** IMAGE, REEL, CAROUSEL, STORY via Container-based Graph API flow.
+    *   **Facebook:** Photo posts, video posts, multi-photo carousel posts via Page API.
+*   **Status Tracking:** Post status transitions through SCHEDULED -> POSTED (success) or MISSED_DEADLINE (failure).
+*   **Retry Logic:** Failed posts can be retried manually. Posts with MISSED_DEADLINE status remain publishable.
+
 ### 4. Inputs (Context Updates)
 This section allows users to provide raw data to the AI engine.
 
@@ -112,8 +121,13 @@ This section allows users to provide raw data to the AI engine.
     *   View Restaurant Name, Cuisine, and Location.
     *   **Edit Profile:** Modal to update restaurant details.
 *   **Integrations:**
-    *   **Instagram:** Toggle to Connect/Disconnect.
-    *   **Facebook:** Displayed as "Coming Soon" (Disabled).
+    *   **Instagram:** Full OAuth flow via Facebook Login (Meta Graph API v18.0).
+        *   **Setup Guide Modal:** Two connection options - standard OAuth or guided onboarding.
+        *   **Account Picker:** Multi-account selection when multiple Instagram Professional accounts are found.
+        *   **Error Handling:** Specific error modals for each failure type (NO_PAGES_FOUND, NO_IG_ACCOUNT_FOUND, PERMISSIONS_MISSING, etc.) with help links.
+        *   **Disconnect:** Confirm dialog to disconnect Instagram with API cleanup.
+        *   **State Sync:** Connection status syncs with restaurant data prop changes.
+    *   **Facebook:** Publishing supported via linked Facebook Page (through Instagram OAuth).
 *   **Team:**
     *   Displays Account Manager details (Name, Photo).
     *   **Direct Support:** WhatsApp button to chat directly with the Account Manager.
@@ -136,8 +150,16 @@ This section allows users to provide raw data to the AI engine.
     *   Active states (`active:scale`) on buttons for tactile feedback.
     *   Large touch targets for all interactive elements.
 
-## Future Enhancements (Backend Roadmap)
-*   **Node.js & Express:** API development.
-*   **MongoDB:** Database for storing Users, Restaurants, Posts, and Strategy Cycles.
+## Completed Backend Features
+*   **Node.js & Express:** Full REST API with TypeScript (ESM)
+*   **MongoDB Atlas:** Database for Users, Restaurants, Posts, Strategy Cycles, Sessions
+*   **Meta Graph API v18.0:** Instagram + Facebook OAuth and publishing
+*   **Publishing Cron:** Automated scheduled post publishing every 5 minutes
+*   **Token Management:** AES-256-GCM encryption + daily refresh cron
+*   **650+ Tests:** Jest (backend) + Vitest (frontend) with 85%+ coverage
+
+## Future Enhancements
 *   **Azure Blob Storage:** For storing media assets (images/videos) and menu files.
 *   **RazorPay Integration:** For handling subscription payments.
+*   **Service Worker:** Offline support and push notifications.
+*   **WebSockets:** Real-time post status updates.

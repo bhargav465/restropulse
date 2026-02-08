@@ -78,9 +78,12 @@ export interface Post {
   videoUrl?: string; // For videos, reels, stories
   caption: string;
   platform: 'INSTAGRAM' | 'FACEBOOK' | 'BOTH';
+  restaurantId?: string;
   scheduledFor?: string;
   postedAt?: string;
   feedback?: string;
+  publishError?: string;
+  publishAttempts?: number;
   duration?: string; // e.g. "0:15"
   strategyId?: string;  // Optional - null/undefined for adhoc posts
   isAdhoc?: boolean;    // True for manually created posts

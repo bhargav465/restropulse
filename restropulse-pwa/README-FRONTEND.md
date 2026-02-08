@@ -75,12 +75,23 @@ npm run preview
 
 The app communicates with the backend through the `api.ts` service layer:
 
-- Authentication endpoints
-- Restaurant data management
-- Posts CRUD operations
-- Strategy cycles management
+- **Authentication** - Login, logout, session management
+- **Restaurant** - Profile CRUD, offers, chef specials
+- **Posts** - CRUD, approval workflow, manual publish, publish log
+- **Strategy** - Cycles management, approval flow
+- **Instagram** - OAuth flow, connect/disconnect, account selection, status
 
-All API calls include proper error handling and loading states.
+All API calls include proper error handling, loading states, and retry logic.
+
+### Instagram OAuth Flow
+
+The Settings component manages the Instagram connection lifecycle:
+1. User clicks "Connect" to open the Setup Guide modal
+2. Chooses standard or guided OAuth flow
+3. OAuth popup opens to Facebook Login
+4. Popup posts message back with success/error
+5. On success: connected state, restaurant data refresh
+6. On error: error modal with specific help links per error type
 
 ## Development Guidelines
 
@@ -88,6 +99,27 @@ All API calls include proper error handling and loading states.
 - Shared types are in `types.ts`
 - API service layer is in `api.ts`
 - Mock assets are served by the backend via the `CONTENT_BASE_URL` configuration.
+
+## Testing
+
+```bash
+# Run all tests
+npm test -- --run
+
+# Run with coverage
+npx vitest --run --coverage
+
+# Run specific test file
+npx vitest --run tests/Settings.test.tsx
+```
+
+**Coverage Summary (301 tests, 10 suites):**
+| Area | Statements | Branches | Functions | Lines |
+|------|-----------|----------|-----------|-------|
+| Overall | 82.70% | 74.22% | 82.20% | 84.56% |
+| ContentStudio.tsx | 75.79% | 64.42% | 70.93% | 80.21% |
+| Settings.tsx | 77.07% | 75.83% | 72.91% | 78.35% |
+| Dashboard.tsx | 98.11% | 90.24% | 94.11% | 98.03% |
 
 ## Future Enhancements
 

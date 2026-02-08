@@ -72,6 +72,7 @@ export const mockPost = {
     thumbnail: '/mockdata/images/food_platter.jpg',
     caption: 'Test caption',
     platform: 'INSTAGRAM' as const,
+    restaurantId: 'r1',
     postedAt: '2024-05-15T18:30:00Z',
     stats: {
         likes: 100,

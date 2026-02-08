@@ -26,7 +26,7 @@ describe('AdhocPostModal Component', () => {
             platform: 'INSTAGRAM',
             isAdhoc: true,
         });
-        
+
         // Mock URL.createObjectURL
         global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
         global.URL.revokeObjectURL = vi.fn();
@@ -69,22 +69,22 @@ describe('AdhocPostModal Component', () => {
 
             // Concept input
             expect(screen.getByTestId('concept-input')).toBeInTheDocument();
-            
+
             // Post type buttons
             expect(screen.getByTestId('type-image')).toBeInTheDocument();
             expect(screen.getByTestId('type-carousel')).toBeInTheDocument();
             expect(screen.getByTestId('type-reel')).toBeInTheDocument();
             expect(screen.getByTestId('type-story')).toBeInTheDocument();
-            
+
             // Platform buttons
             expect(screen.getByTestId('platform-instagram')).toBeInTheDocument();
             expect(screen.getByTestId('platform-facebook')).toBeInTheDocument();
             expect(screen.getByTestId('platform-both')).toBeInTheDocument();
-            
+
             // Schedule buttons
             expect(screen.getByTestId('schedule-now')).toBeInTheDocument();
             expect(screen.getByTestId('schedule-later')).toBeInTheDocument();
-            
+
             // Submit button
             expect(screen.getByTestId('submit-button')).toBeInTheDocument();
         });
@@ -128,7 +128,7 @@ describe('AdhocPostModal Component', () => {
 
             const conceptInput = screen.getByTestId('concept-input');
             fireEvent.change(conceptInput, { target: { value: 'Test post about pizza' } });
-            
+
             expect(conceptInput).toHaveValue('Test post about pizza');
         });
 
@@ -144,7 +144,7 @@ describe('AdhocPostModal Component', () => {
             // Default is IMAGE
             const reelButton = screen.getByTestId('type-reel');
             fireEvent.click(reelButton);
-            
+
             // Check the button has selected styling (border-orange-500)
             expect(reelButton).toHaveClass('border-orange-500');
         });
@@ -160,11 +160,11 @@ describe('AdhocPostModal Component', () => {
 
             const facebookButton = screen.getByTestId('platform-facebook');
             fireEvent.click(facebookButton);
-            
+
             expect(facebookButton).toHaveClass('border-orange-500');
         });
 
-        it('should show date/time inputs when schedule later is selected', async () => {
+        it('should show date/time inputs by default (schedule-later is the default)', () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -173,18 +173,28 @@ describe('AdhocPostModal Component', () => {
                 />
             );
 
-            // Initially date/time inputs should not be visible
+            // Date/time inputs should be visible by default (default is 10 min from now)
+            expect(screen.getByTestId('schedule-date')).toBeInTheDocument();
+            expect(screen.getByTestId('schedule-time')).toBeInTheDocument();
+            // Schedule-later button should have selected styling
+            expect(screen.getByTestId('schedule-later')).toHaveClass('border-orange-500');
+        });
+
+        it('should hide date/time inputs when ASAP is selected', () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            // Click ASAP
+            fireEvent.click(screen.getByTestId('schedule-now'));
+
+            // Date/time inputs should be hidden
             expect(screen.queryByTestId('schedule-date')).not.toBeInTheDocument();
             expect(screen.queryByTestId('schedule-time')).not.toBeInTheDocument();
-
-            // Click schedule later
-            fireEvent.click(screen.getByTestId('schedule-later'));
-
-            // Now date/time inputs should be visible
-            await waitFor(() => {
-                expect(screen.getByTestId('schedule-date')).toBeInTheDocument();
-                expect(screen.getByTestId('schedule-time')).toBeInTheDocument();
-            });
         });
 
         it('should handle file upload and show preview', async () => {
@@ -198,7 +208,7 @@ describe('AdhocPostModal Component', () => {
 
             const fileInput = screen.getByTestId('file-input');
             const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-            
+
             fireEvent.change(fileInput, { target: { files: [file] } });
 
             await waitFor(() => {
@@ -218,7 +228,7 @@ describe('AdhocPostModal Component', () => {
 
             const fileInput = screen.getByTestId('file-input');
             const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-            
+
             fireEvent.change(fileInput, { target: { files: [file] } });
 
             await waitFor(() => {
@@ -263,8 +273,13 @@ describe('AdhocPostModal Component', () => {
                 target: { value: 'Test post' }
             });
 
-            // Select schedule later
-            fireEvent.click(screen.getByTestId('schedule-later'));
+            // Clear the pre-filled date and time
+            fireEvent.change(screen.getByTestId('schedule-date'), {
+                target: { value: '' }
+            });
+            fireEvent.change(screen.getByTestId('schedule-time'), {
+                target: { value: '' }
+            });
 
             // Try to submit without date/time
             fireEvent.click(screen.getByTestId('submit-button'));
@@ -276,7 +291,7 @@ describe('AdhocPostModal Component', () => {
     });
 
     describe('Form Submission', () => {
-        it('should call postsAPI.create with correct data for ASAP post', async () => {
+        it('should call postsAPI.create with correct data for ASAP post (10 min from now)', async () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -296,6 +311,9 @@ describe('AdhocPostModal Component', () => {
             // Select both platforms
             fireEvent.click(screen.getByTestId('platform-both'));
 
+            // Switch to ASAP
+            fireEvent.click(screen.getByTestId('schedule-now'));
+
             // Submit
             fireEvent.click(screen.getByTestId('submit-button'));
 
@@ -306,7 +324,9 @@ describe('AdhocPostModal Component', () => {
                     status: 'PENDING_APPROVAL',
                     caption: 'New brunch menu special',
                     platform: 'BOTH',
-                    scheduledFor: undefined,
+                    restaurantId: 'r1',
+                    scheduledFor: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+                    thumbnail: expect.any(String),
                 }));
             });
         });
@@ -325,14 +345,8 @@ describe('AdhocPostModal Component', () => {
                 target: { value: 'Weekend special announcement' }
             });
 
-            // Select schedule later
-            fireEvent.click(screen.getByTestId('schedule-later'));
-
-            // Set date and time
-            await waitFor(() => {
-                expect(screen.getByTestId('schedule-date')).toBeInTheDocument();
-            });
-            
+            // Schedule-later is already the default, date/time are pre-filled
+            // Override with custom date and time
             fireEvent.change(screen.getByTestId('schedule-date'), {
                 target: { value: '2026-02-15' }
             });
@@ -350,7 +364,9 @@ describe('AdhocPostModal Component', () => {
                     status: 'PENDING_APPROVAL',
                     caption: 'Weekend special announcement',
                     platform: 'INSTAGRAM',
+                    restaurantId: 'r1',
                     scheduledFor: expect.stringContaining('2026-02-15'),
+                    thumbnail: expect.any(String),
                 }));
             });
         });
@@ -369,7 +385,7 @@ describe('AdhocPostModal Component', () => {
                 target: { value: 'Test post' }
             });
 
-            // Submit
+            // Submit (schedule-later is default with pre-filled date/time)
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
@@ -520,6 +536,8 @@ describe('AdhocPostModal Component', () => {
             await waitFor(() => {
                 expect(postsAPI.create).toHaveBeenCalledWith(expect.objectContaining({
                     type: 'CAROUSEL',
+                    restaurantId: 'r1',
+                    status: 'PENDING_APPROVAL',
                     mediaUrls: expect.arrayContaining([expect.any(String)]),
                 }));
             });
@@ -557,8 +575,123 @@ describe('AdhocPostModal Component', () => {
             await waitFor(() => {
                 expect(postsAPI.create).toHaveBeenCalledWith(expect.objectContaining({
                     type: 'REEL',
+                    restaurantId: 'r1',
+                    status: 'PENDING_APPROVAL',
                     videoUrl: expect.any(String),
                 }));
+            });
+        });
+    });
+
+    describe('Payload Completeness', () => {
+        it('should always include all required fields for publishing pipeline', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            // Minimal interaction: just enter a caption and submit with defaults
+            fireEvent.change(screen.getByTestId('concept-input'), {
+                target: { value: 'Minimal post' }
+            });
+
+            fireEvent.click(screen.getByTestId('submit-button'));
+
+            await waitFor(() => {
+                expect(postsAPI.create).toHaveBeenCalledTimes(1);
+            });
+
+            const payload = vi.mocked(postsAPI.create).mock.calls[0][0];
+
+            // Every field the publishing pipeline depends on must be present
+            expect(payload).toHaveProperty('restaurantId', 'r1');
+            expect(payload).toHaveProperty('status', 'PENDING_APPROVAL');
+            expect(payload).toHaveProperty('type', 'IMAGE');
+            expect(payload).toHaveProperty('platform', 'INSTAGRAM');
+            expect(payload).toHaveProperty('caption', 'Minimal post');
+            expect(payload).toHaveProperty('thumbnail');
+            expect(typeof payload.thumbnail).toBe('string');
+            expect(payload.thumbnail.length).toBeGreaterThan(0);
+            expect(payload).toHaveProperty('scheduledFor');
+            expect(typeof payload.scheduledFor).toBe('string');
+            // scheduledFor should be a valid ISO date
+            expect(new Date(payload.scheduledFor!).getTime()).not.toBeNaN();
+        });
+
+        it('should never send undefined for restaurantId', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            fireEvent.change(screen.getByTestId('concept-input'), {
+                target: { value: 'Test restaurantId' }
+            });
+
+            // Try both ASAP and scheduled paths
+            fireEvent.click(screen.getByTestId('schedule-now'));
+            fireEvent.click(screen.getByTestId('submit-button'));
+
+            await waitFor(() => {
+                const payload = vi.mocked(postsAPI.create).mock.calls[0][0];
+                expect(payload.restaurantId).toBe('r1');
+                expect(payload.restaurantId).not.toBeUndefined();
+                expect(payload.restaurantId).not.toBeNull();
+                expect(payload.restaurantId).not.toBe('');
+            });
+        });
+
+        it('should include scheduledFor as valid ISO string for ASAP posts', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            fireEvent.change(screen.getByTestId('concept-input'), {
+                target: { value: 'ASAP post scheduling' }
+            });
+
+            fireEvent.click(screen.getByTestId('schedule-now'));
+            fireEvent.click(screen.getByTestId('submit-button'));
+
+            await waitFor(() => {
+                const payload = vi.mocked(postsAPI.create).mock.calls[0][0];
+                expect(payload.scheduledFor).toBeDefined();
+                expect(typeof payload.scheduledFor).toBe('string');
+                // Should be roughly 10 min from now (within 2-minute tolerance)
+                const scheduled = new Date(payload.scheduledFor!).getTime();
+                const tenMinFromNow = Date.now() + 10 * 60 * 1000;
+                expect(Math.abs(scheduled - tenMinFromNow)).toBeLessThan(2 * 60 * 1000);
+            });
+        });
+
+        it('should set placeholder thumbnail when no media is uploaded', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            fireEvent.change(screen.getByTestId('concept-input'), {
+                target: { value: 'No media post' }
+            });
+
+            fireEvent.click(screen.getByTestId('submit-button'));
+
+            await waitFor(() => {
+                const payload = vi.mocked(postsAPI.create).mock.calls[0][0];
+                expect(payload.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\/\d+\/400\/400$/);
             });
         });
     });

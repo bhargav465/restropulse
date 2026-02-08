@@ -33,6 +33,4 @@ afterAll(async () => {
 
     // Cleanup and disconnect
     await disconnectDB();
-    // Force exit after a short delay to ensure cleanup
-    await new Promise(resolve => setTimeout(resolve, 500));
 }, 10000);
