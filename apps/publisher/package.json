@@ -1,0 +1,29 @@
+{
+  "name": "@restropulse/publisher",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Social media publishing worker -- publishes scheduled posts and refreshes tokens",
+  "type": "module",
+  "main": "dist/worker.js",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "build": "tsc",
+    "start": "node dist/worker.js",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@restropulse/shared": "*",
+    "@restropulse/db": "*",
+    "axios": "^1.13.2",
+    "dotenv": "^16.3.1",
+    "form-data": "^4.0.5",
+    "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.7.0",
+    "typescript": "~5.8.2"
+  }
+}

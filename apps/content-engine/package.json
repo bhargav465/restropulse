@@ -1,0 +1,27 @@
+{
+  "name": "@restropulse/content-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Content generation worker -- creates posts from strategies and adhoc requests",
+  "type": "module",
+  "main": "dist/worker.js",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "build": "tsc",
+    "start": "node dist/worker.js",
+    "type-check": "tsc --noEmit",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@restropulse/shared": "*",
+    "@restropulse/db": "*",
+    "dotenv": "^16.3.1",
+    "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.7.0",
+    "typescript": "~5.8.2"
+  }
+}

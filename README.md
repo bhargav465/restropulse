@@ -1,181 +1,138 @@
 # RestroPulse
 
-AI-powered social media management platform for restaurants.
+Social media management platform for restaurants. Automates content creation, scheduling, and publishing to Instagram and Facebook.
 
-## Project Structure
+## Monorepo Structure
 
-This repository contains a full-stack application split into front-end and back-end:
+```
+apps/
+  web/              React 19 + Vite 6 SPA (port 3000)
+  api/              Express 4 REST API (port 3001)
+  publisher/        Standalone cron worker -- post publishing + token refresh
+  content-engine/   Standalone poll worker -- content generation
+  db-cli/           Commander CLI for DB operations
+packages/
+  shared/           @restropulse/shared -- unified TypeScript types
+  db/               @restropulse/db -- shared MongoDB connection + helpers
+  tsconfig/         Shared tsconfig presets (base, react, node)
+  eslint-config/    Shared ESLint flat config
+```
 
-### `restropulse-pwa/`
-Front-end Progressive Web Application built with React, TypeScript, and Vite.
+## Quick Start
 
-**Quick Start:**
 ```bash
-cd restropulse-pwa
+# Install all workspace dependencies
 npm install
+
+# Start all apps in development mode
 npm run dev
+
+# Start a single app
+npm run dev --filter=@restropulse/api
+npm run dev --filter=@restropulse/web
 ```
 
-See [restropulse-pwa/README-FRONTEND.md](restropulse-pwa/README-FRONTEND.md) for details.
+## Commands
 
-### `restropulse-pwa-backend/`
-Backend API server built with Node.js, Express, and TypeScript.
+| Command                | Description                  |
+|------------------------|------------------------------|
+| npm install            | Install all workspaces       |
+| npm run dev            | Start all apps (Turborepo)   |
+| npm run build          | Build all packages and apps  |
+| npm run test           | Run all test suites          |
+| npm run lint           | Lint all workspaces          |
+| npm run type-check     | TypeScript type checking     |
+| npm run clean          | Remove build artifacts       |
 
-**Quick Start:**
-```bash
-cd restropulse-pwa-backend
-npm install
-npm run dev
+## Tech Stack
+
+- Frontend: React 19, Vite 6, TypeScript, Tailwind CSS
+- Backend: Express 4, TypeScript, MongoDB (driver v6.12)
+- Auth: Firebase Phone Auth (OTP) + JWT
+- External: Meta Graph API v18.0 (Instagram/Facebook)
+- Monorepo: npm workspaces + Turborepo
+- CI: GitHub Actions
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) -- system overview, data flows, diagrams
+- [Infrastructure](docs/INFRASTRUCTURE.md) -- env vars, ports, cron schedules
+- [Testing](docs/TESTING.md) -- testing frameworks, conventions, templates
+- [Meta App Setup](docs/META_APP_SETUP.md) -- Facebook/Instagram app configuration
+
+## Architecture Overview
+
 ```
-
-See [restropulse-pwa-backend/README.md](restropulse-pwa-backend/README.md) for details.
-
-### `restropulse-pwa-database/`
-Database management scripts and seed data.
-
-## Architecture
-
-```
-┌─────────────────────────┐
-│    restropulse-pwa      │  React 19 PWA (Vite)
-│    Port: 3000           │  Tailwind CSS, Recharts
-└───────────┬─────────────┘
-            │ HTTP/REST
++-------------------------+
+|    apps/web             |  React 19 SPA (Vite)
+|    Port: 3000           |  Tailwind CSS, Recharts
++-----------+-------------+
+            | HTTP/REST
             v
-┌─────────────────────────┐     ┌─────────────────────────────┐
-│ restropulse-pwa-backend │     │   Background Services       │
-│ Port: 3001 (Express)    │     │                             │
-│                         │     │  Publishing Cron (5 min)    │
-│  Routes:                │     │  Token Refresh Cron (daily) │
-│    /api/auth            │     └──────────┬──────────────────┘
-│    /api/restaurant      │                │
-│    /api/posts           │────────────────┘
-│    /api/strategy        │
-│    /api/integrations    │
-└───────────┬─────────────┘
-            │
-    ┌───────┴───────┐
-    v               v
-┌─────────┐   ┌──────────────────────┐
-│ MongoDB │   │  Meta Graph API      │
-│ Atlas   │   │  (Instagram + FB)    │
-│         │   │  v18.0               │
-└─────────┘   └──────────────────────┘
++-------------------------+     +-----------------------------+
+| apps/api                |     | apps/publisher              |
+| Port: 3001 (Express)   |     | Publishing Cron (5 min)     |
+|                         |     | Token Refresh Cron (daily)  |
+|  Routes:                |     +-------------+---------------+
+|    /api/auth            |                   |
+|    /api/restaurant      |                   |
+|    /api/posts           |-------------------+
+|    /api/strategy        |
+|    /api/integrations    |     +-----------------------------+
++-----------+-------------+     | apps/content-engine         |
+            |                   | Content Gen Poll (2 min)    |
+    +-------+-------+          +-------------+---------------+
+    v               v                        |
++---------+   +----------------------+       |
+| MongoDB |<--| Meta Graph API v18.0 |       |
+| Atlas   |<--| (Instagram + FB)     |-------+
++---------+   +----------------------+
 ```
 
 ### Publishing Flow
 
 ```
- Content Studio (Approve)    Cron Job (every 5 min)
-         │                          │
+ Content Studio (Approve)    Publisher Cron (every 5 min)
+         |                          |
          v                          v
-  Status: SCHEDULED ───────> Check scheduledFor <= now
-                                    │
+  Status: SCHEDULED ---------> Check scheduledFor <= now
+                                    |
                                     v
                             Publishing Service
-                            ┌───────────────┐
-                            │ IMAGE/CAROUSEL │──> IG Container API
-                            │ REEL/VIDEO    │──> IG Reel Container
-                            │ STORY         │──> IG Story Container
-                            │ FACEBOOK      │──> FB Page Photos/Feed
-                            └───────┬───────┘
-                                    │
+                            +---------------+
+                            | IMAGE/CAROUSEL |--> IG Container API
+                            | REEL/VIDEO     |--> IG Reel Container
+                            | STORY          |--> IG Story Container
+                            | FACEBOOK       |--> FB Page Photos/Feed
+                            +-------+-------+
+                                    |
                               Success/Fail
-                                    │
+                                    |
                                     v
                            Update post status
-                         POSTED / MISSED_DEADLINE
+                          PUBLISHED / FAILED
 ```
 
-## Getting Started
+### Content Generation Flow
 
-### Prerequisites
+```
+ User Request or           Content Engine (every 2 min)
+ Strategy Approval               |
+         |                       v
+         v                Poll for pending work
+  Status: PENDING_CONTENT  (PENDING_CONTENT, APPROVED, PENDING_GENERATION)
+  or APPROVED                    |
+                                 v
+                         Generate Content
+                         (placeholder, future: AI)
+                                 |
+                                 v
+                        Status: PENDING_APPROVAL
+```
 
-- Node.js 18+
-- npm or yarn
+## License
 
-### Development Setup
-
-1. **Start the backend:**
-   ```bash
-   cd restropulse-pwa-backend
-   npm install
-   cp .env.example .env
-   npm run dev
-   ```
-
-2. **Start the frontend:**
-   ```bash
-   cd restropulse-pwa
-   npm install
-   cp .env.example .env
-   npm run dev
-   ```
-
-3. Open `http://localhost:3000` in your browser
-
-### Login Credentials (Demo)
-
-- **Email:** arjun@spicelounge.com
-- **Password:** demo123
-
-## Features
-
-- Restaurant dashboard with analytics
-- Content studio for social media posts with approval workflow
-- Automated publishing to Instagram and Facebook via Meta Graph API v18.0
-- Instagram OAuth integration (connect/disconnect, multi-account picker)
-- Publishing cron job with rate limiting and retry logic
-- Token refresh cron for long-lived access tokens
-- Strategy planning and cycles
-- Offer and special management
-- Multi-platform support (Instagram, Facebook)
-- Comprehensive test suites (650+ tests across frontend and backend)
-
-## Tech Stack
-
-**Frontend:**
-- React 19 + TypeScript
-- Vite
-- Tailwind CSS
-- Lucide Icons
-- Recharts
-
-**Backend:**
-- Node.js + Express
-- TypeScript
-- MongoDB Atlas
-- JWT Auth + Firebase Admin SDK
-- Meta Graph API v18.0 (Instagram + Facebook publishing)
-- AES-256-GCM encryption for access tokens
-- Cron-based scheduled publishing and token refresh
-
-**Testing:**
-- Backend: Jest 29 + ts-jest (ESM) -- 349 tests, 87.66% statement coverage
-- Frontend: Vitest + React Testing Library -- 301 tests, 82.7% statement coverage
-
-**Media & Assets:**
-- Served via Express static middleware
-- Configurable base URL for CDN readiness
-
-## Configuration
-
-### Environment Variables
-
-#### Backend (`/restropulse-pwa-backend/.env`)
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | API Port | `3001` |
-| `CONTENT_BASE_URL` | Base URL for images/videos | `http://localhost:3001/content/mockdata` |
-| `JWT_SECRET` | Token secret | `your-secret-key` |
-| `MONGODB_URI` | MongoDB connection string | Required |
-| `MONGODB_DB_NAME` | Database name | `restropulse` |
-| `INSTAGRAM_APP_ID` | Meta App ID for Instagram OAuth | Required |
-| `INSTAGRAM_APP_SECRET` | Meta App Secret | Required |
-| `INSTAGRAM_REDIRECT_URI` | OAuth callback URL | `http://localhost:3001/api/integrations/instagram/callback` |
-| `ENCRYPTION_KEY` | 32-byte hex key for token encryption | Required |
-| `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase Admin SDK credentials (JSON) | Optional |
-| `FIREBASE_PROJECT_ID` | Firebase project ID | Optional |
+Private
 
 #### Frontend (`/restropulse-pwa/.env`)
 | Variable | Description | Default |
