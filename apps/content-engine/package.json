@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:coverage": "vitest run --coverage",
+    "download-assets": "node scripts/download-assets.mjs",
     "clean": "rimraf dist"
   },
   "dependencies": {

@@ -1,12 +1,18 @@
 /**
- * Content Generator Interface
+ * Content Generator
  *
  * Abstraction layer for content generation. Current implementation uses
- * placeholder content. Replace with actual AI service integration
- * (OpenAI, Replicate, etc.) when ready.
+ * locally stored placeholder assets (images and videos) served by the
+ * built-in asset server. Each PostType gets a themed asset selected
+ * randomly from the local catalog.
+ *
+ * Replace the body of generateContent() (and generateCycleContent() if needed)
+ * with actual AI service calls when ready — the interfaces below are the stable
+ * service contract consumed by adhoc-processor.ts and strategy-processor.ts.
  */
 
 import type { PostType, Platform } from '@restropulse/shared';
+import { getRandomImage, getRandomCarousel, getRandomVideo, buildCaption } from './asset-manager.js';
 
 export interface GeneratedContent {
   caption: string;
@@ -24,46 +30,44 @@ export interface GenerateOptions {
 }
 
 /**
- * Generate content for a post.
+ * Generate content for a single post.
  * TODO: Replace with actual AI content generation service (OpenAI, Replicate, etc.)
  */
 export async function generateContent(options: GenerateOptions): Promise<GeneratedContent> {
-  const { concept, type } = options;
-  const seed = Math.random().toString(36).substring(2, 10);
-  const timestamp = Date.now();
+  const { concept, type, restaurantName, themes } = options;
+  const theme = themes?.[0] ?? 'default';
 
   console.log(`[Content Engine] Generating ${type} content for concept: "${concept}"`);
 
-  // Base placeholder content
-  const caption = concept || `Fresh content from RestroPulse - ${new Date().toLocaleDateString()}`;
+  const caption = buildCaption(concept, theme, restaurantName);
 
   switch (type) {
     case 'CAROUSEL': {
-      const mediaUrls = Array.from({ length: 3 }, (_, i) =>
-        `https://picsum.photos/seed/${seed}-${i}/1080/1080`,
-      );
+      const { urls } = getRandomCarousel(theme);
       return {
         caption,
-        thumbnail: mediaUrls[0],
-        mediaUrls,
+        thumbnail: urls[0],
+        mediaUrls: urls,
       };
     }
 
     case 'REEL':
     case 'VIDEO':
     case 'STORY': {
+      const { videoUrl, thumbnail } = getRandomVideo(theme);
       return {
         caption,
-        thumbnail: `https://picsum.photos/seed/${seed}/1080/1920`,
-        videoUrl: `https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4?t=${timestamp}`,
+        thumbnail,
+        videoUrl,
       };
     }
 
     case 'IMAGE':
     default: {
+      const { url } = getRandomImage(theme);
       return {
         caption,
-        thumbnail: `https://picsum.photos/seed/${seed}/1080/1080`,
+        thumbnail: url,
       };
     }
   }
@@ -95,7 +99,7 @@ export async function generateCycleContent(options: {
   const results: GeneratedContent[] = [];
 
   for (let i = 0; i < totalPosts; i++) {
-    const theme = themes[i % themes.length] || 'Restaurant Highlights';
+    const theme = themes[i % themes.length] || 'default';
     const type = contentTypes[i % contentTypes.length] || 'IMAGE';
 
     const content = await generateContent({
@@ -103,7 +107,7 @@ export async function generateCycleContent(options: {
       type,
       platform: 'BOTH',
       restaurantName: options.restaurantName,
-      themes,
+      themes: [theme],
     });
 
     results.push(content);
