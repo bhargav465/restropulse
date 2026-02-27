@@ -7,6 +7,7 @@ vi.mock('../api', () => ({
     postsAPI: {
         getAll: vi.fn(),
         create: vi.fn(),
+        generate: vi.fn(),
         update: vi.fn(),
         delete: vi.fn(),
         approve: vi.fn(),
@@ -1300,6 +1301,118 @@ describe('ContentStudio Component', () => {
             });
             consoleSpy.mockRestore();
         });
+
+        it('should not show missing video warning for review reel without videoUrl', async () => {
+            const missingVideoPost = {
+                id: 'mv-1',
+                caption: 'Reel without video',
+                type: 'REEL' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+            };
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue([missingVideoPost]);
+            render(<ContentStudio />);
+
+            await waitFor(() => {
+                expect(screen.getByText('Reel without video')).toBeInTheDocument();
+            });
+
+            expect(screen.queryByText('Video content required')).not.toBeInTheDocument();
+        });
+
+        it('should show publish error details for missed deadline posts in history', async () => {
+            const failedPost = {
+                id: 'failed-1',
+                caption: 'Failed publish',
+                type: 'IMAGE' as const,
+                status: 'MISSED_DEADLINE' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                postedAt: new Date().toISOString(),
+                publishError: 'Media upload failed'
+            };
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue([failedPost]);
+            render(<ContentStudio />);
+
+            fireEvent.click(screen.getByText('History'));
+
+            await waitFor(() => {
+                expect(screen.getAllByText('Publish Failed').length).toBeGreaterThan(0);
+                expect(screen.getByText('Media upload failed')).toBeInTheDocument();
+            });
+        });
+
+        it('should open max revisions view and launch account manager chat', async () => {
+            const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+            const limitedPost = {
+                id: 'limit-1',
+                caption: 'Limited revisions post',
+                type: 'IMAGE' as const,
+                status: 'SCHEDULED' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                scheduledFor: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
+                feedback: JSON.stringify({
+                    tags: ['Caption'],
+                    details: { Caption: 'Too short' },
+                    note: 'Initial feedback\\n\\n[Update]: Follow-up feedback',
+                    resolution: 'Updated caption tone'
+                })
+            };
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue([limitedPost]);
+            render(<ContentStudio />);
+
+            fireEvent.click(screen.getByText('Scheduled'));
+            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+
+            fireEvent.click(screen.getByText('Revert to Review'));
+
+            await waitFor(() => {
+                expect(screen.getByText('Max Revisions Reached')).toBeInTheDocument();
+                expect(screen.getByText(/Let's chat directly!/i)).toBeInTheDocument();
+            });
+
+            fireEvent.click(screen.getByRole('button', { name: /Chat with John/i }));
+
+            expect(openSpy).toHaveBeenCalledWith(expect.stringContaining('https://wa.me/'), '_blank');
+            openSpy.mockRestore();
+        });
+
+        it('should handle video playback errors gracefully', async () => {
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+            vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockRejectedValueOnce(new Error('play blocked'));
+
+            const videoPost = {
+                id: 'v-play-error',
+                caption: 'Video play error',
+                type: 'VIDEO' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/thumb.jpg',
+                videoUrl: '/vid.mp4',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+            };
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
+            render(<ContentStudio />);
+
+            await waitFor(() => expect(screen.getByText('Video play error')).toBeInTheDocument());
+
+            const overlay = document.querySelector('.cursor-pointer.z-10');
+            expect(overlay).toBeTruthy();
+            fireEvent.click(overlay!);
+
+            await waitFor(() => {
+                expect(consoleSpy).toHaveBeenCalledWith('Failed to play video:', expect.any(Error));
+            });
+
+            consoleSpy.mockRestore();
+        });
     });
 
     describe('Adhoc Post Integration', () => {
@@ -1348,7 +1461,7 @@ describe('ContentStudio Component', () => {
         });
 
         it('should refresh posts and switch to Review tab after successful adhoc post creation', async () => {
-            vi.mocked(postsAPI.create).mockResolvedValue({
+            vi.mocked(postsAPI.generate).mockResolvedValue({
                 id: 'adhoc-1',
                 type: 'IMAGE',
                 status: 'PENDING_APPROVAL',

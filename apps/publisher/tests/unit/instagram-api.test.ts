@@ -42,6 +42,7 @@ describe('Instagram API Service', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        process.env.ENCRYPTION_KEY = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
     });
 
     describe('Environment Config', () => {

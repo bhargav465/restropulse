@@ -343,6 +343,77 @@ describe('Login Component', () => {
 
         vi.unstubAllEnvs();
     });
+
+    it('should show generic verification error when no auth method is available', async () => {
+        // No Firebase key and no fallback login -> useFirebase false path
+        mockFetch.mockResolvedValueOnce({
+            json: () => Promise.resolve({ success: true })
+        });
+
+        render(<Login onLogin={mockOnLogin} />);
+
+        const phoneInput = screen.getByPlaceholderText(/98765 43210/i);
+        fireEvent.change(phoneInput, { target: { value: '9876543210' } });
+        fireEvent.click(screen.getByText(/Get OTP/i).closest('button')!);
+
+        await waitFor(() => screen.getByLabelText('OTP digit 1'));
+
+        const inputs = screen.getAllByRole('textbox', { name: /OTP digit/i });
+        for (let i = 0; i < 6; i++) {
+            fireEvent.change(inputs[i], { target: { value: String(i + 1) } });
+        }
+
+        await waitFor(() => {
+            expect(screen.getByText('Verification failed. Please try again.')).toBeInTheDocument();
+        });
+    });
+
+    it('should show OTP expired message for code-expired error', async () => {
+        vi.stubEnv('VITE_FIREBASE_API_KEY', 'test-key');
+        (firebase.sendOTP as any).mockResolvedValueOnce(undefined);
+
+        const expiredError = new Error('Code expired');
+        (expiredError as any).code = 'auth/code-expired';
+        (firebase.verifyOTP as any).mockRejectedValueOnce(expiredError);
+
+        render(<Login onLogin={mockOnLogin} />);
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const phoneInput = screen.getByPlaceholderText(/98765 43210/i);
+        fireEvent.change(phoneInput, { target: { value: '9876543210' } });
+        fireEvent.click(screen.getByText(/Get OTP/i).closest('button')!);
+
+        await waitFor(() => screen.getByLabelText('OTP digit 1'));
+
+        const inputs = screen.getAllByRole('textbox', { name: /OTP digit/i });
+        for (let i = 0; i < 6; i++) {
+            fireEvent.change(inputs[i], { target: { value: String(i + 1) } });
+        }
+
+        await waitFor(() => {
+            expect(screen.getByText('OTP has expired. Please request a new one.')).toBeInTheDocument();
+        });
+
+        vi.unstubAllEnvs();
+    });
+
+    it('should log recaptcha initialization failure', async () => {
+        vi.stubEnv('VITE_FIREBASE_API_KEY', 'test-key');
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+        (firebase.initRecaptcha as any).mockImplementationOnce(() => {
+            throw new Error('recaptcha init failed');
+        });
+
+        render(<Login onLogin={mockOnLogin} />);
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('Failed to initialize reCAPTCHA:', expect.any(Error));
+        });
+
+        consoleSpy.mockRestore();
+        vi.unstubAllEnvs();
+    });
 });
 
 // Helper for paste event

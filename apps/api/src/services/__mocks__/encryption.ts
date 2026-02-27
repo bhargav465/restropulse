@@ -1,6 +1,6 @@
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
-export const generateStateToken = jest.fn(() => 'mock-state-token');
-export const encrypt = jest.fn((val: string) => `encrypted_${val}`);
-export const decrypt = jest.fn((val: string) => val.replace('encrypted_', ''));
-export const generateEncryptionKey = jest.fn(() => 'mock-key');
+export const generateStateToken = vi.fn(() => 'mock-state-token');
+export const encrypt = vi.fn((val: string) => `encrypted_${val}`);
+export const decrypt = vi.fn((val: string) => val.replace('encrypted_', ''));
+export const generateEncryptionKey = vi.fn(() => 'mock-key');

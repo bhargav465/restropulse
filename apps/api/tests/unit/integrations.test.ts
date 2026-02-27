@@ -5,6 +5,7 @@ process.env.INSTAGRAM_APP_SECRET = 'test-app-secret';
 import { describe, it, test, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import crypto from 'crypto';
+import { encrypt } from '../../src/services/encryption.js';
 
 // Define Mocks for Services
 const mockGenerateOAuthUrl = vi.fn();
@@ -15,6 +16,8 @@ const mockValidateStateToken = vi.fn();
 const mockCheckAndRefreshTokenIfNeeded = vi.fn();
 const mockValidateToken = vi.fn();
 const mockGetRestaurantsCollection = vi.fn();
+const mockAxiosGet = vi.fn();
+const mockAxiosPost = vi.fn();
 
 // Mock Services
 vi.mock('../../src/services/instagram-api.js', () => ({
@@ -37,6 +40,21 @@ vi.mock('../../src/services/instagram-api.js', () => ({
 vi.mock('../../src/services/token-refresh-cron.js', () => ({
     checkAndRefreshTokenIfNeeded: mockCheckAndRefreshTokenIfNeeded,
     triggerManualRefresh: vi.fn()
+}));
+
+vi.mock('axios', () => ({
+    default: {
+        get: mockAxiosGet,
+        post: mockAxiosPost,
+        create: vi.fn(() => ({
+            get: mockAxiosGet,
+            post: mockAxiosPost,
+            interceptors: {
+                request: { use: vi.fn() },
+                response: { use: vi.fn() }
+            }
+        }))
+    }
 }));
 
 // Mock Database Connection
@@ -363,6 +381,16 @@ describe('Integration Routes', () => {
     });
 
     describe('POST /api/integrations/instagram/select-account', () => {
+        it('should fail when selectionId or accountId missing', async () => {
+            const response = await request(app)
+                .post('/api/integrations/instagram/select-account')
+                .send({});
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toContain('Selection ID and account ID required');
+        });
+
         it('should successfully select account flow', async () => {
             // 1. Setup Mock
             mockHandleOAuthCallback.mockReturnValue({
@@ -401,6 +429,62 @@ describe('Integration Routes', () => {
             expect(response.status).toBe(404);
         });
 
+        it('should fail when selected account is not in pending list', async () => {
+            mockHandleOAuthCallback.mockReturnValue({
+                success: true,
+                accessToken: 'test-token',
+                tokenExpiresAt: new Date(),
+                accounts: [
+                    { id: 'acc1', username: 'user1', name: 'User One' },
+                    { id: 'acc2', username: 'user2', name: 'User Two' }
+                ],
+                restaurantId: 'r1'
+            });
+            mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
+
+            const seedResponse = await request(app)
+                .post('/api/integrations/instagram/callback')
+                .send({ code: 'valid', state: 'valid' });
+
+            const selectionId = seedResponse.body.data.selectionId;
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/select-account')
+                .send({ selectionId, accountId: 'acc-missing' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Invalid account selection');
+        });
+
+        it('should fail when restaurant id is missing in pending and request', async () => {
+            mockHandleOAuthCallback.mockReturnValue({
+                success: true,
+                accessToken: 'test-token',
+                tokenExpiresAt: new Date(),
+                accounts: [
+                    { id: 'acc1', username: 'user1', name: 'User One' },
+                    { id: 'acc2', username: 'user2', name: 'User Two' }
+                ],
+                restaurantId: ''
+            });
+            mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: '' });
+
+            const seedResponse = await request(app)
+                .post('/api/integrations/instagram/callback')
+                .send({ code: 'valid', state: 'valid' });
+
+            const selectionId = seedResponse.body.data.selectionId;
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/select-account')
+                .send({ selectionId, accountId: 'acc1' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Restaurant ID required');
+        });
+
         it('should handle database error during save', async () => {
             // 1. Start Session (Real DB)
             mockHandleOAuthCallback.mockReturnValue({
@@ -427,6 +511,43 @@ describe('Integration Routes', () => {
                 .send({ selectionId: id, accountId: 'a1' });
 
             expect(response.status).toBe(500);
+        });
+    });
+
+    describe('GET /api/integrations/instagram/pending-accounts/:selectionId', () => {
+        it('should return 404 for unknown selection', async () => {
+            const response = await request(app)
+                .get('/api/integrations/instagram/pending-accounts/unknown-selection');
+
+            expect(response.status).toBe(404);
+            expect(response.body.success).toBe(false);
+        });
+
+        it('should return pending accounts for valid selection', async () => {
+            mockHandleOAuthCallback.mockReturnValue({
+                success: true,
+                accessToken: 'test-token',
+                tokenExpiresAt: new Date(),
+                accounts: [
+                    { id: 'acc1', username: 'user1', name: 'User One' },
+                    { id: 'acc2', username: 'user2', name: 'User Two' }
+                ],
+                restaurantId: 'r1'
+            });
+            mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
+
+            const seedResponse = await request(app)
+                .post('/api/integrations/instagram/callback')
+                .send({ code: 'valid', state: 'valid' });
+
+            const selectionId = seedResponse.body.data.selectionId;
+
+            const response = await request(app)
+                .get(`/api/integrations/instagram/pending-accounts/${selectionId}`);
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.data.accounts).toHaveLength(2);
         });
     });
 
@@ -513,6 +634,229 @@ describe('Integration Routes', () => {
 
             expect(response.status).toBe(200);
             expect(response.body.data.instagram.configured).toBe(true);
+        });
+
+        it('should return appId as not_configured when env var is missing', async () => {
+            const previousAppId = process.env.INSTAGRAM_APP_ID;
+            delete process.env.INSTAGRAM_APP_ID;
+            mockIsInstagramConfigured.mockReturnValue(false);
+
+            const response = await request(app).get('/api/integrations/config');
+
+            expect(response.status).toBe(200);
+            expect(response.body.data.instagram.configured).toBe(false);
+            expect(response.body.data.instagram.appId).toBe('not_configured');
+
+            if (previousAppId) {
+                process.env.INSTAGRAM_APP_ID = previousAppId;
+            }
+        });
+
+        it('should return appId as configured when env var exists', async () => {
+            const previousAppId = process.env.INSTAGRAM_APP_ID;
+            process.env.INSTAGRAM_APP_ID = 'test-app-id';
+            mockIsInstagramConfigured.mockReturnValue(true);
+
+            const response = await request(app).get('/api/integrations/config');
+
+            expect(response.status).toBe(200);
+            expect(response.body.data.instagram.configured).toBe(true);
+            expect(response.body.data.instagram.appId).toBe('configured');
+
+            if (previousAppId) {
+                process.env.INSTAGRAM_APP_ID = previousAppId;
+            } else {
+                delete process.env.INSTAGRAM_APP_ID;
+            }
+        });
+    });
+
+    describe('Development-only debug routes', () => {
+        it('should return 404 for debug-token route in production', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'production';
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/debug-token/r1');
+
+            expect(response.status).toBe(404);
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should return 400 when debug-token has no credentials', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne({ _id: 'r1' } as any, { $unset: { instagramCredentials: '' } });
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/debug-token/r1');
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('No credentials found');
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should return 500 when token decryption fails in debug-token', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne(
+                { _id: 'r1' } as any,
+                { $set: { instagramCredentials: { accessToken: 'invalid-token-format' } } }
+            );
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/debug-token/r1');
+
+            expect(response.status).toBe(500);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Failed to decrypt token');
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should return debug details for valid debug-token request', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne(
+                { _id: 'r1' } as any,
+                {
+                    $set: {
+                        instagramCredentials: {
+                            userId: 'ig-user-1',
+                            pageId: 'pg-1',
+                            username: 'debug_user',
+                            accessToken: encrypt('plain-token-123')
+                        }
+                    }
+                }
+            );
+
+            mockAxiosGet.mockImplementation((url: string) => {
+                if (url.includes('/debug_token')) {
+                    return Promise.resolve({
+                        data: {
+                            data: {
+                                app_id: 'app-1',
+                                user_id: 'ig-user-1',
+                                type: 'PAGE',
+                                is_valid: true,
+                                expires_at: 0,
+                                scopes: ['pages_show_list']
+                            }
+                        }
+                    });
+                }
+
+                return Promise.resolve({
+                    data: { id: 'ig-user-1', name: 'IG User' }
+                });
+            });
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/debug-token/r1');
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.data.tokenDebug.isValid).toBe(true);
+            expect(response.body.data.me.id).toBe('ig-user-1');
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should return 404 for migrate route in production', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'production';
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/migrate-to-page-token/r1');
+
+            expect(response.status).toBe(404);
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should return 400 when migrate route has no credentials', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne({ _id: 'r1' } as any, { $unset: { instagramCredentials: '' } });
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/migrate-to-page-token/r1');
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('No credentials found');
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should migrate to page token successfully', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            process.env.INSTAGRAM_APP_ID = 'test-app-id';
+            process.env.INSTAGRAM_APP_SECRET = 'test-app-secret';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne(
+                { _id: 'r1' } as any,
+                {
+                    $set: {
+                        instagramCredentials: {
+                            userId: 'ig-user-1',
+                            pageId: 'page-123',
+                            accessToken: encrypt('user-token-abc')
+                        }
+                    }
+                }
+            );
+
+            mockAxiosGet.mockImplementation((url: string) => {
+                if (url.includes('/me/accounts')) {
+                    return Promise.resolve({
+                        data: {
+                            data: [
+                                { id: 'page-123', name: 'Test Page', access_token: 'page-token-xyz' }
+                            ]
+                        }
+                    });
+                }
+
+                if (url.includes('/debug_token')) {
+                    return Promise.resolve({
+                        data: {
+                            data: {
+                                is_valid: true,
+                                type: 'PAGE',
+                                scopes: ['pages_show_list'],
+                                expires_at: 0
+                            }
+                        }
+                    });
+                }
+
+                return Promise.resolve({ data: {} });
+            });
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/migrate-to-page-token/r1');
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.data.message).toContain('Migrated from User token to Page token');
+
+            process.env.NODE_ENV = previousEnv;
         });
     });
 

@@ -156,7 +156,7 @@ This section allows users to provide raw data to the AI engine.
 *   **Meta Graph API v18.0:** Instagram + Facebook OAuth and publishing
 *   **Publishing Cron:** Automated scheduled post publishing every 5 minutes
 *   **Token Management:** AES-256-GCM encryption + daily refresh cron
-*   **650+ Tests:** Jest (backend) + Vitest (frontend) with 85%+ coverage
+*   **650+ Tests:** Vitest (backend + frontend) with 85%+ coverage
 
 ## Future Enhancements
 *   **Azure Blob Storage:** For storing media assets (images/videos) and menu files.

@@ -1,5 +1,5 @@
 
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 // --- Data Types & Seeds ---
 
@@ -141,10 +141,10 @@ class MockCollection {
     find(query: any) {
         const results = this.docs.filter(doc => this._matches(doc, query));
         return {
-            toArray: jest.fn(async () => results),
-            sort: jest.fn().mockReturnThis(),
-            limit: jest.fn().mockReturnThis(),
-            skip: jest.fn().mockReturnThis(),
+            toArray: vi.fn(async () => results),
+            sort: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            skip: vi.fn().mockReturnThis(),
         };
     }
 
@@ -257,17 +257,17 @@ export const sessionsCollection = new MockCollection('sessions', []);
 
 // --- Exports ---
 
-// Use jest.fn() wrapper to ensure tests can spy if they want, but delegate to instance
-export const getUsersCollection = jest.fn(() => usersCollection);
-export const getRestaurantsCollection = jest.fn(() => restaurantsCollection);
-export const getPostsCollection = jest.fn(() => postsCollection);
-export const getStrategyCyclesCollection = jest.fn(() => strategyCyclesCollection);
-export const getContentStrategiesCollection = jest.fn(() => contentStrategiesCollection);
-export const getSessionsCollection = jest.fn(() => sessionsCollection);
+// Use vi.fn() wrapper to ensure tests can spy if they want, but delegate to instance
+export const getUsersCollection = vi.fn(() => usersCollection);
+export const getRestaurantsCollection = vi.fn(() => restaurantsCollection);
+export const getPostsCollection = vi.fn(() => postsCollection);
+export const getStrategyCyclesCollection = vi.fn(() => strategyCyclesCollection);
+export const getContentStrategiesCollection = vi.fn(() => contentStrategiesCollection);
+export const getSessionsCollection = vi.fn(() => sessionsCollection);
 
-export const connectDB = jest.fn(async () => ({}));
-export const disconnectDB = jest.fn(async () => { });
-export const getDB = jest.fn(() => ({}));
+export const connectDB = vi.fn(async () => ({}));
+export const disconnectDB = vi.fn(async () => { });
+export const getDB = vi.fn(() => ({}));
 
 // Helper exports 
 export function toApiFormat(doc: any) {

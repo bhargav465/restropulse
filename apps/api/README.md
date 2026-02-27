@@ -22,7 +22,7 @@ This backend provides RESTful APIs and background services for:
 - **APIs**: Meta Graph API v18.0 (Instagram + Facebook)
 - **Auth**: JWT + Firebase Admin SDK
 - **Security**: AES-256-GCM token encryption
-- **Testing**: Jest 29 + ts-jest (ESM), 349 tests, 87.66% coverage
+- **Testing**: Vitest (ESM), 349 tests, 87.66% coverage
 - **Build Tool**: TSC (TypeScript Compiler)
 
 ## Getting Started
@@ -214,7 +214,7 @@ npm test
 npm run test:coverage
 
 # Run specific test file
-node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathPattern="posts" --runInBand
+npx vitest run --testPathPattern="posts"
 ```
 
 **Coverage Summary (349 tests, 14 suites):**

@@ -1,3 +1,4 @@
+// @ts-nocheck -- Template file: copy into an app directory before use
 /**
  * Integration Test Template -- Backend API Endpoints
  *
@@ -8,7 +9,7 @@
  * Usage:
  *   1. Copy this file to apps/api/tests/integration/your-route.test.ts
  *   2. Replace placeholders with actual routes and payloads
- *   3. Run: npx jest tests/integration/your-route.test.ts
+ *   3. Run: npx vitest run tests/integration/your-route.test.ts
  */
 
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -57,8 +58,8 @@ afterEach(async () => {
 
 // -- STEP 3: Mock auth middleware if needed -----------------------------------
 
-// jest.mock('../../src/services/auth.js', () => ({
-//   verifyToken: jest.fn().mockReturnValue({ userId: 'u1', role: 'OWNER' }),
+// vi.mock('../../src/services/auth.js', () => ({
+//   verifyToken: vi.fn().mockReturnValue({ userId: 'u1', role: 'OWNER' }),
 // }));
 
 // -- STEP 4: Write integration tests -----------------------------------------

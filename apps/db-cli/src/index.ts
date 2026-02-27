@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { config } from 'dotenv';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
+import { resolve } from 'path';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { setupCommand } from './commands/setup.js';
@@ -9,9 +9,17 @@ import { validateCommand } from './commands/validate.js';
 import { seedCommand } from './commands/seed.js';
 
 // Load .env from api app (single source of truth for MongoDB config)
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const backendEnvPath = resolve(__dirname, '../../api/.env');
-config({ path: backendEnvPath });
+const envCandidates = [
+    resolve(process.cwd(), 'apps/api/.env'),
+    resolve(process.cwd(), '../api/.env'),
+    resolve(process.cwd(), 'api/.env')
+];
+const backendEnvPath = envCandidates.find((path) => existsSync(path));
+if (backendEnvPath) {
+    config({ path: backendEnvPath });
+} else {
+    config();
+}
 
 const program = new Command();
 

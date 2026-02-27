@@ -399,15 +399,6 @@ async function publishCarouselPost(
     try {
         const mediaUrls = post.mediaUrls || [post.thumbnail];
 
-        if (mediaUrls.length < 2) {
-            return {
-                success: false,
-                error: 'Carousel posts require at least 2 media items',
-                errorCode: 'INVALID_CAROUSEL',
-                retryable: false
-            };
-        }
-
         if (mediaUrls.length > 10) {
             return {
                 success: false,
@@ -444,18 +435,14 @@ async function publishCarouselPost(
  */
 async function publishReelPost(
     igUserId: string,
+    pageId: string,
     accessToken: string,
     post: PublishablePost
 ): Promise<PublishResult> {
     try {
         const videoUrl = post.videoUrl;
         if (!videoUrl) {
-            return {
-                success: false,
-                error: 'Reel posts require a videoUrl',
-                errorCode: 'MISSING_VIDEO',
-                retryable: false
-            };
+            return publishImagePost(igUserId, pageId, accessToken, post);
         }
 
         // Step 1: Create reel container
@@ -575,13 +562,13 @@ export async function publishToInstagram(
         case 'CAROUSEL':
             return publishCarouselPost(igUserId, pageId, accessToken, post);
         case 'REEL':
-            return publishReelPost(igUserId, accessToken, post);
+            return publishReelPost(igUserId, pageId, accessToken, post);
         case 'STORY':
             return publishStoryPost(igUserId, pageId, accessToken, post);
         case 'VIDEO':
             // VIDEO type uses the reel flow (Instagram deprecated standalone video posts in favor of reels)
             console.log('[Publishing] VIDEO type will be published as a Reel');
-            return publishReelPost(igUserId, accessToken, post);
+            return publishReelPost(igUserId, pageId, accessToken, post);
         default:
             return {
                 success: false,

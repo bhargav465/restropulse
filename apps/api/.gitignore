@@ -5,6 +5,5 @@ dist/
 .DS_Store
 coverage/
 html/
-.jest-cache/
 *.test.js
 *.spec.js

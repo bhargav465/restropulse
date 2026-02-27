@@ -399,18 +399,6 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                     </div>
                 )}
 
-                {/* Missing Video Warning - show for REEL/STORY/VIDEO without videoUrl */}
-                {(post.type === 'REEL' || post.type === 'STORY' || post.type === 'VIDEO') && !post.videoUrl && tab === 'REVIEW' && (
-                    <div className="p-4 rounded-2xl bg-yellow-50 border border-yellow-200 flex gap-3 items-start">
-                        <AlertCircle size={18} className="text-yellow-600 mt-0.5 shrink-0" />
-                        <div className="flex-1">
-                            <p className="text-sm font-bold text-yellow-900 mb-1">Video content required</p>
-                            <p className="text-xs text-yellow-700">This {post.type.toLowerCase()} post needs a video file before it can be approved and published. Please upload the created video content.</p>
-                            <p className="text-xs text-yellow-600 mt-2 italic">Note: For now, use the backend API or database to add the videoUrl. UI upload feature coming soon.</p>
-                        </div>
-                    </div>
-                )}
-
                 {/* Actions - Review Tab */}
                 {tab === 'REVIEW' && (
                     post.status === 'CHANGES_REQUESTED' ? (

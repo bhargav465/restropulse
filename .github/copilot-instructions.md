@@ -52,10 +52,11 @@ packages/
 
 ### Testing
 - Frontend: Vitest + React Testing Library
-- Backend: Jest + mongodb-memory-server + supertest
+- Backend: Vitest + mongodb-memory-server + supertest
 - Tests go in `tests/` directory within each app
 - Unit tests in `tests/unit/`, integration in `tests/integration/`
 - Use `setDB()` from `@restropulse/db` for test database injection
+- Standard test scripts across app workspaces: `test`, `test:unit`, `test:coverage`
 
 ### Error Handling
 - API returns `{ success: boolean, data?: T, error?: string }` (ApiResponse type)
@@ -100,6 +101,8 @@ npm install              # Install all workspaces
 npm run dev              # Start all apps (Turborepo)
 npm run build            # Build all
 npm run test             # Test all
+npm run test:unit         # Run unit tests across workspaces
+npm run test:coverage     # Run coverage across workspaces
 npm run lint             # Lint all
 npm run type-check       # Type-check all
 npm run dev --filter=@restropulse/api   # Single app

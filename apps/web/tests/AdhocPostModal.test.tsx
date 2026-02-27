@@ -6,6 +6,7 @@ import AdhocPostModal from '../components/AdhocPostModal';
 vi.mock('../api', () => ({
     postsAPI: {
         create: vi.fn(),
+        generate: vi.fn(),
     },
 }));
 
@@ -17,6 +18,15 @@ describe('AdhocPostModal Component', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(postsAPI.generate).mockResolvedValue({
+            id: 'new-post-1',
+            type: 'IMAGE',
+            status: 'PENDING_APPROVAL',
+            thumbnail: '/api/placeholder/400/400',
+            caption: 'Test caption',
+            platform: 'INSTAGRAM',
+            isAdhoc: true,
+        });
         vi.mocked(postsAPI.create).mockResolvedValue({
             id: 'new-post-1',
             type: 'IMAGE',
@@ -291,7 +301,7 @@ describe('AdhocPostModal Component', () => {
     });
 
     describe('Form Submission', () => {
-        it('should call postsAPI.create with correct data for ASAP post (10 min from now)', async () => {
+        it('should call postsAPI.generate with correct data for ASAP post (10 min from now)', async () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -318,20 +328,17 @@ describe('AdhocPostModal Component', () => {
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                expect(postsAPI.create).toHaveBeenCalledTimes(1);
-                expect(postsAPI.create).toHaveBeenCalledWith(expect.objectContaining({
+                expect(postsAPI.generate).toHaveBeenCalledTimes(1);
+                expect(postsAPI.generate).toHaveBeenCalledWith(expect.objectContaining({
+                    concept: 'New brunch menu special',
                     type: 'REEL',
-                    status: 'PENDING_APPROVAL',
-                    caption: 'New brunch menu special',
                     platform: 'BOTH',
-                    restaurantId: 'r1',
                     scheduledFor: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
-                    thumbnail: expect.any(String),
                 }));
             });
         });
 
-        it('should call postsAPI.create with scheduledFor for scheduled post', async () => {
+        it('should call postsAPI.generate with scheduledFor for scheduled post', async () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -358,15 +365,12 @@ describe('AdhocPostModal Component', () => {
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                expect(postsAPI.create).toHaveBeenCalledTimes(1);
-                expect(postsAPI.create).toHaveBeenCalledWith(expect.objectContaining({
+                expect(postsAPI.generate).toHaveBeenCalledTimes(1);
+                expect(postsAPI.generate).toHaveBeenCalledWith(expect.objectContaining({
+                    concept: 'Weekend special announcement',
                     type: 'IMAGE',
-                    status: 'PENDING_APPROVAL',
-                    caption: 'Weekend special announcement',
                     platform: 'INSTAGRAM',
-                    restaurantId: 'r1',
                     scheduledFor: expect.stringContaining('2026-02-15'),
-                    thumbnail: expect.any(String),
                 }));
             });
         });
@@ -395,7 +399,7 @@ describe('AdhocPostModal Component', () => {
         });
 
         it('should show error message when API call fails', async () => {
-            vi.mocked(postsAPI.create).mockRejectedValueOnce(new Error('Network error'));
+            vi.mocked(postsAPI.generate).mockRejectedValueOnce(new Error('Network error'));
 
             render(
                 <AdhocPostModal
@@ -424,7 +428,7 @@ describe('AdhocPostModal Component', () => {
 
         it('should show loading state while submitting', async () => {
             // Make the API call take some time
-            vi.mocked(postsAPI.create).mockImplementation(
+            vi.mocked(postsAPI.generate).mockImplementation(
                 () => new Promise(resolve => setTimeout(() => resolve({
                     id: 'new-post-1',
                     type: 'IMAGE',
@@ -534,11 +538,9 @@ describe('AdhocPostModal Component', () => {
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                expect(postsAPI.create).toHaveBeenCalledWith(expect.objectContaining({
+                expect(postsAPI.generate).toHaveBeenCalledWith(expect.objectContaining({
                     type: 'CAROUSEL',
-                    restaurantId: 'r1',
-                    status: 'PENDING_APPROVAL',
-                    mediaUrls: expect.arrayContaining([expect.any(String)]),
+                    concept: 'Carousel post',
                 }));
             });
         });
@@ -573,18 +575,16 @@ describe('AdhocPostModal Component', () => {
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                expect(postsAPI.create).toHaveBeenCalledWith(expect.objectContaining({
+                expect(postsAPI.generate).toHaveBeenCalledWith(expect.objectContaining({
                     type: 'REEL',
-                    restaurantId: 'r1',
-                    status: 'PENDING_APPROVAL',
-                    videoUrl: expect.any(String),
+                    concept: 'Reel post',
                 }));
             });
         });
     });
 
     describe('Payload Completeness', () => {
-        it('should always include all required fields for publishing pipeline', async () => {
+        it('should always include all required fields for generate endpoint', async () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -593,7 +593,7 @@ describe('AdhocPostModal Component', () => {
                 />
             );
 
-            // Minimal interaction: just enter a caption and submit with defaults
+            // Minimal interaction: just enter a concept and submit with defaults
             fireEvent.change(screen.getByTestId('concept-input'), {
                 target: { value: 'Minimal post' }
             });
@@ -601,27 +601,22 @@ describe('AdhocPostModal Component', () => {
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                expect(postsAPI.create).toHaveBeenCalledTimes(1);
+                expect(postsAPI.generate).toHaveBeenCalledTimes(1);
             });
 
-            const payload = vi.mocked(postsAPI.create).mock.calls[0][0];
+            const payload = vi.mocked(postsAPI.generate).mock.calls[0][0];
 
-            // Every field the publishing pipeline depends on must be present
-            expect(payload).toHaveProperty('restaurantId', 'r1');
-            expect(payload).toHaveProperty('status', 'PENDING_APPROVAL');
+            // Every field the generate endpoint requires must be present
+            expect(payload).toHaveProperty('concept', 'Minimal post');
             expect(payload).toHaveProperty('type', 'IMAGE');
             expect(payload).toHaveProperty('platform', 'INSTAGRAM');
-            expect(payload).toHaveProperty('caption', 'Minimal post');
-            expect(payload).toHaveProperty('thumbnail');
-            expect(typeof payload.thumbnail).toBe('string');
-            expect(payload.thumbnail.length).toBeGreaterThan(0);
             expect(payload).toHaveProperty('scheduledFor');
             expect(typeof payload.scheduledFor).toBe('string');
             // scheduledFor should be a valid ISO date
             expect(new Date(payload.scheduledFor!).getTime()).not.toBeNaN();
         });
 
-        it('should never send undefined for restaurantId', async () => {
+        it('should never send undefined for concept', async () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -631,19 +626,19 @@ describe('AdhocPostModal Component', () => {
             );
 
             fireEvent.change(screen.getByTestId('concept-input'), {
-                target: { value: 'Test restaurantId' }
+                target: { value: 'Test concept value' }
             });
 
-            // Try both ASAP and scheduled paths
+            // Try ASAP path
             fireEvent.click(screen.getByTestId('schedule-now'));
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                const payload = vi.mocked(postsAPI.create).mock.calls[0][0];
-                expect(payload.restaurantId).toBe('r1');
-                expect(payload.restaurantId).not.toBeUndefined();
-                expect(payload.restaurantId).not.toBeNull();
-                expect(payload.restaurantId).not.toBe('');
+                const payload = vi.mocked(postsAPI.generate).mock.calls[0][0];
+                expect(payload.concept).toBe('Test concept value');
+                expect(payload.concept).not.toBeUndefined();
+                expect(payload.concept).not.toBeNull();
+                expect(payload.concept).not.toBe('');
             });
         });
 
@@ -664,7 +659,7 @@ describe('AdhocPostModal Component', () => {
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                const payload = vi.mocked(postsAPI.create).mock.calls[0][0];
+                const payload = vi.mocked(postsAPI.generate).mock.calls[0][0];
                 expect(payload.scheduledFor).toBeDefined();
                 expect(typeof payload.scheduledFor).toBe('string');
                 // Should be roughly 10 min from now (within 2-minute tolerance)
@@ -674,7 +669,7 @@ describe('AdhocPostModal Component', () => {
             });
         });
 
-        it('should set placeholder thumbnail when no media is uploaded', async () => {
+        it('should send concept text when no media is uploaded', async () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -690,8 +685,10 @@ describe('AdhocPostModal Component', () => {
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                const payload = vi.mocked(postsAPI.create).mock.calls[0][0];
-                expect(payload.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\/\d+\/400\/400$/);
+                const payload = vi.mocked(postsAPI.generate).mock.calls[0][0];
+                expect(payload.concept).toBe('No media post');
+                expect(payload.type).toBe('IMAGE');
+                expect(payload.platform).toBe('INSTAGRAM');
             });
         });
     });

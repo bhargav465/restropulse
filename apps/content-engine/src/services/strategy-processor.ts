@@ -15,6 +15,46 @@ import {
 import type { PostType } from '@restropulse/shared';
 import { generateContent, generateCycleContent } from './content-generator.js';
 
+export function parseDateOrFallback(value: unknown, fallback: Date): Date {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return new Date(fallback);
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date(fallback);
+  }
+
+  return parsed;
+}
+
+export function parseBestTime(value: unknown): { hours: number; minutes: number } {
+  if (typeof value !== 'string') {
+    return { hours: 10, minutes: 0 };
+  }
+
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) {
+    return { hours: 10, minutes: 0 };
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return { hours: 10, minutes: 0 };
+  }
+
+  return { hours, minutes };
+}
+
 /**
  * Process approved strategy cycles that need content generated.
  * Looks for cycles with status APPROVED that don't yet have posts linked.
@@ -54,10 +94,14 @@ export async function processApprovedCycles(): Promise<{ processed: number; fail
       const themes = cycleDoc.focus || ['Food & Menu', 'Offers', 'Behind the Scenes'];
       const contentTypes: PostType[] = ['IMAGE', 'CAROUSEL', 'REEL'];
 
+      const now = new Date();
+      const safeStartDate = parseDateOrFallback(cycleDoc.startDate, now);
+      const safeEndDate = parseDateOrFallback(cycleDoc.endDate, safeStartDate);
+
       // Generate content for the cycle
       const contents = await generateCycleContent({
-        startDate: cycleDoc.startDate,
-        endDate: cycleDoc.endDate,
+        startDate: safeStartDate.toISOString(),
+        endDate: safeEndDate.toISOString(),
         postsPerWeek,
         themes,
         contentTypes,
@@ -65,7 +109,7 @@ export async function processApprovedCycles(): Promise<{ processed: number; fail
       });
 
       // Calculate posting schedule
-      const start = new Date(cycleDoc.startDate);
+      const start = new Date(safeStartDate);
       const daysBetweenPosts = Math.floor(7 / postsPerWeek);
 
       // Create posts in the database
@@ -75,8 +119,9 @@ export async function processApprovedCycles(): Promise<{ processed: number; fail
         postDate.setDate(postDate.getDate() + i * daysBetweenPosts);
 
         // Set posting time to strategy's bestTime or default 10:00 AM
-        const bestTime = strategy?.bestTime || '10:00';
-        const [hours, minutes] = bestTime.split(':').map(Number);
+        const bestTime = parseBestTime(strategy?.bestTime);
+        const hours = bestTime.hours;
+        const minutes = bestTime.minutes;
         postDate.setHours(hours, minutes, 0, 0);
 
         const type = contentTypes[i % contentTypes.length];

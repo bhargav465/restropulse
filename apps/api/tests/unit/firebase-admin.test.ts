@@ -162,7 +162,7 @@ describe('Firebase Admin Service', () => {
         });
 
         it('should return null on error', async () => {
-            (mockGetUser as jest.Mock<any>).mockRejectedValue(new Error('Ooops'));
+            (mockGetUser as Mock<any>).mockRejectedValue(new Error('Ooops'));
             const result = await firebaseService.getFirebaseUser('u1');
             expect(result).toBeNull();
         });

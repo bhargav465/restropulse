@@ -1,3 +1,4 @@
+// @ts-nocheck -- Template file: copy into an app directory before use
 /**
  * Unit Test Template -- Backend
  *
@@ -8,26 +9,28 @@
  * Usage:
  *   1. Copy this file to apps/api/tests/unit/your-service.test.ts
  *   2. Replace placeholders with actual service imports and test cases
- *   3. Run: npx jest tests/unit/your-service.test.ts
+ *   3. Run: npx vitest run tests/unit/your-service.test.ts
  */
 
-// -- STEP 1: Mock dependencies BEFORE importing the module under test --------
-// Jest hoists jest.mock() calls, so they run before imports.
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-jest.mock('../../src/db/connection.js', () => ({
-  getDB: jest.fn().mockReturnValue({
-    collection: jest.fn().mockReturnValue({
-      findOne: jest.fn(),
-      find: jest.fn().mockReturnValue({
-        sort: jest.fn().mockReturnValue({
-          limit: jest.fn().mockReturnValue({
-            toArray: jest.fn().mockResolvedValue([]),
+// -- STEP 1: Mock dependencies BEFORE importing the module under test --------
+// Vitest hoists vi.mock() calls, so they run before imports.
+
+vi.mock('../../src/db/connection.js', () => ({
+  getDB: vi.fn().mockReturnValue({
+    collection: vi.fn().mockReturnValue({
+      findOne: vi.fn(),
+      find: vi.fn().mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          limit: vi.fn().mockReturnValue({
+            toArray: vi.fn().mockResolvedValue([]),
           }),
         }),
       }),
-      insertOne: jest.fn(),
-      updateOne: jest.fn(),
-      deleteOne: jest.fn(),
+      insertOne: vi.fn(),
+      updateOne: vi.fn(),
+      deleteOne: vi.fn(),
     }),
   }),
 }));
@@ -42,14 +45,14 @@ jest.mock('../../src/db/connection.js', () => ({
 describe('YourService', () => {
   // Clean up mocks between tests to prevent state leaking
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('yourFunction', () => {
     it('should return expected result for valid input', async () => {
       // Arrange: Set up mock return values
       // const mockCollection = getDB().collection('yourCollection');
-      // (mockCollection.findOne as jest.Mock).mockResolvedValue({ _id: '1', name: 'test' });
+      // (mockCollection.findOne as vi.Mock).mockResolvedValue({ _id: '1', name: 'test' });
 
       // Act: Call the function under test
       // const result = await yourFunction('1');
@@ -62,7 +65,7 @@ describe('YourService', () => {
 
     it('should handle not-found case', async () => {
       // Arrange: Mock returns null
-      // (mockCollection.findOne as jest.Mock).mockResolvedValue(null);
+      // (mockCollection.findOne as vi.Mock).mockResolvedValue(null);
 
       // Act & Assert
       // const result = await yourFunction('nonexistent');

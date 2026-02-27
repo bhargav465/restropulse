@@ -128,7 +128,7 @@ describe('Posts Module', () => {
 
                 const results = await actualPostsDb.findPostsByStatus('SCHEDULED');
                 expect(results).toHaveLength(2);
-                const ids = results.map(r => r.id);
+                const ids = results.map((r: any) => r.id);
                 expect(ids).toContain('p5');
                 expect(ids).toContain('p6');
             });
@@ -865,6 +865,193 @@ describe('Posts Module', () => {
 
                 expect(response.status).toBe(500);
                 expect(response.body.success).toBe(false);
+            });
+        });
+
+        describe('POST /api/posts/generate', () => {
+            it('should return 400 when concept is missing', async () => {
+                const response = await request(app)
+                    .post('/api/posts/generate')
+                    .send({ type: 'IMAGE' });
+
+                expect(response.status).toBe(400);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Concept/description is required');
+            });
+
+            it('should return 400 when type is missing', async () => {
+                const response = await request(app)
+                    .post('/api/posts/generate')
+                    .send({ concept: 'Weekend offer post' });
+
+                expect(response.status).toBe(400);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Post type is required');
+            });
+
+            it('should generate IMAGE post with defaults', async () => {
+                const response = await request(app)
+                    .post('/api/posts/generate')
+                    .send({ concept: 'New lunch combo launch', type: 'IMAGE' });
+
+                expect(response.status).toBe(201);
+                expect(response.body.success).toBe(true);
+                expect(response.body.data.type).toBe('IMAGE');
+                expect(response.body.data.platform).toBe('INSTAGRAM');
+                expect(response.body.data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\//);
+                expect(response.body.data.videoUrl).toBeUndefined();
+                expect(response.body.data.mediaUrls).toBeUndefined();
+                expect(response.body.data.status).toBe('PENDING_APPROVAL');
+                expect(response.body.data.isAdhoc).toBe(true);
+            });
+
+            it('should generate VIDEO post with videoUrl', async () => {
+                const response = await request(app)
+                    .post('/api/posts/generate')
+                    .send({ concept: 'Chef making signature dish', type: 'VIDEO', platform: 'BOTH' });
+
+                expect(response.status).toBe(201);
+                expect(response.body.success).toBe(true);
+                expect(response.body.data.type).toBe('VIDEO');
+                expect(response.body.data.platform).toBe('BOTH');
+                expect(response.body.data.videoUrl).toMatch(/^https:\/\/sample-videos\.com\//);
+                expect(response.body.data.mediaUrls).toBeUndefined();
+            });
+
+            it('should generate CAROUSEL post with mediaUrls', async () => {
+                const response = await request(app)
+                    .post('/api/posts/generate')
+                    .send({ concept: 'Top 3 dishes this week', type: 'CAROUSEL' });
+
+                expect(response.status).toBe(201);
+                expect(response.body.success).toBe(true);
+                expect(response.body.data.type).toBe('CAROUSEL');
+                expect(response.body.data.mediaUrls).toHaveLength(3);
+                expect(Array.isArray(response.body.data.mediaUrls)).toBe(true);
+                expect(response.body.data.videoUrl).toBeUndefined();
+            });
+
+            it('should handle internal error while generating', async () => {
+                mockCreatePost.mockRejectedValueOnce(new Error('Generate failed'));
+
+                const response = await request(app)
+                    .post('/api/posts/generate')
+                    .send({ concept: 'Promo post', type: 'IMAGE' });
+
+                expect(response.status).toBe(500);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Internal server error');
+            });
+        });
+
+        describe('POST /api/posts/:id/test-publish', () => {
+            it('should return 404 when post is not found', async () => {
+                const response = await request(app).post('/api/posts/non-existent/test-publish');
+
+                expect(response.status).toBe(404);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Post not found');
+            });
+
+            it('should return 400 when post has no restaurantId', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'test-pub-no-rest',
+                    type: 'IMAGE',
+                    caption: 'No restaurant',
+                    thumbnail: 'https://example.com/img.jpg',
+                    platform: 'INSTAGRAM'
+                } as any);
+
+                const response = await request(app).post('/api/posts/test-pub-no-rest/test-publish');
+
+                expect(response.status).toBe(400);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Post has no restaurantId');
+            });
+
+            it('should return 400 when Instagram is not connected', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'test-pub-no-ig',
+                    type: 'IMAGE',
+                    caption: 'No IG creds',
+                    thumbnail: 'https://example.com/img.jpg',
+                    platform: 'INSTAGRAM',
+                    restaurantId: 'r-no-ig'
+                } as any);
+
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({ _id: 'r-no-ig', name: 'No IG' } as any);
+
+                const response = await request(app).post('/api/posts/test-pub-no-ig/test-publish');
+
+                expect(response.status).toBe(400);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Instagram not connected');
+            });
+
+            it('should run diagnostic publish successfully', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'test-pub-ok',
+                    type: 'IMAGE',
+                    caption: 'Diagnostic publish',
+                    thumbnail: 'https://example.com/img.jpg',
+                    platform: 'INSTAGRAM',
+                    restaurantId: 'r-test-ok'
+                } as any);
+
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({
+                    _id: 'r-test-ok',
+                    instagramCredentials: {
+                        userId: 'ig-user',
+                        pageId: 'fb-page',
+                        accessToken: 'enc-token'
+                    }
+                } as any);
+
+                mockPublishPost.mockResolvedValueOnce({
+                    instagram: { success: true, instagramMediaId: 'ig-123', retryable: false }
+                });
+
+                const response = await request(app).post('/api/posts/test-pub-ok/test-publish');
+
+                expect(response.status).toBe(200);
+                expect(response.body.success).toBe(true);
+                expect(response.body.message).toContain('Diagnostic publish complete');
+                expect(response.body.results.instagram.success).toBe(true);
+            });
+
+            it('should return 500 when diagnostic publish throws', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'test-pub-err',
+                    type: 'IMAGE',
+                    caption: 'Diagnostic publish error',
+                    thumbnail: 'https://example.com/img.jpg',
+                    platform: 'INSTAGRAM',
+                    restaurantId: 'r-test-err'
+                } as any);
+
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({
+                    _id: 'r-test-err',
+                    instagramCredentials: {
+                        userId: 'ig-user',
+                        pageId: 'fb-page',
+                        accessToken: 'enc-token'
+                    }
+                } as any);
+
+                mockPublishPost.mockRejectedValueOnce(new Error('Diagnostic failure'));
+
+                const response = await request(app).post('/api/posts/test-pub-err/test-publish');
+
+                expect(response.status).toBe(500);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toBe('Diagnostic failure');
             });
         });
 

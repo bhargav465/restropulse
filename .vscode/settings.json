@@ -35,5 +35,6 @@
     // Terminal settings
     "terminal.integrated.env.windows": {
         "PYTHONPATH": "${workspaceFolder}/whatsappbusinessapi-bot"
-    }
+    },
+    "postman.settings.dotenv-detection-notification-visibility": false
 }

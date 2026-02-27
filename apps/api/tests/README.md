@@ -22,7 +22,7 @@ Comprehensive test coverage for RestroPulse Backend API.
 #### mongodb-memory-server Attempt
 
 We tried using `mongodb-memory-server` for true isolation but encountered:
-- Jest ESM (`--experimental-vm-modules`) incompatibility
+- Vitest ESM module resolution issues
 - Module resolution conflicts with bundled MongoDB driver
 - TypeScript source/compiled file conflicts
 
@@ -223,7 +223,7 @@ npm run test:integration
 
 ### Unit Test Template
 ```typescript
-import { describe, test, expect } from '@jest/globals';
+import { describe, test, expect } from 'vitest';
 import request from 'supertest';
 import { createTestApp } from '../helpers/testHelper.js';
 
@@ -284,7 +284,7 @@ These tests are designed to run in CI/CD pipelines:
 ## Troubleshooting
 
 ### Tests Timeout
-- Increase timeout in jest.config.js
+- Increase timeout in vitest.config.ts
 - Check for async operations without await
 
 ### Tests Fail Randomly

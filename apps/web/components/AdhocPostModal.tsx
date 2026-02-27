@@ -262,21 +262,16 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                     {/* Media Upload */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">
-                            Media {(formData.postType === 'REEL' || formData.postType === 'STORY' || formData.postType === 'VIDEO' || formData.postType === 'CAROUSEL') && (
-                                <span className="text-red-500">*</span>
-                            )}
-                            {(formData.postType === 'IMAGE') && (
-                                <span className="text-slate-400 font-normal">(Optional)</span>
-                            )}
+                            Media <span className="text-slate-400 font-normal">(Optional)</span>
                         </label>
                         {(formData.postType === 'REEL' || formData.postType === 'STORY' || formData.postType === 'VIDEO') && (
                             <p className="text-xs text-orange-600 mb-2">
-                                {formData.postType === 'REEL' ? 'Reels' : formData.postType === 'STORY' ? 'Stories' : 'Videos'} require a video file
+                                {formData.postType === 'REEL' ? 'Reels' : formData.postType === 'STORY' ? 'Stories' : 'Videos'} can include a video file if available
                             </p>
                         )}
                         {formData.postType === 'CAROUSEL' && (
                             <p className="text-xs text-orange-600 mb-2">
-                                Carousels require at least one image
+                                Carousels can include multiple images if available
                             </p>
                         )}
                         <input

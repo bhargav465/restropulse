@@ -1,3 +1,4 @@
+// @ts-nocheck -- Template file: copy into an app directory before use
 /**
  * Component Test Template -- Frontend React Components
  *

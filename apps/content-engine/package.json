@@ -10,6 +10,9 @@
     "build": "tsc",
     "start": "node dist/worker.js",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:coverage": "vitest run --coverage",
     "clean": "rimraf dist"
   },
   "dependencies": {
@@ -19,9 +22,11 @@
     "node-cron": "^4.2.1"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
     "@types/node": "^22.14.0",
     "@types/node-cron": "^3.0.11",
     "tsx": "^4.7.0",
-    "typescript": "~5.8.2"
+    "typescript": "~5.8.2",
+    "vitest": "^4.0.18"
   }
 }

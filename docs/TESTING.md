@@ -7,9 +7,9 @@ RestroPulse uses different testing frameworks depending on the app:
 | App        | Framework   | Config          | Coverage Target |
 |------------|-------------|-----------------|-----------------|
 | apps/web   | Vitest      | vite.config.ts  | 85%+            |
-| apps/api   | Jest        | jest.config.js  | 85%+            |
-| apps/publisher | (planned) | jest.config.js | 80%+ |
-| apps/content-engine | (planned) | jest.config.js | 80%+ |
+| apps/api   | Vitest      | vitest.config.ts  | 85%+            |
+| apps/publisher | (planned) | vitest.config.ts | 80%+ |
+| apps/content-engine | (planned) | vitest.config.ts | 80%+ |
 
 ## Running Tests
 
@@ -23,7 +23,7 @@ npm run test --filter=@restropulse/api
 
 # Run with coverage
 cd apps/web && npx vitest run --coverage
-cd apps/api && npx jest --coverage
+cd apps/api && npx vitest run --coverage
 ```
 
 ## Frontend Testing (apps/web)
@@ -80,7 +80,7 @@ describe('MyComponent', () => {
 
 ### Stack
 
-- **Jest** -- test runner
+- **Vitest** -- test runner
 - **mongodb-memory-server** -- in-memory MongoDB for integration tests
 - **supertest** -- HTTP assertion library
 

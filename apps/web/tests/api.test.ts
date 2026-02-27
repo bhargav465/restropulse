@@ -208,6 +208,61 @@ describe('API Service', () => {
 
             await expect(instagramAPI.disconnect('r1')).resolves.not.toThrow();
         });
+
+        it('should return true on refresh token success', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true }),
+            });
+
+            const refreshed = await instagramAPI.refreshToken('r1');
+            expect(refreshed).toBe(true);
+        });
+
+        it('should return false on refresh token failure', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: false,
+                status: 500,
+                json: async () => ({ message: 'Failed refresh' }),
+            });
+
+            const refreshed = await instagramAPI.refreshToken('r1');
+            expect(refreshed).toBe(false);
+        });
+
+        it('should validate connection', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { valid: true, needsReauthorization: false },
+                }),
+            });
+
+            const result = await instagramAPI.validate('r1');
+            expect(result.valid).toBe(true);
+            expect(result.needsReauthorization).toBe(false);
+        });
+
+        it('should get profile', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { username: 'restro_ig' } }),
+            });
+
+            const result = await instagramAPI.getProfile('r1');
+            expect(result.username).toBe('restro_ig');
+        });
+
+        it('should get config', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { instagram: { configured: true } } }),
+            });
+
+            const config = await instagramAPI.getConfig();
+            expect(config.instagram.configured).toBe(true);
+        });
     });
 
     describe('restaurantAPI', () => {
@@ -286,6 +341,38 @@ describe('API Service', () => {
             expect(result.caption).toBe('New post');
         });
 
+        it('should get post by id', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { id: 'p1', caption: 'One post' } }),
+            });
+
+            const result = await postsAPI.getById('p1');
+            expect(result.id).toBe('p1');
+        });
+
+        it('should generate a new post', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { id: 'pgen1', caption: 'Promo post', type: 'IMAGE', platform: 'INSTAGRAM' },
+                }),
+            });
+
+            const result = await postsAPI.generate({
+                concept: 'Promo post',
+                type: 'IMAGE',
+                platform: 'INSTAGRAM',
+            });
+
+            expect(result.id).toBe('pgen1');
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/posts/generate'),
+                expect.objectContaining({ method: 'POST' })
+            );
+        });
+
         it('should update a post', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -343,6 +430,78 @@ describe('API Service', () => {
     });
 
     describe('Error Handling', () => {
+        it('should refresh token and retry original request on 401', async () => {
+            localStorage.setItem('rp_token', 'expired-token');
+            localStorage.setItem('rp_refresh_token', 'refresh-token-1');
+
+            // 1) Original request unauthorized
+            mockFetch.mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                json: async () => ({ message: 'Unauthorized' }),
+            });
+
+            // 2) Refresh endpoint success
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, token: 'new-token-after-refresh' }),
+            });
+
+            // 3) Retried original request success
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { id: 'r1', name: 'Retried Restaurant' } }),
+            });
+
+            const result = await restaurantAPI.get('r1');
+
+            expect(result.name).toBe('Retried Restaurant');
+            expect(localStorage.getItem('rp_token')).toBe('new-token-after-refresh');
+            expect(mockFetch).toHaveBeenCalledTimes(3);
+        });
+
+        it('should clear tokens when refresh fails after 401', async () => {
+            localStorage.setItem('rp_token', 'expired-token');
+            localStorage.setItem('rp_refresh_token', 'bad-refresh-token');
+            localStorage.setItem('rp_session', 'session-data');
+
+            // 1) Original request unauthorized
+            mockFetch.mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                json: async () => ({ message: 'Unauthorized' }),
+            });
+
+            // 2) Refresh endpoint fails
+            mockFetch.mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                json: async () => ({ message: 'Refresh failed' }),
+            });
+
+            await expect(restaurantAPI.get('r1')).rejects.toThrow('Unauthorized');
+
+            expect(localStorage.getItem('rp_token')).toBeNull();
+            expect(localStorage.getItem('rp_refresh_token')).toBeNull();
+            expect(localStorage.getItem('rp_session')).toBeNull();
+        });
+
+        it('should clear tokens on 401 when no refresh token exists', async () => {
+            localStorage.setItem('rp_token', 'expired-token');
+            localStorage.setItem('rp_session', 'session-data');
+
+            mockFetch.mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                json: async () => ({ message: 'Unauthorized' }),
+            });
+
+            await expect(restaurantAPI.get('r1')).rejects.toThrow('Unauthorized');
+
+            expect(localStorage.getItem('rp_token')).toBeNull();
+            expect(localStorage.getItem('rp_session')).toBeNull();
+        });
+
         it('should handle network errors', async () => {
             mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
