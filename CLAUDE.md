@@ -1,4 +1,4 @@
-# RestroPulse - Copilot Instructions
+# RestroPulse - Claude Code Instructions
 
 ## Self-Update Directive
 
@@ -18,6 +18,8 @@ Always keep this file accurate and up to date with the codebase.
 
 RestroPulse is a social media management platform for restaurants. It is a Turborepo monorepo with npm workspaces.
 
+See @README.md for the full project introduction.
+
 ## Monorepo Layout
 
 ```
@@ -33,15 +35,6 @@ packages/
   tsconfig/         Shared tsconfig presets (base, react, node)
   eslint-config/    Shared ESLint flat config
 ```
-
-### AI Assistant Config Files
-
-| File | Purpose |
-|------|---------|
-| `.vscode/mcp.json` | MCP server definitions for VS Code Copilot (JSONC) |
-| `.mcp.json` | MCP server definitions for Claude Code CLI + extension (JSON) |
-| `.github/copilot-instructions.md` | Project instructions for VS Code Copilot |
-| `CLAUDE.md` | Project instructions for Claude Code |
 
 ## Key Conventions
 
@@ -67,13 +60,15 @@ packages/
 - Use `setDB()` from `@restropulse/db` for test database injection
 - Standard test scripts across app workspaces: `test`, `test:unit`, `test:coverage`
 
+See @docs/TESTING.md for the full testing stack, conventions, and examples.
+
 ### Error Handling
 - API returns `{ success: boolean, data?: T, error?: string }` (ApiResponse type)
 - HTTP status codes: 200 (success), 201 (created), 400 (bad request), 401 (unauthorized), 404 (not found), 500 (server error)
 - All async route handlers must catch errors and return proper ApiResponse
 
 ### No Special Characters
-- Do not use special characters like [, !, etc.] emoji in code, documentation, print statements, or logs
+- Do not use special characters like emoji in code, documentation, print statements, or logs
 - Use plain text indicators instead
 
 ## Database
@@ -100,8 +95,9 @@ packages/
 ## Environment
 
 - Each app has its own `.env` file
-- See `docs/INFRASTRUCTURE.md` for the full list of environment variables per app
 - Critical shared vars: MONGODB_URI, ENCRYPTION_KEY, META_APP_ID, META_APP_SECRET
+
+See @docs/INFRASTRUCTURE.md for the full list of environment variables per app.
 
 ## Common Commands
 
@@ -110,8 +106,8 @@ npm install              # Install all workspaces
 npm run dev              # Start all apps (Turborepo)
 npm run build            # Build all
 npm run test             # Test all
-npm run test:unit         # Run unit tests across workspaces
-npm run test:coverage     # Run coverage across workspaces
+npm run test:unit        # Run unit tests across workspaces
+npm run test:coverage    # Run coverage across workspaces
 npm run lint             # Lint all
 npm run type-check       # Type-check all
 npm run dev --filter=@restropulse/api   # Single app
@@ -119,10 +115,11 @@ npm run dev --filter=@restropulse/api   # Single app
 
 ## MCP Tool-Routing Rules
 
-Three MCP servers provide non-overlapping context layers. Follow these rules
-to prevent redundant or conflicting retrieval:
+Three MCP servers are configured in `.mcp.json` (project root) as a
+non-overlapping 3-layer context stack. Follow these rules to prevent
+redundant or conflicting retrieval:
 
-1. **Semantic Search (`codebase-rag`)** -- Use ONLY for high-level discovery
+1. **Semantic Search (`semantic-search`)** -- Use ONLY for high-level discovery
    ("where is the feature that handles X?"). Never use it for type lookups or
    reading final file content.
 2. **Logic / Navigation (`lsp-*`)** -- Use for jump-to-definition, find
@@ -132,13 +129,13 @@ to prevent redundant or conflicting retrieval:
    decisions, conventions, and user preferences. Never store code snippets or
    type information here.
 4. **Filesystem tools** -- Use for reading/writing actual file content. Do not
-   use `codebase-rag` to read files.
+   use `semantic-search` to read files.
 
-Full setup details: `docs/MCP-SETUP.md`
+See @docs/MCP-SETUP.md for full setup details and troubleshooting.
 
 ## Architecture Docs
 
-- `docs/ARCHITECTURE.md` -- System overview, data flows, component diagram
-- `docs/INFRASTRUCTURE.md` -- Env vars, ports, cron schedules, external services
-- `docs/TESTING.md` -- Testing stack, conventions, examples
-- `docs/MCP-SETUP.md` -- MCP server configuration, tool-routing rules, troubleshooting
+- @docs/ARCHITECTURE.md -- System overview, data flows, component diagram
+- @docs/INFRASTRUCTURE.md -- Env vars, ports, cron schedules, external services
+- @docs/TESTING.md -- Testing stack, conventions, examples
+- @docs/MCP-SETUP.md -- MCP server configuration, tool-routing rules, troubleshooting

@@ -52,10 +52,18 @@ typescript-language-server --version
 mcp-language-server --help
 ```
 
-## Configuration File
+## Configuration Files
 
-All servers are declared in `.vscode/mcp.json`. Open the file for the full
-JSONC config with inline comments explaining each entry.
+Two configuration files define the same set of MCP servers for different AI
+assistants. Both are committed to git and share the same server topology.
+
+| File | Consumer | Format | Variable Syntax |
+|------|----------|--------|-----------------|
+| `.vscode/mcp.json` | VS Code Copilot | JSONC (comments allowed) | `${workspaceFolder}`, `${userHome}` |
+| `.mcp.json` (project root) | Claude Code CLI + VS Code Extension | Strict JSON | `${USERPROFILE}` (Windows) / `${HOME}` (Unix) |
+
+Open either file for the full config. The inline comments in `.vscode/mcp.json`
+explain each entry.
 
 ### Semantic Search (`semantic-search`)
 
@@ -94,8 +102,9 @@ resolution.
 
 ## Tool-Routing Rules
 
-These rules prevent overlap between the three layers. They are also codified in
-`.github/copilot-instructions.md` so every AI assistant session respects them.
+These rules prevent overlap between the three layers. They are codified in both
+`.github/copilot-instructions.md` (for Copilot) and `CLAUDE.md` (for Claude
+Code) so every AI assistant session respects them.
 
 | Task | Primary | Secondary | Never Use |
 |------|---------|-----------|-----------|
@@ -116,6 +125,20 @@ watchers, and AI indexing aligned on the same noise-free subset.
 Excluded paths: `node_modules`, `dist`, `.turbo`, `coverage`, `html`,
 `public/mockdata`, `assets/videos`, `assets/images`, `package-lock.json`.
 
+## Claude Code Setup
+
+Claude Code (the CLI and its VS Code extension) reads `.mcp.json` at the
+project root. It does **not** read `.vscode/mcp.json`.
+
+- **Instructions file**: `CLAUDE.md` at the project root -- equivalent to
+  `.github/copilot-instructions.md` for Copilot. Uses `@path` imports to
+  reference docs instead of duplicating content.
+- **Personal overrides**: Create `CLAUDE.local.md` for personal preferences.
+  It is gitignored automatically.
+- **Cross-platform paths**: The `.mcp.json` uses `${USERPROFILE}` for the
+  bun/codebase-rag path (Windows). On macOS/Linux, change this to `${HOME}`.
+- **Verify servers**: Run `claude mcp list` from the project root.
+
 ## Troubleshooting
 
 - **LSP not starting**: Ensure `typescript-language-server` and
@@ -128,3 +151,8 @@ Excluded paths: `node_modules`, `dist`, `.turbo`, `coverage`, `html`,
 - **Cross-package types not resolving**: Confirm that the app's `tsconfig.json`
   has correct `paths` or that `@restropulse/shared` resolves via
   `node_modules` workspace symlinks.
+- **Claude Code not finding servers**: Ensure you are running `claude` from the
+  project root where `.mcp.json` lives. Run `claude mcp list` to verify.
+- **npx errors in monorepo**: The `project-memory` server uses a globally
+  installed `mcp-server-memory` binary to avoid npm arborist bugs with `npx`
+  in monorepos. Install it with `npm i -g @modelcontextprotocol/server-memory`.
