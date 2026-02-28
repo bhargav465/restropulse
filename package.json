@@ -16,7 +16,9 @@
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "clean": "turbo clean && rimraf node_modules",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "setup:mcp": "node scripts/setup-mcp.mjs",
+    "reindex": "node scripts/reindex-rag.mjs"
   },
   "devDependencies": {
     "prettier": "^3.2.0",

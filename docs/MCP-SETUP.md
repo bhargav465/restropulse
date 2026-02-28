@@ -1,0 +1,130 @@
+# MCP Server Configuration
+
+RestroPulse uses three Model Context Protocol (MCP) servers arranged as a
+non-redundant **3-layer context stack**. Each layer has a distinct role and
+strict scope so the AI assistant never receives conflicting or duplicate data.
+
+## Layer Overview
+
+| Layer | Server | Role | Scope |
+|-------|--------|------|-------|
+| Semantic Search | `codebase-rag` | Find files by *intent*, not just name | `apps/*/src`, `packages/*/src`, `docs/`, READMEs |
+| Logic / Navigation | `mcp-language-server` | Type-aware jump-to-definition, references, diagnostics | One instance per app/package boundary |
+| Knowledge / Memory | `@modelcontextprotocol/server-memory` | Persist architecture decisions, conventions, preferences | Decision-only -- never code snippets |
+
+## Prerequisites (one-time)
+
+The fastest way to check and install everything is the automated setup script:
+
+```bash
+# Interactive -- checks all tools then prompts to install missing ones
+npm run setup:mcp
+
+# Auto-install without prompts
+node scripts/setup-mcp.mjs --install
+
+# Check only (CI-friendly, exits 1 if anything is missing)
+node scripts/setup-mcp.mjs --check
+```
+
+The script handles:
+
+| Tool | How it installs |
+|------|-----------------|
+| Go (>= 1.21) | winget / Chocolatey (Windows) or Homebrew (macOS/Linux) |
+| typescript | `npm install -g typescript` |
+| typescript-language-server | `npm install -g typescript-language-server` |
+| mcp-language-server | `go install github.com/isaacphi/mcp-language-server@latest` |
+| codebase-rag | Fetched automatically via `npx -y` at runtime |
+| @modelcontextprotocol/server-memory | Fetched automatically via `npx -y` at runtime |
+
+If you prefer to install manually:
+
+```bash
+npm install -g typescript typescript-language-server
+go install github.com/isaacphi/mcp-language-server@latest
+```
+
+Verify both are on your PATH:
+
+```bash
+typescript-language-server --version
+mcp-language-server --help
+```
+
+## Configuration File
+
+All servers are declared in `.vscode/mcp.json`. Open the file for the full
+JSONC config with inline comments explaining each entry.
+
+### Semantic Search (`semantic-search`)
+
+- Runs `codebase-rag` against the workspace root.
+- Respects `.gitignore` by default.
+- Additional excludes via `CODEBASE_RAG_EXCLUDE` env var keep `coverage/`,
+  `html/`, `public/mockdata`, media assets, and lock files out of the index.
+
+### Logic / Navigation (`lsp-*`)
+
+Six scoped instances, one per workspace boundary:
+
+| Server ID | Workspace |
+|-----------|-----------|
+| `lsp-web` | `apps/web` |
+| `lsp-api` | `apps/api` |
+| `lsp-publisher` | `apps/publisher` |
+| `lsp-content-engine` | `apps/content-engine` |
+| `lsp-shared` | `packages/shared` |
+| `lsp-db` | `packages/db` |
+
+Each instance runs `typescript-language-server` through the
+`mcp-language-server` bridge, scoped to its own `tsconfig.json`. This keeps
+the TypeScript program graph small and fast.
+
+Cross-package type resolution works because each app's `tsconfig.json` already
+maps `@restropulse/shared` and `@restropulse/db` via paths or workspace
+resolution.
+
+### Knowledge / Memory (`project-memory`)
+
+- Stores only **decisions, conventions, and preferences**.
+- Does NOT store code snippets (that is RAG's job) or type information
+  (that is LSP's job).
+- Periodically ask the AI to "summarize project memory" and prune stale nodes.
+
+## Tool-Routing Rules
+
+These rules prevent overlap between the three layers. They are also codified in
+`.github/copilot-instructions.md` so every AI assistant session respects them.
+
+| Task | Primary | Secondary | Never Use |
+|------|---------|-----------|-----------|
+| "Where is the feature that does X?" | `codebase-rag` | -- | `project-memory` |
+| Jump to definition / find references | `lsp-*` | -- | `codebase-rag` |
+| Type errors or diagnostics | `lsp-*` | -- | `codebase-rag` |
+| Refactor a symbol across files | `lsp-*` | `codebase-rag` (impact search) | -- |
+| "What convention do we use for X?" | `project-memory` | -- | `codebase-rag` |
+| Debugging a logic error | `lsp-*` | `project-memory` (past context) | -- |
+| Reading/writing file contents | Filesystem tools | -- | `codebase-rag` |
+
+## Index Hygiene
+
+`.vscode/settings.json` defines `search.exclude` and `files.watcherExclude`
+entries that mirror the RAG exclude list. This keeps VS Code search, file
+watchers, and AI indexing aligned on the same noise-free subset.
+
+Excluded paths: `node_modules`, `dist`, `.turbo`, `coverage`, `html`,
+`public/mockdata`, `assets/videos`, `assets/images`, `package-lock.json`.
+
+## Troubleshooting
+
+- **LSP not starting**: Ensure `typescript-language-server` and
+  `mcp-language-server` are on PATH. Run `typescript-language-server --version`
+  to confirm.
+- **RAG indexing too slow**: Check that `.gitignore` is up to date and
+  `CODEBASE_RAG_EXCLUDE` covers large generated folders.
+- **Memory bloat**: Ask the AI to list all memory nodes and delete outdated
+  entries.
+- **Cross-package types not resolving**: Confirm that the app's `tsconfig.json`
+  has correct `paths` or that `@restropulse/shared` resolves via
+  `node_modules` workspace symlinks.

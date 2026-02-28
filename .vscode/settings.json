@@ -20,7 +20,23 @@
     "files.watcherExclude": {
         "**/venv/**": true,
         "**/.venv/**": true,
-        "**/node_modules/**": true
+        "**/node_modules/**": true,
+        "**/dist/**": true,
+        "**/.turbo/**": true,
+        "**/coverage/**": true
+    },
+    // Search excludes -- keep generated / vendor noise out of
+    // workspace search and AI indexing (RAG, LSP symbol cache).
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/dist": true,
+        "**/.turbo": true,
+        "**/coverage": true,
+        "**/html": true,
+        "**/public/mockdata": true,
+        "**/assets/videos": true,
+        "**/assets/images": true,
+        "**/package-lock.json": true
     },
     // Markdown settings
     "markdownlint.config": {

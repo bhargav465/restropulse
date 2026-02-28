@@ -203,3 +203,13 @@ Shared MongoDB connection layer with collection helpers:
 | strategyCycles      | ObjectId                     | API, Engine          |
 
 Database name: `restropulse` (configurable via `MONGODB_DB_NAME`)
+
+## MCP Context Stack
+
+The workspace uses three MCP servers as a non-redundant context stack:
+
+- **codebase-rag** -- Semantic search over source and docs (discovery layer)
+- **mcp-language-server** -- Type-aware navigation via TSServer, one instance per app/package (logic layer)
+- **server-memory** -- Persistent knowledge graph for decisions and conventions (knowledge layer)
+
+See `docs/MCP-SETUP.md` for full configuration, tool-routing rules, and troubleshooting.

@@ -108,8 +108,28 @@ npm run type-check       # Type-check all
 npm run dev --filter=@restropulse/api   # Single app
 ```
 
+## MCP Tool-Routing Rules
+
+Three MCP servers provide non-overlapping context layers. Follow these rules
+to prevent redundant or conflicting retrieval:
+
+1. **Semantic Search (`codebase-rag`)** -- Use ONLY for high-level discovery
+   ("where is the feature that handles X?"). Never use it for type lookups or
+   reading final file content.
+2. **Logic / Navigation (`lsp-*`)** -- Use for jump-to-definition, find
+   references, type diagnostics, and refactoring. This is the source of truth
+   for TypeScript types and structure.
+3. **Knowledge / Memory (`project-memory`)** -- Use for recalling architecture
+   decisions, conventions, and user preferences. Never store code snippets or
+   type information here.
+4. **Filesystem tools** -- Use for reading/writing actual file content. Do not
+   use `codebase-rag` to read files.
+
+Full setup details: `docs/MCP-SETUP.md`
+
 ## Architecture Docs
 
 - `docs/ARCHITECTURE.md` -- System overview, data flows, component diagram
 - `docs/INFRASTRUCTURE.md` -- Env vars, ports, cron schedules, external services
 - `docs/TESTING.md` -- Testing stack, conventions, examples
+- `docs/MCP-SETUP.md` -- MCP server configuration, tool-routing rules, troubleshooting
