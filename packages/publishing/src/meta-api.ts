@@ -5,6 +5,7 @@
 
 import axios, { AxiosError } from 'axios';
 import { generateStateToken, encrypt, decrypt } from './encryption.js';
+import { getOauthSessionsCollection } from '@restropulse/db';
 
 // Instagram OAuth Configuration
 const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID || '';
@@ -34,8 +35,6 @@ const OAUTH_SCOPES = [
     'public_profile'
 ].join(',');
 
-// In-memory store for OAuth state tokens (use Redis in production)
-const stateTokenStore = new Map<string, { createdAt: number; restaurantId: string }>();
 const STATE_TOKEN_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 
 // Error types for validation pipeline
@@ -84,28 +83,15 @@ export interface StoredInstagramCredentials {
 }
 
 /**
- * Clean up expired state tokens
- */
-function cleanupExpiredStateTokens(): void {
-    const now = Date.now();
-    for (const [token, data] of stateTokenStore.entries()) {
-        if (now - data.createdAt > STATE_TOKEN_EXPIRY_MS) {
-            stateTokenStore.delete(token);
-        }
-    }
-}
-
-/**
  * Generate OAuth URL with CSRF protection
  * Uses Business Login for Instagram with extras parameter for simplified onboarding
  * See: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/business-login-for-instagram
  */
-export function generateOAuthUrl(restaurantId: string, useOnboarding: boolean = false): { url: string; state: string } {
-    // Cleanup old tokens first
-    cleanupExpiredStateTokens();
-
+export async function generateOAuthUrl(restaurantId: string, useOnboarding: boolean = false): Promise<{ url: string; state: string }> {
     const state = generateStateToken();
-    stateTokenStore.set(state, { createdAt: Date.now(), restaurantId });
+    const expiresAt = new Date(Date.now() + STATE_TOKEN_EXPIRY_MS);
+    const col = getOauthSessionsCollection();
+    await col.insertOne({ type: 'oauth_state', state, restaurantId, expiresAt });
 
     const params = new URLSearchParams({
         client_id: INSTAGRAM_APP_ID,
@@ -137,24 +123,22 @@ export function generateOAuthUrl(restaurantId: string, useOnboarding: boolean = 
 
 /**
  * Validate state token and return associated restaurant ID
+ * One-time use: findOneAndDelete removes the token atomically
  */
-export function validateStateToken(state: string): { valid: boolean; restaurantId?: string } {
-    const data = stateTokenStore.get(state);
+export async function validateStateToken(state: string): Promise<{ valid: boolean; restaurantId?: string }> {
+    const col = getOauthSessionsCollection();
+    const doc = await col.findOneAndDelete({ type: 'oauth_state', state }) as any;
 
-    if (!data) {
+    if (!doc) {
         return { valid: false };
     }
 
-    // Check expiry
-    if (Date.now() - data.createdAt > STATE_TOKEN_EXPIRY_MS) {
-        stateTokenStore.delete(state);
+    // Check expiry (TTL index handles background cleanup; check here for immediate validation)
+    if (new Date() > new Date(doc.expiresAt)) {
         return { valid: false };
     }
 
-    // Remove token after validation (one-time use)
-    stateTokenStore.delete(state);
-
-    return { valid: true, restaurantId: data.restaurantId };
+    return { valid: true, restaurantId: doc.restaurantId };
 }
 
 /**
@@ -477,7 +461,7 @@ export async function handleOAuthCallback(code: string, state: string, skipState
 
     // Validate state token (CSRF protection) - skip if already validated by caller
     if (!skipStateValidation) {
-        const stateValidation = validateStateToken(state);
+        const stateValidation = await validateStateToken(state);
         if (!stateValidation.valid) {
             return {
                 success: false,

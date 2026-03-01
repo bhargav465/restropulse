@@ -40,9 +40,10 @@ const useActualImplementation = async () => {
 };
 
 // Dynamic Import of Test Helper
-const { createTestApp, mockStrategyCycle } = await import('../helpers/testHelper.js');
+const { createTestApp, mockStrategyCycle, generateAuthToken } = await import('../helpers/testHelper.js');
 
 const app = createTestApp();
+const authToken = generateAuthToken();
 
 describe('Strategy Routes - Unit Tests', () => {
     beforeEach(async () => {
@@ -53,7 +54,8 @@ describe('Strategy Routes - Unit Tests', () => {
     describe('GET /api/strategy', () => {
         it('should get content strategy', async () => {
             const response = await request(app)
-                .get('/api/strategy');
+                .get('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('success', true);
@@ -62,7 +64,8 @@ describe('Strategy Routes - Unit Tests', () => {
 
         it('should return strategy with correct structure', async () => {
             const response = await request(app)
-                .get('/api/strategy');
+                .get('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.body.data).toHaveProperty('postsPerWeek');
             expect(response.body.data).toHaveProperty('focusCategories');
@@ -72,7 +75,8 @@ describe('Strategy Routes - Unit Tests', () => {
 
         it('should return array for focusCategories', async () => {
             const response = await request(app)
-                .get('/api/strategy');
+                .get('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(Array.isArray(response.body.data.focusCategories)).toBe(true);
         });
@@ -80,7 +84,9 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should handle database error', async () => {
             mockFindContentStrategy.mockRejectedValue(new Error('DB Error'));
 
-            const response = await request(app).get('/api/strategy');
+            const response = await request(app)
+                .get('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(500);
             expect(response.body).toEqual({
@@ -92,7 +98,9 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should return default strategy if none exists', async () => {
             mockFindContentStrategy.mockResolvedValue(null);
 
-            const response = await request(app).get('/api/strategy');
+            const response = await request(app)
+                .get('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
@@ -110,6 +118,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .put('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(updateData);
 
             expect(response.status).toBe(200);
@@ -121,6 +130,7 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should handle partial updates', async () => {
             const response = await request(app)
                 .put('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ postsPerWeek: 10 });
 
             expect(response.status).toBe(200);
@@ -131,6 +141,7 @@ describe('Strategy Routes - Unit Tests', () => {
             const newCategories = ['Videos', 'Stories', 'Reels'];
             const response = await request(app)
                 .put('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ focusCategories: newCategories });
 
             expect(response.body.data.focusCategories).toEqual(newCategories);
@@ -139,6 +150,7 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should return success message', async () => {
             const response = await request(app)
                 .put('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ bestTime: '7:00 PM - 9:00 PM' });
 
             expect(response.body).toHaveProperty('message', 'Content strategy updated successfully');
@@ -149,6 +161,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .put('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ postsPerWeek: 5 });
 
             expect(response.status).toBe(500);
@@ -162,7 +175,8 @@ describe('Strategy Routes - Unit Tests', () => {
     describe('GET /api/strategy/cycles', () => {
         it('should get all strategy cycles', async () => {
             const response = await request(app)
-                .get('/api/strategy/cycles');
+                .get('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('success', true);
@@ -171,7 +185,8 @@ describe('Strategy Routes - Unit Tests', () => {
 
         it('should return cycles with correct structure', async () => {
             const response = await request(app)
-                .get('/api/strategy/cycles');
+                .get('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`);
 
             if (response.body.data.length > 0) {
                 const cycle = response.body.data[0];
@@ -187,7 +202,9 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should handle database error', async () => {
             mockFindAllCycles.mockRejectedValue(new Error('DB Error'));
 
-            const response = await request(app).get('/api/strategy/cycles');
+            const response = await request(app)
+                .get('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(500);
             expect(response.body).toEqual({
@@ -200,7 +217,8 @@ describe('Strategy Routes - Unit Tests', () => {
     describe('GET /api/strategy/cycles/:id', () => {
         it('should get cycle by valid ID', async () => {
             const response = await request(app)
-                .get('/api/strategy/cycles/sc1');
+                .get('/api/strategy/cycles/sc1')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('success', true);
@@ -209,7 +227,8 @@ describe('Strategy Routes - Unit Tests', () => {
 
         it('should return 404 for non-existent cycle', async () => {
             const response = await request(app)
-                .get('/api/strategy/cycles/non-existent');
+                .get('/api/strategy/cycles/non-existent')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(404);
             expect(response.body).toHaveProperty('success', false);
@@ -218,7 +237,8 @@ describe('Strategy Routes - Unit Tests', () => {
 
         it('should return complete cycle data', async () => {
             const response = await request(app)
-                .get('/api/strategy/cycles/sc1');
+                .get('/api/strategy/cycles/sc1')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.body.data).toHaveProperty('startDate');
             expect(response.body.data).toHaveProperty('endDate');
@@ -229,7 +249,9 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should handle database error', async () => {
             mockFindCycleById.mockRejectedValue(new Error('DB Error'));
 
-            const response = await request(app).get('/api/strategy/cycles/123');
+            const response = await request(app)
+                .get('/api/strategy/cycles/123')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(500);
             expect(response.body).toEqual({
@@ -256,6 +278,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(newCycle);
 
             expect(response.status).toBe(201);
@@ -278,6 +301,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(newCycle);
 
             expect(response.body.data).toHaveProperty('id');
@@ -299,6 +323,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(newCycle);
 
             expect(response.status).toBe(201);
@@ -318,6 +343,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(newCycle);
 
             expect(response.body).toHaveProperty('message', 'Strategy cycle created successfully');
@@ -328,6 +354,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     period: 'Test Period',
                     startDate: '2024-01-01',
@@ -351,6 +378,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .put('/api/strategy/cycles/sc1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(updateData);
 
             expect(response.status).toBe(200);
@@ -362,6 +390,7 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should return 404 for non-existent cycle', async () => {
             const response = await request(app)
                 .put('/api/strategy/cycles/non-existent')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ summary: 'test' });
 
             expect(response.status).toBe(404);
@@ -371,6 +400,7 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should preserve cycle ID when updating', async () => {
             const response = await request(app)
                 .put('/api/strategy/cycles/sc1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ id: 'different-id', summary: 'test' });
 
             expect(response.body.data.id).toBe('sc1');
@@ -384,6 +414,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .put('/api/strategy/cycles/sc1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ plannedPosts: newPlannedPosts });
 
             expect(response.body.data.plannedPosts).toEqual(newPlannedPosts);
@@ -394,6 +425,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .put('/api/strategy/cycles/sc1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ focus: newFocus });
 
             expect(response.body.data.focus).toEqual(newFocus);
@@ -402,6 +434,7 @@ describe('Strategy Routes - Unit Tests', () => {
         it('should handle feedback updates', async () => {
             const response = await request(app)
                 .put('/api/strategy/cycles/sc1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ feedback: 'Looks great, approved!' });
 
             expect(response.body.data.feedback).toBe('Looks great, approved!');
@@ -412,6 +445,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .put('/api/strategy/cycles/123')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ period: 'Updated Period' });
 
             expect(response.status).toBe(500);
@@ -436,6 +470,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(newCycle);
 
             expect(response.status).toBe(201);
@@ -455,6 +490,7 @@ describe('Strategy Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(newCycle);
 
             expect(response.status).toBe(201);

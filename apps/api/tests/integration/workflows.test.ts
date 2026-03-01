@@ -1,8 +1,9 @@
 import { describe, test, expect } from 'vitest';
 import request from 'supertest';
-import { createTestApp } from '../helpers/testHelper.js';
+import { createTestApp, generateAuthToken } from '../helpers/testHelper.js';
 
 const app = createTestApp();
+const authToken = generateAuthToken();
 
 describe('Integration Tests - Complete Workflows', () => {
     describe('User Authentication Flow', () => {
@@ -45,16 +46,16 @@ describe('Integration Tests - Complete Workflows', () => {
 
     describe('Restaurant Management Flow', () => {
         it('should complete CRUD operations on restaurant', async () => {
-            // 1. Get initial restaurant data
+            // 1. Get initial restaurant data (public)
             const getResponse = await request(app)
                 .get('/api/restaurant/r1');
 
             expect(getResponse.status).toBe(200);
-            const initialData = getResponse.body.data;
 
             // 2. Update restaurant
             const updateResponse = await request(app)
                 .put('/api/restaurant/r1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ name: 'Updated Restaurant' });
 
             expect(updateResponse.status).toBe(200);
@@ -63,6 +64,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // 3. Add offer
             const offerResponse = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'New Offer' });
 
             expect(offerResponse.status).toBe(200);
@@ -71,6 +73,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // 4. Add chef special
             const specialResponse = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'New Special' });
 
             expect(specialResponse.status).toBe(200);
@@ -78,14 +81,15 @@ describe('Integration Tests - Complete Workflows', () => {
 
             // 5. Update menu
             const menuResponse = await request(app)
-                .patch('/api/restaurant/r1/menu');
+                .patch('/api/restaurant/r1/menu')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(menuResponse.status).toBe(200);
             expect(menuResponse.body.data.menuLastUpdated).toBeDefined();
         });
 
         it('should manage multiple offers lifecycle', async () => {
-            // Get initial count
+            // Get initial count (public)
             const initialResponse = await request(app)
                 .get('/api/restaurant/r1');
             const initialCount = initialResponse.body.data.activeOffers?.length || 0;
@@ -93,10 +97,12 @@ describe('Integration Tests - Complete Workflows', () => {
             // Add multiple offers
             await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'Offer 1' });
 
             await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'Offer 2' });
 
             const getResponse = await request(app)
@@ -107,6 +113,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // Delete one offer
             await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'DELETE', payload: 0 });
 
             const afterDeleteResponse = await request(app)
@@ -121,6 +128,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // 1. Create post
             const createResponse = await request(app)
                 .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE',
                     status: 'PENDING_APPROVAL',
@@ -142,6 +150,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // 3. Update the post
             const updateResponse = await request(app)
                 .put(`/api/posts/${postId}`)
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     caption: 'Updated Caption',
                     status: 'APPROVED'
@@ -152,7 +161,8 @@ describe('Integration Tests - Complete Workflows', () => {
 
             // 4. Delete the post
             const deleteResponse = await request(app)
-                .delete(`/api/posts/${postId}`);
+                .delete(`/api/posts/${postId}`)
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(deleteResponse.status).toBe(200);
 
@@ -167,6 +177,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // Create pending post
             const createResponse = await request(app)
                 .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'CAROUSEL',
                     status: 'PENDING_APPROVAL',
@@ -180,6 +191,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // Request changes
             await request(app)
                 .put(`/api/posts/${postId}`)
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     status: 'CHANGES_REQUESTED',
                     feedback: JSON.stringify({ note: 'Please improve caption' })
@@ -193,6 +205,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // Resubmit for approval
             await request(app)
                 .put(`/api/posts/${postId}`)
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     caption: 'Improved Caption',
                     status: 'PENDING_APPROVAL'
@@ -201,6 +214,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // Approve
             await request(app)
                 .put(`/api/posts/${postId}`)
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ status: 'SCHEDULED' });
 
             getResponse = await request(app)
@@ -211,23 +225,29 @@ describe('Integration Tests - Complete Workflows', () => {
 
         it('should get all posts and filter results', async () => {
             // Create multiple posts
-            await request(app).post('/api/posts').send({
-                type: 'IMAGE',
-                status: 'POSTED',
-                thumbnail: '/img1.jpg',
-                caption: 'Posted Image',
-                platform: 'INSTAGRAM'
-            });
+            await request(app).post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'IMAGE',
+                    status: 'POSTED',
+                    thumbnail: '/img1.jpg',
+                    caption: 'Posted Image',
+                    platform: 'INSTAGRAM'
+                });
 
-            await request(app).post('/api/posts').send({
-                type: 'VIDEO',
-                status: 'SCHEDULED',
-                thumbnail: '/vid1.jpg',
-                caption: 'Scheduled Video',
-                platform: 'FACEBOOK'
-            });
+            await request(app).post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'VIDEO',
+                    status: 'SCHEDULED',
+                    thumbnail: '/vid1.jpg',
+                    caption: 'Scheduled Video',
+                    platform: 'FACEBOOK'
+                });
 
-            const response = await request(app).get('/api/posts');
+            const response = await request(app)
+                .get('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(200);
             expect(response.body.data.length).toBeGreaterThanOrEqual(2);
@@ -238,13 +258,15 @@ describe('Integration Tests - Complete Workflows', () => {
         it('should manage content strategy and cycles', async () => {
             // 1. Get current strategy
             const strategyResponse = await request(app)
-                .get('/api/strategy');
+                .get('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(strategyResponse.status).toBe(200);
 
             // 2. Update strategy
             const updateStrategyResponse = await request(app)
                 .put('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     postsPerWeek: 8,
                     focusCategories: ['Videos', 'Stories']
@@ -256,6 +278,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // 3. Create new cycle
             const createCycleResponse = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     period: 'Integration Test Cycle',
                     startDate: '2024-06-01',
@@ -272,6 +295,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // 4. Update cycle status
             const updateCycleResponse = await request(app)
                 .put(`/api/strategy/cycles/${cycleId}`)
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ status: 'APPROVED' });
 
             expect(updateCycleResponse.status).toBe(200);
@@ -279,7 +303,8 @@ describe('Integration Tests - Complete Workflows', () => {
 
             // 5. Get all cycles
             const cyclesResponse = await request(app)
-                .get('/api/strategy/cycles');
+                .get('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(cyclesResponse.status).toBe(200);
             expect(cyclesResponse.body.data.length).toBeGreaterThanOrEqual(1);
@@ -289,6 +314,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // Create cycle
             const createResponse = await request(app)
                 .post('/api/strategy/cycles')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     period: 'Approval Test',
                     startDate: '2024-07-01',
@@ -304,19 +330,22 @@ describe('Integration Tests - Complete Workflows', () => {
             // Request changes
             await request(app)
                 .put(`/api/strategy/cycles/${cycleId}`)
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     status: 'CHANGES_REQUESTED',
                     feedback: 'Please add more content'
                 });
 
             let getResponse = await request(app)
-                .get(`/api/strategy/cycles/${cycleId}`);
+                .get(`/api/strategy/cycles/${cycleId}`)
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(getResponse.body.data.status).toBe('CHANGES_REQUESTED');
 
             // Update and resubmit
             await request(app)
                 .put(`/api/strategy/cycles/${cycleId}`)
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     summary: 'Updated with more content',
                     plannedPosts: [
@@ -329,10 +358,12 @@ describe('Integration Tests - Complete Workflows', () => {
             // Approve
             await request(app)
                 .put(`/api/strategy/cycles/${cycleId}`)
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ status: 'APPROVED' });
 
             getResponse = await request(app)
-                .get(`/api/strategy/cycles/${cycleId}`);
+                .get(`/api/strategy/cycles/${cycleId}`)
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(getResponse.body.data.status).toBe('APPROVED');
         });
@@ -343,11 +374,13 @@ describe('Integration Tests - Complete Workflows', () => {
             // Update restaurant offers
             await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'Summer Sale 30% Off' });
 
             // Create post about the offer
             const postResponse = await request(app)
                 .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE',
                     status: 'SCHEDULED',
@@ -361,6 +394,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // Update strategy to reflect campaign
             const strategyResponse = await request(app)
                 .put('/api/strategy')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     theme: 'Summer Sale Campaign',
                     focusCategories: ['Promotions', 'Offers']
@@ -372,10 +406,10 @@ describe('Integration Tests - Complete Workflows', () => {
         it('should handle concurrent operations', async () => {
             // Simulate multiple concurrent requests
             const promises = [
-                request(app).get('/api/posts'),
+                request(app).get('/api/posts').set('Authorization', `Bearer ${authToken}`),
                 request(app).get('/api/restaurant/r1'),
-                request(app).get('/api/strategy'),
-                request(app).get('/api/strategy/cycles')
+                request(app).get('/api/strategy').set('Authorization', `Bearer ${authToken}`),
+                request(app).get('/api/strategy/cycles').set('Authorization', `Bearer ${authToken}`)
             ];
 
             const responses = await Promise.all(promises);
@@ -408,6 +442,7 @@ describe('Integration Tests - Complete Workflows', () => {
             // Posts now require a caption - sending empty body should return 400
             const response = await request(app)
                 .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({});
 
             expect(response.status).toBe(400);

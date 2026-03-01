@@ -91,6 +91,7 @@ export interface User {
   phone: string;
   role: UserRole;
   firebaseUid?: string;
+  restaurantId: string;
 }
 
 export interface Restaurant {

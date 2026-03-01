@@ -88,6 +88,18 @@ export function getSessionsCollection(): Collection {
   return getDB().collection('sessions');
 }
 
+export function getOtpChallengesCollection(): Collection {
+  return getDB().collection('otpChallenges');
+}
+
+export function getOauthSessionsCollection(): Collection {
+  return getDB().collection('oauthSessions');
+}
+
+export function getDataDeletionAuditsCollection(): Collection {
+  return getDB().collection('dataDeletionAudits');
+}
+
 // ----- Helpers -----
 
 /**

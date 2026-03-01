@@ -47,7 +47,8 @@ const App: React.FC = () => {
                     await authAPI.checkSession();
 
                     // Load restaurant data
-                    const restaurant = await restaurantAPI.get('r1');
+                    const restaurantId = localStorage.getItem('rp_restaurant_id') || '';
+                    const restaurant = await restaurantAPI.get(restaurantId);
                     setRestaurantData(restaurant);
 
                     setIsLoggedIn(true);
@@ -89,7 +90,8 @@ const App: React.FC = () => {
     const onLoginSuccess = async (response: { success: boolean; message?: string }) => {
         if (!response.success) throw new Error(response.message || 'Login failed');
         localStorage.setItem('rp_session', 'true');
-        const restaurant = await restaurantAPI.get('r1');
+        const restaurantId = localStorage.getItem('rp_restaurant_id') || '';
+        const restaurant = await restaurantAPI.get(restaurantId);
         setRestaurantData(restaurant);
         window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
         setCurrentView('DASHBOARD');

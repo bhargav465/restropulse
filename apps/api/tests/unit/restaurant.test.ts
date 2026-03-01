@@ -35,8 +35,10 @@ vi.mock('@restropulse/db', async (importOriginal) => {
 let actualRestaurantsDb: any;
 
 // Import Helpers
-const { createTestApp, mockRestaurant } = await import('../helpers/testHelper.js');
+const { createTestApp, mockRestaurant, generateAuthToken } = await import('../helpers/testHelper.js');
 const { getRestaurantsCollection } = await import('@restropulse/db');
+
+const authToken = generateAuthToken();
 
 // Reset Helper
 const useActualImplementation = async () => {
@@ -127,6 +129,7 @@ describe('Restaurant Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .put('/api/restaurant/r1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send(updateData);
 
             expect(response.status).toBe(200);
@@ -136,18 +139,21 @@ describe('Restaurant Routes - Unit Tests', () => {
             expect(response.body.data.id).toBe('r1');
         });
 
-        it('should return 404 for non-existent restaurant', async () => {
+        it('should return 403 when restaurantId does not match auth context', async () => {
             const response = await request(app)
                 .put('/api/restaurant/invalid-id')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ name: 'Test' });
 
-            expect(response.status).toBe(404);
+            expect(response.status).toBe(403);
             expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Forbidden');
         });
 
         it('should preserve ID when updating', async () => {
             const response = await request(app)
                 .put('/api/restaurant/r1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ id: 'different-id', name: 'Test' });
 
             expect(response.body.data.id).toBe('r1');
@@ -156,6 +162,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should handle partial updates', async () => {
             const response = await request(app)
                 .put('/api/restaurant/r1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ cuisine: 'Only Cuisine Update' });
 
             expect(response.status).toBe(200);
@@ -167,6 +174,7 @@ describe('Restaurant Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .put('/api/restaurant/r1')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ name: 'New Name' });
 
             expect(response.status).toBe(500);
@@ -188,6 +196,7 @@ describe('Restaurant Routes - Unit Tests', () => {
             if (offersCount > 0) {
                 const response = await request(app)
                     .patch('/api/restaurant/r1/offers')
+                    .set('Authorization', `Bearer ${authToken}`)
                     .send({
                         action: 'DELETE',
                         payload: 0
@@ -201,6 +210,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should add new offer', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'ADD',
                     payload: 'New Special Offer 50% Off'
@@ -214,6 +224,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should delete offer by index', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'DELETE',
                     payload: 0
@@ -227,6 +238,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should reject invalid action with 400 error', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'INVALID',
                     payload: 'test'
@@ -240,6 +252,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should reject missing payload for ADD with 400 error', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'ADD'
                 });
@@ -252,6 +265,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should reject non-string payload for ADD with 400 error', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'ADD',
                     payload: 123
@@ -265,6 +279,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should reject non-number payload for DELETE with 400 error', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'DELETE',
                     payload: 'not-a-number'
@@ -279,12 +294,12 @@ describe('Restaurant Routes - Unit Tests', () => {
             // First clear offers by updating restaurant
             await request(app)
                 .put('/api/restaurant/r1')
-                .send({
-                    activeOffers: null
-                });
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ activeOffers: null });
 
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'ADD',
                     payload: 'First Offer'
@@ -298,12 +313,12 @@ describe('Restaurant Routes - Unit Tests', () => {
             // First clear offers
             await request(app)
                 .put('/api/restaurant/r1')
-                .send({
-                    activeOffers: null
-                });
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ activeOffers: null });
 
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'DELETE',
                     payload: 0
@@ -313,17 +328,16 @@ describe('Restaurant Routes - Unit Tests', () => {
             expect(response.body.success).toBe(true);
         });
 
-        it('should handle restaurant not found during ADD', async () => {
-            mockAddOffer.mockResolvedValue(null);
-
+        it('should return 403 when restaurantId does not match auth context', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/invalid-id/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'New Offer' });
 
-            expect(response.status).toBe(404);
+            expect(response.status).toBe(403);
             expect(response.body).toEqual({
                 success: false,
-                error: 'Restaurant not found'
+                error: 'Forbidden'
             });
         });
 
@@ -332,6 +346,7 @@ describe('Restaurant Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'New Offer' });
 
             expect(response.status).toBe(500);
@@ -346,6 +361,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should reject invalid action for specials with 400 error', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'INVALID',
                     payload: 'test'
@@ -359,6 +375,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should add new chef special', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'ADD',
                     payload: 'Lobster Thermidor'
@@ -372,6 +389,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should delete chef special by index', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'DELETE',
                     payload: 0
@@ -384,6 +402,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should return updated restaurant data', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'ADD',
                     payload: 'Test Special'
@@ -396,6 +415,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should reject non-string payload for ADD special with 400 error', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'ADD',
                     payload: 456
@@ -409,6 +429,7 @@ describe('Restaurant Routes - Unit Tests', () => {
         it('should reject non-number payload for DELETE special with 400 error', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'DELETE',
                     payload: 'not-a-number'
@@ -423,12 +444,12 @@ describe('Restaurant Routes - Unit Tests', () => {
             // First clear specials
             await request(app)
                 .put('/api/restaurant/r1')
-                .send({
-                    chefSpecials: null
-                });
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ chefSpecials: null });
 
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'ADD',
                     payload: 'First Special'
@@ -442,12 +463,12 @@ describe('Restaurant Routes - Unit Tests', () => {
             // First clear specials
             await request(app)
                 .put('/api/restaurant/r1')
-                .send({
-                    chefSpecials: null
-                });
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ chefSpecials: null });
 
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     action: 'DELETE',
                     payload: 0
@@ -457,17 +478,16 @@ describe('Restaurant Routes - Unit Tests', () => {
             expect(response.body.success).toBe(true);
         });
 
-        it('should handle restaurant not found during ADD', async () => {
-            mockAddSpecial.mockResolvedValue(null);
-
+        it('should return 403 when restaurantId does not match auth context', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/invalid-id/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'Special Dish' });
 
-            expect(response.status).toBe(404);
+            expect(response.status).toBe(403);
             expect(response.body).toEqual({
                 success: false,
-                error: 'Restaurant not found'
+                error: 'Forbidden'
             });
         });
 
@@ -476,6 +496,7 @@ describe('Restaurant Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
                 .send({ action: 'ADD', payload: 'Special Dish' });
 
             expect(response.status).toBe(500);
@@ -489,7 +510,8 @@ describe('Restaurant Routes - Unit Tests', () => {
     describe('PATCH /api/restaurant/:id/menu', () => {
         it('should update menu timestamp', async () => {
             const response = await request(app)
-                .patch('/api/restaurant/r1/menu');
+                .patch('/api/restaurant/r1/menu')
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
@@ -499,23 +521,22 @@ describe('Restaurant Routes - Unit Tests', () => {
 
         it('should set current date as menu update date', async () => {
             const response = await request(app)
-                .patch('/api/restaurant/r1/menu');
+                .patch('/api/restaurant/r1/menu')
+                .set('Authorization', `Bearer ${authToken}`);
 
             const today = new Date().toISOString().split('T')[0];
             expect(response.body.data.menuLastUpdated).toBe(today);
         });
 
-        it('should handle restaurant not found', async () => {
-            mockUpdateMenuTimestamp.mockResolvedValue(null);
-
+        it('should return 403 when restaurantId does not match auth context', async () => {
             const response = await request(app)
                 .patch('/api/restaurant/invalid-id/menu')
-                .send({});
+                .set('Authorization', `Bearer ${authToken}`);
 
-            expect(response.status).toBe(404);
+            expect(response.status).toBe(403);
             expect(response.body).toEqual({
                 success: false,
-                error: 'Restaurant not found'
+                error: 'Forbidden'
             });
         });
 
@@ -524,7 +545,7 @@ describe('Restaurant Routes - Unit Tests', () => {
 
             const response = await request(app)
                 .patch('/api/restaurant/r1/menu')
-                .send({});
+                .set('Authorization', `Bearer ${authToken}`);
 
             expect(response.status).toBe(500);
             expect(response.body).toEqual({

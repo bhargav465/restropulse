@@ -9,15 +9,14 @@ import {
 } from '@restropulse/db';
 import { ApiResponse, StrategyCycle, ContentStrategy } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Default restaurant ID (in production, get from auth context)
-const DEFAULT_RESTAURANT_ID = 'r1';
-
 // Get content strategy
-router.get('/', handle(async (_req: Request, res: Response<ApiResponse<ContentStrategy>>) => {
-    let strategy = await findContentStrategy(DEFAULT_RESTAURANT_ID);
+router.get('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse<ContentStrategy>>) => {
+    const { restaurantId } = req.user!;
+    let strategy = await findContentStrategy(restaurantId);
 
     // Return default if none exists
     if (!strategy) {
@@ -38,10 +37,11 @@ router.get('/', handle(async (_req: Request, res: Response<ApiResponse<ContentSt
 }));
 
 // Update content strategy
-router.put('/', handle(async (req: Request, res: Response<ApiResponse<ContentStrategy>>) => {
-    const strategy = await updateContentStrategy(DEFAULT_RESTAURANT_ID, {
+router.put('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse<ContentStrategy>>) => {
+    const { restaurantId } = req.user!;
+    const strategy = await updateContentStrategy(restaurantId, {
         ...req.body,
-        restaurantId: DEFAULT_RESTAURANT_ID
+        restaurantId
     });
 
     res.json({
@@ -52,8 +52,8 @@ router.put('/', handle(async (req: Request, res: Response<ApiResponse<ContentStr
 }));
 
 // Get all cycles
-router.get('/cycles', handle(async (_req: Request, res: Response<ApiResponse<StrategyCycle[]>>) => {
-    const cycles = await findAllCycles();
+router.get('/cycles', requireAuth, handle(async (req: Request, res: Response<ApiResponse<StrategyCycle[]>>) => {
+    const cycles = await findAllCycles(req.user!.restaurantId);
     res.json({
         success: true,
         data: cycles
@@ -61,7 +61,7 @@ router.get('/cycles', handle(async (_req: Request, res: Response<ApiResponse<Str
 }));
 
 // Get cycle by ID
-router.get('/cycles/:id', handle(async (req: Request, res: Response<ApiResponse<StrategyCycle>>) => {
+router.get('/cycles/:id', requireAuth, handle(async (req: Request, res: Response<ApiResponse<StrategyCycle>>) => {
     const { id } = req.params;
     const cycle = await findCycleById(id);
 
@@ -79,10 +79,11 @@ router.get('/cycles/:id', handle(async (req: Request, res: Response<ApiResponse<
 }));
 
 // Create new cycle
-router.post('/cycles', handle(async (req: Request, res: Response<ApiResponse<StrategyCycle>>) => {
+router.post('/cycles', requireAuth, handle(async (req: Request, res: Response<ApiResponse<StrategyCycle>>) => {
+    const { restaurantId } = req.user!;
     const newCycle = await createCycle({
         ...req.body,
-        restaurantId: DEFAULT_RESTAURANT_ID
+        restaurantId
     });
 
     res.status(201).json({
@@ -93,7 +94,7 @@ router.post('/cycles', handle(async (req: Request, res: Response<ApiResponse<Str
 }));
 
 // Update cycle
-router.put('/cycles/:id', handle(async (req: Request, res: Response<ApiResponse<StrategyCycle>>) => {
+router.put('/cycles/:id', requireAuth, handle(async (req: Request, res: Response<ApiResponse<StrategyCycle>>) => {
     const { id } = req.params;
     const cycle = await updateCycle(id, req.body);
 

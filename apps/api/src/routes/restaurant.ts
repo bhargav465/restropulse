@@ -6,14 +6,16 @@ import {
     removeOffer,
     addSpecial,
     removeSpecial,
-    updateMenuTimestamp
+    updateMenuTimestamp,
+    getPostsCollection
 } from '@restropulse/db';
 import { ApiResponse, Restaurant } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Get restaurant by ID
+// Get restaurant by ID (public read)
 router.get('/:id', handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
     const { id } = req.params;
     const restaurant = await findRestaurantById(id);
@@ -31,9 +33,57 @@ router.get('/:id', handle(async (req: Request, res: Response<ApiResponse<Restaur
     }
 }));
 
-// Update restaurant
-router.put('/:id', handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
+// Get analytics for a restaurant (computed from posts)
+router.get('/:id/analytics', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
     const { id } = req.params;
+
+    if (req.user!.restaurantId !== id) {
+        return res.status(403).json({
+            success: false,
+            error: 'Forbidden'
+        });
+    }
+
+    const postsCol = getPostsCollection();
+
+    const [postsPerWeek, contentMix, platformMix] = await Promise.all([
+        postsCol.aggregate([
+            { $match: { restaurantId: id } },
+            { $addFields: { scheduledDate: { $toDate: '$scheduledFor' } } },
+            { $group: { _id: { $isoWeek: '$scheduledDate' }, posts: { $sum: 1 } } },
+            { $sort: { _id: -1 } },
+            { $limit: 5 },
+            { $project: { _id: 0, week: '$_id', posts: 1 } }
+        ]).toArray(),
+        postsCol.aggregate([
+            { $match: { restaurantId: id } },
+            { $group: { _id: '$type', count: { $sum: 1 } } },
+            { $project: { _id: 0, type: '$_id', count: 1 } }
+        ]).toArray(),
+        postsCol.aggregate([
+            { $match: { restaurantId: id } },
+            { $group: { _id: '$platform', count: { $sum: 1 } } },
+            { $project: { _id: 0, platform: '$_id', count: 1 } }
+        ]).toArray()
+    ]);
+
+    res.json({
+        success: true,
+        data: { postsPerWeek, contentMix, platformMix }
+    });
+}));
+
+// Update restaurant
+router.put('/:id', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
+    const { id } = req.params;
+
+    if (req.user!.restaurantId !== id) {
+        return res.status(403).json({
+            success: false,
+            error: 'Forbidden'
+        });
+    }
+
     const restaurant = await updateRestaurant(id, req.body);
 
     if (restaurant) {
@@ -51,8 +101,16 @@ router.put('/:id', handle(async (req: Request, res: Response<ApiResponse<Restaur
 }));
 
 // Update offers
-router.patch('/:id/offers', handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
+router.patch('/:id/offers', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
     const { id } = req.params;
+
+    if (req.user!.restaurantId !== id) {
+        return res.status(403).json({
+            success: false,
+            error: 'Forbidden'
+        });
+    }
+
     const { action, payload } = req.body;
 
     // Validate action
@@ -100,8 +158,16 @@ router.patch('/:id/offers', handle(async (req: Request, res: Response<ApiRespons
 }));
 
 // Update chef specials
-router.patch('/:id/specials', handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
+router.patch('/:id/specials', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
     const { id } = req.params;
+
+    if (req.user!.restaurantId !== id) {
+        return res.status(403).json({
+            success: false,
+            error: 'Forbidden'
+        });
+    }
+
     const { action, payload } = req.body;
 
     // Validate action
@@ -149,8 +215,16 @@ router.patch('/:id/specials', handle(async (req: Request, res: Response<ApiRespo
 }));
 
 // Update menu timestamp
-router.patch('/:id/menu', handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
+router.patch('/:id/menu', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {
     const { id } = req.params;
+
+    if (req.user!.restaurantId !== id) {
+        return res.status(403).json({
+            success: false,
+            error: 'Forbidden'
+        });
+    }
+
     const restaurant = await updateMenuTimestamp(id);
 
     if (restaurant) {

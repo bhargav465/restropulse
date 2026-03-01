@@ -536,7 +536,7 @@ const ContentStudio: React.FC = () => {
             try {
                 const [postsData, restaurantData] = await Promise.all([
                     postsAPI.getAll(),
-                    restaurantAPI.get('r1')
+                    restaurantAPI.get(localStorage.getItem('rp_restaurant_id') || '')
                 ]);
                 setPosts(postsData);
                 setRestaurant(restaurantData);

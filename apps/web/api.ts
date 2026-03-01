@@ -55,6 +55,9 @@ export const authAPI = {
             if (response.refreshToken) {
                 localStorage.setItem('rp_refresh_token', response.refreshToken);
             }
+            if (response.user?.restaurantId) {
+                localStorage.setItem('rp_restaurant_id', response.user.restaurantId);
+            }
         }
 
         return response;
@@ -85,6 +88,9 @@ export const authAPI = {
             localStorage.setItem('rp_token', response.token);
             if (response.refreshToken) {
                 localStorage.setItem('rp_refresh_token', response.refreshToken);
+            }
+            if (response.user?.restaurantId) {
+                localStorage.setItem('rp_restaurant_id', response.user.restaurantId);
             }
         }
 
@@ -117,6 +123,7 @@ export const authAPI = {
         localStorage.removeItem('rp_token');
         localStorage.removeItem('rp_refresh_token');
         localStorage.removeItem('rp_session');
+        localStorage.removeItem('rp_restaurant_id');
     },
 
     checkSession: async (): Promise<AuthResponse> => {
@@ -159,6 +166,19 @@ export const restaurantAPI = {
         const response = await fetchAPI<ApiResponse<Restaurant>>(`/restaurant/${id}/menu`, {
             method: 'PATCH',
         });
+        return response.data!;
+    },
+
+    getAnalytics: async (id: string): Promise<{
+        postsPerWeek: { week: number; posts: number }[];
+        contentMix: { type: string; count: number }[];
+        platformMix: { platform: string; count: number }[];
+    }> => {
+        const response = await fetchAPI<ApiResponse<{
+            postsPerWeek: { week: number; posts: number }[];
+            contentMix: { type: string; count: number }[];
+            platformMix: { platform: string; count: number }[];
+        }>>(`/restaurant/${id}/analytics`);
         return response.data!;
     },
 };

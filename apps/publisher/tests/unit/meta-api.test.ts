@@ -42,7 +42,6 @@ describe('Instagram API Service', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        process.env.ENCRYPTION_KEY = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
     });
 
     describe('Environment Config', () => {
@@ -52,8 +51,8 @@ describe('Instagram API Service', () => {
     });
 
     describe('generateOAuthUrl', () => {
-        it('should generate valid URL and state', () => {
-            const { url, state } = instagramService.generateOAuthUrl('res-123');
+        it('should generate valid URL and state', async () => {
+            const { url, state } = await instagramService.generateOAuthUrl('res-123');
 
             expect(url).toContain('https://www.facebook.com/v18.0/dialog/oauth');
             expect(url).toContain('client_id=test-app-id');
@@ -63,24 +62,24 @@ describe('Instagram API Service', () => {
             expect(state.length).toBeGreaterThan(10);
         });
 
-        it('should generate URL without IG_API_ONBOARDING by default', () => {
-            const { url } = instagramService.generateOAuthUrl('res-123');
+        it('should generate URL without IG_API_ONBOARDING by default', async () => {
+            const { url } = await instagramService.generateOAuthUrl('res-123');
 
             // Should NOT contain extras parameter for standard flow
             expect(url).not.toContain('extras');
             expect(url).not.toContain('IG_API_ONBOARDING');
         });
 
-        it('should include IG_API_ONBOARDING when useOnboarding is true', () => {
-            const { url } = instagramService.generateOAuthUrl('res-123', true);
+        it('should include IG_API_ONBOARDING when useOnboarding is true', async () => {
+            const { url } = await instagramService.generateOAuthUrl('res-123', true);
 
             // Should contain extras parameter with IG_API_ONBOARDING
             expect(url).toContain('extras');
             expect(decodeURIComponent(url)).toContain('IG_API_ONBOARDING');
         });
 
-        it('should NOT include IG_API_ONBOARDING when useOnboarding is false', () => {
-            const { url } = instagramService.generateOAuthUrl('res-123', false);
+        it('should NOT include IG_API_ONBOARDING when useOnboarding is false', async () => {
+            const { url } = await instagramService.generateOAuthUrl('res-123', false);
 
             expect(url).not.toContain('extras');
             expect(url).not.toContain('IG_API_ONBOARDING');
@@ -88,28 +87,28 @@ describe('Instagram API Service', () => {
     });
 
     describe('validateStateToken', () => {
-        it('should return valid result for correct state', () => {
+        it('should return valid result for correct state', async () => {
             // Setup state using real encryption logic (via service helper)
-            const { state } = instagramService.generateOAuthUrl('res-123');
+            const { state } = await instagramService.generateOAuthUrl('res-123');
 
-            const result = instagramService.validateStateToken(state);
+            const result = await instagramService.validateStateToken(state);
             expect(result).toEqual({ valid: true, restaurantId: 'res-123' });
         });
 
-        it('should return invalid for unknown state', () => {
-            const result = instagramService.validateStateToken('invalid-state');
+        it('should return invalid for unknown state', async () => {
+            const result = await instagramService.validateStateToken('invalid-state');
             expect(result).toEqual({ valid: false });
         });
 
-        it('should invalidate already used state token (one-time use)', () => {
-            const { state } = instagramService.generateOAuthUrl('res-123');
+        it('should invalidate already used state token (one-time use)', async () => {
+            const { state } = await instagramService.generateOAuthUrl('res-123');
 
             // First use - valid
-            const firstResult = instagramService.validateStateToken(state);
+            const firstResult = await instagramService.validateStateToken(state);
             expect(firstResult).toEqual({ valid: true, restaurantId: 'res-123' });
 
             // Second use - invalid (already consumed)
-            const secondResult = instagramService.validateStateToken(state);
+            const secondResult = await instagramService.validateStateToken(state);
             expect(secondResult).toEqual({ valid: false });
         });
 
@@ -136,7 +135,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should fail if token exchange fails', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-123');
+            const { state } = await instagramService.generateOAuthUrl('res-123');
             mockGet.mockRejectedValueOnce(new Error('Token failed'));
 
             const result = await instagramService.handleOAuthCallback('code', state);
@@ -145,7 +144,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should fail if permissions are missing', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-123');
+            const { state } = await instagramService.generateOAuthUrl('res-123');
 
             // 1. Token exchange success (code -> short -> long)
             mockGet.mockImplementation((url: any, config: any) => {
@@ -176,7 +175,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should fail if no pages found', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-123');
+            const { state } = await instagramService.generateOAuthUrl('res-123');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -200,7 +199,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should fail if no IG account found on pages', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-123');
+            const { state } = await instagramService.generateOAuthUrl('res-123');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -231,7 +230,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should succeed with multiple accounts', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-123');
+            const { state } = await instagramService.generateOAuthUrl('res-123');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -272,7 +271,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should auto-select single account', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-single');
+            const { state } = await instagramService.generateOAuthUrl('res-single');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -328,7 +327,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should handle page fetch error gracefully', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-page-err');
+            const { state } = await instagramService.generateOAuthUrl('res-page-err');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -352,7 +351,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should handle IG account fetch error gracefully', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-ig-err');
+            const { state } = await instagramService.generateOAuthUrl('res-ig-err');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -381,7 +380,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should use granular_scopes fallback when /me/accounts is empty', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-granular');
+            const { state } = await instagramService.generateOAuthUrl('res-granular');
 
             mockGet.mockImplementation((url: any, config: any) => {
                 // Token exchange
@@ -448,7 +447,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should deduplicate pages from granular_scopes', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-dedup');
+            const { state } = await instagramService.generateOAuthUrl('res-dedup');
 
             mockGet.mockImplementation((url: any, config: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -496,7 +495,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should deduplicate Instagram accounts across multiple pages', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-ig-dedup');
+            const { state } = await instagramService.generateOAuthUrl('res-ig-dedup');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -667,7 +666,7 @@ describe('Instagram API Service', () => {
 
     describe('Error Handling (parseMetaApiError)', () => {
         it('should handle permission validation error', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-perm-err');
+            const { state } = await instagramService.generateOAuthUrl('res-perm-err');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });
@@ -684,7 +683,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should handle timeout errors during OAuth flow', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-timeout');
+            const { state } = await instagramService.generateOAuthUrl('res-timeout');
 
             // Create a proper timeout-like AxiosError
             const timeoutError: any = new Error('timeout of 30000ms exceeded');
@@ -704,7 +703,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should handle ETIMEDOUT error code', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-etimedout');
+            const { state } = await instagramService.generateOAuthUrl('res-etimedout');
 
             const etimedoutError: any = new Error('connect ETIMEDOUT');
             etimedoutError.code = 'ETIMEDOUT';
@@ -723,7 +722,7 @@ describe('Instagram API Service', () => {
         });
 
         it('should handle Meta API error with code', async () => {
-            const { state } = instagramService.generateOAuthUrl('res-meta-err');
+            const { state } = await instagramService.generateOAuthUrl('res-meta-err');
 
             mockGet.mockImplementation((url: any) => {
                 if (url.includes('oauth/access_token')) return Promise.resolve({ data: { access_token: 't', expires_in: 100 } });

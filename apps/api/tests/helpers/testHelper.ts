@@ -40,7 +40,8 @@ export const mockUser = {
     name: 'Arjun Mehta',
     email: 'arjun@spicelounge.com',
     phone: '+91 98765 43210',
-    role: 'OWNER' as const
+    role: 'OWNER' as const,
+    restaurantId: 'r1'
 };
 
 export const mockRestaurant = {
@@ -103,6 +104,6 @@ export const mockStrategyCycle = {
 };
 
 export function generateAuthToken(): string {
-    const tokens = generateTokens(mockUser.id, mockUser.phone);
+    const tokens = generateTokens(mockUser.id, mockUser.phone, mockUser.restaurantId);
     return tokens.accessToken;
 }

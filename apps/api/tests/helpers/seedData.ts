@@ -29,6 +29,7 @@ export async function seedTestData() {
             email: 'arjun@spicelounge.com',
             phone: '+91 98765 43210',
             role: 'OWNER',
+            restaurantId: 'r1',
             createdAt: new Date(),
             updatedAt: new Date()
         }

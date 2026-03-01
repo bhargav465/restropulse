@@ -6,10 +6,11 @@ import jwt from 'jsonwebtoken';
 describe('JWT Service', () => {
     const userId = 'user-123';
     const phone = '1234567890';
+    const restaurantId = "r1";
 
     describe('generateTokens', () => {
         it('should generate access and refresh tokens', () => {
-            const tokens = generateTokens(userId, phone);
+            const tokens = generateTokens(userId, phone, restaurantId);
 
             expect(tokens.accessToken).toBeDefined();
             expect(tokens.refreshToken).toBeDefined();
@@ -26,7 +27,7 @@ describe('JWT Service', () => {
 
     describe('verifyToken', () => {
         it('should verify valid token', () => {
-            const { accessToken } = generateTokens(userId, phone);
+            const { accessToken } = generateTokens(userId, phone, restaurantId);
             const decoded = verifyToken(accessToken);
 
             expect(decoded).toBeTruthy();
@@ -41,7 +42,7 @@ describe('JWT Service', () => {
 
     describe('refreshAccessToken', () => {
         it('should issue new access token with valid refresh token', () => {
-            const { refreshToken } = generateTokens(userId, phone);
+            const { refreshToken } = generateTokens(userId, phone, restaurantId);
             const newAccessToken = refreshAccessToken(refreshToken);
 
             expect(newAccessToken).toBeDefined();
@@ -56,7 +57,7 @@ describe('JWT Service', () => {
         });
 
         it('should return null for access token passed as refresh token', () => {
-            const { accessToken } = generateTokens(userId, phone);
+            const { accessToken } = generateTokens(userId, phone, restaurantId);
             const result = refreshAccessToken(accessToken);
             expect(result).toBeNull();
         });

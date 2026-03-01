@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, Users, ArrowRight, Bell, Calendar, Eye, Tag, UtensilsCrossed, Lock, Activity, Sparkles, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { INSIGHT_DATA } from '../constants';
 import { ViewState, Restaurant, User, Post } from '@restropulse/shared';
-import { authAPI, postsAPI } from '../api';
+import { authAPI, postsAPI, restaurantAPI } from '../api';
 
 interface DashboardProps {
     setView?: (view: ViewState) => void;
@@ -14,6 +13,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
     const [user, setUser] = useState<User | null>(null);
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
+    const [analyticsData, setAnalyticsData] = useState<{ name: string; posts: number }[]>([]);
 
     useEffect(() => {
         const loadData = async () => {
@@ -22,8 +22,20 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
                     authAPI.checkSession(),
                     postsAPI.getAll()
                 ]);
-                setUser(userData.user);
+                setUser(userData.user ?? null);
                 setPosts(postsData);
+
+                if (restaurantData.id) {
+                    try {
+                        const analytics = await restaurantAPI.getAnalytics(restaurantData.id);
+                        const chartData = [...analytics.postsPerWeek]
+                            .reverse()
+                            .map(w => ({ name: `Week ${w.week}`, posts: w.posts }));
+                        setAnalyticsData(chartData);
+                    } catch {
+                        // Analytics may be empty for new restaurants
+                    }
+                }
             } catch (error) {
                 console.error('Failed to load dashboard data:', error);
             } finally {
@@ -31,7 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
             }
         };
         loadData();
-    }, []);
+    }, [restaurantData.id]);
 
     const pendingCount = posts.filter(p => p.status === 'PENDING_APPROVAL' || p.status === 'CHANGES_REQUESTED').length;
     const nextScheduled = posts.find(p => p.status === 'SCHEDULED');
@@ -227,7 +239,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
 
                 <div className="h-40 w-full" style={{ minHeight: '160px' }}>
                     <ResponsiveContainer width="100%" height={160}>
-                        <AreaChart data={INSIGHT_DATA} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                        <AreaChart data={analyticsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                             <defs>
                                 <linearGradient id="colorEngagement" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
@@ -242,7 +254,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
                             <YAxis hide />
                             <Area
                                 type="monotone"
-                                dataKey="engagement"
+                                dataKey="posts"
                                 stroke="#f97316"
                                 strokeWidth={3}
                                 fillOpacity={1}

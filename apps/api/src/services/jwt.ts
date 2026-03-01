@@ -12,6 +12,7 @@ const REFRESH_TOKEN_EXPIRY = '7d';  // 7 days
 export interface TokenPayload {
     userId: string;
     phone: string;
+    restaurantId: string;
     type: 'access' | 'refresh';
 }
 
@@ -23,15 +24,15 @@ export interface TokenPair {
 /**
  * Generate access and refresh tokens for a user
  */
-export function generateTokens(userId: string, phone: string): TokenPair {
+export function generateTokens(userId: string, phone: string, restaurantId: string): TokenPair {
     const accessToken = jwt.sign(
-        { userId, phone, type: 'access' } as TokenPayload,
+        { userId, phone, restaurantId, type: 'access' } as TokenPayload,
         JWT_SECRET,
         { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
 
     const refreshToken = jwt.sign(
-        { userId, phone, type: 'refresh' } as TokenPayload,
+        { userId, phone, restaurantId, type: 'refresh' } as TokenPayload,
         JWT_SECRET,
         { expiresIn: REFRESH_TOKEN_EXPIRY }
     );
@@ -62,7 +63,7 @@ export function refreshAccessToken(refreshToken: string): string | null {
     }
 
     const accessToken = jwt.sign(
-        { userId: payload.userId, phone: payload.phone, type: 'access' } as TokenPayload,
+        { userId: payload.userId, phone: payload.phone, restaurantId: payload.restaurantId, type: 'access' } as TokenPayload,
         JWT_SECRET,
         { expiresIn: ACCESS_TOKEN_EXPIRY }
     );

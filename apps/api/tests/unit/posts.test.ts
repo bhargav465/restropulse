@@ -39,8 +39,10 @@ vi.mock('@restropulse/publishing', () => ({
 let actualPostsDb: any;
 
 // Import Helpers
-const { createTestApp, mockPost } = await import('../helpers/testHelper.js');
+const { createTestApp, mockPost, generateAuthToken } = await import('../helpers/testHelper.js');
 const { getPostsCollection, getRestaurantsCollection } = await import('@restropulse/db');
+
+const authToken = generateAuthToken();
 
 // Reset Mocks Helper
 const useActualImplementation = async () => {
@@ -257,12 +259,17 @@ describe('Posts Module', () => {
     describe('API Routes (src/routes/posts.ts)', () => {
         beforeEach(async () => {
             // Seed data for API tests
-            await request(app).post('/api/posts').send(mockPost);
+            await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send(mockPost);
         });
 
         describe('GET /api/posts', () => {
             it('should get all posts', async () => {
-                const response = await request(app).get('/api/posts');
+                const response = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
 
                 expect(response.status).toBe(200);
                 expect(response.body).toHaveProperty('success', true);
@@ -271,7 +278,9 @@ describe('Posts Module', () => {
             });
 
             it('should return posts with correct structure', async () => {
-                const response = await request(app).get('/api/posts');
+                const response = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
 
                 if (response.body.data.length > 0) {
                     const post = response.body.data[0];
@@ -284,14 +293,18 @@ describe('Posts Module', () => {
             });
 
             it('should return JSON content type', async () => {
-                const response = await request(app).get('/api/posts');
+                const response = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 expect(response.headers['content-type']).toMatch(/json/);
             });
 
             it('should handle 500 error', async () => {
                 mockFindAllPosts.mockRejectedValue(new Error('DB Error'));
 
-                const response = await request(app).get('/api/posts');
+                const response = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 expect(response.status).toBe(500);
                 expect(response.body).toEqual({
                     success: false,
@@ -302,7 +315,9 @@ describe('Posts Module', () => {
 
         describe('GET /api/posts/:id', () => {
             it('should get post by valid ID', async () => {
-                const getRes = await request(app).get('/api/posts');
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
 
                 const response = await request(app).get(`/api/posts/${postId}`);
@@ -321,7 +336,9 @@ describe('Posts Module', () => {
             });
 
             it('should return complete post data', async () => {
-                const getRes = await request(app).get('/api/posts');
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
 
                 const response = await request(app).get(`/api/posts/${postId}`);
@@ -353,7 +370,10 @@ describe('Posts Module', () => {
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(newPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(newPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body).toHaveProperty('success', true);
@@ -371,7 +391,10 @@ describe('Posts Module', () => {
                     platform: 'FACEBOOK'
                 };
 
-                const response = await request(app).post('/api/posts').send(newPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(newPost);
 
                 expect(response.body.data).toHaveProperty('id');
                 expect(response.body.data.id).toMatch(/^[a-f0-9]{24}$/);
@@ -387,7 +410,10 @@ describe('Posts Module', () => {
                     stats: { likes: 100, shares: 20, comments: 15, reach: 1000 }
                 };
 
-                const response = await request(app).post('/api/posts').send(newPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(newPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.stats).toMatchObject(newPost.stats);
@@ -403,7 +429,10 @@ describe('Posts Module', () => {
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(newPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(newPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.mediaUrls).toEqual(newPost.mediaUrls);
@@ -420,7 +449,10 @@ describe('Posts Module', () => {
                     duration: '0:15'
                 };
 
-                const response = await request(app).post('/api/posts').send(newPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(newPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.videoUrl).toBe(newPost.videoUrl);
@@ -430,8 +462,10 @@ describe('Posts Module', () => {
             it('should handle 500 error', async () => {
                 mockCreatePost.mockRejectedValue(new Error('DB Error'));
 
-                // Need to provide valid caption to pass validation and reach DB call
-                const response = await request(app).post('/api/posts').send({ caption: 'Test post' });
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ caption: 'Test post' });
                 expect(response.status).toBe(500);
                 expect(response.body).toEqual({
                     success: false,
@@ -442,12 +476,17 @@ describe('Posts Module', () => {
 
         describe('PUT /api/posts/:id', () => {
             it('should update existing post', async () => {
-                const getRes = await request(app).get('/api/posts');
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
 
                 const updateData = { caption: 'Updated caption', status: 'APPROVED' };
 
-                const response = await request(app).put(`/api/posts/${postId}`).send(updateData);
+                const response = await request(app)
+                    .put(`/api/posts/${postId}`)
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(updateData);
 
                 expect(response.status).toBe(200);
                 expect(response.body).toHaveProperty('success', true);
@@ -456,48 +495,71 @@ describe('Posts Module', () => {
             });
 
             it('should return 404 for non-existent post', async () => {
-                const response = await request(app).put('/api/posts/non-existent').send({ caption: 'test' });
+                const response = await request(app)
+                    .put('/api/posts/non-existent')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ caption: 'test' });
 
                 expect(response.status).toBe(404);
                 expect(response.body.success).toBe(false);
             });
 
             it('should preserve post ID when updating', async () => {
-                const getRes = await request(app).get('/api/posts');
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
 
-                const response = await request(app).put(`/api/posts/${postId}`).send({ id: 'different-id', caption: 'test' });
+                const response = await request(app)
+                    .put(`/api/posts/${postId}`)
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ id: 'different-id', caption: 'test' });
 
                 expect(response.body.data.id).toBe(postId);
             });
 
             it('should handle partial updates', async () => {
-                const getRes = await request(app).get('/api/posts');
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
 
-                const response = await request(app).put(`/api/posts/${postId}`).send({ status: 'CHANGES_REQUESTED' });
+                const response = await request(app)
+                    .put(`/api/posts/${postId}`)
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ status: 'CHANGES_REQUESTED' });
 
                 expect(response.status).toBe(200);
                 expect(response.body.data.status).toBe('CHANGES_REQUESTED');
             });
 
             it('should update stats', async () => {
-                const getRes = await request(app).get('/api/posts');
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
 
                 const newStats = { stats: { likes: 999, shares: 99, comments: 88, reach: 8888 } };
 
-                const response = await request(app).put(`/api/posts/${postId}`).send(newStats);
+                const response = await request(app)
+                    .put(`/api/posts/${postId}`)
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(newStats);
 
                 expect(response.body.data.stats).toMatchObject(newStats.stats);
             });
 
             it('should update feedback field', async () => {
-                const getRes = await request(app).get('/api/posts');
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
                 const feedback = { feedback: JSON.stringify({ tags: ['Caption'], note: 'Please improve' }) };
 
-                const response = await request(app).put(`/api/posts/${postId}`).send(feedback);
+                const response = await request(app)
+                    .put(`/api/posts/${postId}`)
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(feedback);
 
                 expect(response.body.data.feedback).toBe(feedback.feedback);
             });
@@ -505,7 +567,10 @@ describe('Posts Module', () => {
             it('should handle 500 error', async () => {
                 mockUpdatePost.mockRejectedValue(new Error('DB Error'));
 
-                const response = await request(app).put('/api/posts/123').send({ title: 'updated' });
+                const response = await request(app)
+                    .put('/api/posts/123')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ title: 'updated' });
                 expect(response.status).toBe(500);
                 expect(response.body).toEqual({
                     success: false,
@@ -516,10 +581,14 @@ describe('Posts Module', () => {
 
         describe('DELETE /api/posts/:id', () => {
             it('should delete existing post', async () => {
-                const getRes = await request(app).get('/api/posts');
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
 
-                const response = await request(app).delete(`/api/posts/${postId}`);
+                const response = await request(app)
+                    .delete(`/api/posts/${postId}`)
+                    .set('Authorization', `Bearer ${authToken}`);
 
                 expect(response.status).toBe(200);
                 expect(response.body).toHaveProperty('success', true);
@@ -527,18 +596,27 @@ describe('Posts Module', () => {
             });
 
             it('should return 404 for non-existent post', async () => {
-                const response = await request(app).delete('/api/posts/non-existent-id');
+                const response = await request(app)
+                    .delete('/api/posts/non-existent-id')
+                    .set('Authorization', `Bearer ${authToken}`);
 
                 expect(response.status).toBe(404);
                 expect(response.body.success).toBe(false);
             });
 
             it('should actually remove post from list', async () => {
-                await request(app).post('/api/posts').send(mockPost);
-                const getRes = await request(app).get('/api/posts');
+                await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(mockPost);
+                const getRes = await request(app)
+                    .get('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`);
                 const postId = getRes.body.data[0].id;
 
-                await request(app).delete(`/api/posts/${postId}`);
+                await request(app)
+                    .delete(`/api/posts/${postId}`)
+                    .set('Authorization', `Bearer ${authToken}`);
 
                 const getResponse = await request(app).get(`/api/posts/${postId}`);
                 expect(getResponse.status).toBe(404);
@@ -547,7 +625,9 @@ describe('Posts Module', () => {
             it('should handle 500 error', async () => {
                 mockDeletePost.mockRejectedValue(new Error('DB Error'));
 
-                const response = await request(app).delete('/api/posts/123');
+                const response = await request(app)
+                    .delete('/api/posts/123')
+                    .set('Authorization', `Bearer ${authToken}`);
                 expect(response.status).toBe(500);
                 expect(response.body).toEqual({
                     success: false,
@@ -558,30 +638,39 @@ describe('Posts Module', () => {
 
         describe('Edge Cases', () => {
             it('should handle empty request body for POST', async () => {
-                const response = await request(app).post('/api/posts').send({});
-                // Now requires caption, so should return 400
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({});
+                // Requires caption, so should return 400
                 expect(response.status).toBe(400);
                 expect(response.body.error).toBe('Caption is required');
             });
 
             it('should handle very long captions', async () => {
                 const longCaption = 'A'.repeat(5000);
-                const response = await request(app).post('/api/posts').send({
-                    type: 'IMAGE',
-                    caption: longCaption,
-                    platform: 'INSTAGRAM'
-                });
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({
+                        type: 'IMAGE',
+                        caption: longCaption,
+                        platform: 'INSTAGRAM'
+                    });
                 expect(response.status).toBe(201);
                 expect(response.body.data.caption).toBe(longCaption);
             });
 
             it('should handle special characters in caption', async () => {
                 const specialCaption = '(emoji: pizza)(emoji: party) Special #offer @restaurant 50% off! (emoji: money)';
-                const response = await request(app).post('/api/posts').send({
-                    type: 'IMAGE',
-                    caption: specialCaption,
-                    platform: 'INSTAGRAM'
-                });
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({
+                        type: 'IMAGE',
+                        caption: specialCaption,
+                        platform: 'INSTAGRAM'
+                    });
                 expect(response.status).toBe(201);
                 expect(response.body.data.caption).toBe(specialCaption);
             });
@@ -595,7 +684,10 @@ describe('Posts Module', () => {
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.success).toBe(true);
@@ -612,7 +704,10 @@ describe('Posts Module', () => {
                     platform: 'BOTH'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.status).toBe('PENDING_APPROVAL');
@@ -624,7 +719,10 @@ describe('Posts Module', () => {
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.type).toBe('IMAGE');
@@ -635,7 +733,10 @@ describe('Posts Module', () => {
                     caption: 'Quick announcement'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.platform).toBe('INSTAGRAM');
@@ -648,26 +749,32 @@ describe('Posts Module', () => {
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\/\d+\/400\/400$/);
             });
 
-            it('should set default restaurantId to r1 when not provided', async () => {
+            it('should set restaurantId from auth context', async () => {
                 const adhocPost = {
                     caption: 'Post without restaurantId',
                     type: 'IMAGE',
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.restaurantId).toBe('r1');
             });
 
-            it('should preserve provided restaurantId', async () => {
+            it('should always use auth context restaurantId', async () => {
                 const adhocPost = {
                     caption: 'Post for specific restaurant',
                     type: 'IMAGE',
@@ -675,22 +782,27 @@ describe('Posts Module', () => {
                     restaurantId: 'r-custom'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
 
                 expect(response.status).toBe(201);
-                expect(response.body.data.restaurantId).toBe('r-custom');
+                // restaurantId is always set from auth context (r1), not from body
+                expect(response.body.data.restaurantId).toBe('r1');
             });
 
             it('should set all required defaults on minimal post creation', async () => {
-                // Send only the required field (caption)
                 const minimalPost = { caption: 'Bare minimum post' };
 
-                const response = await request(app).post('/api/posts').send(minimalPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(minimalPost);
 
                 expect(response.status).toBe(201);
                 const data = response.body.data;
 
-                // Every field the publishing pipeline depends on
                 expect(data.restaurantId).toBe('r1');
                 expect(data.type).toBe('IMAGE');
                 expect(data.status).toBe('PENDING_APPROVAL');
@@ -708,10 +820,12 @@ describe('Posts Module', () => {
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
                 expect(response.status).toBe(201);
 
-                // Verify directly in the DB
                 const col = getPostsCollection();
                 const dbDoc = await col.findOne({ caption: 'DB persistence check' });
                 expect(dbDoc).not.toBeNull();
@@ -726,7 +840,10 @@ describe('Posts Module', () => {
                     strategyId: 'strategy-123'
                 };
 
-                const response = await request(app).post('/api/posts').send(strategyPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(strategyPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.isAdhoc).toBe(false);
@@ -741,7 +858,10 @@ describe('Posts Module', () => {
                     scheduledFor: '2026-02-15T14:00:00.000Z'
                 };
 
-                const response = await request(app).post('/api/posts').send(scheduledAdhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(scheduledAdhocPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.scheduledFor).toBe(scheduledAdhocPost.scheduledFor);
@@ -756,7 +876,10 @@ describe('Posts Module', () => {
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(invalidPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(invalidPost);
 
                 expect(response.status).toBe(400);
                 expect(response.body.success).toBe(false);
@@ -770,7 +893,10 @@ describe('Posts Module', () => {
                     platform: 'INSTAGRAM'
                 };
 
-                const response = await request(app).post('/api/posts').send(invalidPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(invalidPost);
 
                 expect(response.status).toBe(400);
                 expect(response.body.success).toBe(false);
@@ -786,7 +912,10 @@ describe('Posts Module', () => {
                     duration: '0:30'
                 };
 
-                const response = await request(app).post('/api/posts').send(reelPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(reelPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.type).toBe('REEL');
@@ -805,7 +934,10 @@ describe('Posts Module', () => {
                     thumbnail: '/img1.jpg'
                 };
 
-                const response = await request(app).post('/api/posts').send(carouselPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(carouselPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.type).toBe('CAROUSEL');
@@ -822,7 +954,10 @@ describe('Posts Module', () => {
                     videoUrl: '/stories/story-123.mp4'
                 };
 
-                const response = await request(app).post('/api/posts').send(storyPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(storyPost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.type).toBe('STORY');
@@ -838,13 +973,16 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED'
                 };
 
-                const response = await request(app).post('/api/posts').send(adhocPost);
+                const response = await request(app)
+                    .post('/api/posts')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send(adhocPost);
 
                 expect(response.status).toBe(201);
-                // Status should use provided value, not default
                 expect(response.body.data.status).toBe('SCHEDULED');
             });
         });
+
 
         describe('POST /api/posts/actions/publish-all', () => {
             it('should trigger manual publish and return stats', async () => {
@@ -873,6 +1011,7 @@ describe('Posts Module', () => {
             it('should return 400 when concept is missing', async () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
                     .send({ type: 'IMAGE' });
 
                 expect(response.status).toBe(400);
@@ -883,6 +1022,7 @@ describe('Posts Module', () => {
             it('should return 400 when type is missing', async () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
                     .send({ concept: 'Weekend offer post' });
 
                 expect(response.status).toBe(400);
@@ -893,6 +1033,7 @@ describe('Posts Module', () => {
             it('should generate IMAGE post with defaults', async () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
                     .send({ concept: 'New lunch combo launch', type: 'IMAGE' });
 
                 expect(response.status).toBe(201);
@@ -909,6 +1050,7 @@ describe('Posts Module', () => {
             it('should generate VIDEO post with videoUrl', async () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
                     .send({ concept: 'Chef making signature dish', type: 'VIDEO', platform: 'BOTH' });
 
                 expect(response.status).toBe(201);
@@ -922,6 +1064,7 @@ describe('Posts Module', () => {
             it('should generate CAROUSEL post with mediaUrls', async () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
                     .send({ concept: 'Top 3 dishes this week', type: 'CAROUSEL' });
 
                 expect(response.status).toBe(201);
@@ -937,6 +1080,7 @@ describe('Posts Module', () => {
 
                 const response = await request(app)
                     .post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
                     .send({ concept: 'Promo post', type: 'IMAGE' });
 
                 expect(response.status).toBe(500);

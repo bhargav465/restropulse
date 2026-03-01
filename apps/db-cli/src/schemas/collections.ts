@@ -210,4 +210,25 @@ export const COLLECTIONS: CollectionSchema[] = [
             },
         },
     },
+    {
+        name: 'otpChallenges',
+        indexes: [
+            { spec: { phone: 1 } },
+            { spec: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
+        ],
+    },
+    {
+        name: 'oauthSessions',
+        indexes: [
+            { spec: { sessionId: 1 }, options: { unique: true } },
+            { spec: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
+        ],
+    },
+    {
+        name: 'dataDeletionAudits',
+        indexes: [
+            { spec: { confirmationCode: 1 }, options: { unique: true } },
+            { spec: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
+        ],
+    },
 ];

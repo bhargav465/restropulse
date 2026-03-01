@@ -3,12 +3,13 @@ import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPost
 import { publishPost, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
 import { ApiResponse, Post } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Get all posts
-router.get('/', handle(async (_req: Request, res: Response<ApiResponse<Post[]>>) => {
-    const posts = await findAllPosts();
+router.get('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Post[]>>) => {
+    const posts = await findAllPosts(req.user!.restaurantId);
     res.json({
         success: true,
         data: posts
@@ -54,7 +55,7 @@ router.get('/:id', handle(async (req: Request, res: Response<ApiResponse<Post>>)
 }));
 
 // Create new post (supports both strategy-generated and adhoc posts)
-router.post('/', handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
+router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
     const postData = req.body;
 
     // Validate required fields
@@ -75,8 +76,8 @@ router.post('/', handle(async (req: Request, res: Response<ApiResponse<Post>>) =
         platform: postData.platform || 'INSTAGRAM',
         thumbnail: postData.thumbnail || placeholderImage,
         ...postData,
-        // Ensure restaurantId is always set (currently single-restaurant app)
-        restaurantId: postData.restaurantId || 'r1',
+        // Ensure restaurantId is always set from auth context
+        restaurantId: req.user!.restaurantId,
         // Mark as adhoc if no strategyId
         isAdhoc: !postData.strategyId,
     };
@@ -90,7 +91,7 @@ router.post('/', handle(async (req: Request, res: Response<ApiResponse<Post>>) =
 }));
 
 // Generate post with AI-created content (for adhoc posts)
-router.post('/generate', handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
+router.post('/generate', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
     const { concept, type, platform, scheduledFor } = req.body;
 
     // Validate required fields
@@ -158,7 +159,7 @@ router.post('/generate', handle(async (req: Request, res: Response<ApiResponse<P
         thumbnail,
         videoUrl,
         mediaUrls,
-        restaurantId: 'r1',
+        restaurantId: req.user!.restaurantId,
         scheduledFor: scheduledFor || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
         isAdhoc: true
     };
@@ -175,7 +176,7 @@ router.post('/generate', handle(async (req: Request, res: Response<ApiResponse<P
 }));
 
 // Update post
-router.put('/:id', handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
+router.put('/:id', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
     const { id } = req.params;
     const post = await updatePost(id, req.body);
 
@@ -485,7 +486,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
 });
 
 // Delete post
-router.delete('/:id', handle(async (req: Request, res: Response<ApiResponse>) => {
+router.delete('/:id', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
     const { id } = req.params;
     const deleted = await deletePost(id);
 

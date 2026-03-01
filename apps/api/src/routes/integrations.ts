@@ -19,39 +19,12 @@ import {
     encrypt,
     checkAndRefreshTokenIfNeeded
 } from '@restropulse/publishing';
-import { getRestaurantsCollection } from '@restropulse/db';
+import { getRestaurantsCollection, getOauthSessionsCollection, getDataDeletionAuditsCollection } from '@restropulse/db';
 
 const router = express.Router();
 
 // App Secret for signature verification
 const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || '';
-
-// In-memory store for pending OAuth sessions (selectionId -> account selection)
-const pendingSelections = new Map<string, {
-    accounts: InstagramAccount[];
-    accessToken: string;
-    tokenExpiresAt: Date;
-    restaurantId: string;
-    createdAt: number;
-}>();
-
-// In-memory store for data deletion confirmations (for GDPR compliance)
-const dataDeletionRequests = new Map<string, {
-    confirmationCode: string;
-    userId: string;
-    requestedAt: Date;
-    status: 'pending' | 'completed';
-}>();
-
-// Cleanup expired pending selections every 5 minutes
-setInterval(() => {
-    const now = Date.now();
-    for (const [key, data] of pendingSelections.entries()) {
-        if (now - data.createdAt > 10 * 60 * 1000) { // 10 minutes
-            pendingSelections.delete(key);
-        }
-    }
-}, 5 * 60 * 1000);
 
 /**
  * Verify Facebook signed request
@@ -119,7 +92,7 @@ router.get('/instagram/oauth-url', async (req: Request, res: Response) => {
             });
         }
 
-        const { url, state } = generateOAuthUrl(restaurantId, useOnboarding);
+        const { url, state } = await generateOAuthUrl(restaurantId, useOnboarding);
 
         res.json({
             success: true,
@@ -158,7 +131,7 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
 
     try {
         // Validate state first to get restaurant ID
-        const stateValidation = validateStateToken(String(state));
+        const stateValidation = await validateStateToken(String(state));
         if (!stateValidation.valid || !stateValidation.restaurantId) {
             console.log('[DEBUG] Invalid state token');
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=invalid_state&message=${encodeURIComponent('Invalid or expired authorization request. Please try again.')}`);
@@ -211,12 +184,16 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
         // Multiple accounts - store for selection
         if (result.accounts && result.accounts.length > 1) {
             const selectionId = crypto.randomBytes(16).toString('hex');
-            pendingSelections.set(selectionId, {
+            const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+            const col = getOauthSessionsCollection();
+            await col.insertOne({
+                type: 'pending_selection',
+                sessionId: selectionId,
                 accounts: result.accounts,
                 accessToken: result.accessToken!,
                 tokenExpiresAt: result.tokenExpiresAt!,
                 restaurantId,
-                createdAt: Date.now()
+                expiresAt
             });
 
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?select=true&selectionId=${selectionId}`);
@@ -270,20 +247,24 @@ router.post('/instagram/callback', async (req: Request, res: Response) => {
         // Multiple accounts - store and return selection ID
         if (result.accounts && result.accounts.length > 1) {
             const selectionId = crypto.randomBytes(16).toString('hex');
-            const stateData = validateStateToken(state);
+            const stateData = await validateStateToken(state);
+            const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-            pendingSelections.set(selectionId, {
+            const col = getOauthSessionsCollection();
+            await col.insertOne({
+                type: 'pending_selection',
+                sessionId: selectionId,
                 accounts: result.accounts,
                 accessToken: result.accessToken!,
                 tokenExpiresAt: result.tokenExpiresAt!,
                 restaurantId: stateData.restaurantId || '',
-                createdAt: Date.now()
+                expiresAt
             });
 
             return res.json({
                 success: true,
                 data: {
-                    accounts: result.accounts.map(a => ({
+                    accounts: result.accounts.map((a: InstagramAccount) => ({
                         id: a.id,
                         username: a.username,
                         name: a.name,
@@ -318,7 +299,8 @@ router.post('/instagram/callback', async (req: Request, res: Response) => {
 router.get('/instagram/pending-accounts/:selectionId', async (req: Request, res: Response) => {
     const { selectionId } = req.params;
 
-    const pending = pendingSelections.get(selectionId);
+    const col = getOauthSessionsCollection();
+    const pending = await col.findOne({ type: 'pending_selection', sessionId: selectionId }) as any;
 
     if (!pending) {
         return res.status(404).json({
@@ -330,7 +312,7 @@ router.get('/instagram/pending-accounts/:selectionId', async (req: Request, res:
     res.json({
         success: true,
         data: {
-            accounts: pending.accounts.map(a => ({
+            accounts: pending.accounts.map((a: InstagramAccount) => ({
                 id: a.id,
                 username: a.username,
                 name: a.name,
@@ -355,7 +337,8 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
         });
     }
 
-    const pending = pendingSelections.get(selectionId);
+    const col = getOauthSessionsCollection();
+    const pending = await col.findOne({ type: 'pending_selection', sessionId: selectionId }) as any;
 
     if (!pending) {
         return res.status(404).json({
@@ -374,7 +357,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
         });
     }
 
-    const selectedAccount = pending.accounts.find(a => a.id === accountId);
+    const selectedAccount = pending.accounts.find((a: InstagramAccount) => a.id === accountId);
 
     if (!selectedAccount) {
         return res.status(400).json({
@@ -396,8 +379,8 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
 
         // Save to database
         console.log('[DEBUG] select-account: Saving Instagram credentials for restaurant:', targetRestaurantId);
-        const col = getRestaurantsCollection();
-        const updateResult = await col.updateOne(
+        const restaurantsCol = getRestaurantsCollection();
+        const updateResult = await restaurantsCol.updateOne(
             { _id: targetRestaurantId as any },
             {
                 $set: {
@@ -410,7 +393,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
         console.log('[DEBUG] select-account: Update result:', JSON.stringify(updateResult));
 
         // Clean up pending selection
-        pendingSelections.delete(selectionId);
+        await col.deleteOne({ type: 'pending_selection', sessionId: selectionId });
 
         res.json({
             success: true,
@@ -672,8 +655,6 @@ router.get('/instagram/profile/:restaurantId', async (req: Request, res: Respons
 /**
  * POST /api/integrations/instagram/deauthorize
  * Called by Facebook when a user removes the app
- * 
- * Facebook sends a signed_request parameter containing user info
  */
 router.post('/instagram/deauthorize', async (req: Request, res: Response) => {
     console.log('[Instagram Deauthorize] Received callback');
@@ -723,9 +704,6 @@ router.post('/instagram/deauthorize', async (req: Request, res: Response) => {
 /**
  * POST /api/integrations/instagram/data-deletion
  * GDPR Data Deletion Request Callback
- * 
- * Called by Facebook when a user requests data deletion
- * Must return a confirmation code and status URL
  */
 router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
     console.log('[Instagram Data Deletion] Received request');
@@ -749,13 +727,16 @@ router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
 
         // Generate a confirmation code
         const confirmationCode = crypto.randomBytes(16).toString('hex');
+        const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
 
-        // Store the deletion request
-        dataDeletionRequests.set(confirmationCode, {
+        // Store the deletion request in DB
+        const auditsCol = getDataDeletionAuditsCollection();
+        await auditsCol.insertOne({
             confirmationCode,
             userId: userData.userId,
             requestedAt: new Date(),
-            status: 'pending'
+            status: 'pending',
+            expiresAt
         });
 
         // Delete user data from database
@@ -776,10 +757,10 @@ router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
         console.log(`[Instagram Data Deletion] Deleted data from ${result.modifiedCount} restaurant(s)`);
 
         // Update deletion request status
-        const request = dataDeletionRequests.get(confirmationCode);
-        if (request) {
-            request.status = 'completed';
-        }
+        await auditsCol.updateOne(
+            { confirmationCode },
+            { $set: { status: 'completed' } }
+        );
 
         // Build the status URL
         const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
@@ -815,7 +796,8 @@ router.get('/instagram/data-deletion-status', async (req: Request, res: Response
         `);
     }
 
-    const request = dataDeletionRequests.get(String(code));
+    const auditsCol = getDataDeletionAuditsCollection();
+    const request = await auditsCol.findOne({ confirmationCode: String(code) }) as any;
 
     if (!request) {
         return res.status(404).send(`
@@ -944,7 +926,6 @@ router.get('/instagram/debug-token/:restaurantId', async (req: Request, res: Res
 /**
  * POST /api/integrations/instagram/migrate-to-page-token/:restaurantId
  * One-time migration: convert stored User Access Token to Page Access Token.
- * The Content Publishing API requires a Page token, not a User token.
  * Dev only.
  */
 router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Request, res: Response) => {
@@ -986,7 +967,6 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
         const matchingPage = pages.find((p: any) => p.id === storedPageId);
 
         if (!matchingPage) {
-            // If /me/accounts returned empty (Dev mode bug), try fetching page directly
             console.log(`[Token Migration] Page ${storedPageId} not in /me/accounts, trying direct fetch...`);
             try {
                 const directRes = await axios.get(`https://graph.facebook.com/v18.0/${storedPageId}`, {

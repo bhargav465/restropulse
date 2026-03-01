@@ -1,14 +1,11 @@
 import express, { Request, Response } from 'express';
-import { findUserByEmail, findUserByPhone, findUserById, createUser, findUserByFirebaseUid, updateUser } from '@restropulse/db';
+import { findUserByEmail, findUserByPhone, findUserById, createUser, findUserByFirebaseUid, updateUser, getOtpChallengesCollection } from '@restropulse/db';
 import { AuthResponse, LoginRequest, OtpRequest, OtpVerifyRequest } from '@restropulse/shared';
 import { generateTokens, verifyToken, refreshAccessToken } from '../services/jwt.js';
 import { verifyFirebaseToken, isFirebaseInitialized } from '../services/firebase-admin.js';
 import { handle } from '../middleware/async-handler.js';
 
 const router = express.Router();
-
-// In-memory OTP store (for development fallback when Firebase is not available)
-const otpStore = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
 
 // Generate 6-digit OTP (for development fallback)
 function generateOtp(): string {
@@ -69,7 +66,8 @@ router.post('/firebase', handle(async (req: Request, res: Response) => {
                 email: `${phone.replace('+', '')}@phone.restropulse.local`,
                 phone,
                 firebaseUid: uid,
-                role: 'OWNER'
+                role: 'OWNER',
+                restaurantId: ''
             });
         }
     }
@@ -82,13 +80,14 @@ router.post('/firebase', handle(async (req: Request, res: Response) => {
     }
 
     // Generate our own JWT tokens for API authorization
-    const tokens = generateTokens(user.id, phone);
+    const tokens = generateTokens(user.id, phone, user.restaurantId);
 
     res.json({
         success: true,
         user,
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
+        restaurantId: user.restaurantId,
         message: 'Login successful'
     });
 }));
@@ -110,10 +109,12 @@ router.post('/send-otp', handle(async (req: Request<{}, {}, OtpRequest>, res: Re
 
     // Generate OTP
     const otp = generateOtp();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // Store OTP
-    otpStore.set(phone, { otp, expiresAt, attempts: 0 });
+    // Store OTP in DB (upsert by phone to replace any existing challenge)
+    const col = getOtpChallengesCollection();
+    await col.deleteMany({ phone });
+    await col.insertOne({ phone, otp, expiresAt, attempts: 0 });
 
     // Log OTP for development
     console.log(`[OTP] ${phone}: ${otp}`);
@@ -137,7 +138,8 @@ router.post('/verify-otp', handle(async (req: Request<{}, {}, OtpVerifyRequest>,
         });
     }
 
-    const stored = otpStore.get(phone);
+    const col = getOtpChallengesCollection();
+    const stored = await col.findOne({ phone }) as any;
 
     // Check if OTP exists
     if (!stored) {
@@ -148,8 +150,8 @@ router.post('/verify-otp', handle(async (req: Request<{}, {}, OtpVerifyRequest>,
     }
 
     // Check expiration
-    if (Date.now() > stored.expiresAt) {
-        otpStore.delete(phone);
+    if (new Date() > new Date(stored.expiresAt)) {
+        await col.deleteOne({ phone });
         return res.status(400).json({
             success: false,
             message: 'OTP has expired. Please request a new one.'
@@ -158,7 +160,7 @@ router.post('/verify-otp', handle(async (req: Request<{}, {}, OtpVerifyRequest>,
 
     // Check attempts
     if (stored.attempts >= 3) {
-        otpStore.delete(phone);
+        await col.deleteOne({ phone });
         return res.status(400).json({
             success: false,
             message: 'Too many attempts. Please request a new OTP.'
@@ -167,15 +169,16 @@ router.post('/verify-otp', handle(async (req: Request<{}, {}, OtpVerifyRequest>,
 
     // Verify OTP
     if (stored.otp !== otp) {
-        stored.attempts++;
+        await col.updateOne({ phone }, { $inc: { attempts: 1 } });
+        const remaining = 3 - (stored.attempts + 1);
         return res.status(401).json({
             success: false,
-            message: `Invalid OTP. ${3 - stored.attempts} attempts remaining.`
+            message: `Invalid OTP. ${remaining} attempts remaining.`
         });
     }
 
     // OTP verified - clear it
-    otpStore.delete(phone);
+    await col.deleteOne({ phone });
 
     // Find or create user
     let user = await findUserByPhone(phone);
@@ -186,18 +189,20 @@ router.post('/verify-otp', handle(async (req: Request<{}, {}, OtpVerifyRequest>,
             name: 'Restaurant Owner',
             email: `${phone.replace('+', '')}@phone.restropulse.local`,
             phone,
-            role: 'OWNER'
+            role: 'OWNER',
+            restaurantId: ''
         });
     }
 
     // Generate JWT tokens
-    const tokens = generateTokens(user.id, phone);
+    const tokens = generateTokens(user.id, phone, user.restaurantId);
 
     res.json({
         success: true,
         user,
         token: tokens.accessToken,
         refreshToken: tokens.refreshToken,
+        restaurantId: user.restaurantId,
         message: 'Login successful'
     });
 }));
@@ -242,7 +247,7 @@ router.post('/login', handle(async (req: Request<{}, {}, LoginRequest>, res: Res
     const user = await findUserByEmail(email);
 
     if (user && password) {
-        const tokens = generateTokens(user.id, user.phone);
+        const tokens = generateTokens(user.id, user.phone, user.restaurantId);
         res.json({
             success: true,
             user,
