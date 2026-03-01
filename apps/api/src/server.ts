@@ -1,9 +1,9 @@
-import 'dotenv/config'; // Load environment variables before other imports
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { connectDB, disconnectDB } from './db/connection.js';
+import { loadAndValidateEnv, z } from '@restropulse/shared';
+import { connectDB, disconnectDB } from '@restropulse/db';
 import { initializeFirebaseAdmin } from './services/firebase-admin.js';
 // NOTE: Cron jobs (publishing + token refresh) are now handled by apps/publisher
 import authRoutes from './routes/auth.js';
@@ -15,9 +15,21 @@ import integrationsRoutes from './routes/integrations.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const env = loadAndValidateEnv({
+    serviceName: 'api',
+    envPath: path.resolve(process.cwd(), '.env'),
+    schema: z.object({
+        NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+        PORT: z.coerce.number().int().positive().default(3001),
+        CORS_ORIGIN: z.string().min(1).default('http://localhost:3000'),
+        MONGODB_URI: z.string().min(1),
+        MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
+    }).passthrough(),
+});
+
 const app: Express = express();
-const PORT = process.env.PORT || 3001;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const PORT = env.PORT;
+const CORS_ORIGIN = env.CORS_ORIGIN;
 
 // Initialize Firebase Admin SDK (optional - for production auth)
 initializeFirebaseAdmin();

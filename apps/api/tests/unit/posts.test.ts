@@ -14,21 +14,22 @@ const mockPublishPost = vi.fn();
 const mockTriggerManualPublish = vi.fn();
 const mockGetRecentPublishAttempts = vi.fn();
 
-// Mock Module
-vi.mock('../../src/db/posts.js', () => ({
-    findAllPosts: mockFindAllPosts,
-    findPostById: mockFindPostById,
-    createPost: mockCreatePost,
-    updatePost: mockUpdatePost,
-    deletePost: mockDeletePost,
-    findPostsByStatus: mockFindPostsByStatus
-}));
+// Mock Module - keep real collection getters, override post helper functions
+vi.mock('@restropulse/db', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        findAllPosts: mockFindAllPosts,
+        findPostById: mockFindPostById,
+        createPost: mockCreatePost,
+        updatePost: mockUpdatePost,
+        deletePost: mockDeletePost,
+        findPostsByStatus: mockFindPostsByStatus
+    };
+});
 
-vi.mock('../../src/services/publishing-service.js', () => ({
-    publishPost: mockPublishPost
-}));
-
-vi.mock('../../src/services/publishing-cron.js', () => ({
+vi.mock('@restropulse/publishing', () => ({
+    publishPost: mockPublishPost,
     triggerManualPublish: mockTriggerManualPublish,
     getRecentPublishAttempts: mockGetRecentPublishAttempts,
     startPublishingCron: vi.fn()
@@ -39,12 +40,12 @@ let actualPostsDb: any;
 
 // Import Helpers
 const { createTestApp, mockPost } = await import('../helpers/testHelper.js');
-const { getPostsCollection, getRestaurantsCollection } = await import('../../src/db/connection.js');
+const { getPostsCollection, getRestaurantsCollection } = await import('@restropulse/db');
 
 // Reset Mocks Helper
 const useActualImplementation = async () => {
     if (!actualPostsDb) {
-        actualPostsDb = await vi.importActual('../../src/db/posts.js');
+        actualPostsDb = await vi.importActual('@restropulse/db');
     }
     mockFindAllPosts.mockImplementation(actualPostsDb.findAllPosts);
     mockFindPostById.mockImplementation(actualPostsDb.findPostById);

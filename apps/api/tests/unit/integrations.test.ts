@@ -5,7 +5,7 @@ process.env.INSTAGRAM_APP_SECRET = 'test-app-secret';
 import { describe, it, test, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import crypto from 'crypto';
-import { encrypt } from '../../src/services/encryption.js';
+const { encrypt } = await import('../../../../packages/publishing/dist/encryption.js');
 
 // Define Mocks for Services
 const mockGenerateOAuthUrl = vi.fn();
@@ -20,7 +20,7 @@ const mockAxiosGet = vi.fn();
 const mockAxiosPost = vi.fn();
 
 // Mock Services
-vi.mock('../../src/services/instagram-api.js', () => ({
+vi.mock('@restropulse/publishing', () => ({
     generateOAuthUrl: mockGenerateOAuthUrl,
     handleOAuthCallback: mockHandleOAuthCallback,
     isInstagramConfigured: mockIsInstagramConfigured,
@@ -34,12 +34,11 @@ vi.mock('../../src/services/instagram-api.js', () => ({
         name: account.name
     })),
     refreshAccessToken: vi.fn(),
-    validateToken: mockValidateToken
-}));
-
-vi.mock('../../src/services/token-refresh-cron.js', () => ({
+    validateToken: mockValidateToken,
     checkAndRefreshTokenIfNeeded: mockCheckAndRefreshTokenIfNeeded,
-    triggerManualRefresh: vi.fn()
+    triggerManualRefresh: vi.fn(),
+    encrypt: vi.fn((val: string) => `iv_hex:${val}`),
+    decrypt: vi.fn((val: string) => val && val.includes(':') ? val.split(':').slice(1).join(':') : null)
 }));
 
 vi.mock('axios', () => ({
@@ -58,7 +57,7 @@ vi.mock('axios', () => ({
 }));
 
 // Mock Database Connection
-vi.mock('../../src/db/connection.js', async (importOriginal) => {
+vi.mock('@restropulse/db', async (importOriginal) => {
     const actual = await importOriginal() as any;
     return {
         ...actual,
@@ -72,7 +71,7 @@ let realConnection: any;
 // Helper to reset mocks
 const useActualImplementation = async () => {
     if (!realConnection) {
-        realConnection = await vi.importActual('../../src/db/connection.js');
+        realConnection = await vi.importActual('@restropulse/db');
     }
     mockGetRestaurantsCollection.mockImplementation(realConnection.getRestaurantsCollection);
 };

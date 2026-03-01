@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, CheckCircle, MessageCircle, RefreshCw, Send, Edit, Clock, Lock, Undo2, AlertTriangle, FileText, Image as ImageIcon, MoreHorizontal, CheckSquare, Square, AlertCircle, ChevronDown, LockKeyhole, History, Sparkles, Phone, Film, CircleDashed, Layers, Play, Video, ChevronLeft, ChevronRight, Pause, ScanEye, CalendarClock, Archive, X, Plus } from 'lucide-react';
-import { Post, Restaurant } from '../types';
+import { Post, Restaurant } from '@restropulse/shared';
 import { postsAPI, restaurantAPI } from '../api';
 import AdhocPostModal from './AdhocPostModal';
 
@@ -276,13 +276,19 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
 
                     {/* Navigation Arrows (Desktop mostly) */}
                     <button
+                        type="button"
                         onClick={prevSlide}
+                        aria-label="Previous slide"
+                        title="Previous slide"
                         className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 text-white p-1.5 rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
                     >
                         <ChevronLeft size={16} />
                     </button>
                     <button
+                        type="button"
                         onClick={nextSlide}
+                        aria-label="Next slide"
+                        title="Next slide"
                         className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/20 hover:bg-black/40 text-white p-1.5 rounded-full backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
                     >
                         <ChevronRight size={16} />
@@ -410,12 +416,14 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
 
                             <div className="flex items-center gap-4">
                                 <button
+                                    type="button"
                                     onClick={() => onFeedback(post.id, 'EDIT')}
                                     className="text-[10px] font-bold text-slate-400 hover:text-orange-600 uppercase tracking-wide transition-colors"
                                 >
                                     Add Note
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => onApprove(post.id)}
                                     disabled={approving === post.id}
                                     className={`text-[10px] font-bold uppercase tracking-wide transition-colors ${approving === post.id ? 'text-slate-300 cursor-wait' : 'text-slate-400 hover:text-green-600'}`}
@@ -427,12 +435,14 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                     ) : (
                         <div className="grid grid-cols-2 gap-3 pt-2">
                             <button
+                                type="button"
                                 onClick={() => onFeedback(post.id, 'EDIT')}
                                 className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all"
                             >
                                 <Edit size={16} /> Request Edit
                             </button>
                             <button
+                                type="button"
                                 onClick={() => onApprove(post.id)}
                                 disabled={approving === post.id}
                                 className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm transition-all ${approving === post.id ? 'bg-orange-400 text-white/80 cursor-wait' : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'}`}
@@ -457,6 +467,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                             </div>
                         ) : (
                             <button
+                                type="button"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onFeedback(post.id, 'REVERT');
@@ -837,6 +848,7 @@ const ContentStudio: React.FC = () => {
                 {/* New Post Button */}
                 <div className="flex justify-end mb-3">
                     <button
+                        type="button"
                         onClick={() => setIsAdhocModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-semibold text-sm shadow-lg shadow-orange-500/25 transition-all active:scale-[0.97]"
                         data-testid="new-post-button"
@@ -851,6 +863,7 @@ const ContentStudio: React.FC = () => {
                         const isActive = activeTab === tab.id;
                         return (
                             <button
+                                type="button"
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${isActive ? 'text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-600'}`}
@@ -988,6 +1001,7 @@ const ContentStudio: React.FC = () => {
                                     )}
 
                                     <button
+                                        type="button"
                                         onClick={contactAccountManager}
                                         className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3.5 rounded-xl shadow-md shadow-green-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2.5"
                                     >
@@ -1009,6 +1023,7 @@ const ContentStudio: React.FC = () => {
                                                     const hasSelections = selectedTags.includes(category.id);
                                                     return (
                                                         <button
+                                                            type="button"
                                                             key={category.id}
                                                             onClick={() => setActiveFeedbackTab(category.id)}
                                                             className={`
@@ -1039,6 +1054,7 @@ const ContentStudio: React.FC = () => {
                                                         const isSelected = (tagDetails[activeFeedbackTab] || '').split(', ').includes(option);
                                                         return (
                                                             <button
+                                                                type="button"
                                                                 key={option}
                                                                 onClick={() => toggleDetailOption(activeFeedbackTab, option)}
                                                                 className={`
@@ -1156,6 +1172,7 @@ const ContentStudio: React.FC = () => {
                                         )}
 
                                         <button
+                                            type="button"
                                             onClick={() => submitFeedback(!!feedbackState.warning)}
                                             className={`w-full font-bold py-3.5 rounded-2xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${feedbackState.warning ? 'bg-orange-600 hover:bg-orange-700 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'}`}
                                         >

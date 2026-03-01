@@ -14,11 +14,12 @@ import {
     validateToken,
     getInstagramProfile,
     isInstagramConfigured,
-    InstagramAccount
-} from '../services/instagram-api.js';
-import { decrypt, encrypt } from '../services/encryption.js';
-import { getRestaurantsCollection } from '../db/connection.js';
-import { checkAndRefreshTokenIfNeeded } from '../services/token-refresh-cron.js';
+    InstagramAccount,
+    decrypt,
+    encrypt,
+    checkAndRefreshTokenIfNeeded
+} from '@restropulse/publishing';
+import { getRestaurantsCollection } from '@restropulse/db';
 
 const router = express.Router();
 

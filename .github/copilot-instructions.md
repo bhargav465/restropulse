@@ -30,6 +30,7 @@ apps/
 packages/
   shared/           @restropulse/shared -- unified TypeScript types
   db/               @restropulse/db -- shared MongoDB connection + helpers
+  publishing/       @restropulse/publishing -- Meta API, encryption, publishing/token-refresh crons
   tsconfig/         Shared tsconfig presets (base, react, node)
   eslint-config/    Shared ESLint flat config
 ```
@@ -50,7 +51,9 @@ packages/
 - ESM modules (type: "module" in package.json)
 - Target: ES2022
 - Import from `@restropulse/shared` for all types -- never duplicate type definitions
+- Import `loadAndValidateEnv` from `@restropulse/shared` for startup config validation in services
 - Import from `@restropulse/db` for MongoDB operations -- never create separate DB connections
+- Import from `@restropulse/publishing` for encryption, Meta API, and publishing/token-refresh crons -- never duplicate these locally
 
 ### Naming
 - Files: kebab-case (e.g., `publishing-service.ts`)
@@ -73,7 +76,7 @@ packages/
 - All async route handlers must catch errors and return proper ApiResponse
 
 ### No Special Characters
-- Do not use special characters like [, !, etc.] emoji in code, documentation, print statements, or logs
+- Do not use special characters like emoji in code, documentation, print statements, or logs
 - Use plain text indicators instead
 
 ## Database
@@ -100,6 +103,7 @@ packages/
 ## Environment
 
 - Each app has its own `.env` file
+- Service entrypoints must load and validate env via `loadAndValidateEnv` with a local per-service schema
 - See `docs/INFRASTRUCTURE.md` for the full list of environment variables per app
 - Critical shared vars: MONGODB_URI, ENCRYPTION_KEY, META_APP_ID, META_APP_SECRET
 
@@ -107,11 +111,11 @@ packages/
 
 ```bash
 npm install              # Install all workspaces
-npm run dev              # Start all apps (Turborepo)
+npm run dev              # Start runtime apps (excludes @restropulse/db-cli)
 npm run build            # Build all
 npm run test             # Test all
-npm run test:unit         # Run unit tests across workspaces
-npm run test:coverage     # Run coverage across workspaces
+npm run test:unit        # Run unit tests across workspaces
+npm run test:coverage    # Run coverage across workspaces
 npm run lint             # Lint all
 npm run type-check       # Type-check all
 npm run dev --filter=@restropulse/api   # Single app
@@ -122,7 +126,7 @@ npm run dev --filter=@restropulse/api   # Single app
 Three MCP servers provide non-overlapping context layers. Follow these rules
 to prevent redundant or conflicting retrieval:
 
-1. **Semantic Search (`codebase-rag`)** -- Use ONLY for high-level discovery
+1. **Semantic Search (`semantic-search`)** -- Use ONLY for high-level discovery
    ("where is the feature that handles X?"). Never use it for type lookups or
    reading final file content.
 2. **Logic / Navigation (`lsp-*`)** -- Use for jump-to-definition, find
@@ -132,7 +136,7 @@ to prevent redundant or conflicting retrieval:
    decisions, conventions, and user preferences. Never store code snippets or
    type information here.
 4. **Filesystem tools** -- Use for reading/writing actual file content. Do not
-   use `codebase-rag` to read files.
+   use `semantic-search` to read files.
 
 Full setup details: `docs/MCP-SETUP.md`
 

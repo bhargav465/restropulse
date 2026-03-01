@@ -27,7 +27,7 @@ const mockSchedule = vi.fn();
 const mockGetPostsCollection = vi.fn(() => mockPostsCollection);
 const mockGetRestaurantsCollection = vi.fn(() => mockRestaurantsCollection);
 
-vi.mock('../../src/db/connection.js', async (importOriginal) => {
+vi.mock('@restropulse/db', async (importOriginal) => {
     const actual = await importOriginal() as any;
     return {
         ...actual,
@@ -37,7 +37,7 @@ vi.mock('../../src/db/connection.js', async (importOriginal) => {
 });
 
 // Mock modules before importing subject
-vi.mock('../../src/services/publishing-service.js', () => ({
+vi.mock('../../../../packages/publishing/dist/publishing-service.js', () => ({
     publishPost: mockPublishPost
 }));
 
@@ -54,7 +54,7 @@ const {
     getRecentPublishAttempts,
     startPublishingCron,
     triggerManualPublish
-} = await import('../../src/services/publishing-cron.js');
+} = await import('@restropulse/publishing');
 
 describe('Publishing Cron Service', () => {
     beforeEach(() => {

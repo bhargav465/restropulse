@@ -4,8 +4,8 @@
  */
 
 import cron from 'node-cron';
-import { getRestaurantsCollection } from '../db/connection.js';
-import { refreshAccessToken } from './instagram-api.js';
+import { getRestaurantsCollection } from '@restropulse/db';
+import { refreshAccessToken } from './meta-api.js';
 import { encrypt } from './encryption.js';
 
 // Track failed refresh attempts for analytics

@@ -1,4 +1,4 @@
-import express, { Express } from 'express';
+import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { generateTokens } from '../../src/services/jwt.js';
 import authRoutes from '../../src/routes/auth.js';
@@ -23,6 +23,14 @@ export function createTestApp(): Express {
     app.use('/api/posts', postsRoutes);
     app.use('/api/strategy', strategyRoutes);
     app.use('/api/integrations', integrationsRoutes);
+
+    // Global error handler (mirrors server.ts)
+    app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error'
+        });
+    });
 
     return app;
 }

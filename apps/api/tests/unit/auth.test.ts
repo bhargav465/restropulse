@@ -16,14 +16,18 @@ const mockRefreshAccessToken = vi.fn();
 const mockVerifyFirebaseToken = vi.fn();
 
 // Mock Modules - Vitest hoists these to the top
-vi.mock('../../src/db/users.js', () => ({
-    findUserByEmail: mockFindUserByEmail,
-    findUserByPhone: mockFindUserByPhone,
-    findUserById: mockFindUserById,
-    createUser: mockCreateUser,
-    findUserByFirebaseUid: mockFindUserByFirebaseUid,
-    updateUser: mockUpdateUser
-}));
+vi.mock('@restropulse/db', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        findUserByEmail: mockFindUserByEmail,
+        findUserByPhone: mockFindUserByPhone,
+        findUserById: mockFindUserById,
+        createUser: mockCreateUser,
+        findUserByFirebaseUid: mockFindUserByFirebaseUid,
+        updateUser: mockUpdateUser
+    };
+});
 
 vi.mock('../../src/services/jwt.js', () => ({
     generateTokens: mockGenerateTokens,
@@ -45,7 +49,7 @@ let actualJwt: any;
 // Helper to use actual implementations
 const useActualImplementation = async () => {
     if (!actualUsersDb) {
-        actualUsersDb = await vi.importActual('../../src/db/users.js');
+        actualUsersDb = await vi.importActual('@restropulse/db');
     }
     if (!actualJwt) {
         actualJwt = await vi.importActual('../../src/services/jwt.js');

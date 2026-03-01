@@ -5,8 +5,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { instagramAPI } from '../api';
-import { InstagramAccount, InstagramConnectionError } from '../types';
-import { CheckCircle2, XCircle, Loader2, Instagram } from 'lucide-react';
+import { InstagramAccount, InstagramConnectionError } from '@restropulse/shared';
+import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { InstagramIcon } from './BrandIcons';
 
 interface InstagramCallbackProps {
     onComplete?: (success: boolean, username?: string) => void;
@@ -42,6 +43,18 @@ const ERROR_MESSAGES: Record<InstagramConnectionError, { title: string; descript
     ACCOUNT_TYPE_MISMATCH: {
         title: 'Account Type Issue',
         description: 'Your account type may not support all required features. Please check your Instagram account settings.'
+    },
+    RATE_LIMITED: {
+        title: 'Too Many Attempts',
+        description: 'Instagram is temporarily rate limiting requests. Please wait a few minutes and try again.'
+    },
+    CONFIG_ERROR: {
+        title: 'Configuration Issue',
+        description: 'Instagram integration is not configured correctly. Please contact support if this continues.'
+    },
+    TIMEOUT: {
+        title: 'Request Timed Out',
+        description: 'The request timed out. Please check your network connection and try again.'
     }
 };
 
@@ -220,7 +233,7 @@ const InstagramCallback: React.FC<InstagramCallbackProps> = ({ onComplete, onErr
                 {/* Header */}
                 <div className="flex items-center justify-center mb-6">
                     <div className="w-16 h-16 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-2xl flex items-center justify-center">
-                        <Instagram size={32} className="text-white" />
+                        <InstagramIcon size={32} className="text-white" />
                     </div>
                 </div>
 
@@ -298,7 +311,7 @@ const InstagramCallback: React.FC<InstagramCallbackProps> = ({ onComplete, onErr
                                         />
                                     ) : (
                                         <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                                            <Instagram size={20} className="text-white" />
+                                            <InstagramIcon size={20} className="text-white" />
                                         </div>
                                     )}
                                     <div className="flex-1 text-left">

@@ -8,7 +8,7 @@ import Settings from './components/Settings';
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
-import { ViewState, Restaurant } from './types';
+import { ViewState, Restaurant } from '@restropulse/shared';
 import { authAPI, restaurantAPI } from './api';
 
 const App: React.FC = () => {
@@ -86,52 +86,24 @@ const App: React.FC = () => {
         window.history.pushState({ view }, '', `?view=${view.toLowerCase()}`);
     };
 
+    const onLoginSuccess = async (response: { success: boolean; message?: string }) => {
+        if (!response.success) throw new Error(response.message || 'Login failed');
+        localStorage.setItem('rp_session', 'true');
+        const restaurant = await restaurantAPI.get('r1');
+        setRestaurantData(restaurant);
+        window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
+        setCurrentView('DASHBOARD');
+        setIsLoggedIn(true);
+    };
+
     // Firebase Authentication (Primary)
     const handleFirebaseLogin = async (firebaseIdToken: string) => {
-        try {
-            const response = await authAPI.loginWithFirebase(firebaseIdToken);
-
-            if (response.success) {
-                setIsLoggedIn(true);
-                localStorage.setItem('rp_session', 'true');
-
-                // Load restaurant data
-                const restaurant = await restaurantAPI.get('r1');
-                setRestaurantData(restaurant);
-
-                window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
-                setCurrentView('DASHBOARD');
-            } else {
-                throw new Error(response.message || 'Login failed');
-            }
-        } catch (error) {
-            console.error('Firebase login failed:', error);
-            throw error;
-        }
+        await onLoginSuccess(await authAPI.loginWithFirebase(firebaseIdToken));
     };
 
     // Fallback OTP Authentication (Development)
     const handleFallbackLogin = async (phone: string, otp: string) => {
-        try {
-            const response = await authAPI.verifyOtp(phone, otp);
-
-            if (response.success) {
-                setIsLoggedIn(true);
-                localStorage.setItem('rp_session', 'true');
-
-                // Load restaurant data
-                const restaurant = await restaurantAPI.get('r1');
-                setRestaurantData(restaurant);
-
-                window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
-                setCurrentView('DASHBOARD');
-            } else {
-                throw new Error(response.message || 'Login failed');
-            }
-        } catch (error) {
-            console.error('Fallback login failed:', error);
-            throw error;
-        }
+        await onLoginSuccess(await authAPI.verifyOtp(phone, otp));
     };
 
     const handleLogout = async () => {

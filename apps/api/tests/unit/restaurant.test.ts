@@ -13,31 +13,35 @@ const mockFindRestaurantsWithInstagram = vi.fn();
 const mockUpdateInstagramCredentials = vi.fn();
 const mockRemoveInstagramCredentials = vi.fn();
 
-// Mock Module
-vi.mock('../../src/db/restaurants.js', () => ({
-    findRestaurantById: mockFindRestaurantById,
-    updateRestaurant: mockUpdateRestaurant,
-    addOffer: mockAddOffer,
-    removeOffer: mockRemoveOffer,
-    addSpecial: mockAddSpecial,
-    removeSpecial: mockRemoveSpecial,
-    updateMenuTimestamp: mockUpdateMenuTimestamp,
-    findRestaurantsWithInstagram: mockFindRestaurantsWithInstagram,
-    updateInstagramCredentials: mockUpdateInstagramCredentials,
-    removeInstagramCredentials: mockRemoveInstagramCredentials
-}));
+// Mock Module - keep real collection getters, override restaurant helper functions
+vi.mock('@restropulse/db', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        findRestaurantById: mockFindRestaurantById,
+        updateRestaurant: mockUpdateRestaurant,
+        addOffer: mockAddOffer,
+        removeOffer: mockRemoveOffer,
+        addSpecial: mockAddSpecial,
+        removeSpecial: mockRemoveSpecial,
+        updateMenuTimestamp: mockUpdateMenuTimestamp,
+        findRestaurantsWithInstagram: mockFindRestaurantsWithInstagram,
+        updateInstagramCredentials: mockUpdateInstagramCredentials,
+        removeInstagramCredentials: mockRemoveInstagramCredentials
+    };
+});
 
 // Import actual implementation using vi.importActual to get real implementations
 let actualRestaurantsDb: any;
 
 // Import Helpers
 const { createTestApp, mockRestaurant } = await import('../helpers/testHelper.js');
-const { getRestaurantsCollection } = await import('../../src/db/connection.js');
+const { getRestaurantsCollection } = await import('@restropulse/db');
 
 // Reset Helper
 const useActualImplementation = async () => {
     if (!actualRestaurantsDb) {
-        actualRestaurantsDb = await vi.importActual('../../src/db/restaurants.js');
+        actualRestaurantsDb = await vi.importActual('@restropulse/db');
     }
     mockFindRestaurantById.mockImplementation(actualRestaurantsDb.findRestaurantById);
     mockUpdateRestaurant.mockImplementation(actualRestaurantsDb.updateRestaurant);

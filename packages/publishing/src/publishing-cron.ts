@@ -12,9 +12,9 @@
  */
 
 import cron from 'node-cron';
-import { getPostsCollection, getRestaurantsCollection, toApiFormat } from '../db/connection.js';
+import { getPostsCollection, getRestaurantsCollection, toApiFormat } from '@restropulse/db';
 import { publishPost, PublishResult } from './publishing-service.js';
-import { Post } from '../models/types.js';
+import { Post } from '@restropulse/shared';
 
 // Constants
 const MAX_PUBLISH_ATTEMPTS = 3;

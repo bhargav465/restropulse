@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, LogOut, Trash2, MapPin, Instagram, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, Facebook } from 'lucide-react';
-import { SubscriptionTier, Restaurant, InstagramConnectionError, InstagramAccount } from '../types';
+import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle } from 'lucide-react';
+import { SubscriptionTier, Restaurant, InstagramConnectionError, InstagramAccount } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI } from '../api';
+import { FacebookIcon, InstagramIcon } from './BrandIcons';
 
 interface SettingsProps {
     onLogout: () => void;
@@ -55,6 +56,18 @@ const INSTAGRAM_ERROR_MESSAGES: Record<InstagramConnectionError, {
         helpUrl: 'https://www.facebook.com/help/1148909221857370',
         helpLabel: 'Link Instagram to Facebook Page',
         setupStep: 'link_accounts'
+    },
+    RATE_LIMITED: {
+        title: 'Too Many Attempts',
+        description: 'Instagram is temporarily rate limiting requests. Please wait a few minutes and try again.'
+    },
+    CONFIG_ERROR: {
+        title: 'Configuration Issue',
+        description: 'Instagram integration is not configured correctly. Please contact support if this continues.'
+    },
+    TIMEOUT: {
+        title: 'Request Timed Out',
+        description: 'The connection request took too long. Please check your network and try again.'
     }
 };
 
@@ -339,7 +352,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                     {/* Header */}
                     <div className="flex items-center gap-4 mb-6">
                         <div className="w-14 h-14 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-2xl flex items-center justify-center">
-                            <Instagram size={28} className="text-white" />
+                            <InstagramIcon size={28} className="text-white" />
                         </div>
                         <div>
                             <h3 className="text-xl font-bold text-slate-800">Connect Instagram</h3>
@@ -365,7 +378,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                                     }}
                                     className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700 text-sm"
                                 >
-                                    <Facebook size={16} />
+                                    <FacebookIcon size={16} />
                                     Connect with Facebook
                                 </button>
                             </div>
@@ -390,7 +403,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                                     }}
                                     className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90 text-sm"
                                 >
-                                    <Instagram size={16} />
+                                    <InstagramIcon size={16} />
                                     Guided Setup
                                 </button>
                             </div>
@@ -502,7 +515,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                 <div className="absolute inset-0" onClick={() => setShowAccountPicker(false)}></div>
                 <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 relative z-10">
                     <div className="w-16 h-16 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <Instagram size={28} className="text-white" />
+                        <InstagramIcon size={28} className="text-white" />
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 text-center mb-2">Select Account</h3>
                     <p className="text-slate-500 text-sm text-center mb-6">Choose which Instagram account to connect</p>
@@ -522,7 +535,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                                     />
                                 ) : (
                                     <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                                        <Instagram size={20} className="text-white" />
+                                        <InstagramIcon size={20} className="text-white" />
                                     </div>
                                 )}
                                 <div className="flex-1 text-left">
@@ -590,15 +603,15 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                 <div className="space-y-4">
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Restaurant Name</label>
-                        <input type="text" defaultValue={restaurantData.name} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
+                        <input type="text" defaultValue={restaurantData.name} aria-label="Restaurant Name" className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cuisine</label>
-                        <input type="text" defaultValue={restaurantData.cuisine} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
+                        <input type="text" defaultValue={restaurantData.cuisine} aria-label="Cuisine" className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Location</label>
-                        <input type="text" defaultValue={restaurantData.location.address} className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
+                        <input type="text" defaultValue={restaurantData.location.address} aria-label="Location" className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
                     </div>
                     <button onClick={closeEditProfile} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold mt-4 flex items-center justify-center gap-2">
                         <Save size={18} /> Save Changes
@@ -741,6 +754,8 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                     <img src="https://picsum.photos/80/80" alt="Restaurant Logo" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md mb-3" />
                     <button
                         onClick={openEditProfile}
+                        aria-label="Edit profile"
+                        title="Edit profile"
                         className="absolute bottom-2 right-0 bg-slate-800 text-white p-2 rounded-full shadow-sm hover:bg-slate-700"
                     >
                         <Edit3 size={14} />
@@ -765,7 +780,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                                 ? 'bg-gradient-to-br from-purple-500 via-pink-500 to-orange-500'
                                 : 'bg-pink-100'
                                 }`}>
-                                <Instagram size={20} className={instagramConnected ? 'text-white' : 'text-pink-600'} />
+                                <InstagramIcon size={20} className={instagramConnected ? 'text-white' : 'text-pink-600'} />
                             </div>
                             <div>
                                 <p className="font-bold text-slate-800 text-sm">Instagram</p>

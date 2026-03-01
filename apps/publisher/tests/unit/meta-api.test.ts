@@ -33,15 +33,16 @@ vi.mock('axios', () => ({
 }));
 
 // We use REAL encryption service for robust testing, instead of mocking it.
-const { encrypt, decrypt } = await import('../../src/services/encryption.js');
+const { encrypt, decrypt } = await import('@restropulse/publishing');
 
 // Dynamically import the service under test
-const instagramService = await import('../../src/services/instagram-api.js');
+const instagramService = await import('@restropulse/publishing');
 
 describe('Instagram API Service', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        process.env.ENCRYPTION_KEY = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
     });
 
     describe('Environment Config', () => {
@@ -316,7 +317,7 @@ describe('Instagram API Service', () => {
 
             // Re-import to pick up changed config
             vi.resetModules();
-            const freshService = await import('../../src/services/instagram-api.js');
+            const freshService = await import('@restropulse/publishing');
 
             const result = await freshService.handleOAuthCallback('code', 'state');
             expect(result.success).toBe(false);

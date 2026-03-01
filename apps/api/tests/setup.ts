@@ -1,6 +1,6 @@
 import { beforeAll, afterAll, vi } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { connectDB, disconnectDB } from '../src/db/connection.js';
+import { connectDB, disconnectDB } from '@restropulse/db';
 
 // Store original console methods
 const originalConsoleError = console.error;

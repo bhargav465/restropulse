@@ -9,15 +9,19 @@ const mockFindCycleById = vi.fn();
 const mockCreateCycle = vi.fn();
 const mockUpdateCycle = vi.fn();
 
-// Mock the module
-vi.mock('../../src/db/strategy.js', () => ({
-    findContentStrategy: mockFindContentStrategy,
-    updateContentStrategy: mockUpdateContentStrategy,
-    findAllCycles: mockFindAllCycles,
-    findCycleById: mockFindCycleById,
-    createCycle: mockCreateCycle,
-    updateCycle: mockUpdateCycle
-}));
+// Mock the module - keep real collection getters, override strategy helper functions
+vi.mock('@restropulse/db', async (importOriginal) => {
+    const actual = await importOriginal() as any;
+    return {
+        ...actual,
+        findContentStrategy: mockFindContentStrategy,
+        updateContentStrategy: mockUpdateContentStrategy,
+        findAllCycles: mockFindAllCycles,
+        findCycleById: mockFindCycleById,
+        createCycle: mockCreateCycle,
+        updateCycle: mockUpdateCycle
+    };
+});
 
 // Import actual implementation using vi.importActual to get real implementations
 let actualStrategyDb: any;
@@ -25,7 +29,7 @@ let actualStrategyDb: any;
 // Helper to reset to actual implementation
 const useActualImplementation = async () => {
     if (!actualStrategyDb) {
-        actualStrategyDb = await vi.importActual('../../src/db/strategy.js');
+        actualStrategyDb = await vi.importActual('@restropulse/db');
     }
     mockFindContentStrategy.mockImplementation(actualStrategyDb.findContentStrategy);
     mockUpdateContentStrategy.mockImplementation(actualStrategyDb.updateContentStrategy);

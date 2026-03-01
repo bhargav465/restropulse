@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Clock, CalendarCheck, Zap, ChevronRight, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
 import { strategyAPI } from '../api';
-import { StrategyCycle } from '../types';
+import { StrategyCycle } from '@restropulse/shared';
 
 const Strategy: React.FC = () => {
     const [cycles, setCycles] = useState<StrategyCycle[]>([]);

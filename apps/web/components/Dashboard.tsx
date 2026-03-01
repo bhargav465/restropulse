@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, Users, ArrowRight, Bell, Calendar, Eye, Tag, UtensilsCrossed, Lock, Activity, Sparkles, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { INSIGHT_DATA } from '../constants';
-import { ViewState, Restaurant, User, Post } from '../types';
+import { ViewState, Restaurant, User, Post } from '@restropulse/shared';
 import { authAPI, postsAPI } from '../api';
 
 interface DashboardProps {

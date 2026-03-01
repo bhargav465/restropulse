@@ -315,6 +315,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                                     type="tel"
                                     value={formatPhone(phone)}
                                     onChange={handlePhoneChange}
+                                    aria-label="Phone number"
                                     placeholder="98765 43210"
                                     className="flex-1 bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 text-lg tracking-wider placeholder:text-slate-500"
                                     autoFocus

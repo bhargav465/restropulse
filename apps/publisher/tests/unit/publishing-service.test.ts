@@ -39,14 +39,14 @@ vi.mock('axios', () => {
 
 const mockDecrypt = vi.fn();
 
-vi.mock('../../src/services/encryption.js', () => ({
+vi.mock('../../../../packages/publishing/dist/encryption.js', () => ({
     decrypt: mockDecrypt,
     encrypt: vi.fn((val: string) => `encrypted_${val}`),
     generateStateToken: vi.fn(() => 'mock-state-token')
 }));
 
 // Import subject after mocks
-const { publishToInstagram, publishToFacebook, publishPost } = await import('../../src/services/publishing-service.js');
+const { publishToInstagram, publishToFacebook, publishPost } = await import('@restropulse/publishing');
 
 describe('Publishing Service', () => {
     beforeEach(() => {

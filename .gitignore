@@ -21,6 +21,7 @@ Thumbs.db
 .vscode/settings.json
 *.swp
 *.swo
+*.tmp.*
 
 # Environment
 .env

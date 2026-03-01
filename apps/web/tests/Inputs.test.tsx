@@ -376,10 +376,7 @@ describe('Inputs Component', () => {
         it('should delete an offer when delete button is clicked', async () => {
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
 
-            const deleteButtons = screen.getAllByRole('button', { name: '' });
-            const offerDeleteButton = deleteButtons.find(btn =>
-                btn.closest('div')?.textContent?.includes('Summer Special')
-            );
+            const offerDeleteButton = screen.getByRole('button', { name: 'Delete offer 1' });
 
             fireEvent.click(offerDeleteButton!);
 
@@ -392,10 +389,7 @@ describe('Inputs Component', () => {
         it('should delete a special when delete button is clicked', async () => {
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
 
-            const deleteButtons = screen.getAllByRole('button', { name: '' });
-            const specialDeleteButton = deleteButtons.find(btn =>
-                btn.closest('div')?.textContent?.includes('Truffle Pasta')
-            );
+            const specialDeleteButton = screen.getByRole('button', { name: 'Delete special 1' });
 
             fireEvent.click(specialDeleteButton!);
 
@@ -412,10 +406,7 @@ describe('Inputs Component', () => {
 
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
 
-            const deleteButtons = screen.getAllByRole('button', { name: '' });
-            const offerDeleteButton = deleteButtons.find(btn =>
-                btn.closest('div')?.textContent?.includes('Summer Special')
-            );
+            const offerDeleteButton = screen.getByRole('button', { name: 'Delete offer 1' });
 
             fireEvent.click(offerDeleteButton!);
 

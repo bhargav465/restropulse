@@ -26,7 +26,7 @@ vi.mock('@restropulse/db', () => ({
     toApiFormat: vi.fn((value: unknown) => value)
 }));
 
-vi.mock('../../src/services/publishing-service.js', () => ({
+vi.mock('../../../../packages/publishing/dist/publishing-service.js', () => ({
     publishPost: mockPublishPost
 }));
 
@@ -42,7 +42,7 @@ const {
     getRecentPublishAttempts,
     startPublishingCron,
     triggerManualPublish
-} = await import('../../src/services/publishing-cron.js');
+} = await import('@restropulse/publishing');
 
 describe('publishing cron service', () => {
     beforeEach(() => {

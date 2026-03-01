@@ -13,10 +13,24 @@
  *   npm run start -- production (node dist/worker.js)
  */
 
-import 'dotenv/config';
+import path from 'node:path';
+import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
-import { startPublishingCron } from './services/publishing-cron.js';
-import { startTokenRefreshCron } from './services/token-refresh-cron.js';
+import { startPublishingCron, startTokenRefreshCron } from '@restropulse/publishing';
+
+loadAndValidateEnv({
+  serviceName: 'publisher',
+  envPath: path.resolve(process.cwd(), '.env'),
+  schema: z.object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    MONGODB_URI: z.string().min(1),
+    MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
+    INSTAGRAM_APP_ID: z.string().min(1),
+    INSTAGRAM_APP_SECRET: z.string().min(1),
+    ENCRYPTION_KEY: z.string().regex(/^[A-Fa-f0-9]{64}$/),
+    INSTAGRAM_REDIRECT_URI: z.string().url().optional(),
+  }).passthrough(),
+});
 
 const startWorker = async () => {
   try {

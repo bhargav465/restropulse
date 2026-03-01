@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { encrypt, decrypt, generateStateToken } from '../../src/services/encryption.js';
+import { encrypt, decrypt, generateStateToken } from '@restropulse/publishing';
 
 describe('encryption service', () => {
     beforeEach(() => {

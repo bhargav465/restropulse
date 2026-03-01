@@ -3,7 +3,17 @@
     "allow": [
       "Bash(npm run type-check)",
       "Bash(npm test)",
-      "Bash(claude mcp:*)"
+      "Bash(claude mcp:*)",
+      "Bash(find:*)",
+      "mcp__semantic-search__query",
+      "mcp__semantic-search__stats",
+      "mcp__lsp-api__references",
+      "mcp__lsp-shared__definition",
+      "mcp__lsp-publisher__diagnostics",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npm install:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

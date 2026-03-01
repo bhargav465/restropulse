@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Camera, UtensilsCrossed, Tag, FileText, UploadCloud, X, ChevronRight, Trash2, CalendarCheck, CheckCircle, Plus } from 'lucide-react';
-import { Restaurant } from '../types';
+import { Restaurant } from '@restropulse/shared';
 import { restaurantAPI } from '../api';
 
 interface InputsProps {
@@ -219,6 +219,8 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                                             <p className="font-bold text-slate-800 text-sm leading-snug flex-1">{offer}</p>
                                             <button
                                                 onClick={() => handleDelete('OFFER', index)}
+                                                aria-label={`Delete offer ${index + 1}`}
+                                                title="Delete offer"
                                                 className="text-slate-300 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
                                             >
                                                 <Trash2 size={16} />
@@ -250,6 +252,8 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                                             <p className="font-bold text-slate-800 text-sm leading-snug flex-1">{special}</p>
                                             <button
                                                 onClick={() => handleDelete('SPECIAL', index)}
+                                                aria-label={`Delete special ${index + 1}`}
+                                                title="Delete special"
                                                 className="text-slate-300 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
                                             >
                                                 <Trash2 size={16} />
@@ -297,6 +301,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                                 type="text"
                                 value={offerInput}
                                 onChange={(e) => setOfferInput(e.target.value)}
+                                aria-label="Offer Title"
                                 placeholder="e.g. 20% Off on Pasta"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all"
                                 autoFocus
@@ -304,7 +309,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Valid Until</label>
-                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all" />
+                            <input type="date" aria-label="Valid Until" className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all" />
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Details</label>
@@ -330,6 +335,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                                 type="text"
                                 value={specialInput}
                                 onChange={(e) => setSpecialInput(e.target.value)}
+                                aria-label="Dish Name"
                                 placeholder="e.g. Truffle Risotto"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:bg-white outline-none transition-all"
                                 autoFocus
@@ -354,7 +360,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                 <Modal title="Update Menu" onClose={closeModal}>
                     <div className="space-y-5">
                         <div className="border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer relative group">
-                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf,.jpg,.png" />
+                            <input type="file" aria-label="Upload Menu File" className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf,.jpg,.png" />
                             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                                 <FileText size={32} className="text-slate-400" />
                             </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { LayoutGrid, PenTool, Lightbulb, UserCog, PlusCircle } from 'lucide-react';
-import { ViewState } from '../types';
+import { ViewState } from '@restropulse/shared';
 
 interface LayoutProps {
   children: React.ReactNode;

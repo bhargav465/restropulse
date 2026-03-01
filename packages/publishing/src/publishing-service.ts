@@ -1,14 +1,25 @@
 /**
  * Publishing Service
- * Handles publishing posts to Instagram via the Graph API Content Publishing endpoints.
- * Supports IMAGE, CAROUSEL, REEL, and STORY post types.
+ * Handles publishing posts to Instagram and Facebook via the Meta Graph API.
+ * Supports IMAGE, CAROUSEL, REEL, STORY, and VIDEO post types.
  *
  * Instagram Content Publishing API flow:
  *   1. Create a media container (POST /{ig-user-id}/media)
  *   2. For video types: poll container status until FINISHED
  *   3. Publish the container (POST /{ig-user-id}/media_publish)
  *
+ * Facebook Page Publishing API flow:
+ *   - IMAGE: POST /{page-id}/photos (binary upload)
+ *   - CAROUSEL: Upload unpublished photos, then POST /{page-id}/feed with attached_media
+ *   - REEL: Two-phase upload via /{page-id}/video_reels
+ *   - STORY: POST /{page-id}/photo_stories or /{page-id}/video_stories
+ *   - VIDEO: POST /{page-id}/videos
+ *
+ * Platform routing is controlled by the post's `platform` field (INSTAGRAM, FACEBOOK, or BOTH).
+ *
  * See: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/content-publishing
+ * See: https://developers.facebook.com/docs/pages-api/posts
+ * See: https://developers.facebook.com/docs/video-api/guides/reels-publishing
  */
 
 import axios, { AxiosError } from 'axios';

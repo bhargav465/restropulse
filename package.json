@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "turbo dev",
+    "dev": "turbo run dev --filter=!@restropulse/db-cli",
     "build": "turbo build",
     "test": "turbo test",
     "test:unit": "turbo run test:unit --filter=@restropulse/api --filter=@restropulse/web --filter=@restropulse/publisher --filter=@restropulse/content-engine",

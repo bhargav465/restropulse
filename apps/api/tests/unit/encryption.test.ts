@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from 'vitest';
-import { encrypt, decrypt, generateStateToken, generateEncryptionKey } from '../../src/services/encryption.js';
+import { encrypt, decrypt, generateStateToken, generateEncryptionKey } from '@restropulse/publishing';
 
 describe('Encryption Service', () => {
     beforeAll(() => {

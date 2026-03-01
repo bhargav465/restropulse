@@ -9,7 +9,7 @@ import {
     getSessionsCollection,
     toApiFormat,
     toObjectId
-} from '../../src/db/connection.js';
+} from '@restropulse/db';
 import { ObjectId } from 'mongodb';
 
 /**

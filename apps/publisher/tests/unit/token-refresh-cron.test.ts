@@ -18,11 +18,11 @@ vi.mock('@restropulse/db', () => ({
     getRestaurantsCollection: vi.fn(() => mockRestaurantsCollection)
 }));
 
-vi.mock('../../src/services/instagram-api.js', () => ({
+vi.mock('../../../../packages/publishing/dist/meta-api.js', () => ({
     refreshAccessToken: mockRefreshAccessToken
 }));
 
-vi.mock('../../src/services/encryption.js', () => ({
+vi.mock('../../../../packages/publishing/dist/encryption.js', () => ({
     encrypt: mockEncrypt
 }));
 
@@ -37,7 +37,7 @@ const {
     triggerManualRefresh,
     getRecentRefreshAttempts,
     startTokenRefreshCron
-} = await import('../../src/services/token-refresh-cron.js');
+} = await import('@restropulse/publishing');
 
 describe('token refresh cron service', () => {
     beforeEach(() => {

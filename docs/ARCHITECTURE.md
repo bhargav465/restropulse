@@ -17,6 +17,7 @@ restropulse/
   packages/
     shared/       @restropulse/shared       Unified TypeScript types
     db/           @restropulse/db           Shared MongoDB connection + helpers
+    publishing/   @restropulse/publishing   Meta API, encryption, publishing/token-refresh crons
     tsconfig/     @restropulse/tsconfig     Shared tsconfig presets
     eslint-config/ @restropulse/eslint-config Shared ESLint flat config
 ```
@@ -140,6 +141,18 @@ Shared MongoDB connection layer with collection helpers:
 | users.ts          | `getUsersCollection()`, `findUserByPhone()`, `findUserByFirebaseUid()` |
 
 `setDB()` enables test injection with `mongodb-memory-server`.
+
+### packages/publishing
+
+Shared publishing layer used by both `apps/api` and `apps/publisher`. Key exports:
+
+| Module                | Exports                                                              |
+|-----------------------|----------------------------------------------------------------------|
+| encryption.ts         | `encrypt()`, `decrypt()`, `generateEncryptionKey()`                 |
+| instagram-api.ts      | `generateOAuthUrl()`, `handleOAuthCallback()`, `refreshAccessToken()`, `validateToken()`, `getInstagramProfile()`, `isInstagramConfigured()`, `prepareCredentialsForStorage()`, `validateStateToken()` |
+| publishing-service.ts | `publishPost()`                                                      |
+| publishing-cron.ts    | `startPublishingCron()`, `triggerManualPublish()`, `getRecentPublishAttempts()`, `runPublishingJob()` |
+| token-refresh-cron.ts | `startTokenRefreshCron()`, `triggerManualRefresh()`, `checkAndRefreshTokenIfNeeded()`, `getRecentRefreshAttempts()` |
 
 ## Data Flows
 

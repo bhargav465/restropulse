@@ -1,5 +1,5 @@
 /**
- * Instagram Graph API Service
+ * Meta API Service
  * Handles OAuth flow, token management, and API calls to Instagram/Meta
  */
 

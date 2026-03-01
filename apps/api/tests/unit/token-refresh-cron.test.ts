@@ -18,7 +18,7 @@ const mockEncrypt = vi.fn((val: string) => `encrypted_${val}`);
 const mockSchedule = vi.fn();
 
 // Mock modules BEFORE importing the subject
-vi.mock('../../src/db/connection.js', async (importOriginal) => {
+vi.mock('@restropulse/db', async (importOriginal) => {
     const actual = await importOriginal() as any;
     return {
         ...actual,
@@ -26,11 +26,11 @@ vi.mock('../../src/db/connection.js', async (importOriginal) => {
     };
 });
 
-vi.mock('../../src/services/instagram-api.js', () => ({
+vi.mock('../../../../packages/publishing/dist/meta-api.js', () => ({
     refreshAccessToken: mockRefreshAccessToken
 }));
 
-vi.mock('../../src/services/encryption.js', () => ({
+vi.mock('../../../../packages/publishing/dist/encryption.js', () => ({
     encrypt: mockEncrypt
 }));
 
@@ -46,7 +46,7 @@ const {
     triggerManualRefresh,
     getRecentRefreshAttempts,
     startTokenRefreshCron
-} = await import('../../src/services/token-refresh-cron.js');
+} = await import('@restropulse/publishing');
 
 describe('Token Refresh Cron Service', () => {
     beforeEach(() => {

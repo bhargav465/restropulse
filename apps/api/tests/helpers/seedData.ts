@@ -3,7 +3,7 @@ import {
     getRestaurantsCollection,
     getContentStrategiesCollection,
     getStrategyCyclesCollection
-} from '../../src/db/connection.js';
+} from '@restropulse/db';
 
 /**
  * Seeds the test database with initial data needed by all tests

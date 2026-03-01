@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Calendar, Instagram, Image as ImageIcon, Video, Sparkles, Clock, Send, AlertCircle, Loader2 } from 'lucide-react';
-import { Post } from '../types';
+import { X, Upload, Calendar, Image as ImageIcon, Video, Sparkles, Clock, Send, AlertCircle, Loader2 } from 'lucide-react';
+import { Post } from '@restropulse/shared';
 import { postsAPI } from '../api';
+import { FacebookIcon, InstagramIcon } from './BrandIcons';
 
 // Post type options for user selection
 const POST_TYPES = [
@@ -278,6 +279,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                             type="file"
                             ref={fileInputRef}
                             onChange={handleFileChange}
+                            aria-label="Upload image or video"
                             accept="image/*,video/*"
                             className="hidden"
                             data-testid="file-input"
@@ -295,6 +297,8 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                         setFormData(prev => ({ ...prev, mediaUrl: '' }));
                                         if (fileInputRef.current) fileInputRef.current.value = '';
                                     }}
+                                    aria-label="Remove uploaded media"
+                                    title="Remove uploaded media"
                                     className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
                                     data-testid="remove-media"
                                 >
@@ -321,8 +325,8 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                         </label>
                         <div className="flex gap-2">
                             {[
-                                { id: 'INSTAGRAM' as const, label: 'Instagram', icon: Instagram },
-                                { id: 'FACEBOOK' as const, label: 'Facebook', icon: () => <span className="text-base font-bold">f</span> },
+                                { id: 'INSTAGRAM' as const, label: 'Instagram', icon: InstagramIcon },
+                                { id: 'FACEBOOK' as const, label: 'Facebook', icon: FacebookIcon },
                                 { id: 'BOTH' as const, label: 'Both', icon: () => <span className="text-xs font-bold">IG+FB</span> },
                             ].map((platform) => (
                                 <button
@@ -385,6 +389,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                     type="date"
                                     value={formData.scheduledDate}
                                     onChange={(e) => setFormData(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                                    aria-label="Scheduled date"
                                     min={today}
                                     className="flex-1 p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                                     data-testid="schedule-date"
@@ -393,6 +398,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                     type="time"
                                     value={formData.scheduledTime}
                                     onChange={(e) => setFormData(prev => ({ ...prev, scheduledTime: e.target.value }))}
+                                    aria-label="Scheduled time"
                                     className="flex-1 p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                                     data-testid="schedule-time"
                                 />

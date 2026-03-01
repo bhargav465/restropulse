@@ -20,15 +20,28 @@
  *   npm run download-assets  -- download placeholder images and videos to assets/
  */
 
-import 'dotenv/config';
 import http from 'node:http';
+import path from 'node:path';
 import cron from 'node-cron';
+import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { processAdhocRequests } from './services/adhoc-processor.js';
 import { processApprovedCycles, processStrategyRequests } from './services/strategy-processor.js';
 import { startAssetServer } from './services/asset-server.js';
 
-const ASSET_PORT = parseInt(process.env.ASSET_SERVER_PORT ?? '3002', 10);
+const env = loadAndValidateEnv({
+  serviceName: 'content-engine',
+  envPath: path.resolve(process.cwd(), '.env'),
+  schema: z.object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    MONGODB_URI: z.string().min(1),
+    MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
+    ASSET_SERVER_PORT: z.coerce.number().int().positive().default(3002),
+    ASSET_SERVER_BASE_URL: z.string().url().optional(),
+  }).passthrough(),
+});
+
+const ASSET_PORT = env.ASSET_SERVER_PORT;
 
 async function runContentJob(): Promise<void> {
   console.log(`[Content Engine] Running content generation job at ${new Date().toISOString()}`);
