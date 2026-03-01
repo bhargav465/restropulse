@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import { setupCommand } from './commands/setup.js';
 import { validateCommand } from './commands/validate.js';
 import { seedCommand } from './commands/seed.js';
+import { resetCommand } from './commands/reset.js';
 
 // Load .env from api app (single source of truth for MongoDB config)
 const envCandidates = [
@@ -49,5 +50,11 @@ program
     .option('--clean', 'Clear existing data before seeding')
     .option('--main', 'Seed main database instead of test (use with caution)')
     .action(seedCommand);
+
+program
+    .command('reset')
+    .description('Drop all collections and recreate empty database with indexes')
+    .option('--main', 'Reset main database instead of test (60s safety delay)')
+    .action(resetCommand);
 
 program.parse();

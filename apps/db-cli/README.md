@@ -7,6 +7,7 @@ Standalone CLI tool for MongoDB database setup, schema validation, and test data
 - **Setup**: Create main and test databases with collections, indexes, and validators
 - **Validate**: Check schemas and indexes against expected definitions
 - **Seed**: Populate test database with sample data
+- **Reset**: Drop all collections and recreate an empty database with indexes
 
 ## Installation
 
@@ -45,6 +46,12 @@ npm run seed
 
 # Seed with clean (wipe existing data first)
 npm run seed:clean
+
+# Reset test database (drop all, recreate empty)
+npm run reset
+
+# Reset main database (60s safety delay)
+npm run reset:main
 ```
 
 ### Using the CLI directly
@@ -80,6 +87,12 @@ Seeds the database with test data.
 Options:
 - `--clean` - Clear existing data before seeding
 - `--main` - Seed main database (use with caution)
+
+#### `reset`
+Drops all collections and recreates an empty database with schema validators and indexes. This gives you a fresh database as if the application has just started.
+
+Options:
+- `--main` - Reset main database instead of test (includes a 60-second safety delay)
 
 ## Building Executable
 
@@ -118,6 +131,7 @@ restropulse-pwa-database/
       setup.ts         # Setup command
       validate.ts      # Validate command
       seed.ts          # Seed command
+      reset.ts         # Reset command
     schemas/
       collections.ts   # Collection definitions
     data/

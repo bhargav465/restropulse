@@ -119,6 +119,8 @@ npm run test:coverage    # Run coverage across workspaces
 npm run lint             # Lint all
 npm run type-check       # Type-check all
 npm run dev --filter=@restropulse/api   # Single app
+npm run reset --filter=@restropulse/db-cli          # Reset test DB (empty)
+npm run reset:main --filter=@restropulse/db-cli     # Reset main DB (60s delay)
 ```
 
 ## MCP Tool-Routing Rules

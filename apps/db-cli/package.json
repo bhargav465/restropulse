@@ -15,7 +15,9 @@
     "setup": "tsx src/index.ts setup",
     "validate": "tsx src/index.ts validate",
     "seed": "tsx src/index.ts seed",
-    "seed:clean": "tsx src/index.ts seed --clean"
+    "seed:clean": "tsx src/index.ts seed --clean",
+    "reset": "tsx src/index.ts reset",
+    "reset:main": "tsx src/index.ts reset --main"
   },
   "pkg": {
     "scripts": "dist/**/*.js",

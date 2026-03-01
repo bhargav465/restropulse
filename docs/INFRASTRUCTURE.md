@@ -136,7 +136,8 @@
    npm run dev --filter=@restropulse/api   # API only
    npm run dev --filter=@restropulse/web   # Frontend only
    ```
-5. For database seeding: `npm run db:seed --filter=@restropulse/api`
+5. For database seeding: `npm run seed --filter=@restropulse/db-cli`
+6. For a fresh empty database: `npm run reset --filter=@restropulse/db-cli` (test) or `npm run reset:main --filter=@restropulse/db-cli` (main, 60s safety delay)
 
 ## Build and Deploy
 
