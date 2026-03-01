@@ -1,4 +1,4 @@
-import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError } from '@restropulse/shared';
+import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager } from '@restropulse/shared';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -133,6 +133,20 @@ export const authAPI = {
 
 // Restaurant API
 export const restaurantAPI = {
+    create: async (data: {
+        name: string;
+        cuisine: string;
+        userName?: string;
+        location?: Restaurant['location'];
+        accountManager?: Restaurant['accountManager'];
+    }): Promise<{ restaurant: Restaurant; token: string; refreshToken: string }> => {
+        const response = await fetchAPI<ApiResponse<{ restaurant: Restaurant; token: string; refreshToken: string }>>('/restaurant', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+        return response.data!;
+    },
+
     get: async (id: string): Promise<Restaurant> => {
         const response = await fetchAPI<ApiResponse<Restaurant>>(`/restaurant/${id}`);
         return response.data!;
@@ -382,6 +396,18 @@ export const instagramAPI = {
     getConfig: async (): Promise<{ instagram: { configured: boolean } }> => {
         const response = await fetchAPI<ApiResponse<{ instagram: { configured: boolean } }>>(
             '/integrations/config'
+        );
+        return response.data!;
+    },
+};
+
+// Account Manager API
+export const accountManagerAPI = {
+    getByCityAndZone: async (city: string, zone?: string): Promise<AccountManager[]> => {
+        const params = new URLSearchParams({ city });
+        if (zone) params.set('zone', zone);
+        const response = await fetchAPI<ApiResponse<AccountManager[]>>(
+            `/restaurant/account-managers?${params.toString()}`
         );
         return response.data!;
     },

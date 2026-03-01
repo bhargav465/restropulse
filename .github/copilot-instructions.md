@@ -83,7 +83,7 @@ packages/
 
 - MongoDB Atlas (driver: mongodb v6.12)
 - Database name: `restropulse`
-- Collections: users, restaurants, posts, contentStrategies, strategyCycles
+- Collections: users, restaurants, posts, contentStrategies, strategyCycles, accountManagers
 - Document IDs: Support both ObjectId and custom string IDs (e.g., `r1` for seed data)
 - Connection: Always use `@restropulse/db` singleton -- never create separate MongoClient instances
 
@@ -99,6 +99,7 @@ packages/
 - Meta Graph API v18.0 for Instagram/Facebook
 - OAuth scopes: instagram_basic, instagram_content_publish, pages_show_list, pages_read_user_content, pages_manage_posts, public_profile
 - Tokens encrypted with AES-256-CBC before storage
+- Google Maps Places API (optional) for onboarding address autocomplete (`@react-google-maps/api`)
 
 ## Environment
 

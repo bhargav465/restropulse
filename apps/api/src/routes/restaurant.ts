@@ -1,19 +1,93 @@
 import express, { Request, Response } from 'express';
 import {
     findRestaurantById,
+    createRestaurant,
     updateRestaurant,
     addOffer,
     removeOffer,
     addSpecial,
     removeSpecial,
     updateMenuTimestamp,
-    getPostsCollection
+    getPostsCollection,
+    getAccountManagersByCityAndZone,
+    findUserById,
+    updateUser,
 } from '@restropulse/db';
-import { ApiResponse, Restaurant } from '@restropulse/shared';
+import { ApiResponse, Restaurant, AccountManager } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
+import { generateTokens } from '../services/jwt.js';
 
 const router = express.Router();
+
+// Create restaurant (onboarding)
+router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
+    const userId = req.user!.userId;
+
+    const user = await findUserById(userId);
+    if (!user) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (user.restaurantId && user.restaurantId !== '') {
+        return res.status(400).json({ success: false, error: 'User already has a restaurant' });
+    }
+
+    const { name, cuisine, location, accountManager, userName } = req.body;
+
+    if (!name || !cuisine) {
+        return res.status(400).json({ success: false, error: 'Restaurant name and cuisine are required' });
+    }
+
+    // Update user name if provided
+    if (userName) {
+        await updateUser(userId, { name: userName });
+    }
+
+    const renewalDate = new Date();
+    renewalDate.setDate(renewalDate.getDate() + 30);
+
+    const restaurant = await createRestaurant({
+        name,
+        cuisine,
+        location: location || { address: '', lat: 0, lng: 0, mapUrl: '' },
+        accountManager: accountManager || { name: '', phone: '', email: '', avatar: '' },
+        subscription: {
+            tier: 'BASIC',
+            renewalDate: renewalDate.toISOString().split('T')[0],
+            status: 'ACTIVE',
+        },
+        integrations: { instagram: false },
+    });
+
+    // Link restaurant to user
+    await updateUser(userId, { restaurantId: restaurant.id });
+
+    // Issue fresh tokens with the new restaurantId
+    const tokens = generateTokens(userId, req.user!.phone, restaurant.id);
+
+    res.status(201).json({
+        success: true,
+        data: {
+            restaurant,
+            token: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+        },
+    });
+}));
+
+// Get account managers by city/zone
+router.get('/account-managers', requireAuth, handle(async (req: Request, res: Response<ApiResponse<AccountManager[]>>) => {
+    const city = req.query.city as string;
+    if (!city) {
+        return res.status(400).json({ success: false, error: 'City query parameter is required' });
+    }
+
+    const zone = req.query.zone as string | undefined;
+    const managers = await getAccountManagersByCityAndZone(city, zone);
+
+    res.json({ success: true, data: managers });
+}));
 
 // Get restaurant by ID (public read)
 router.get('/:id', handle(async (req: Request, res: Response<ApiResponse<Restaurant>>) => {

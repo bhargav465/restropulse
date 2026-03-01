@@ -5,6 +5,16 @@
 import { getRestaurantsCollection, toApiFormat } from './connection.js';
 import type { Restaurant, InstagramCredentials } from '@restropulse/shared';
 
+export async function createRestaurant(restaurant: Omit<Restaurant, 'id'>): Promise<Restaurant> {
+  const col = getRestaurantsCollection();
+  const result = await col.insertOne({
+    ...restaurant,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  return { ...restaurant, id: result.insertedId.toString() } as Restaurant;
+}
+
 export async function findRestaurantById(id: string): Promise<Restaurant | null> {
   const col = getRestaurantsCollection();
   const doc = await col.findOne({ _id: id as any });

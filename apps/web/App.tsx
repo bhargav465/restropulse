@@ -8,6 +8,7 @@ import Settings from './components/Settings';
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
+import Onboarding from './components/Onboarding';
 import { ViewState, Restaurant } from '@restropulse/shared';
 import { authAPI, restaurantAPI } from './api';
 
@@ -46,16 +47,23 @@ const App: React.FC = () => {
                     // Verify session
                     await authAPI.checkSession();
 
-                    // Load restaurant data
                     const restaurantId = localStorage.getItem('rp_restaurant_id') || '';
-                    const restaurant = await restaurantAPI.get(restaurantId);
-                    setRestaurantData(restaurant);
 
-                    setIsLoggedIn(true);
-                    if (!window.history.state) {
-                        window.history.replaceState({ view: 'DASHBOARD' }, '');
+                    if (!restaurantId) {
+                        // Session valid but no restaurant -- send to onboarding
+                        setIsLoggedIn(true);
+                        setCurrentView('ONBOARDING');
+                    } else {
+                        // Load restaurant data
+                        const restaurant = await restaurantAPI.get(restaurantId);
+                        setRestaurantData(restaurant);
+
+                        setIsLoggedIn(true);
+                        if (!window.history.state) {
+                            window.history.replaceState({ view: 'DASHBOARD' }, '');
+                        }
+                        setCurrentView('DASHBOARD');
                     }
-                    setCurrentView('DASHBOARD');
                 } catch (error) {
                     console.error('Session validation failed:', error);
                     localStorage.removeItem('rp_token');
@@ -91,6 +99,15 @@ const App: React.FC = () => {
         if (!response.success) throw new Error(response.message || 'Login failed');
         localStorage.setItem('rp_session', 'true');
         const restaurantId = localStorage.getItem('rp_restaurant_id') || '';
+
+        if (!restaurantId) {
+            // New user without a restaurant -- go to onboarding
+            setIsLoggedIn(true);
+            window.history.replaceState({ view: 'ONBOARDING' }, '', '?view=onboarding');
+            setCurrentView('ONBOARDING');
+            return;
+        }
+
         const restaurant = await restaurantAPI.get(restaurantId);
         setRestaurantData(restaurant);
         window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
@@ -187,6 +204,20 @@ const App: React.FC = () => {
                 <Login
                     onLogin={handleFirebaseLogin}
                     onFallbackLogin={handleFallbackLogin}
+                />
+            </ErrorBoundary>
+        );
+    }
+
+    if (currentView === 'ONBOARDING') {
+        return (
+            <ErrorBoundary>
+                <Onboarding
+                    onComplete={(restaurant) => {
+                        setRestaurantData(restaurant);
+                        window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
+                        setCurrentView('DASHBOARD');
+                    }}
                 />
             </ErrorBoundary>
         );

@@ -3,6 +3,7 @@ import request from 'supertest';
 
 // Define Mocks
 const mockFindRestaurantById = vi.fn();
+const mockCreateRestaurant = vi.fn();
 const mockUpdateRestaurant = vi.fn();
 const mockAddOffer = vi.fn();
 const mockRemoveOffer = vi.fn();
@@ -12,6 +13,9 @@ const mockUpdateMenuTimestamp = vi.fn();
 const mockFindRestaurantsWithInstagram = vi.fn();
 const mockUpdateInstagramCredentials = vi.fn();
 const mockRemoveInstagramCredentials = vi.fn();
+const mockFindUserById = vi.fn();
+const mockUpdateUser = vi.fn();
+const mockGetAccountManagersByCityAndZone = vi.fn();
 
 // Mock Module - keep real collection getters, override restaurant helper functions
 vi.mock('@restropulse/db', async (importOriginal) => {
@@ -19,6 +23,7 @@ vi.mock('@restropulse/db', async (importOriginal) => {
     return {
         ...actual,
         findRestaurantById: mockFindRestaurantById,
+        createRestaurant: mockCreateRestaurant,
         updateRestaurant: mockUpdateRestaurant,
         addOffer: mockAddOffer,
         removeOffer: mockRemoveOffer,
@@ -27,34 +32,42 @@ vi.mock('@restropulse/db', async (importOriginal) => {
         updateMenuTimestamp: mockUpdateMenuTimestamp,
         findRestaurantsWithInstagram: mockFindRestaurantsWithInstagram,
         updateInstagramCredentials: mockUpdateInstagramCredentials,
-        removeInstagramCredentials: mockRemoveInstagramCredentials
+        removeInstagramCredentials: mockRemoveInstagramCredentials,
+        findUserById: mockFindUserById,
+        updateUser: mockUpdateUser,
+        getAccountManagersByCityAndZone: mockGetAccountManagersByCityAndZone,
     };
 });
 
 // Import actual implementation using vi.importActual to get real implementations
-let actualRestaurantsDb: any;
+let actualDb: any;
 
 // Import Helpers
-const { createTestApp, mockRestaurant, generateAuthToken } = await import('../helpers/testHelper.js');
-const { getRestaurantsCollection } = await import('@restropulse/db');
+const { createTestApp, mockRestaurant, mockUser, generateAuthToken } = await import('../helpers/testHelper.js');
+const { getRestaurantsCollection, getUsersCollection, getAccountManagersCollection } = await import('@restropulse/db');
+const { generateTokens } = await import('../../src/services/jwt.js');
 
 const authToken = generateAuthToken();
 
 // Reset Helper
 const useActualImplementation = async () => {
-    if (!actualRestaurantsDb) {
-        actualRestaurantsDb = await vi.importActual('@restropulse/db');
+    if (!actualDb) {
+        actualDb = await vi.importActual('@restropulse/db');
     }
-    mockFindRestaurantById.mockImplementation(actualRestaurantsDb.findRestaurantById);
-    mockUpdateRestaurant.mockImplementation(actualRestaurantsDb.updateRestaurant);
-    mockAddOffer.mockImplementation(actualRestaurantsDb.addOffer);
-    mockRemoveOffer.mockImplementation(actualRestaurantsDb.removeOffer);
-    mockAddSpecial.mockImplementation(actualRestaurantsDb.addSpecial);
-    mockRemoveSpecial.mockImplementation(actualRestaurantsDb.removeSpecial);
-    mockUpdateMenuTimestamp.mockImplementation(actualRestaurantsDb.updateMenuTimestamp);
-    mockFindRestaurantsWithInstagram.mockImplementation(actualRestaurantsDb.findRestaurantsWithInstagram);
-    mockUpdateInstagramCredentials.mockImplementation(actualRestaurantsDb.updateInstagramCredentials);
-    mockRemoveInstagramCredentials.mockImplementation(actualRestaurantsDb.removeInstagramCredentials);
+    mockFindRestaurantById.mockImplementation(actualDb.findRestaurantById);
+    mockCreateRestaurant.mockImplementation(actualDb.createRestaurant);
+    mockUpdateRestaurant.mockImplementation(actualDb.updateRestaurant);
+    mockAddOffer.mockImplementation(actualDb.addOffer);
+    mockRemoveOffer.mockImplementation(actualDb.removeOffer);
+    mockAddSpecial.mockImplementation(actualDb.addSpecial);
+    mockRemoveSpecial.mockImplementation(actualDb.removeSpecial);
+    mockUpdateMenuTimestamp.mockImplementation(actualDb.updateMenuTimestamp);
+    mockFindRestaurantsWithInstagram.mockImplementation(actualDb.findRestaurantsWithInstagram);
+    mockUpdateInstagramCredentials.mockImplementation(actualDb.updateInstagramCredentials);
+    mockRemoveInstagramCredentials.mockImplementation(actualDb.removeInstagramCredentials);
+    mockFindUserById.mockImplementation(actualDb.findUserById);
+    mockUpdateUser.mockImplementation(actualDb.updateUser);
+    mockGetAccountManagersByCityAndZone.mockImplementation(actualDb.getAccountManagersByCityAndZone);
 };
 
 const app = createTestApp();
@@ -577,7 +590,7 @@ describe('Restaurant Routes - Unit Tests', () => {
                 }
             );
 
-            const result = await actualRestaurantsDb.findRestaurantsWithInstagram();
+            const result = await actualDb.findRestaurantsWithInstagram();
 
             expect(result).toBeInstanceOf(Array);
             expect(result.length).toBeGreaterThan(0);
@@ -594,7 +607,7 @@ describe('Restaurant Routes - Unit Tests', () => {
                 { $unset: { instagramCredentials: '' } }
             );
 
-            const result = await actualRestaurantsDb.findRestaurantsWithInstagram();
+            const result = await actualDb.findRestaurantsWithInstagram();
 
             expect(result).toBeInstanceOf(Array);
             expect(result.length).toBe(0);
@@ -612,7 +625,7 @@ describe('Restaurant Routes - Unit Tests', () => {
                 tokenExpiresAt: new Date(Date.now() + 60 * 86400000)
             };
 
-            const result = await actualRestaurantsDb.updateInstagramCredentials('r1', credentials);
+            const result = await actualDb.updateInstagramCredentials('r1', credentials);
 
             expect(result).toBeTruthy();
             // toApiFormat transforms instagramCredentials to instagramConnection
@@ -633,7 +646,7 @@ describe('Restaurant Routes - Unit Tests', () => {
                 tokenExpiresAt: new Date()
             };
 
-            const result = await actualRestaurantsDb.updateInstagramCredentials('nonexistent', credentials);
+            const result = await actualDb.updateInstagramCredentials('nonexistent', credentials);
 
             expect(result).toBeNull();
         });
@@ -660,7 +673,7 @@ describe('Restaurant Routes - Unit Tests', () => {
                 }
             );
 
-            const result = await actualRestaurantsDb.removeInstagramCredentials('r1');
+            const result = await actualDb.removeInstagramCredentials('r1');
 
             expect(result).toBeTruthy();
             // toApiFormat removes instagramCredentials entirely when it doesn't exist
@@ -669,9 +682,330 @@ describe('Restaurant Routes - Unit Tests', () => {
         });
 
         test('removeInstagramCredentials should return null for non-existent restaurant', async () => {
-            const result = await actualRestaurantsDb.removeInstagramCredentials('nonexistent');
+            const result = await actualDb.removeInstagramCredentials('nonexistent');
 
             expect(result).toBeNull();
+        });
+    });
+
+    describe('POST /api/restaurant (Onboarding)', () => {
+        const newUserToken = (() => {
+            const tokens = generateTokens('u-new', '+919000000000', '');
+            return tokens.accessToken;
+        })();
+
+        beforeEach(async () => {
+            // Create a new user without a restaurant
+            const usersCol = getUsersCollection();
+            await usersCol.updateOne(
+                { _id: 'u-new' as any },
+                {
+                    $set: {
+                        name: 'New User',
+                        email: 'new@test.com',
+                        phone: '+919000000000',
+                        role: 'OWNER',
+                        restaurantId: '',
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    },
+                },
+                { upsert: true }
+            );
+        });
+
+        it('should create restaurant with valid data', async () => {
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({
+                    name: 'Test Restaurant',
+                    cuisine: 'Italian',
+                    userName: 'John Doe',
+                    location: {
+                        address: '1 Main St, Bangalore',
+                        lat: 12.97,
+                        lng: 77.59,
+                        mapUrl: 'https://maps.google.com/test',
+                    },
+                    accountManager: {
+                        name: 'Manager One',
+                        phone: '+91 11111 22222',
+                        email: 'mgr@test.com',
+                        avatar: 'https://example.com/avatar.jpg',
+                    },
+                });
+
+            expect(response.status).toBe(201);
+            expect(response.body.success).toBe(true);
+            expect(response.body.data).toHaveProperty('restaurant');
+            expect(response.body.data).toHaveProperty('token');
+            expect(response.body.data).toHaveProperty('refreshToken');
+            expect(response.body.data.restaurant.name).toBe('Test Restaurant');
+            expect(response.body.data.restaurant.cuisine).toBe('Italian');
+        });
+
+        it('should set default subscription to BASIC/ACTIVE with 30-day renewal', async () => {
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ name: 'Sub Test', cuisine: 'Thai' });
+
+            expect(response.status).toBe(201);
+            const sub = response.body.data.restaurant.subscription;
+            expect(sub.tier).toBe('BASIC');
+            expect(sub.status).toBe('ACTIVE');
+            // Renewal date should be roughly 30 days from now
+            const renewal = new Date(sub.renewalDate);
+            const now = new Date();
+            const diffDays = Math.floor((renewal.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            expect(diffDays).toBeGreaterThanOrEqual(29);
+            expect(diffDays).toBeLessThanOrEqual(31);
+        });
+
+        it('should set integrations.instagram to false by default', async () => {
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ name: 'Integ Test', cuisine: 'Chinese' });
+
+            expect(response.status).toBe(201);
+            expect(response.body.data.restaurant.integrations.instagram).toBe(false);
+        });
+
+        it('should update userName when provided', async () => {
+            await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ name: 'Name Test', cuisine: 'Indian', userName: 'Updated Name' });
+
+            // Verify user was updated
+            const usersCol = getUsersCollection();
+            const user = await usersCol.findOne({ _id: 'u-new' as any });
+            expect(user!.name).toBe('Updated Name');
+        });
+
+        it('should link restaurant to user', async () => {
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ name: 'Link Test', cuisine: 'Japanese' });
+
+            expect(response.status).toBe(201);
+            const restaurantId = response.body.data.restaurant.id;
+
+            const usersCol = getUsersCollection();
+            const user = await usersCol.findOne({ _id: 'u-new' as any });
+            expect(user!.restaurantId).toBe(restaurantId);
+        });
+
+        it('should use default location and accountManager when not provided', async () => {
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ name: 'Minimal', cuisine: 'Mexican' });
+
+            expect(response.status).toBe(201);
+            expect(response.body.data.restaurant.location).toEqual({
+                address: '', lat: 0, lng: 0, mapUrl: '',
+            });
+            expect(response.body.data.restaurant.accountManager).toEqual({
+                name: '', phone: '', email: '', avatar: '',
+            });
+        });
+
+        it('should return 400 when name is missing', async () => {
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ cuisine: 'Italian' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toContain('name and cuisine are required');
+        });
+
+        it('should return 400 when cuisine is missing', async () => {
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ name: 'Test' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toContain('name and cuisine are required');
+        });
+
+        it('should return 400 when user already has a restaurant', async () => {
+            // Use the default auth token which has restaurantId 'r1'
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ name: 'Duplicate', cuisine: 'French' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toContain('already has a restaurant');
+        });
+
+        it('should return 404 when user is not found', async () => {
+            mockFindUserById.mockResolvedValueOnce(null);
+
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ name: 'Ghost', cuisine: 'Korean' });
+
+            expect(response.status).toBe(404);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('User not found');
+        });
+
+        it('should return 401 without auth token', async () => {
+            const response = await request(app)
+                .post('/api/restaurant')
+                .send({ name: 'No Auth', cuisine: 'Spanish' });
+
+            expect(response.status).toBe(401);
+        });
+
+        it('should handle database error during creation', async () => {
+            mockCreateRestaurant.mockRejectedValueOnce(new Error('DB write error'));
+
+            const response = await request(app)
+                .post('/api/restaurant')
+                .set('Authorization', `Bearer ${newUserToken}`)
+                .send({ name: 'Error Test', cuisine: 'Greek' });
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error',
+            });
+        });
+    });
+
+    describe('GET /api/restaurant/account-managers', () => {
+        beforeEach(async () => {
+            const col = getAccountManagersCollection();
+            await col.deleteMany({});
+            await col.insertMany([
+                {
+                    _id: 'am1' as any,
+                    name: 'Manager Alpha',
+                    phone: '+91 11111 11111',
+                    email: 'alpha@test.com',
+                    avatar: 'https://example.com/a.jpg',
+                    city: 'Bangalore',
+                    zone: 'Indiranagar',
+                },
+                {
+                    _id: 'am2' as any,
+                    name: 'Manager Beta',
+                    phone: '+91 22222 22222',
+                    email: 'beta@test.com',
+                    avatar: 'https://example.com/b.jpg',
+                    city: 'Bangalore',
+                    zone: 'Koramangala',
+                },
+                {
+                    _id: 'am3' as any,
+                    name: 'Manager Gamma',
+                    phone: '+91 33333 33333',
+                    email: 'gamma@test.com',
+                    avatar: 'https://example.com/g.jpg',
+                    city: 'Mumbai',
+                    zone: 'Andheri',
+                },
+            ] as any);
+        });
+
+        it('should return managers filtered by city', async () => {
+            const response = await request(app)
+                .get('/api/restaurant/account-managers?city=Bangalore')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.data).toHaveLength(2);
+            expect(response.body.data.every((m: any) => m.city === 'Bangalore')).toBe(true);
+        });
+
+        it('should filter by city and zone', async () => {
+            const response = await request(app)
+                .get('/api/restaurant/account-managers?city=Bangalore&zone=Indiranagar')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(response.status).toBe(200);
+            expect(response.body.data).toHaveLength(1);
+            expect(response.body.data[0].name).toBe('Manager Alpha');
+        });
+
+        it('should return empty array for unknown city', async () => {
+            const response = await request(app)
+                .get('/api/restaurant/account-managers?city=UnknownCity')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.data).toHaveLength(0);
+        });
+
+        it('should be case-insensitive for city match', async () => {
+            const response = await request(app)
+                .get('/api/restaurant/account-managers?city=bangalore')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(response.status).toBe(200);
+            expect(response.body.data).toHaveLength(2);
+        });
+
+        it('should return 400 when city parameter is missing', async () => {
+            const response = await request(app)
+                .get('/api/restaurant/account-managers')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toContain('City query parameter is required');
+        });
+
+        it('should return 401 without auth token', async () => {
+            const response = await request(app)
+                .get('/api/restaurant/account-managers?city=Bangalore');
+
+            expect(response.status).toBe(401);
+        });
+
+        it('should return manager data with correct shape', async () => {
+            const response = await request(app)
+                .get('/api/restaurant/account-managers?city=Mumbai')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(response.status).toBe(200);
+            expect(response.body.data).toHaveLength(1);
+            const manager = response.body.data[0];
+            expect(manager).toHaveProperty('id');
+            expect(manager).toHaveProperty('name', 'Manager Gamma');
+            expect(manager).toHaveProperty('phone');
+            expect(manager).toHaveProperty('email');
+            expect(manager).toHaveProperty('avatar');
+            expect(manager).toHaveProperty('city', 'Mumbai');
+            expect(manager).toHaveProperty('zone', 'Andheri');
+        });
+
+        it('should handle database error', async () => {
+            mockGetAccountManagersByCityAndZone.mockRejectedValueOnce(new Error('DB Error'));
+
+            const response = await request(app)
+                .get('/api/restaurant/account-managers?city=Bangalore')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(response.status).toBe(500);
+            expect(response.body).toEqual({
+                success: false,
+                error: 'Internal server error',
+            });
         });
     });
 });

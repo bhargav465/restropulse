@@ -18,6 +18,7 @@ export {
   getOtpChallengesCollection,
   getOauthSessionsCollection,
   getDataDeletionAuditsCollection,
+  getAccountManagersCollection,
   toApiFormat,
   toApiFormatArray,
   toObjectId,
@@ -30,3 +31,4 @@ export * from './users.js';
 export * from './restaurants.js';
 export * from './posts.js';
 export * from './strategy.js';
+export * from './account-managers.js';

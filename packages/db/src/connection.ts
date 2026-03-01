@@ -100,6 +100,10 @@ export function getDataDeletionAuditsCollection(): Collection {
   return getDB().collection('dataDeletionAudits');
 }
 
+export function getAccountManagersCollection(): Collection {
+  return getDB().collection('accountManagers');
+}
+
 // ----- Helpers -----
 
 /**

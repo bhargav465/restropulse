@@ -225,6 +225,29 @@ export const COLLECTIONS: CollectionSchema[] = [
         ],
     },
     {
+        name: 'accountManagers',
+        indexes: [
+            { spec: { city: 1 } },
+            { spec: { city: 1, zone: 1 } },
+        ],
+        validator: {
+            $jsonSchema: {
+                bsonType: 'object',
+                required: ['name', 'phone', 'email', 'city', 'zone'],
+                properties: {
+                    name: { bsonType: 'string', description: 'Manager full name' },
+                    phone: { bsonType: 'string', description: 'Contact phone' },
+                    email: { bsonType: 'string', description: 'Contact email' },
+                    avatar: { bsonType: 'string', description: 'Avatar URL' },
+                    city: { bsonType: 'string', description: 'City name' },
+                    zone: { bsonType: 'string', description: 'Zone within city' },
+                    createdAt: { bsonType: 'date' },
+                    updatedAt: { bsonType: 'date' },
+                },
+            },
+        },
+    },
+    {
         name: 'dataDeletionAudits',
         indexes: [
             { spec: { confirmationCode: 1 }, options: { unique: true } },

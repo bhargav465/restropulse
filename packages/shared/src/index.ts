@@ -35,7 +35,7 @@ export type StrategyCycleStatus =
 
 export type TokenStatus = 'valid' | 'expiring_soon' | 'expired';
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'STUDIO' | 'INPUTS' | 'STRATEGY' | 'SETTINGS';
+export type ViewState = 'LOGIN' | 'ONBOARDING' | 'DASHBOARD' | 'STUDIO' | 'INPUTS' | 'STRATEGY' | 'SETTINGS';
 
 export type InstagramConnectionError =
   | 'NO_PAGES_FOUND'
@@ -50,6 +50,16 @@ export type InstagramConnectionError =
   | 'TIMEOUT';
 
 // ----- Interfaces -----
+
+export interface AccountManager {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  avatar: string;
+  city: string;
+  zone: string;
+}
 
 export interface InstagramConnectionStatus {
   connected: boolean;

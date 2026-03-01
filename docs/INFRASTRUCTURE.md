@@ -47,8 +47,10 @@
 | VITE_FIREBASE_STORAGE_BUCKET     | Yes*     | placeholder                | Firebase storage bucket     |
 | VITE_FIREBASE_MESSAGING_SENDER_ID| Yes*    | placeholder                | Firebase messaging sender ID|
 | VITE_FIREBASE_APP_ID             | Yes*     | placeholder                | Firebase app ID             |
+| VITE_GOOGLE_MAPS_API_KEY         | No       | (none)                     | Google Maps Places API key  |
 
 *Required for production; dev uses fallback values.
+**VITE_GOOGLE_MAPS_API_KEY is optional; when absent, the onboarding location step falls back to manual address entry.
 
 ### apps/publisher (.env)
 
@@ -82,7 +84,7 @@
 ### MongoDB Atlas
 
 - **Database**: `restropulse`
-- **Collections**: users, restaurants, posts, contentStrategies, strategyCycles
+- **Collections**: users, restaurants, posts, contentStrategies, strategyCycles, accountManagers
 - **Driver**: mongodb v6.12
 - **Connection**: Shared singleton via `@restropulse/db`
 
@@ -100,6 +102,14 @@
 - **Scopes**: instagram_basic, instagram_content_publish, pages_show_list, pages_read_user_content, pages_manage_posts, public_profile
 - **Token Lifetime**: 60 days (long-lived)
 - **Refresh Window**: 15 days before expiry (cron), 7 days (on-demand)
+
+### Google Maps Places API (optional)
+
+- **Package**: `@react-google-maps/api` (frontend only)
+- **Used for**: Address autocomplete during onboarding (location step)
+- **API Key**: `VITE_GOOGLE_MAPS_API_KEY` in `apps/web/.env`
+- **Fallback**: Manual address text input when API key is not configured
+- **Required APIs**: Maps JavaScript API, Places API
 
 ## Token and Timeout Configuration
 

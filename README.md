@@ -150,7 +150,9 @@ Private
 - [x] Publishing cron with rate limiting and retry logic
 - [x] Token encryption (AES-256-GCM) and auto-refresh cron
 - [x] Content approval workflow (approve/request changes/revert)
-- [x] 650+ automated tests with 85%+ coverage
+- [x] New user onboarding flow (multi-step registration with Google Maps)
+- [x] Account manager assignment during onboarding
+- [x] 828+ automated tests across 31 test files
 
 ## Future Roadmap
 

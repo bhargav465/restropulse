@@ -70,6 +70,7 @@ restropulse/
 | View         | Component          | Purpose                         |
 |--------------|--------------------|---------------------------------|
 | LOGIN        | Login.tsx          | Phone OTP authentication        |
+| ONBOARDING   | Onboarding.tsx     | New user registration (multi-step) |
 | DASHBOARD    | Dashboard.tsx      | Restaurant overview              |
 | STUDIO       | ContentStudio.tsx  | Content calendar, post management|
 | INPUTS       | Inputs.tsx         | Offers, chef specials, menu      |
@@ -82,6 +83,13 @@ restropulse/
 3. Frontend sends ID token to `POST /api/auth/firebase`
 4. Backend verifies via Firebase Admin SDK, returns JWT pair
 5. Frontend stores `rp_token` (15min) and `rp_refresh_token` (7d) in localStorage
+6. If user has no `restaurantId`, frontend routes to ONBOARDING view
+
+**Onboarding Flow** (new users only):
+1. User completes 4-step form: user details, restaurant details, location (Google Maps), account manager selection
+2. Frontend sends `POST /api/restaurant` with collected data
+3. Backend creates restaurant, links to user, issues fresh JWT tokens with new restaurantId
+4. Frontend stores new tokens and navigates to DASHBOARD
 
 ### apps/api -- REST API
 
@@ -95,6 +103,8 @@ restropulse/
 | Prefix                           | Purpose                            |
 |----------------------------------|------------------------------------|
 | `/api/auth/*`                    | Authentication (Firebase, JWT)     |
+| `POST /api/restaurant`           | Create restaurant (onboarding)     |
+| `GET /api/restaurant/account-managers` | Account managers by city/zone |
 | `/api/restaurant/:id`           | Restaurant CRUD, offers, specials  |
 | `/api/posts/*`                   | Post CRUD, publishing, generation  |
 | `/api/strategy/*`               | Content strategy and cycles        |
@@ -126,19 +136,20 @@ restropulse/
 
 ### packages/shared
 
-Single source of truth for all TypeScript types, enums, and interfaces used across the monorepo. Key exports: `User`, `Restaurant`, `Post`, `ContentStrategy`, `StrategyCycle`, and all status/type enums.
+Single source of truth for all TypeScript types, enums, and interfaces used across the monorepo. Key exports: `User`, `Restaurant`, `Post`, `ContentStrategy`, `StrategyCycle`, `AccountManager`, and all status/type enums.
 
 ### packages/db
 
 Shared MongoDB connection layer with collection helpers:
 
-| Module            | Exports                                     |
-|-------------------|---------------------------------------------|
-| connection.ts     | `connectDB()`, `disconnectDB()`, `getDB()`, `setDB()` |
-| posts.ts          | `getPostsCollection()`, `findPostById()`, `getRecentPublishAttempts()` |
-| restaurants.ts    | `getRestaurantsCollection()`, `findRestaurantById()` |
-| strategy.ts       | `getContentStrategiesCollection()`, `getStrategyCyclesCollection()` |
-| users.ts          | `getUsersCollection()`, `findUserByPhone()`, `findUserByFirebaseUid()` |
+| Module              | Exports                                     |
+|---------------------|---------------------------------------------|
+| connection.ts       | `connectDB()`, `disconnectDB()`, `getDB()`, `setDB()` |
+| posts.ts            | `getPostsCollection()`, `findPostById()`, `getRecentPublishAttempts()` |
+| restaurants.ts      | `getRestaurantsCollection()`, `findRestaurantById()`, `createRestaurant()` |
+| strategy.ts         | `getContentStrategiesCollection()`, `getStrategyCyclesCollection()` |
+| users.ts            | `getUsersCollection()`, `findUserByPhone()`, `findUserByFirebaseUid()` |
+| account-managers.ts | `getAccountManagersByCity()`, `getAccountManagersByCityAndZone()` |
 
 `setDB()` enables test injection with `mongodb-memory-server`.
 
@@ -214,6 +225,7 @@ Shared publishing layer used by both `apps/api` and `apps/publisher`. Key export
 | posts               | ObjectId or custom string    | API, Publisher, Engine|
 | contentStrategies   | ObjectId                     | API, Engine          |
 | strategyCycles      | ObjectId                     | API, Engine          |
+| accountManagers     | ObjectId                     | API                  |
 
 Database name: `restropulse` (configurable via `MONGODB_DB_NAME`)
 
