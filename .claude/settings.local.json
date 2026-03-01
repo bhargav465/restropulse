@@ -14,7 +14,8 @@
       "Bash(npm run:*)",
       "Bash(npx vitest:*)",
       "Bash(npm install:*)",
-      "mcp__lsp-db__definition"
+      "mcp__lsp-db__definition",
+      "Bash(powershell:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
