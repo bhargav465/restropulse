@@ -48,7 +48,6 @@ const mockCreateResponse = {
         cuisine: 'Italian',
         location: { address: '1 Main St', lat: 12.97, lng: 77.59, mapUrl: '' },
         accountManager: { name: '', phone: '', email: '', avatar: '' },
-        subscription: { tier: 'BASIC', renewalDate: '2026-04-01', status: 'ACTIVE' },
         integrations: { instagram: false },
     },
     token: 'new-access-token',

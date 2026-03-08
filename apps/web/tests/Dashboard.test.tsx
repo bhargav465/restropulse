@@ -68,11 +68,6 @@ describe('Dashboard Component', () => {
             email: 'manager@test.com',
             avatar: '/avatar.jpg',
         },
-        subscription: {
-            tier: 'GOLD' as const,
-            renewalDate: '2024-12-31',
-            status: 'ACTIVE' as const,
-        },
         integrations: {
             whatsapp: true,
             instagram: true,

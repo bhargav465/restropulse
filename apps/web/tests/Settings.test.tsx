@@ -45,11 +45,6 @@ describe('Settings Component', () => {
             email: 'john@example.com',
             avatar: '/avatar.jpg',
         },
-        subscription: {
-            tier: 'GOLD' as const,
-            renewalDate: '2024-12-31',
-            status: 'ACTIVE' as const,
-        },
         integrations: {
             instagram: false,
         },
@@ -82,12 +77,6 @@ describe('Settings Component', () => {
             expect(screen.getByText(mockRestaurantData.accountManager.name)).toBeInTheDocument();
             // Email might not be directly displayed in the component
             expect(mockRestaurantData.accountManager.email).toBe('john@example.com');
-        });
-
-        it('should display subscription tier', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            expect(screen.getByText(/Gold/i)).toBeInTheDocument();
         });
 
         it('should display integration status', () => {
@@ -139,67 +128,6 @@ describe('Settings Component', () => {
 
                 expect(mockHistoryBack).toHaveBeenCalled();
             }
-        });
-    });
-
-    describe('Subscription Management', () => {
-        it('should open subscription modal', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage') || btn.textContent?.includes('Subscription')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-                expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'subscription' }, '', '#subscription');
-            }
-        });
-
-        it('should display all subscription plans in modal', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage') || btn.textContent?.includes('Subscription')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                // Check that subscription plan names exist
-                const basicElements = screen.getAllByText(/Basic/i);
-                expect(basicElements.length).toBeGreaterThan(0);
-                expect(screen.getAllByText(/Gold/i).length).toBeGreaterThan(0);
-                expect(screen.getByText(/Platinum/i)).toBeInTheDocument();
-            }
-        });
-
-        it('should handle plan switch', () => {
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
-
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage') || btn.textContent?.includes('Subscription')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                const platinumButton = screen.getAllByRole('button').find(btn =>
-                    btn.textContent?.includes('Platinum')
-                );
-
-                if (platinumButton) {
-                    fireEvent.click(platinumButton);
-                    expect(alertSpy).toHaveBeenCalled();
-                }
-            }
-
-            alertSpy.mockRestore();
         });
     });
 
@@ -340,44 +268,6 @@ describe('Settings Component', () => {
         });
     });
 
-    describe('Subscription Modal Interactions', () => {
-        it('should handle closing subscription modal via backdrop click', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                const backdrop = document.querySelector('.fixed.inset-0');
-                if (backdrop) {
-                    fireEvent.click(backdrop);
-                    expect(mockHistoryBack).toHaveBeenCalled();
-                }
-            }
-        });
-
-        it('should show different subscription tiers', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                expect(screen.getAllByText(/Basic/i).length).toBeGreaterThan(0);
-                expect(screen.getAllByText(/Gold/i).length).toBeGreaterThan(0);
-                expect(screen.getByText(/Platinum/i)).toBeInTheDocument();
-            }
-        });
-    });
-
     describe('Offers Management', () => {
 
 
@@ -424,25 +314,6 @@ describe('Settings Component', () => {
             if (facebookToggle) {
                 fireEvent.click(facebookToggle);
             }
-        });
-    });
-
-    describe('Subscription Status', () => {
-
-
-
-
-        it('should handle inactive subscription', () => {
-            const inactiveData = {
-                ...mockRestaurantData,
-                subscription: {
-                    ...mockRestaurantData.subscription,
-                    status: 'INACTIVE' as const,
-                },
-            };
-
-            render(<Settings onLogout={mockOnLogout} restaurantData={inactiveData} />);
-            expect(screen.getByText(inactiveData.name)).toBeInTheDocument();
         });
     });
 
@@ -544,74 +415,6 @@ describe('Settings Component', () => {
                 window.dispatchEvent(new PopStateEvent('popstate'));
             }
         });
-
-        it('should close subscription modal on popstate', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                // Simulate browser back
-                window.dispatchEvent(new PopStateEvent('popstate'));
-            }
-        });
-    });
-
-    describe('Subscription Plan Switching', () => {
-        it('should switch to Basic plan', () => {
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
-
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                const allButtons = screen.getAllByRole('button');
-                const basicButton = allButtons.find(btn => btn.textContent?.includes('Basic'));
-
-                if (basicButton) {
-                    fireEvent.click(basicButton);
-                    expect(alertSpy).toHaveBeenCalled();
-                }
-            }
-
-            alertSpy.mockRestore();
-        });
-
-        it('should switch to Gold plan', () => {
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
-
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                const allButtons = screen.getAllByRole('button');
-                const goldButtons = allButtons.filter(btn => btn.textContent?.includes('Gold'));
-                const actionButton = goldButtons.find(btn => btn.className.includes('bg-orange'));
-
-                if (actionButton) {
-                    fireEvent.click(actionButton);
-                }
-            }
-
-            alertSpy.mockRestore();
-        });
     });
 
     describe('Edit Profile Modal Interactions', () => {
@@ -670,50 +473,6 @@ describe('Settings Component', () => {
         });
     });
 
-    describe('Subscription Modal Touch Interactions', () => {
-        it('should handle touch drag on subscription modal', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                const modal = document.querySelector('.bg-white.rounded-t-3xl');
-                if (modal) {
-                    fireEvent.touchStart(modal, { touches: [{ clientY: 100 }] });
-                    fireEvent.touchMove(modal, { touches: [{ clientY: 150 }] });
-                    fireEvent.touchEnd(modal);
-                }
-            }
-        });
-
-        it('should close subscription modal on large drag', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subscriptionButtons = screen.getAllByRole('button');
-            const subscriptionButton = subscriptionButtons.find(btn =>
-                btn.textContent?.includes('Manage')
-            );
-
-            if (subscriptionButton) {
-                fireEvent.click(subscriptionButton);
-
-                const modal = document.querySelector('.bg-white.rounded-t-3xl');
-                if (modal) {
-                    fireEvent.touchStart(modal, { touches: [{ clientY: 100 }] });
-                    fireEvent.touchMove(modal, { touches: [{ clientY: 250 }] });
-                    fireEvent.touchEnd(modal);
-
-                    expect(mockHistoryBack).toHaveBeenCalled();
-                }
-            }
-        });
-    });
-
     describe('Additional Coverage Tests', () => {
         // 1. Delete Account Alert
         it('should show alert when delete account is clicked', () => {
@@ -763,75 +522,8 @@ describe('Settings Component', () => {
             expect(connectedBtn).toBeInTheDocument();
         });
 
-        // 4. Subscription Modal Scroll Logic
-        it('should not drag subscription modal if scrolled down', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Manage') || b.textContent?.includes('Subscription'));
-            if (subBtn) fireEvent.click(subBtn);
-
-            const modal = document.querySelector('.overflow-y-auto'); // This targets the scrollable container
-            if (modal) {
-                // Mock scrollTop property
-                Object.defineProperty(modal, 'scrollTop', { value: 50, writable: true });
-
-                fireEvent.touchStart(modal, { touches: [{ clientY: 100 }] });
-                fireEvent.touchMove(modal, { touches: [{ clientY: 200 }] }); // Drag down
-                // Logic check implicitly via coverage, but we ensure the handlers run
-            }
-        });
-
-        it('should drag subscription modal if at top', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Manage') || b.textContent?.includes('Subscription'));
-            if (subBtn) fireEvent.click(subBtn);
-
-            const modal = document.querySelector('.overflow-y-auto');
-            if (modal) {
-                Object.defineProperty(modal, 'scrollTop', { value: 0, writable: true });
-
-                fireEvent.touchStart(modal, { touches: [{ clientY: 100 }] });
-                fireEvent.touchMove(modal, { touches: [{ clientY: 150 }] });
-            }
-        });
-
-        it('should allow scrolling up (negative offset) without dragging', () => {
-            render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-            const subBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Manage') || b.textContent?.includes('Subscription'));
-            if (subBtn) fireEvent.click(subBtn);
-
-            const modal = document.querySelector('.overflow-y-auto');
-            if (modal) {
-                fireEvent.touchStart(modal, { touches: [{ clientY: 200 }] });
-                fireEvent.touchMove(modal, { touches: [{ clientY: 100 }] }); // Drag up
-            }
-        });
     });
 });
-
-
-// Helper to find the modal container (which has the event listeners)
-const getModalContainer = (titleText: string) => {
-    try {
-        const titleElements = screen.getAllByText(titleText);
-        const title = titleElements[0];
-        let current: HTMLElement | null = title;
-        while (current) {
-            if (typeof current.className === 'string' &&
-                (current.className.includes('overflow-y-auto') || current.className.includes('z-10'))) {
-                if (current.className.includes('bg-white')) {
-                    return current;
-                }
-            }
-            current = current.parentElement;
-        }
-    } catch (e) {
-        // console.error('getModalContainer error:', e);
-    }
-    return null;
-};
 
 describe('Settings Branching Logic', () => {
     const mockOnLogout = vi.fn();
@@ -851,11 +543,6 @@ describe('Settings Branching Logic', () => {
             email: 'john@example.com',
             avatar: '/avatar.jpg',
         },
-        subscription: {
-            tier: 'BASIC' as const,
-            renewalDate: '2024-12-31',
-            status: 'ACTIVE' as const,
-        },
         integrations: {
             whatsapp: true,
             instagram: false,
@@ -864,68 +551,6 @@ describe('Settings Branching Logic', () => {
         activeOffers: [],
         chefSpecials: [],
     };
-
-    it('should handle dragging up (negative offset) in Subscription Modal', async () => {
-        render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-        const subBtn = screen.getByText('Subscription').closest('button');
-        fireEvent.click(subBtn!);
-
-        await waitFor(() => expect(screen.getByText('Manage your plan')).toBeInTheDocument());
-
-        let modalContainer = getModalContainer('Manage your plan');
-        expect(modalContainer).not.toBeNull();
-
-        if (modalContainer) {
-            // Drag Up (Scrolling content up)
-            fireEvent.touchStart(modalContainer, { touches: [{ clientY: 500 }] });
-
-            modalContainer = getModalContainer('Manage your plan');
-            if (modalContainer) {
-                fireEvent.touchMove(modalContainer, { touches: [{ clientY: 400 }] }); // -100px
-
-                modalContainer = getModalContainer('Manage your plan');
-                // Should stay at 0
-                if (modalContainer) {
-                    expect(modalContainer).toHaveStyle('transform: translateY(0px)');
-                    fireEvent.touchEnd(modalContainer);
-                }
-            }
-        }
-    });
-
-    it('should NOT drag Subscription Modal if content is scrolled down', async () => {
-        render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
-
-        const subBtn = screen.getByText('Subscription').closest('button');
-        fireEvent.click(subBtn!);
-        await waitFor(() => expect(screen.getByText('Manage your plan')).toBeInTheDocument());
-
-        let modalContainer = getModalContainer('Manage your plan');
-        expect(modalContainer).not.toBeNull();
-
-        if (modalContainer) {
-            // Mock scrollTop > 0 on the actual scroll container
-            Object.defineProperty(modalContainer, 'scrollTop', { value: 50, configurable: true });
-
-            // Try to drag down
-            fireEvent.touchStart(modalContainer, { touches: [{ clientY: 100 }] });
-            modalContainer = getModalContainer('Manage your plan');
-            if (modalContainer) {
-                // Re-apply scrollTop because re-render might have reset
-                Object.defineProperty(modalContainer, 'scrollTop', { value: 50, configurable: true });
-
-                fireEvent.touchMove(modalContainer, { touches: [{ clientY: 200 }] }); // +100px
-
-                modalContainer = getModalContainer('Manage your plan');
-                // Should stay at 0 because scrollTop > 0
-                if (modalContainer) {
-                    expect(modalContainer).toHaveStyle('transform: translateY(0px)');
-                    fireEvent.touchEnd(modalContainer);
-                }
-            }
-        }
-    });
 
     it('should handle popstate when NO modals are open', () => {
         render(<Settings onLogout={mockOnLogout} restaurantData={mockRestaurantData} />);
@@ -1064,7 +689,6 @@ describe('Settings Instagram OAuth & Connection Flows', () => {
         cuisine: 'Italian',
         location: { address: '123 Main St', lat: 0, lng: 0, mapUrl: '' },
         accountManager: { name: 'John Doe', phone: '+1234567890', email: 'john@example.com', avatar: '/avatar.jpg' },
-        subscription: { tier: 'GOLD' as const, renewalDate: '2024-12-31', status: 'ACTIVE' as const },
         integrations: { instagram: false },
         activeOffers: [],
         chefSpecials: [],

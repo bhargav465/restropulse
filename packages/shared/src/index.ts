@@ -6,11 +6,21 @@
 
 // ----- Enums / Literal Unions -----
 
-export type SubscriptionTier = 'BASIC' | 'GOLD' | 'PLATINUM';
+export type SubscriptionTier = 'STARTER' | 'GROWTH' | 'PREMIUM';
 
-export type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE';
+export type SubscriptionStatus = 'NONE' | 'CREATED' | 'AUTHENTICATED' | 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'HALTED';
 
-export type UserRole = 'OWNER' | 'MANAGER';
+export type UserRole = 'OWNER' | 'MANAGER' | 'ADMIN';
+
+export type BillingCycle = 'MONTHLY' | 'ANNUAL';
+
+export type CouponType = 'PERCENTAGE' | 'FLAT';
+
+export type CouponStatus = 'ACTIVE' | 'DISABLED' | 'EXPIRED';
+
+export type CreditPurchaseStatus = 'PENDING' | 'PAID' | 'FAILED';
+
+export type InvoiceType = 'SUBSCRIPTION' | 'CREDIT_PURCHASE';
 
 export type PostType = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'STORY' | 'REEL';
 
@@ -126,11 +136,6 @@ export interface Restaurant {
     email: string;
     avatar: string;
   };
-  subscription: {
-    tier: SubscriptionTier;
-    renewalDate: string;
-    status: SubscriptionStatus;
-  };
   integrations: {
     instagram: boolean;
   };
@@ -199,6 +204,152 @@ export interface StrategyCycle {
   plannedPosts: PlannedPost[];
   focus: string[];
   feedback?: string;
+}
+
+// ----- Subscription & Billing -----
+
+export const POST_TYPE_CREDIT_COSTS: Record<PostType, number> = {
+  IMAGE: 1,
+  VIDEO: 1,
+  STORY: 1,
+  CAROUSEL: 3,
+  REEL: 5,
+};
+
+export const FREE_SIGNUP_CREDITS = 20;
+
+export interface PlanLimits {
+  reelsPerWeek: number;
+  instagramPostsPerWeek: number;
+  carouselPostsPerWeek: number;
+}
+
+export interface PlanPricing {
+  monthly: number;   // in paise
+  annual: number;    // in paise
+  currency: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  slug: string;
+  version: number;
+  isCurrentVersion: boolean;
+  tier: SubscriptionTier;
+  name: string;
+  limits: PlanLimits;
+  pricing: PlanPricing;
+  razorpayPlanIds: { monthly: string; annual: string };
+  features: string[];
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface Subscription {
+  id: string;
+  restaurantId: string;
+  planId?: string;
+  planSnapshot?: SubscriptionPlan | null;
+  billingCycle?: BillingCycle;
+  status: SubscriptionStatus;
+  razorpaySubscriptionId?: string;
+  razorpayCustomerId?: string;
+  currentPeriodStart?: string | Date;
+  currentPeriodEnd?: string | Date;
+  credits: number;
+  couponCode?: string;
+  cancelledAt?: string | Date;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  type: CouponType;
+  value: number;
+  maxBillingCycles?: number;
+  maxRedemptions?: number;
+  redemptionCount: number;
+  assignedTo?: string;
+  applicablePlans?: string[];
+  applicableCycles?: BillingCycle[];
+  validFrom: string | Date;
+  validUntil?: string | Date;
+  status: CouponStatus;
+  razorpayOfferId?: string;
+  createdBy: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface CouponRedemption {
+  id: string;
+  couponId: string;
+  couponCode: string;
+  restaurantId: string;
+  userId: string;
+  subscriptionId: string;
+  discountAppliedPaise: number;
+  redeemedAt: string | Date;
+}
+
+export interface CreditPurchase {
+  id: string;
+  restaurantId: string;
+  userId: string;
+  creditPackId: string;
+  creditsAdded: number;
+  amountPaise: number;
+  razorpayOrderId: string;
+  razorpayPaymentId?: string;
+  status: CreditPurchaseStatus;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface CreditPack {
+  id: string;
+  name: string;
+  description: string;
+  credits: number;
+  priceInPaise: number;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface Invoice {
+  id: string;
+  restaurantId: string;
+  type: InvoiceType;
+  razorpayInvoiceId?: string;
+  razorpayPaymentId?: string;
+  razorpaySubscriptionId?: string;
+  razorpayOrderId?: string;
+  amountPaise: number;
+  currency: string;
+  status: string;
+  description: string;
+  billingPeriodStart?: string | Date;
+  billingPeriodEnd?: string | Date;
+  pdfUrl?: string;
+  paidAt?: string | Date;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface PlanUsage {
+  reels: { used: number; limit: number };
+  instagramPosts: { used: number; limit: number };
+  carousels: { used: number; limit: number };
+}
+
+export interface SubscribeRequest {
+  planSlug: string;
+  billingCycle: BillingCycle;
+  couponCode?: string;
 }
 
 // ----- API Types (request/response) -----

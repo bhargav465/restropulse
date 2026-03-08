@@ -1,4 +1,4 @@
-import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City } from '@restropulse/shared';
+import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice } from '@restropulse/shared';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -397,6 +397,82 @@ export const instagramAPI = {
         const response = await fetchAPI<ApiResponse<{ instagram: { configured: boolean } }>>(
             '/integrations/config'
         );
+        return response.data!;
+    },
+};
+
+// Subscription API
+export const subscriptionAPI = {
+    getPlans: async (): Promise<SubscriptionPlan[]> => {
+        const response = await fetchAPI<ApiResponse<SubscriptionPlan[]>>('/subscriptions/plans');
+        return response.data!;
+    },
+
+    getCurrent: async (): Promise<{ subscription: Subscription | null; usage: PlanUsage | null }> => {
+        const response = await fetchAPI<ApiResponse<{ subscription: Subscription | null; usage: PlanUsage | null }>>('/subscriptions/current');
+        return response.data!;
+    },
+
+    subscribe: async (planSlug: string, billingCycle: BillingCycle, couponCode?: string): Promise<{ subscriptionId: string; keyId: string }> => {
+        const response = await fetchAPI<ApiResponse<{ subscriptionId: string; keyId: string }>>('/subscriptions/subscribe', {
+            method: 'POST',
+            body: JSON.stringify({ planSlug, billingCycle, couponCode }),
+        });
+        return response.data!;
+    },
+
+    cancel: async (): Promise<void> => {
+        await fetchAPI('/subscriptions/cancel', { method: 'POST' });
+    },
+
+    upgrade: async (): Promise<void> => {
+        await fetchAPI('/subscriptions/upgrade', { method: 'POST' });
+    },
+
+    purchaseCredits: async (creditPackId: string): Promise<{ orderId: string; amount: number; currency: string; keyId: string; credits: number }> => {
+        const response = await fetchAPI<ApiResponse<{ orderId: string; amount: number; currency: string; keyId: string; credits: number }>>('/subscriptions/credits/purchase', {
+            method: 'POST',
+            body: JSON.stringify({ creditPackId }),
+        });
+        return response.data!;
+    },
+
+    verifyCredits: async (razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string): Promise<void> => {
+        await fetchAPI('/subscriptions/credits/verify', {
+            method: 'POST',
+            body: JSON.stringify({ razorpayOrderId, razorpayPaymentId, razorpaySignature }),
+        });
+    },
+};
+
+// Coupon API
+export const couponAPI = {
+    validate: async (code: string, planSlug?: string, billingCycle?: BillingCycle): Promise<{ valid: boolean; reason?: string; type?: string; value?: number; maxBillingCycles?: number }> => {
+        const response = await fetchAPI<ApiResponse<{ valid: boolean; reason?: string; type?: string; value?: number; maxBillingCycles?: number }>>('/coupons/validate', {
+            method: 'POST',
+            body: JSON.stringify({ code, planSlug, billingCycle }),
+        });
+        return response.data!;
+    },
+};
+
+// Credit Packs API
+export const creditPacksAPI = {
+    getAll: async (): Promise<CreditPack[]> => {
+        const response = await fetchAPI<ApiResponse<CreditPack[]>>('/credit-packs');
+        return response.data!;
+    },
+};
+
+// Invoice API
+export const invoiceAPI = {
+    getAll: async (): Promise<Invoice[]> => {
+        const response = await fetchAPI<ApiResponse<Invoice[]>>('/invoices');
+        return response.data!;
+    },
+
+    getById: async (id: string): Promise<Invoice> => {
+        const response = await fetchAPI<ApiResponse<Invoice>>(`/invoices/${id}`);
         return response.data!;
     },
 };

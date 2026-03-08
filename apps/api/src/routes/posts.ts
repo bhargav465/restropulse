@@ -1,9 +1,10 @@
 import express, { Request, Response } from 'express';
-import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId } from '@restropulse/db';
+import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
 import { publishPost, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
 import { ApiResponse, Post } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
+import { enforcePlanLimits } from '../middleware/enforce-plan-limits.js';
 
 const router = express.Router();
 
@@ -55,7 +56,7 @@ router.get('/:id', handle(async (req: Request, res: Response<ApiResponse<Post>>)
 }));
 
 // Create new post (supports both strategy-generated and adhoc posts)
-router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
+router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
     const postData = req.body;
 
     // Validate required fields
@@ -83,6 +84,15 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
     };
 
     const newPost = await createPost(postWithDefaults);
+
+    // Deduct credits if middleware flagged it
+    if (req.creditCost) {
+        const sub = await findActiveSubscription(req.user!.restaurantId);
+        if (sub) {
+            await deductCredits(sub.id, req.creditCost);
+        }
+    }
+
     res.status(201).json({
         success: true,
         data: newPost,
@@ -91,7 +101,7 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
 }));
 
 // Generate post with AI-created content (for adhoc posts)
-router.post('/generate', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
+router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
     const { concept, type, platform, scheduledFor } = req.body;
 
     // Validate required fields
@@ -165,6 +175,14 @@ router.post('/generate', requireAuth, handle(async (req: Request, res: Response<
     };
 
     const newPost = await createPost(postData);
+
+    // Deduct credits if middleware flagged it
+    if (req.creditCost) {
+        const sub = await findActiveSubscription(req.user!.restaurantId);
+        if (sub) {
+            await deductCredits(sub.id, req.creditCost);
+        }
+    }
 
     console.log(`[Content Generation] Post created successfully: ${newPost.id}`);
 

@@ -75,7 +75,7 @@ restropulse/
 | STUDIO       | ContentStudio.tsx  | Content calendar, post management|
 | INPUTS       | Inputs.tsx         | Offers, chef specials, menu      |
 | STRATEGY     | Strategy.tsx       | Content strategy configuration   |
-| SETTINGS     | Settings.tsx       | Instagram connection, logout     |
+| SETTINGS     | Settings.tsx       | Subscription, billing, Instagram, logout |
 
 **Auth Flow**:
 1. User enters phone number; Firebase sends OTP via RecaptchaVerifier
@@ -109,6 +109,10 @@ restropulse/
 | `/api/posts/*`                   | Post CRUD, publishing, generation  |
 | `/api/strategy/*`               | Content strategy and cycles        |
 | `/api/integrations/instagram/*` | OAuth, account management, GDPR    |
+| `/api/subscriptions/*`          | Plans, subscribe, cancel, webhooks, credits |
+| `/api/coupons/*`                | Coupon CRUD, validation (admin)    |
+| `/api/credit-packs/*`           | Credit pack CRUD (admin)           |
+| `/api/invoices/*`               | Invoice listing, detail, PDF       |
 | `/health`                        | Health check                       |
 
 ### apps/publisher -- Publishing Worker
@@ -136,20 +140,25 @@ restropulse/
 
 ### packages/shared
 
-Single source of truth for all TypeScript types, enums, and interfaces used across the monorepo. Key exports: `User`, `Restaurant`, `Post`, `ContentStrategy`, `StrategyCycle`, `AccountManager`, and all status/type enums.
+Single source of truth for all TypeScript types, enums, and interfaces used across the monorepo. Key exports: `User`, `Restaurant`, `Post`, `ContentStrategy`, `StrategyCycle`, `AccountManager`, `SubscriptionPlan`, `Subscription`, `Coupon`, `Invoice`, `CreditPack`, and all status/type enums. Also exports constants: `POST_TYPE_CREDIT_COSTS`, `FREE_SIGNUP_CREDITS`.
 
 ### packages/db
 
 Shared MongoDB connection layer with collection helpers:
 
-| Module              | Exports                                     |
-|---------------------|---------------------------------------------|
-| connection.ts       | `connectDB()`, `disconnectDB()`, `getDB()`, `setDB()` |
-| posts.ts            | `getPostsCollection()`, `findPostById()`, `getRecentPublishAttempts()` |
-| restaurants.ts      | `getRestaurantsCollection()`, `findRestaurantById()`, `createRestaurant()` |
-| strategy.ts         | `getContentStrategiesCollection()`, `getStrategyCyclesCollection()` |
-| users.ts            | `getUsersCollection()`, `findUserByPhone()`, `findUserByFirebaseUid()` |
-| account-managers.ts | `getAccountManagersByCity()`, `getAccountManagersByCityAndZone()` |
+| Module                  | Exports                                     |
+|-------------------------|---------------------------------------------|
+| connection.ts           | `connectDB()`, `disconnectDB()`, `getDB()`, `setDB()`, collection getters |
+| posts.ts                | `findPostById()`, `findAllPosts()`, `createPost()`, `updatePost()` |
+| restaurants.ts          | `findRestaurantById()`, `createRestaurant()`, `updateRestaurant()` |
+| strategy.ts             | `getContentStrategiesCollection()`, `getStrategyCyclesCollection()` |
+| users.ts                | `findUserByPhone()`, `findUserByFirebaseUid()` |
+| account-managers.ts     | `getAccountManagersByCity()`, `getAccountManagersByCityAndZone()` |
+| subscription-plans.ts   | `findCurrentPlans()`, `findPlanBySlug()`, `findPlanById()`, `createPlan()`, `versionPlan()` |
+| subscriptions.ts        | `findActiveSubscription()`, `createSubscription()`, `updateSubscription()`, `deductCredits()`, `addCredits()` |
+| coupons.ts              | `findCouponByCode()`, `createCoupon()`, `updateCoupon()`, `createCouponRedemption()` |
+| credit-packs.ts         | `findActiveCreditPacks()`, `findCreditPackById()`, `createCreditPurchase()` |
+| invoices.ts             | `createInvoice()`, `findInvoicesByRestaurant()`, `findInvoiceById()`, `updateInvoice()` |
 
 `setDB()` enables test injection with `mongodb-memory-server`.
 
@@ -208,13 +217,28 @@ Shared publishing layer used by both `apps/api` and `apps/publisher`. Key export
 7. User reviews and approves --> status: SCHEDULED
 ```
 
+### Subscription & Billing Flow
+
+```
+1. User selects plan (Starter/Growth/Premium) + billing cycle (Monthly/Annual)
+2. POST /api/subscriptions/subscribe -> creates Razorpay Subscription
+3. User completes payment via Razorpay checkout
+4. Razorpay webhook (subscription.charged) -> updates subscription status to ACTIVE
+5. Invoice record auto-created from webhook payment data
+6. Post creation checks plan limits via enforcePlanLimits middleware
+7. If over weekly limit: deducts from unified credit balance (IMAGE=1, CAROUSEL=3, REEL=5)
+8. Credit packs purchasable via Razorpay Orders (one-time payments)
+```
+
 ## Security
 
 - **Token encryption**: AES-256-CBC with per-operation random IV; stored as `iv:ciphertext` in MongoDB
 - **JWT**: Access tokens (15min), refresh tokens (7 days), signed with `JWT_SECRET`
 - **OAuth CSRF**: Random state tokens with 10-minute expiry
 - **Facebook Webhooks**: HMAC-SHA256 signed request verification using App Secret
+- **Razorpay Webhooks**: HMAC-SHA256 signature verification using Webhook Secret
 - **CORS**: Restricted to configured `FRONTEND_URL` + API origin
+- **Role-based access**: ADMIN role required for coupon/credit-pack management
 
 ## MongoDB Collections
 
@@ -226,6 +250,13 @@ Shared publishing layer used by both `apps/api` and `apps/publisher`. Key export
 | contentStrategies   | ObjectId                     | API, Engine          |
 | strategyCycles      | ObjectId                     | API, Engine          |
 | accountManagers     | ObjectId                     | API                  |
+| subscriptionPlans   | ObjectId                     | API                  |
+| subscriptions       | ObjectId                     | API                  |
+| coupons             | ObjectId                     | API                  |
+| couponRedemptions   | ObjectId                     | API                  |
+| creditPurchases     | ObjectId                     | API                  |
+| creditPacks         | ObjectId                     | API                  |
+| invoices            | ObjectId                     | API                  |
 
 Database name: `restropulse` (configurable via `MONGODB_DB_NAME`)
 

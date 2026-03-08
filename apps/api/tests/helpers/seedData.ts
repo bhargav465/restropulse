@@ -2,7 +2,8 @@ import {
     getUsersCollection,
     getRestaurantsCollection,
     getContentStrategiesCollection,
-    getStrategyCyclesCollection
+    getStrategyCyclesCollection,
+    getSubscriptionsCollection,
 } from '@restropulse/db';
 
 /**
@@ -62,11 +63,6 @@ export async function seedTestData() {
                 phone: '+91 99999 88888',
                 email: 'sarah@restropulse.ai',
                 avatar: 'https://picsum.photos/100/100'
-            },
-            subscription: {
-                tier: 'GOLD',
-                renewalDate: '2024-12-01',
-                status: 'ACTIVE'
             },
             integrations: {
                 whatsapp: true,
@@ -139,5 +135,29 @@ export async function seedTestData() {
         }
     ] as any);
 
-    console.log('[Seed] Seeded: 1 user, 1 restaurant, 1 content strategy, 2 strategy cycles');
+    // Seed Subscription for r1 (active plan with high limits for testing)
+    const subscriptionsCol = getSubscriptionsCollection();
+    await subscriptionsCol.deleteMany({});
+    await subscriptionsCol.insertMany([
+        {
+            _id: 'sub-r1',
+            restaurantId: 'r1',
+            status: 'ACTIVE',
+            credits: 100,
+            planId: 'plan-growth-v1',
+            planSnapshot: {
+                slug: 'growth',
+                tier: 'GROWTH',
+                name: 'Growth',
+                limits: { reelsPerWeek: 100, instagramPostsPerWeek: 100, carouselPostsPerWeek: 100 },
+                pricing: { monthly: 999900, annual: 9999000, currency: 'INR' },
+                features: ['INSTAGRAM', 'FACEBOOK'],
+            },
+            billingCycle: 'MONTHLY',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }
+    ] as any);
+
+    console.log('[Seed] Seeded: 1 user, 1 restaurant, 1 subscription, 1 content strategy, 2 strategy cycles');
 }

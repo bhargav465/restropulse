@@ -6,6 +6,10 @@ import restaurantRoutes from '../../src/routes/restaurant.js';
 import postsRoutes from '../../src/routes/posts.js';
 import strategyRoutes from '../../src/routes/strategy.js';
 import integrationsRoutes from '../../src/routes/integrations.js';
+import subscriptionRoutes from '../../src/routes/subscriptions.js';
+import couponRoutes from '../../src/routes/coupons.js';
+import creditPackRoutes from '../../src/routes/credit-packs.js';
+import invoiceRoutes from '../../src/routes/invoices.js';
 
 export function createTestApp(): Express {
     const app = express();
@@ -23,6 +27,10 @@ export function createTestApp(): Express {
     app.use('/api/posts', postsRoutes);
     app.use('/api/strategy', strategyRoutes);
     app.use('/api/integrations', integrationsRoutes);
+    app.use('/api/subscriptions', subscriptionRoutes);
+    app.use('/api/coupons', couponRoutes);
+    app.use('/api/credit-packs', creditPackRoutes);
+    app.use('/api/invoices', invoiceRoutes);
 
     // Global error handler (mirrors server.ts)
     app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -59,11 +67,6 @@ export const mockRestaurant = {
         phone: '+91 99999 88888',
         email: 'sarah@restropulse.ai',
         avatar: 'https://picsum.photos/100/100'
-    },
-    subscription: {
-        tier: 'GOLD' as const,
-        renewalDate: '2024-12-01',
-        status: 'ACTIVE' as const
     },
     integrations: {
         whatsapp: true,
@@ -105,5 +108,10 @@ export const mockStrategyCycle = {
 
 export function generateAuthToken(): string {
     const tokens = generateTokens(mockUser.id, mockUser.phone, mockUser.restaurantId);
+    return tokens.accessToken;
+}
+
+export function generateAdminAuthToken(): string {
+    const tokens = generateTokens(mockUser.id, mockUser.phone, mockUser.restaurantId, 'ADMIN');
     return tokens.accessToken;
 }

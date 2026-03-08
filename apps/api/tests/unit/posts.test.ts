@@ -8,6 +8,9 @@ const mockCreatePost = vi.fn();
 const mockUpdatePost = vi.fn();
 const mockDeletePost = vi.fn();
 const mockFindPostsByStatus = vi.fn();
+const mockFindActiveSubscription = vi.fn();
+const mockDeductCredits = vi.fn();
+const mockGetWeeklyPostCounts = vi.fn();
 
 // Mock publishPost and cron functions used by routes/posts.ts
 const mockPublishPost = vi.fn();
@@ -24,7 +27,10 @@ vi.mock('@restropulse/db', async (importOriginal) => {
         createPost: mockCreatePost,
         updatePost: mockUpdatePost,
         deletePost: mockDeletePost,
-        findPostsByStatus: mockFindPostsByStatus
+        findPostsByStatus: mockFindPostsByStatus,
+        findActiveSubscription: mockFindActiveSubscription,
+        deductCredits: mockDeductCredits,
+        getWeeklyPostCounts: mockGetWeeklyPostCounts,
     };
 });
 
@@ -67,6 +73,21 @@ describe('Posts Module', () => {
         // Clear the mock collection
         const col = getPostsCollection();
         await col.deleteMany({});
+
+        // Default subscription mock: active plan with high limits so tests pass through
+        mockFindActiveSubscription.mockResolvedValue({
+            id: 'sub-test',
+            restaurantId: 'r1',
+            status: 'ACTIVE',
+            credits: 100,
+            planSnapshot: {
+                slug: 'growth',
+                tier: 'GROWTH',
+                limits: { reelsPerWeek: 100, instagramPostsPerWeek: 100, carouselPostsPerWeek: 100 },
+            },
+        });
+        mockGetWeeklyPostCounts.mockResolvedValue({ IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0 });
+        mockDeductCredits.mockResolvedValue(true);
     });
 
     describe('DB Helpers (src/db/posts.ts)', () => {
