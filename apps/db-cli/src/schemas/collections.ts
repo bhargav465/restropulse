@@ -248,6 +248,24 @@ export const COLLECTIONS: CollectionSchema[] = [
         },
     },
     {
+        name: 'cities',
+        indexes: [
+            { spec: { name: 1 }, options: { unique: true } },
+        ],
+        validator: {
+            $jsonSchema: {
+                bsonType: 'object',
+                required: ['name', 'defaultZone'],
+                properties: {
+                    name: { bsonType: 'string' },
+                    defaultZone: { bsonType: 'string' },
+                    createdAt: { bsonType: 'date' },
+                    updatedAt: { bsonType: 'date' },
+                },
+            },
+        },
+    },
+    {
         name: 'dataDeletionAudits',
         indexes: [
             { spec: { confirmationCode: 1 }, options: { unique: true } },

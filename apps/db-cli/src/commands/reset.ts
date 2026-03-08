@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { connect, getConfig, disconnect } from '../config/database.js';
 import { COLLECTIONS } from '../schemas/collections.js';
+import { DEFAULT_CITIES, DEFAULT_ACCOUNT_MANAGERS } from '../data/default-data.js';
 
 interface ResetOptions {
     main?: boolean;
@@ -58,7 +59,20 @@ export async function resetCommand(options: ResetOptions): Promise<void> {
             spinner.succeed(`Created ${collection.name} (${collection.indexes.length} indexes)`);
         }
 
-        console.log(chalk.green('\nDatabase reset complete -- empty and ready to use.'));
+        // Seed default cities and HQ account managers
+        spinner.start('Seeding default cities and account managers...');
+        const now = new Date();
+        const citiesCol = db.collection('cities');
+        for (const city of DEFAULT_CITIES) {
+            await citiesCol.insertOne({ ...city, createdAt: now, updatedAt: now } as any);
+        }
+        const amCol = db.collection('accountManagers');
+        for (const am of DEFAULT_ACCOUNT_MANAGERS) {
+            await amCol.insertOne({ ...am, createdAt: now, updatedAt: now } as any);
+        }
+        spinner.succeed(`Seeded ${DEFAULT_CITIES.length} cities and ${DEFAULT_ACCOUNT_MANAGERS.length} account managers`);
+
+        console.log(chalk.green('\nDatabase reset complete -- defaults seeded and ready to use.'));
 
     } catch (err: any) {
         spinner.fail('Reset failed');

@@ -1,4 +1,4 @@
-import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager } from '@restropulse/shared';
+import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City } from '@restropulse/shared';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -397,6 +397,14 @@ export const instagramAPI = {
         const response = await fetchAPI<ApiResponse<{ instagram: { configured: boolean } }>>(
             '/integrations/config'
         );
+        return response.data!;
+    },
+};
+
+// Cities API
+export const citiesAPI = {
+    getAll: async (): Promise<City[]> => {
+        const response = await fetchAPI<ApiResponse<City[]>>('/restaurant/cities');
         return response.data!;
     },
 };

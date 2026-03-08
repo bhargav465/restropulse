@@ -61,6 +61,12 @@ export interface AccountManager {
   zone: string;
 }
 
+export interface City {
+  id: string;
+  name: string;
+  defaultZone: string;
+}
+
 export interface InstagramConnectionStatus {
   connected: boolean;
   username?: string;

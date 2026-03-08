@@ -10,10 +10,11 @@ import {
     updateMenuTimestamp,
     getPostsCollection,
     getAccountManagersByCityAndZone,
+    getAllCities,
     findUserById,
     updateUser,
 } from '@restropulse/db';
-import { ApiResponse, Restaurant, AccountManager } from '@restropulse/shared';
+import { ApiResponse, Restaurant, AccountManager, City } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { generateTokens } from '../services/jwt.js';
@@ -33,15 +34,18 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
         return res.status(400).json({ success: false, error: 'User already has a restaurant' });
     }
 
-    const { name, cuisine, location, accountManager, userName } = req.body;
+    const { name, cuisine, location, accountManager, userName, email } = req.body;
 
     if (!name || !cuisine) {
         return res.status(400).json({ success: false, error: 'Restaurant name and cuisine are required' });
     }
 
-    // Update user name if provided
-    if (userName) {
-        await updateUser(userId, { name: userName });
+    // Update user name and email if provided
+    if (userName || email) {
+        const userUpdate: Record<string, string> = {};
+        if (userName) userUpdate.name = userName;
+        if (email) userUpdate.email = email;
+        await updateUser(userId, userUpdate);
     }
 
     const renewalDate = new Date();
@@ -74,6 +78,12 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
             refreshToken: tokens.refreshToken,
         },
     });
+}));
+
+// Get all cities
+router.get('/cities', requireAuth, handle(async (req: Request, res: Response<ApiResponse<City[]>>) => {
+    const cities = await getAllCities();
+    res.json({ success: true, data: cities });
 }));
 
 // Get account managers by city/zone

@@ -218,7 +218,50 @@ export const SEED_DATA: Record<string, any[]> = {
         },
     ],
 
+    cities: [
+        { _id: 'city-bangalore', name: 'Bangalore', defaultZone: 'HQ' },
+        { _id: 'city-delhi', name: 'Delhi', defaultZone: 'HQ' },
+        { _id: 'city-hyderabad', name: 'Hyderabad', defaultZone: 'HQ' },
+        { _id: 'city-mumbai', name: 'Mumbai', defaultZone: 'HQ' },
+    ],
+
     accountManagers: [
+        {
+            _id: 'am-default-bangalore',
+            name: 'RestroPulse Bangalore',
+            phone: '+91 00000 00001',
+            email: 'bangalore@restropulse.ai',
+            avatar: '',
+            city: 'Bangalore',
+            zone: 'HQ',
+        },
+        {
+            _id: 'am-default-delhi',
+            name: 'RestroPulse Delhi',
+            phone: '+91 00000 00002',
+            email: 'delhi@restropulse.ai',
+            avatar: '',
+            city: 'Delhi',
+            zone: 'HQ',
+        },
+        {
+            _id: 'am-default-hyderabad',
+            name: 'RestroPulse Hyderabad',
+            phone: '+91 00000 00003',
+            email: 'hyderabad@restropulse.ai',
+            avatar: '',
+            city: 'Hyderabad',
+            zone: 'HQ',
+        },
+        {
+            _id: 'am-default-mumbai',
+            name: 'RestroPulse Mumbai',
+            phone: '+91 00000 00004',
+            email: 'mumbai@restropulse.ai',
+            avatar: '',
+            city: 'Mumbai',
+            zone: 'HQ',
+        },
         {
             _id: 'am1',
             name: 'Sarah Jenkins',

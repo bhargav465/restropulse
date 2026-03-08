@@ -104,6 +104,10 @@ export function getAccountManagersCollection(): Collection {
   return getDB().collection('accountManagers');
 }
 
+export function getCitiesCollection(): Collection {
+  return getDB().collection('cities');
+}
+
 // ----- Helpers -----
 
 /**

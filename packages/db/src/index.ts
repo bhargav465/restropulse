@@ -19,6 +19,7 @@ export {
   getOauthSessionsCollection,
   getDataDeletionAuditsCollection,
   getAccountManagersCollection,
+  getCitiesCollection,
   toApiFormat,
   toApiFormatArray,
   toObjectId,
@@ -32,3 +33,4 @@ export * from './restaurants.js';
 export * from './posts.js';
 export * from './strategy.js';
 export * from './account-managers.js';
+export * from './cities.js';
