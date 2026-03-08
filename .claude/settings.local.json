@@ -15,7 +15,13 @@
       "Bash(npx vitest:*)",
       "Bash(npm install:*)",
       "mcp__lsp-db__definition",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(npm view:*)",
+      "WebSearch",
+      "WebFetch(domain:developers.google.com)",
+      "Bash(npm:*)",
+      "Bash(ls:*)",
+      "Bash(xargs grep:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
