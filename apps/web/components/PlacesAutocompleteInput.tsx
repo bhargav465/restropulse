@@ -131,15 +131,13 @@ export const PlacesAutocompleteInput: React.FC<PlacesAutocompleteInputProps> = (
     const isDark = theme === 'dark';
 
     const inputClasses = isDark
-        ? `w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border focus:outline-none focus:ring-1 placeholder:text-slate-500 disabled:opacity-50 ${
-            confirmed
-                ? 'border-green-500/50 focus:border-green-500 focus:ring-green-500'
-                : 'border-slate-700 focus:border-orange-500 focus:ring-orange-500'
+        ? `w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border focus:outline-none focus:ring-1 placeholder:text-slate-500 disabled:opacity-50 ${confirmed
+            ? 'border-green-500/50 focus:border-green-500 focus:ring-green-500'
+            : 'border-slate-700 focus:border-orange-500 focus:ring-orange-500'
         }`
-        : `w-full bg-slate-50 text-slate-900 px-4 py-3.5 rounded-xl border focus:outline-none focus:ring-1 placeholder:text-slate-400 disabled:opacity-50 ${
-            confirmed
-                ? 'border-green-500/50 focus:border-green-500 focus:ring-green-500'
-                : 'border-slate-200 focus:border-orange-500 focus:ring-orange-500'
+        : `w-full bg-slate-50 text-slate-900 px-4 py-3.5 rounded-xl border focus:outline-none focus:ring-1 placeholder:text-slate-400 disabled:opacity-50 ${confirmed
+            ? 'border-green-500/50 focus:border-green-500 focus:ring-green-500'
+            : 'border-slate-200 focus:border-orange-500 focus:ring-orange-500'
         }`;
 
     const dropdownClasses = isDark

@@ -438,7 +438,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 center={{ lat, lng }}
                                 zoom={16}
                                 disableDefaultUI
-                                
+
                                 mapId="onboarding-map"
                             >
                                 {lat !== 0 && lng !== 0 && <AdvancedMarker position={{ lat, lng }} />}

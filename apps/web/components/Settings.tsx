@@ -683,13 +683,13 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                                 />
                             )}
                         </div>
-                        
+
                         <div className="pt-2">
                             <button onClick={handleSave} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors shadow-sm">
                                 <Save size={18} /> Save Changes
                             </button>
-                            <button 
-                                onClick={closeEditProfile} 
+                            <button
+                                onClick={closeEditProfile}
                                 className="w-full bg-transparent text-slate-600 hover:text-slate-900 py-3 rounded-xl font-bold mt-2 hover:bg-slate-50 transition-colors"
                             >
                                 Cancel

@@ -71,13 +71,13 @@ const completeStep2 = async () => {
     });
     // Open city dropdown
     fireEvent.click(screen.getByText('Select city'));
-    
+
     // Select city from options
     await waitFor(() => {
         expect(screen.getByRole('button', { name: 'Bangalore' })).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Bangalore' }));
-    
+
     // Fill restaurant name and cuisine
     fireEvent.change(screen.getByPlaceholderText(/The Spice Lounge/i), { target: { value: 'My Restaurant' } });
     fireEvent.change(screen.getByPlaceholderText(/Modern Indian Fusion/i), { target: { value: 'Italian' } });
@@ -359,7 +359,7 @@ describe('Onboarding Component', () => {
 
     it('should show loading state during submission', async () => {
         // Make create hang
-        (restaurantAPI.create as any).mockImplementation(() => new Promise(() => {}));
+        (restaurantAPI.create as any).mockImplementation(() => new Promise(() => { }));
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
 
         render(<Onboarding onComplete={mockOnComplete} />);
