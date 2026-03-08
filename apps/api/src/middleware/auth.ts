@@ -25,6 +25,7 @@ export const requireAuth: RequestHandler = (req, res, next) => {
         userId: payload.userId,
         phone: payload.phone,
         restaurantId: payload.restaurantId,
+        role: payload.role,
     };
 
     next();

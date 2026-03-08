@@ -10,7 +10,10 @@ declare global {
                 userId: string;
                 phone: string;
                 restaurantId: string;
+                role?: string;
             };
+            /** Credit cost set by enforcePlanLimits middleware when credits should be deducted */
+            creditCost?: number;
         }
     }
 }

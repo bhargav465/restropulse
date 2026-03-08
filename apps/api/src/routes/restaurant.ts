@@ -13,8 +13,9 @@ import {
     getAllCities,
     findUserById,
     updateUser,
+    createSubscription,
 } from '@restropulse/db';
-import { ApiResponse, Restaurant, AccountManager, City } from '@restropulse/shared';
+import { ApiResponse, Restaurant, AccountManager, City, FREE_SIGNUP_CREDITS } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { generateTokens } from '../services/jwt.js';
@@ -48,24 +49,23 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
         await updateUser(userId, userUpdate);
     }
 
-    const renewalDate = new Date();
-    renewalDate.setDate(renewalDate.getDate() + 30);
-
     const restaurant = await createRestaurant({
         name,
         cuisine,
         location: location || { address: '', lat: 0, lng: 0, mapUrl: '' },
         accountManager: accountManager || { name: '', phone: '', email: '', avatar: '' },
-        subscription: {
-            tier: 'BASIC',
-            renewalDate: renewalDate.toISOString().split('T')[0],
-            status: 'ACTIVE',
-        },
         integrations: { instagram: false },
     });
 
     // Link restaurant to user
     await updateUser(userId, { restaurantId: restaurant.id });
+
+    // Create subscription doc with free signup credits (no active plan)
+    await createSubscription({
+        restaurantId: restaurant.id,
+        status: 'NONE',
+        credits: FREE_SIGNUP_CREDITS,
+    });
 
     // Issue fresh tokens with the new restaurantId
     const tokens = generateTokens(userId, req.user!.phone, restaurant.id);

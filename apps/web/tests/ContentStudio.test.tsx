@@ -36,11 +36,6 @@ describe('ContentStudio Component', () => {
             email: 'john@example.com',
             avatar: '/avatar.jpg'
         },
-        subscription: {
-            tier: 'GOLD' as const,
-            renewalDate: '2024-12-31',
-            status: 'ACTIVE' as const
-        },
         integrations: {
             whatsapp: true,
             instagram: true,

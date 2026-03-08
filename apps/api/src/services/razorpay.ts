@@ -1,0 +1,185 @@
+/**
+ * Razorpay Service
+ * Handles Razorpay Subscriptions, Orders, Offers, and signature verification.
+ */
+
+import crypto from 'crypto';
+
+function getConfig() {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+    if (!keyId || !keySecret) {
+        throw new Error('Razorpay not configured: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required');
+    }
+
+    return { keyId, keySecret, webhookSecret };
+}
+
+function getAuthHeader(): string {
+    const { keyId, keySecret } = getConfig();
+    return 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+}
+
+async function razorpayRequest(path: string, method: string, body?: object): Promise<any> {
+    const response = await fetch(`https://api.razorpay.com/v1${path}`, {
+        method,
+        headers: {
+            'Authorization': getAuthHeader(),
+            'Content-Type': 'application/json',
+        },
+        body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const data = await response.json() as any;
+
+    if (!response.ok) {
+        const errorMsg = data?.error?.description || data?.message || `Razorpay API error: ${response.status}`;
+        throw new Error(errorMsg);
+    }
+
+    return data;
+}
+
+/**
+ * Create a Razorpay Subscription for recurring billing.
+ */
+export async function createRazorpaySubscription(
+    planId: string,
+    totalCount: number,
+    offerId?: string,
+): Promise<{ id: string; shortUrl: string; status: string }> {
+    const body: any = {
+        plan_id: planId,
+        total_count: totalCount,
+        quantity: 1,
+    };
+
+    if (offerId) {
+        body.offer_id = offerId;
+    }
+
+    return razorpayRequest('/subscriptions', 'POST', body);
+}
+
+/**
+ * Cancel a Razorpay Subscription.
+ */
+export async function cancelRazorpaySubscription(
+    subscriptionId: string,
+    cancelAtCycleEnd: boolean = true,
+): Promise<any> {
+    return razorpayRequest(`/subscriptions/${subscriptionId}/cancel`, 'POST', {
+        cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0,
+    });
+}
+
+/**
+ * Create a Razorpay Order for one-time payments (credit packs).
+ */
+export async function createRazorpayOrder(
+    amountPaise: number,
+    receipt: string,
+    currency: string = 'INR',
+): Promise<{ id: string; amount: number; currency: string; status: string }> {
+    return razorpayRequest('/orders', 'POST', {
+        amount: amountPaise,
+        currency,
+        receipt,
+    });
+}
+
+/**
+ * Create a Razorpay Offer (for coupon discounts).
+ */
+export async function createRazorpayOffer(params: {
+    name: string;
+    paymentMethod: string;
+    discountType: 'percentage' | 'flat';
+    discountValue: number;
+    maxBillingCycles?: number;
+}): Promise<{ id: string }> {
+    const body: any = {
+        name: params.name,
+        payment_method: params.paymentMethod,
+        discount: {
+            type: params.discountType,
+            value: params.discountValue,
+        },
+    };
+
+    if (params.maxBillingCycles) {
+        body.max_billing_cycles = params.maxBillingCycles;
+    }
+
+    return razorpayRequest('/offers', 'POST', body);
+}
+
+/**
+ * Verify Razorpay webhook signature (HMAC-SHA256).
+ */
+export function verifyWebhookSignature(body: string | Buffer, signature: string): boolean {
+    const { webhookSecret } = getConfig();
+    if (!webhookSecret) {
+        throw new Error('RAZORPAY_WEBHOOK_SECRET is not configured');
+    }
+
+    const expectedSignature = crypto
+        .createHmac('sha256', webhookSecret)
+        .update(body)
+        .digest('hex');
+
+    return crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(signature),
+    );
+}
+
+/**
+ * Verify payment signature for client-side payment verification.
+ * Used after Razorpay checkout to confirm payment authenticity.
+ */
+export function verifyPaymentSignature(
+    orderId: string,
+    paymentId: string,
+    signature: string,
+): boolean {
+    const { keySecret } = getConfig();
+    const payload = `${orderId}|${paymentId}`;
+
+    const expectedSignature = crypto
+        .createHmac('sha256', keySecret)
+        .update(payload)
+        .digest('hex');
+
+    return crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(signature),
+    );
+}
+
+/**
+ * Fetch a Razorpay Invoice by ID.
+ */
+export async function fetchRazorpayInvoice(
+    invoiceId: string,
+): Promise<{ id: string; short_url: string; status: string; amount: number; currency: string }> {
+    return razorpayRequest(`/invoices/${invoiceId}`, 'GET');
+}
+
+/**
+ * List Razorpay Invoices for a subscription.
+ */
+export async function listRazorpayInvoices(
+    subscriptionId: string,
+): Promise<{ items: Array<{ id: string; short_url: string; status: string; amount: number; currency: string }> }> {
+    return razorpayRequest(`/invoices?type=invoice&subscription_id=${subscriptionId}`, 'GET');
+}
+
+/**
+ * Get the Razorpay key ID for frontend checkout.
+ */
+export function getRazorpayKeyId(): string {
+    return getConfig().keyId;
+}

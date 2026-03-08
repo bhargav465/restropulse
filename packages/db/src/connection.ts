@@ -108,6 +108,34 @@ export function getCitiesCollection(): Collection {
   return getDB().collection('cities');
 }
 
+export function getSubscriptionPlansCollection(): Collection {
+  return getDB().collection('subscriptionPlans');
+}
+
+export function getSubscriptionsCollection(): Collection {
+  return getDB().collection('subscriptions');
+}
+
+export function getCouponsCollection(): Collection {
+  return getDB().collection('coupons');
+}
+
+export function getCouponRedemptionsCollection(): Collection {
+  return getDB().collection('couponRedemptions');
+}
+
+export function getCreditPurchasesCollection(): Collection {
+  return getDB().collection('creditPurchases');
+}
+
+export function getCreditPacksCollection(): Collection {
+  return getDB().collection('creditPacks');
+}
+
+export function getInvoicesCollection(): Collection {
+  return getDB().collection('invoices');
+}
+
 // ----- Helpers -----
 
 /**

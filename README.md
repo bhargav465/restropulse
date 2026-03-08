@@ -78,6 +78,10 @@ npm run dev --filter=@restropulse/web
 |    /api/restaurant      |                   |
 |    /api/posts           |-------------------+
 |    /api/strategy        |
+|    /api/subscriptions   |
+|    /api/coupons         |
+|    /api/credit-packs    |
+|    /api/invoices        |
 |    /api/integrations    |     +-----------------------------+
 +-----------+-------------+     | apps/content-engine         |
             |                   | Content Gen Poll (2 min)    |
@@ -152,7 +156,12 @@ Private
 - [x] Content approval workflow (approve/request changes/revert)
 - [x] New user onboarding flow (multi-step registration with Google Maps)
 - [x] Account manager assignment during onboarding
-- [x] 828+ automated tests across 31 test files
+- [x] Razorpay subscription payments (Starter/Growth/Premium plans)
+- [x] Unified credit system with credit packs
+- [x] Coupon system with Razorpay Offers integration
+- [x] Invoice generation (auto from webhooks + credit purchases)
+- [x] Plan limit enforcement middleware
+- [x] ADMIN role with role-based access control
 
 ## Future Roadmap
 
@@ -160,4 +169,3 @@ Private
 - WebSocket for real-time updates
 - Service worker for offline support
 - Push notifications
-- RazorPay subscription payments

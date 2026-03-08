@@ -16,6 +16,7 @@ const mockRemoveInstagramCredentials = vi.fn();
 const mockFindUserById = vi.fn();
 const mockUpdateUser = vi.fn();
 const mockGetAccountManagersByCityAndZone = vi.fn();
+const mockCreateSubscription = vi.fn();
 
 // Mock Module - keep real collection getters, override restaurant helper functions
 vi.mock('@restropulse/db', async (importOriginal) => {
@@ -36,6 +37,7 @@ vi.mock('@restropulse/db', async (importOriginal) => {
         findUserById: mockFindUserById,
         updateUser: mockUpdateUser,
         getAccountManagersByCityAndZone: mockGetAccountManagersByCityAndZone,
+        createSubscription: mockCreateSubscription,
     };
 });
 
@@ -68,6 +70,7 @@ const useActualImplementation = async () => {
     mockFindUserById.mockImplementation(actualDb.findUserById);
     mockUpdateUser.mockImplementation(actualDb.updateUser);
     mockGetAccountManagersByCityAndZone.mockImplementation(actualDb.getAccountManagersByCityAndZone);
+    mockCreateSubscription.mockResolvedValue({ id: 'sub-test', restaurantId: '', status: 'NONE', credits: 20 });
 };
 
 const app = createTestApp();
@@ -115,7 +118,6 @@ describe('Restaurant Routes - Unit Tests', () => {
 
             expect(response.body.data).toHaveProperty('location');
             expect(response.body.data).toHaveProperty('accountManager');
-            expect(response.body.data).toHaveProperty('subscription');
             expect(response.body.data).toHaveProperty('integrations');
         });
 
@@ -745,22 +747,15 @@ describe('Restaurant Routes - Unit Tests', () => {
             expect(response.body.data.restaurant.cuisine).toBe('Italian');
         });
 
-        it('should set default subscription to BASIC/ACTIVE with 30-day renewal', async () => {
+        it('should create restaurant without embedded subscription (subscription is a separate collection)', async () => {
             const response = await request(app)
                 .post('/api/restaurant')
                 .set('Authorization', `Bearer ${newUserToken}`)
                 .send({ name: 'Sub Test', cuisine: 'Thai' });
 
             expect(response.status).toBe(201);
-            const sub = response.body.data.restaurant.subscription;
-            expect(sub.tier).toBe('BASIC');
-            expect(sub.status).toBe('ACTIVE');
-            // Renewal date should be roughly 30 days from now
-            const renewal = new Date(sub.renewalDate);
-            const now = new Date();
-            const diffDays = Math.floor((renewal.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            expect(diffDays).toBeGreaterThanOrEqual(29);
-            expect(diffDays).toBeLessThanOrEqual(31);
+            // Subscription is no longer embedded on the restaurant document
+            expect(response.body.data.restaurant).not.toHaveProperty('subscription');
         });
 
         it('should set integrations.instagram to false by default', async () => {

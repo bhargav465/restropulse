@@ -2,7 +2,12 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { connect, getConfig, disconnect } from '../config/database.js';
 import { COLLECTIONS } from '../schemas/collections.js';
-import { DEFAULT_CITIES, DEFAULT_ACCOUNT_MANAGERS } from '../data/default-data.js';
+import {
+    DEFAULT_CITIES,
+    DEFAULT_ACCOUNT_MANAGERS,
+    DEFAULT_SUBSCRIPTION_PLANS,
+    DEFAULT_CREDIT_PACKS,
+} from '../data/default-data.js';
 
 interface ResetOptions {
     main?: boolean;
@@ -71,6 +76,18 @@ export async function resetCommand(options: ResetOptions): Promise<void> {
             await amCol.insertOne({ ...am, createdAt: now, updatedAt: now } as any);
         }
         spinner.succeed(`Seeded ${DEFAULT_CITIES.length} cities and ${DEFAULT_ACCOUNT_MANAGERS.length} account managers`);
+
+        // Seed default subscription plans and credit packs
+        spinner.start('Seeding default subscription plans and credit packs...');
+        const plansCol = db.collection('subscriptionPlans');
+        for (const plan of DEFAULT_SUBSCRIPTION_PLANS) {
+            await plansCol.insertOne({ ...plan, createdAt: now, updatedAt: now } as any);
+        }
+        const packsCol = db.collection('creditPacks');
+        for (const pack of DEFAULT_CREDIT_PACKS) {
+            await packsCol.insertOne({ ...pack, createdAt: now, updatedAt: now } as any);
+        }
+        spinner.succeed(`Seeded ${DEFAULT_SUBSCRIPTION_PLANS.length} subscription plans and ${DEFAULT_CREDIT_PACKS.length} credit packs`);
 
         console.log(chalk.green('\nDatabase reset complete -- defaults seeded and ready to use.'));
 

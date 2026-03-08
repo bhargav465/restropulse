@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
-import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User } from 'lucide-react';
-import { SubscriptionTier, Restaurant, InstagramConnectionError, InstagramAccount } from '@restropulse/shared';
-import { instagramAPI, restaurantAPI } from '../api';
+import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download } from 'lucide-react';
+import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Restaurant, InstagramConnectionError, InstagramAccount, Invoice } from '@restropulse/shared';
+import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI } from '../api';
 import { FacebookIcon, InstagramIcon } from './BrandIcons';
 
 interface SettingsProps {
@@ -87,32 +87,24 @@ const WhatsAppIcon = ({ size = 24, className = "" }: { size?: number, className?
     </svg>
 );
 
-const SUBSCRIPTION_PLANS: { id: SubscriptionTier; name: string; price: string; features: string[]; icon: any; color: string }[] = [
-    {
-        id: 'BASIC',
-        name: 'Basic',
-        price: '₹2,999/mo',
-        features: ['4 Posts/Week', 'Basic Analytics', 'Email Support', '1 User'],
-        icon: Zap,
-        color: 'bg-slate-500'
-    },
-    {
-        id: 'GOLD',
-        name: 'Gold',
-        price: '₹5,999/mo',
-        features: ['Daily Posts', 'Advanced Analytics', 'Priority Support', 'Reels Creation', '3 Users'],
-        icon: Star,
-        color: 'bg-orange-500'
-    },
-    {
-        id: 'PLATINUM',
-        name: 'Platinum',
-        price: '₹9,999/mo',
-        features: ['Dedicated Account Manager', 'On-site Shoots', 'Custom Strategy', '24/7 Support', 'Unlimited Users'],
-        icon: Crown,
-        color: 'bg-indigo-600'
-    }
-];
+const TIER_ICONS: Record<SubscriptionTier, { icon: any; color: string }> = {
+    STARTER: { icon: Zap, color: 'bg-slate-500' },
+    GROWTH: { icon: Star, color: 'bg-orange-500' },
+    PREMIUM: { icon: Crown, color: 'bg-indigo-600' },
+};
+
+function formatPaise(paise: number): string {
+    return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(paise / 100);
+}
+
+function planFeatures(plan: SubscriptionPlan): string[] {
+    return [
+        `${plan.limits.reelsPerWeek} Reels/week`,
+        `${plan.limits.instagramPostsPerWeek} Posts/week`,
+        `${plan.limits.carouselPostsPerWeek} Carousels/week`,
+        ...plan.features.map(f => f === 'INSTAGRAM' ? 'Instagram' : f === 'FACEBOOK' ? 'Facebook' : f),
+    ];
+}
 
 const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaurantUpdate }) => {
     const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -134,7 +126,40 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
     // Setup guide state - simplified to informational only
     const [showSetupGuide, setShowSetupGuide] = useState(false);
 
-    const [subscription, setSubscription] = useState(restaurantData.subscription);
+    // Subscription state (fetched from API)
+    const [subscription, setSubscription] = useState<Subscription | null>(null);
+    const [usage, setUsage] = useState<PlanUsage | null>(null);
+    const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+    const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
+    const [billingCycle, setBillingCycle] = useState<BillingCycle>('MONTHLY');
+    const [couponCode, setCouponCode] = useState('');
+    const [couponValid, setCouponValid] = useState<boolean | null>(null);
+    const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
+
+    // Load subscription data on mount
+    useEffect(() => {
+        const loadSubscription = async () => {
+            try {
+                const [currentData, plansData, packsData, invoicesData] = await Promise.all([
+                    subscriptionAPI.getCurrent(),
+                    subscriptionAPI.getPlans(),
+                    creditPacksAPI.getAll(),
+                    invoiceAPI.getAll().catch(() => [] as Invoice[]),
+                ]);
+                setSubscription(currentData.subscription);
+                setUsage(currentData.usage);
+                setPlans(plansData);
+                setCreditPacks(packsData);
+                setInvoices(invoicesData);
+            } catch (error) {
+                console.error('Failed to load subscription data:', error);
+            } finally {
+                setSubscriptionLoading(false);
+            }
+        };
+        loadSubscription();
+    }, []);
 
     // Sync Instagram state when restaurantData prop changes (e.g., after refresh)
     useEffect(() => {
@@ -559,15 +584,78 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
         );
     };
 
-    const handleSwitchPlan = (tier: SubscriptionTier) => {
-        // Simulate API call
-        setSubscription(prev => ({
-            ...prev,
-            tier: tier,
-            status: 'ACTIVE'
-        }));
-        alert(`Switched to ${tier} plan successfully!`);
-        closeSubscription();
+    const handleSwitchPlan = async (planSlug: string) => {
+        try {
+            // If upgrading from an active subscription, cancel first
+            if (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE') {
+                await subscriptionAPI.upgrade();
+            }
+
+            const data = await subscriptionAPI.subscribe(planSlug, billingCycle, couponCode || undefined);
+
+            // Open Razorpay checkout
+            const options = {
+                key: data.keyId,
+                subscription_id: data.subscriptionId,
+                name: 'RestroPulse',
+                description: `${planSlug} plan - ${billingCycle.toLowerCase()}`,
+                handler: async () => {
+                    // Refresh subscription data after successful payment
+                    const currentData = await subscriptionAPI.getCurrent();
+                    setSubscription(currentData.subscription);
+                    setUsage(currentData.usage);
+                    closeSubscription();
+                },
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.open();
+        } catch (error) {
+            console.error('Subscription failed:', error);
+            alert('Failed to start subscription. Please try again.');
+        }
+    };
+
+    const handlePurchaseCredits = async (packId: string) => {
+        try {
+            const data = await subscriptionAPI.purchaseCredits(packId);
+
+            const options = {
+                key: data.keyId,
+                amount: data.amount,
+                currency: data.currency,
+                order_id: data.orderId,
+                name: 'RestroPulse',
+                description: `${data.credits} Credits`,
+                handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+                    await subscriptionAPI.verifyCredits(
+                        response.razorpay_order_id,
+                        response.razorpay_payment_id,
+                        response.razorpay_signature,
+                    );
+                    // Refresh subscription data
+                    const currentData = await subscriptionAPI.getCurrent();
+                    setSubscription(currentData.subscription);
+                    setUsage(currentData.usage);
+                },
+            };
+
+            const rzp = new (window as any).Razorpay(options);
+            rzp.open();
+        } catch (error) {
+            console.error('Credit purchase failed:', error);
+            alert('Failed to start credit purchase. Please try again.');
+        }
+    };
+
+    const handleValidateCoupon = async () => {
+        if (!couponCode) return;
+        try {
+            const result = await couponAPI.validate(couponCode);
+            setCouponValid(result.valid);
+        } catch {
+            setCouponValid(false);
+        }
     };
 
     const EditProfileModal = () => {
@@ -702,7 +790,9 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
     };
 
     const SubscriptionModal = () => {
-        const currentPlan = SUBSCRIPTION_PLANS.find(p => p.id === subscription.tier);
+        const currentTier = subscription?.planSnapshot?.tier;
+        const tierMeta = currentTier ? TIER_ICONS[currentTier] : null;
+        const CurrentIcon = tierMeta?.icon;
         const modalRef = React.useRef<HTMLDivElement>(null);
 
         const handleDragStart = (e: React.TouchEvent) => {
@@ -714,12 +804,10 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                 const offset = e.touches[0].clientY - dragStartY;
                 const scrollTop = modalRef.current?.scrollTop || 0;
 
-                // Only allow dragging down when at the top of scroll
                 if (offset > 0 && scrollTop === 0) {
                     e.preventDefault();
                     setDragOffset(offset);
                 } else if (offset < 0) {
-                    // Allow scrolling up normally
                     setDragOffset(0);
                 }
             }
@@ -736,7 +824,6 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
 
         return (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-                {/* Click outside */}
                 <div className="absolute inset-0" onClick={closeSubscription}></div>
 
                 <div
@@ -747,7 +834,6 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                     onTouchMove={handleDragMove}
                     onTouchEnd={handleDragEnd}
                 >
-                    {/* Drag Handle */}
                     <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 shrink-0 sm:hidden"></div>
 
                     <div className="flex justify-between items-center mb-6">
@@ -758,59 +844,152 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                     </div>
 
                     {/* Current Plan Status */}
-                    <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-5 text-white mb-8 shadow-lg">
+                    <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-5 text-white mb-6 shadow-lg">
                         <div className="flex justify-between items-start mb-4">
                             <div>
                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Current Plan</p>
                                 <h4 className="text-2xl font-bold flex items-center gap-2">
-                                    {currentPlan?.name} <span className="px-2 py-0.5 bg-white/20 text-xs rounded-md font-medium">Active</span>
+                                    {subscription?.planSnapshot?.name || 'No Plan'}
+                                    {subscription?.status === 'ACTIVE' && <span className="px-2 py-0.5 bg-white/20 text-xs rounded-md font-medium">Active</span>}
+                                    {subscription?.status === 'NONE' && <span className="px-2 py-0.5 bg-yellow-500/30 text-xs rounded-md font-medium">Free Credits</span>}
                                 </h4>
                             </div>
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-white/10`}>
-                                {currentPlan && <currentPlan.icon size={20} />}
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/10">
+                                {CurrentIcon && <CurrentIcon size={20} />}
                             </div>
                         </div>
                         <div className="flex items-center justify-between text-sm border-t border-white/10 pt-4">
-                            <span className="text-slate-300">Renews on {new Date(subscription.renewalDate).toLocaleDateString()}</span>
-                            <span className="font-bold">{currentPlan?.price}</span>
+                            <span className="text-slate-300">Credits: {subscription?.credits ?? 0}</span>
+                            {subscription?.currentPeriodEnd && (
+                                <span className="font-bold">Renews {new Date(subscription.currentPeriodEnd).toLocaleDateString()}</span>
+                            )}
                         </div>
+                    </div>
+
+                    {/* Weekly Usage */}
+                    {usage && (
+                        <div className="mb-6 space-y-2">
+                            <h4 className="font-bold text-slate-800 mb-2 text-sm">Weekly Usage</h4>
+                            <div className="grid grid-cols-3 gap-2">
+                                <div className="bg-slate-50 rounded-xl p-3 text-center">
+                                    <p className="text-xs text-slate-500">Reels</p>
+                                    <p className="text-lg font-bold text-slate-800">{usage.reels.used}<span className="text-sm text-slate-400">/{usage.reels.limit}</span></p>
+                                </div>
+                                <div className="bg-slate-50 rounded-xl p-3 text-center">
+                                    <p className="text-xs text-slate-500">Posts</p>
+                                    <p className="text-lg font-bold text-slate-800">{usage.instagramPosts.used}<span className="text-sm text-slate-400">/{usage.instagramPosts.limit}</span></p>
+                                </div>
+                                <div className="bg-slate-50 rounded-xl p-3 text-center">
+                                    <p className="text-xs text-slate-500">Carousels</p>
+                                    <p className="text-lg font-bold text-slate-800">{usage.carousels.used}<span className="text-sm text-slate-400">/{usage.carousels.limit}</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Billing Cycle Toggle */}
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                        <button
+                            onClick={() => setBillingCycle('MONTHLY')}
+                            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors ${billingCycle === 'MONTHLY' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+                        >
+                            Monthly
+                        </button>
+                        <button
+                            onClick={() => setBillingCycle('ANNUAL')}
+                            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors ${billingCycle === 'ANNUAL' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+                        >
+                            Annual (2 months free)
+                        </button>
                     </div>
 
                     <h4 className="font-bold text-slate-800 mb-4">Available Plans</h4>
                     <div className="space-y-3">
-                        {SUBSCRIPTION_PLANS.map((plan) => (
-                            <div key={plan.id} className={`border rounded-2xl p-4 transition-all ${subscription.tier === plan.id ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200'}`}>
-                                <div className="flex justify-between items-center mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${plan.color}`}>
-                                            <plan.icon size={20} />
+                        {plans.map((plan) => {
+                            const meta = TIER_ICONS[plan.tier] || TIER_ICONS.STARTER;
+                            const PlanIcon = meta.icon;
+                            const price = billingCycle === 'MONTHLY' ? plan.pricing.monthly : plan.pricing.annual;
+                            const priceLabel = billingCycle === 'MONTHLY'
+                                ? `${formatPaise(price)}/mo`
+                                : `${formatPaise(price)}/yr`;
+                            const isCurrentPlan = subscription?.planSnapshot?.slug === plan.slug && (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE');
+
+                            return (
+                                <div key={plan.id} className={`border rounded-2xl p-4 transition-all ${isCurrentPlan ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200'}`}>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${meta.color}`}>
+                                                <PlanIcon size={20} />
+                                            </div>
+                                            <div>
+                                                <h5 className="font-bold text-slate-800">{plan.name}</h5>
+                                                <p className="text-sm text-slate-500 font-medium">{priceLabel}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h5 className="font-bold text-slate-800">{plan.name}</h5>
-                                            <p className="text-sm text-slate-500 font-medium">{plan.price}</p>
-                                        </div>
+                                        {isCurrentPlan ? (
+                                            <CheckCircle2 size={24} className="text-orange-500" />
+                                        ) : (
+                                            <button
+                                                onClick={() => handleSwitchPlan(plan.slug)}
+                                                className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800"
+                                            >
+                                                {subscription?.status === 'ACTIVE' ? 'Switch' : 'Subscribe'}
+                                            </button>
+                                        )}
                                     </div>
-                                    {subscription.tier === plan.id ? (
-                                        <CheckCircle2 size={24} className="text-orange-500" />
-                                    ) : (
-                                        <button
-                                            onClick={() => handleSwitchPlan(plan.id)}
-                                            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800"
-                                        >
-                                            Switch
-                                        </button>
-                                    )}
+                                    <ul className="space-y-2 pl-1">
+                                        {planFeatures(plan).map((feat, i) => (
+                                            <li key={i} className="text-xs text-slate-600 flex items-center gap-2">
+                                                <div className="w-1 h-1 bg-slate-300 rounded-full"></div> {feat}
+                                            </li>
+                                        ))}
+                                    </ul>
                                 </div>
-                                <ul className="space-y-2 pl-1">
-                                    {plan.features.map((feat, i) => (
-                                        <li key={i} className="text-xs text-slate-600 flex items-center gap-2">
-                                            <div className="w-1 h-1 bg-slate-300 rounded-full"></div> {feat}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
+
+                    {/* Coupon Code */}
+                    <div className="mt-6">
+                        <h4 className="font-bold text-slate-800 mb-2 text-sm">Coupon Code</h4>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={couponCode}
+                                onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponValid(null); }}
+                                placeholder="Enter coupon code"
+                                className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm"
+                            />
+                            <button
+                                onClick={handleValidateCoupon}
+                                className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl hover:bg-slate-800"
+                            >
+                                Apply
+                            </button>
+                        </div>
+                        {couponValid === true && <p className="text-xs text-green-600 mt-1">Coupon applied!</p>}
+                        {couponValid === false && <p className="text-xs text-red-500 mt-1">Invalid coupon code</p>}
+                    </div>
+
+                    {/* Credit Packs */}
+                    {creditPacks.length > 0 && (
+                        <div className="mt-6">
+                            <h4 className="font-bold text-slate-800 mb-3 text-sm">Buy Credits</h4>
+                            <div className="grid grid-cols-3 gap-2">
+                                {creditPacks.map((pack) => (
+                                    <button
+                                        key={pack.id}
+                                        onClick={() => handlePurchaseCredits(pack.id)}
+                                        className="border border-slate-200 rounded-xl p-3 text-center hover:border-orange-300 hover:bg-orange-50 transition-colors"
+                                    >
+                                        <p className="text-sm font-bold text-slate-800">{pack.credits}</p>
+                                        <p className="text-[10px] text-slate-500">credits</p>
+                                        <p className="text-xs font-bold text-orange-600 mt-1">{formatPaise(pack.priceInPaise)}</p>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="mt-6 text-center">
                         <p className="text-xs text-slate-400">Payments are processed securely via Razorpay.</p>
@@ -951,6 +1130,43 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                 </div>
             </div>
 
+            {/* Billing History */}
+            {invoices.length > 0 && (
+                <div>
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Billing History</h3>
+                    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
+                        {invoices.slice(0, 10).map((invoice) => (
+                            <div key={invoice.id} className="p-4 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${invoice.type === 'SUBSCRIPTION' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                                        <FileText size={18} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-700">{invoice.description}</p>
+                                        <p className="text-xs text-slate-500">
+                                            {new Date(invoice.paidAt || invoice.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            {' -- '}
+                                            {formatPaise(invoice.amountPaise)}
+                                        </p>
+                                    </div>
+                                </div>
+                                {invoice.pdfUrl && (
+                                    <a
+                                        href={invoice.pdfUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-9 h-9 bg-slate-100 text-slate-500 hover:text-slate-700 rounded-lg flex items-center justify-center"
+                                        title="Download Invoice"
+                                    >
+                                        <Download size={16} />
+                                    </a>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Subscription & Account Actions */}
             <div>
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Account</h3>
@@ -965,7 +1181,7 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                             </div>
                             <div className="text-left">
                                 <p className="text-sm font-bold text-slate-700">Subscription</p>
-                                <p className="text-xs text-slate-500 font-medium">{subscription.tier} Plan</p>
+                                <p className="text-xs text-slate-500 font-medium">{subscription?.planSnapshot?.name || 'No Plan'} {subscription?.credits ? `(${subscription.credits} credits)` : ''}</p>
                             </div>
                         </div>
                         <ChevronRight size={18} className="text-slate-300 group-hover:text-slate-400" />

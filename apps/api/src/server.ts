@@ -12,6 +12,10 @@ import restaurantRoutes from './routes/restaurant.js';
 import postsRoutes from './routes/posts.js';
 import strategyRoutes from './routes/strategy.js';
 import integrationsRoutes from './routes/integrations.js';
+import subscriptionRoutes from './routes/subscriptions.js';
+import couponRoutes from './routes/coupons.js';
+import creditPackRoutes from './routes/credit-packs.js';
+import invoiceRoutes from './routes/invoices.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,6 +64,9 @@ const env = loadAndValidateEnv({
         CORS_ORIGIN: z.string().min(1).default(`http://localhost:${portConfig.web}`),
         MONGODB_URI: z.string().min(1),
         MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
+        RAZORPAY_KEY_ID: z.string().min(1).optional(),
+        RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
+        RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
     }).passthrough(),
 });
 
@@ -82,6 +89,8 @@ app.use(cors({
     origin: [CORS_ORIGIN, 'http://localhost:3001'],
     credentials: true
 }));
+// Razorpay webhook needs raw body for signature verification
+app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -102,6 +111,10 @@ app.use('/api/restaurant', restaurantRoutes);
 app.use('/api/posts', postsRoutes);
 app.use('/api/strategy', strategyRoutes);
 app.use('/api/integrations', integrationsRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/coupons', couponRoutes);
+app.use('/api/credit-packs', creditPackRoutes);
+app.use('/api/invoices', invoiceRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

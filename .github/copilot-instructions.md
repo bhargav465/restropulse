@@ -83,7 +83,7 @@ packages/
 
 - MongoDB Atlas (driver: mongodb v6.12)
 - Database name: `restropulse`
-- Collections: users, restaurants, posts, contentStrategies, strategyCycles, accountManagers
+- Collections: users, restaurants, posts, contentStrategies, strategyCycles, accountManagers, subscriptionPlans, subscriptions, coupons, couponRedemptions, creditPurchases, creditPacks, invoices
 - Document IDs: Support both ObjectId and custom string IDs (e.g., `r1` for seed data)
 - Connection: Always use `@restropulse/db` singleton -- never create separate MongoClient instances
 
@@ -100,6 +100,7 @@ packages/
 - OAuth scopes: instagram_basic, instagram_content_publish, pages_show_list, pages_read_user_content, pages_manage_posts, public_profile
 - Tokens encrypted with AES-256-CBC before storage
 - Google Maps Places API (optional) for onboarding address autocomplete (`@react-google-maps/api`)
+- Razorpay API for subscription billing, one-time credit purchases, coupon offers, and invoices
 
 ## Environment
 
@@ -107,6 +108,7 @@ packages/
 - Service entrypoints must load and validate env via `loadAndValidateEnv` with a local per-service schema
 - See `docs/INFRASTRUCTURE.md` for the full list of environment variables per app
 - Critical shared vars: MONGODB_URI, ENCRYPTION_KEY, META_APP_ID, META_APP_SECRET
+- Payment vars (optional in dev): RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
 
 ## Common Commands
 

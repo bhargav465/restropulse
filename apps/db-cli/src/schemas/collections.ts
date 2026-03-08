@@ -25,7 +25,7 @@ export const COLLECTIONS: CollectionSchema[] = [
                     email: { bsonType: 'string', description: 'User email address' },
                     name: { bsonType: 'string', description: 'User full name' },
                     phone: { bsonType: 'string' },
-                    role: { enum: ['OWNER', 'MANAGER', 'STAFF'], description: 'User role' },
+                    role: { enum: ['OWNER', 'MANAGER', 'ADMIN'], description: 'User role' },
                     restaurantId: { bsonType: 'string' },
                     createdAt: { bsonType: 'date' },
                     updatedAt: { bsonType: 'date' },
@@ -37,8 +37,6 @@ export const COLLECTIONS: CollectionSchema[] = [
         name: 'restaurants',
         indexes: [
             { spec: { 'location.lat': 1, 'location.lng': 1 } },
-            { spec: { 'subscription.status': 1 } },
-            { spec: { 'subscription.tier': 1 } },
         ],
         validator: {
             $jsonSchema: {
@@ -63,14 +61,6 @@ export const COLLECTIONS: CollectionSchema[] = [
                             phone: { bsonType: 'string' },
                             email: { bsonType: 'string' },
                             avatar: { bsonType: 'string' },
-                        },
-                    },
-                    subscription: {
-                        bsonType: 'object',
-                        properties: {
-                            tier: { enum: ['STARTER', 'GROWTH', 'GOLD', 'ENTERPRISE'] },
-                            renewalDate: { bsonType: 'string' },
-                            status: { enum: ['ACTIVE', 'SUSPENDED', 'CANCELLED'] },
                         },
                     },
                     integrations: {
@@ -106,7 +96,7 @@ export const COLLECTIONS: CollectionSchema[] = [
                 required: ['type', 'status', 'platform'],
                 properties: {
                     type: { enum: ['IMAGE', 'VIDEO', 'CAROUSEL', 'REEL', 'STORY'] },
-                    status: { enum: ['PENDING_APPROVAL', 'CHANGES_REQUESTED', 'SCHEDULED', 'POSTED', 'MISSED_DEADLINE'] },
+                    status: { enum: ['PENDING_CONTENT', 'PENDING_APPROVAL', 'CHANGES_REQUESTED', 'SCHEDULED', 'PUBLISHING', 'POSTED', 'MISSED_DEADLINE'] },
                     thumbnail: { bsonType: 'string' },
                     videoUrl: { bsonType: 'string' },
                     mediaUrls: { bsonType: 'array', items: { bsonType: 'string' } },
@@ -271,5 +261,179 @@ export const COLLECTIONS: CollectionSchema[] = [
             { spec: { confirmationCode: 1 }, options: { unique: true } },
             { spec: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
         ],
+    },
+    {
+        name: 'subscriptionPlans',
+        indexes: [
+            { spec: { slug: 1, version: -1 }, options: { unique: true } },
+            { spec: { isCurrentVersion: 1 } },
+        ],
+        validator: {
+            $jsonSchema: {
+                bsonType: 'object',
+                required: ['slug', 'version', 'tier', 'name'],
+                properties: {
+                    slug: { bsonType: 'string' },
+                    version: { bsonType: 'int' },
+                    isCurrentVersion: { bsonType: 'bool' },
+                    tier: { enum: ['STARTER', 'GROWTH', 'PREMIUM'] },
+                    name: { bsonType: 'string' },
+                    limits: {
+                        bsonType: 'object',
+                        properties: {
+                            reelsPerWeek: { bsonType: 'int' },
+                            instagramPostsPerWeek: { bsonType: 'int' },
+                            carouselPostsPerWeek: { bsonType: 'int' },
+                        },
+                    },
+                    pricing: {
+                        bsonType: 'object',
+                        properties: {
+                            monthly: { bsonType: 'int' },
+                            annual: { bsonType: 'int' },
+                            currency: { bsonType: 'string' },
+                        },
+                    },
+                    features: { bsonType: 'array', items: { bsonType: 'string' } },
+                    createdAt: { bsonType: 'date' },
+                    updatedAt: { bsonType: 'date' },
+                },
+            },
+        },
+    },
+    {
+        name: 'subscriptions',
+        indexes: [
+            { spec: { restaurantId: 1 }, options: { unique: true } },
+            { spec: { razorpaySubscriptionId: 1 }, options: { unique: true, sparse: true } },
+            { spec: { status: 1 } },
+        ],
+        validator: {
+            $jsonSchema: {
+                bsonType: 'object',
+                required: ['restaurantId', 'status', 'credits'],
+                properties: {
+                    restaurantId: { bsonType: 'string' },
+                    status: { enum: ['NONE', 'CREATED', 'AUTHENTICATED', 'ACTIVE', 'PAST_DUE', 'CANCELLED', 'HALTED'] },
+                    credits: { bsonType: 'int' },
+                    billingCycle: { enum: ['MONTHLY', 'ANNUAL'] },
+                    razorpaySubscriptionId: { bsonType: 'string' },
+                    razorpayCustomerId: { bsonType: 'string' },
+                    couponCode: { bsonType: 'string' },
+                    createdAt: { bsonType: 'date' },
+                    updatedAt: { bsonType: 'date' },
+                },
+            },
+        },
+    },
+    {
+        name: 'coupons',
+        indexes: [
+            { spec: { code: 1 }, options: { unique: true } },
+            { spec: { status: 1 } },
+            { spec: { createdBy: 1 } },
+            { spec: { assignedTo: 1 }, options: { sparse: true } },
+        ],
+        validator: {
+            $jsonSchema: {
+                bsonType: 'object',
+                required: ['code', 'type', 'value', 'status', 'createdBy', 'validFrom'],
+                properties: {
+                    code: { bsonType: 'string' },
+                    type: { enum: ['PERCENTAGE', 'FLAT'] },
+                    value: { bsonType: 'int' },
+                    status: { enum: ['ACTIVE', 'DISABLED', 'EXPIRED'] },
+                    redemptionCount: { bsonType: 'int' },
+                    createdBy: { bsonType: 'string' },
+                    validFrom: { bsonType: 'date' },
+                    createdAt: { bsonType: 'date' },
+                    updatedAt: { bsonType: 'date' },
+                },
+            },
+        },
+    },
+    {
+        name: 'couponRedemptions',
+        indexes: [
+            { spec: { couponId: 1 } },
+            { spec: { restaurantId: 1 } },
+            { spec: { couponId: 1, restaurantId: 1 }, options: { unique: true } },
+        ],
+    },
+    {
+        name: 'creditPurchases',
+        indexes: [
+            { spec: { restaurantId: 1 } },
+            { spec: { razorpayOrderId: 1 }, options: { unique: true } },
+        ],
+        validator: {
+            $jsonSchema: {
+                bsonType: 'object',
+                required: ['restaurantId', 'userId', 'status'],
+                properties: {
+                    restaurantId: { bsonType: 'string' },
+                    userId: { bsonType: 'string' },
+                    status: { enum: ['PENDING', 'PAID', 'FAILED'] },
+                    creditsAdded: { bsonType: 'int' },
+                    amountPaise: { bsonType: 'int' },
+                    razorpayOrderId: { bsonType: 'string' },
+                    createdAt: { bsonType: 'date' },
+                    updatedAt: { bsonType: 'date' },
+                },
+            },
+        },
+    },
+    {
+        name: 'creditPacks',
+        indexes: [
+            { spec: { isActive: 1 } },
+        ],
+        validator: {
+            $jsonSchema: {
+                bsonType: 'object',
+                required: ['name', 'credits', 'priceInPaise'],
+                properties: {
+                    name: { bsonType: 'string' },
+                    description: { bsonType: 'string' },
+                    credits: { bsonType: 'int' },
+                    priceInPaise: { bsonType: 'int' },
+                    isActive: { bsonType: 'bool' },
+                    sortOrder: { bsonType: 'int' },
+                    createdAt: { bsonType: 'date' },
+                    updatedAt: { bsonType: 'date' },
+                },
+            },
+        },
+    },
+    {
+        name: 'invoices',
+        indexes: [
+            { spec: { restaurantId: 1 } },
+            { spec: { razorpayInvoiceId: 1 }, options: { unique: true, sparse: true } },
+            { spec: { razorpayPaymentId: 1 }, options: { sparse: true } },
+            { spec: { type: 1 } },
+            { spec: { restaurantId: 1, createdAt: -1 } },
+        ],
+        validator: {
+            $jsonSchema: {
+                bsonType: 'object',
+                required: ['restaurantId', 'type', 'amountPaise', 'currency', 'status', 'description'],
+                properties: {
+                    restaurantId: { bsonType: 'string' },
+                    type: { enum: ['SUBSCRIPTION', 'CREDIT_PURCHASE'] },
+                    amountPaise: { bsonType: 'int' },
+                    currency: { bsonType: 'string' },
+                    status: { bsonType: 'string' },
+                    description: { bsonType: 'string' },
+                    razorpayInvoiceId: { bsonType: 'string' },
+                    razorpayPaymentId: { bsonType: 'string' },
+                    razorpaySubscriptionId: { bsonType: 'string' },
+                    razorpayOrderId: { bsonType: 'string' },
+                    pdfUrl: { bsonType: 'string' },
+                    createdAt: { bsonType: 'date' },
+                    updatedAt: { bsonType: 'date' },
+                },
+            },
+        },
     },
 ];

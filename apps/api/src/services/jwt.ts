@@ -13,6 +13,7 @@ export interface TokenPayload {
     userId: string;
     phone: string;
     restaurantId: string;
+    role?: string;
     type: 'access' | 'refresh';
 }
 
@@ -24,15 +25,18 @@ export interface TokenPair {
 /**
  * Generate access and refresh tokens for a user
  */
-export function generateTokens(userId: string, phone: string, restaurantId: string): TokenPair {
+export function generateTokens(userId: string, phone: string, restaurantId: string, role?: string): TokenPair {
+    const payload: TokenPayload = { userId, phone, restaurantId, type: 'access' };
+    if (role) payload.role = role;
+
     const accessToken = jwt.sign(
-        { userId, phone, restaurantId, type: 'access' } as TokenPayload,
+        { ...payload } as TokenPayload,
         JWT_SECRET,
         { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
 
     const refreshToken = jwt.sign(
-        { userId, phone, restaurantId, type: 'refresh' } as TokenPayload,
+        { ...payload, type: 'refresh' } as TokenPayload,
         JWT_SECRET,
         { expiresIn: REFRESH_TOKEN_EXPIRY }
     );
@@ -62,8 +66,16 @@ export function refreshAccessToken(refreshToken: string): string | null {
         return null;
     }
 
+    const refreshPayload: TokenPayload = {
+        userId: payload.userId,
+        phone: payload.phone,
+        restaurantId: payload.restaurantId,
+        type: 'access',
+    };
+    if (payload.role) refreshPayload.role = payload.role;
+
     const accessToken = jwt.sign(
-        { userId: payload.userId, phone: payload.phone, restaurantId: payload.restaurantId, type: 'access' } as TokenPayload,
+        refreshPayload,
         JWT_SECRET,
         { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
