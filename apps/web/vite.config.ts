@@ -1,13 +1,30 @@
 import path from 'path';
+import fs from 'fs';
 import { defineConfig, loadEnv } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+
+function getWebPort(): number {
+  try {
+    const configPath = path.resolve(__dirname, '../../config/ports.json');
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const parsed = JSON.parse(raw) as { web?: number };
+    if (typeof parsed.web === 'number' && parsed.web > 0) {
+      return parsed.web;
+    }
+  } catch {
+  }
+
+  return 3000;
+}
+
+const WEB_PORT = getWebPort();
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
     server: {
-      port: 3000,
+      port: WEB_PORT,
       host: '0.0.0.0',
       strictPort: true,
     },

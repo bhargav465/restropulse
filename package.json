@@ -8,7 +8,13 @@
     "apps/*"
   ],
   "scripts": {
+    "ports:check": "node scripts/free-ports.mjs --check",
+    "ports:free": "node scripts/free-ports.mjs --force",
+    "ports:check:dev": "node scripts/free-ports.mjs --check",
+    "ports:free:dev": "node scripts/free-ports.mjs --force",
     "dev": "turbo run dev --filter=!@restropulse/db-cli",
+    "dev:check": "npm run ports:check:dev && npm run dev",
+    "dev:free": "npm run ports:free:dev && npm run dev",
     "build": "turbo build",
     "test": "turbo test",
     "test:unit": "turbo run test:unit --filter=@restropulse/api --filter=@restropulse/web --filter=@restropulse/publisher --filter=@restropulse/content-engine",

@@ -2,6 +2,22 @@
 
 ## Services and Ports
 
+Source of truth for local service ports: `config/ports.json`.
+
+```json
+{
+   "web": 3000,
+   "api": 3001,
+   "publisher": 3002,
+   "strictInDevelopment": true
+}
+```
+
+Rules:
+- `apps/web` uses `config/ports.json:web` in `vite.config.ts` with `strictPort: true`.
+- `apps/api` uses `config/ports.json:api` as default and enforces the same port in development when `strictInDevelopment` is `true`.
+- Root port scripts (`ports:check`, `ports:free`, `dev:check`, `dev:free`) read ports from `config/ports.json` unless explicit CLI ports are provided.
+
 | Service         | Port   | Protocol | Description              |
 |-----------------|--------|----------|--------------------------|
 | Frontend (web)  | 3000   | HTTP     | Vite dev server          |
@@ -19,7 +35,7 @@
 | Variable                         | Required | Default                                          | Purpose                                    |
 |----------------------------------|----------|--------------------------------------------------|--------------------------------------------|
 | PORT                             | No       | 3001                                             | API server port                            |
-| FRONTEND_URL                     | No       | http://localhost:3000                             | Allowed CORS origin                        |
+| CORS_ORIGIN                      | No       | http://localhost:3000                             | Allowed CORS origin                        |
 | NODE_ENV                         | No       | development                                      | Environment mode                           |
 | MONGODB_URI                      | Yes      | --                                               | MongoDB Atlas connection string            |
 | MONGODB_DB_NAME                  | No       | restropulse                                      | Database name                              |
@@ -105,7 +121,7 @@
 
 ### Google Maps Places API (optional)
 
-- **Package**: `@react-google-maps/api` (frontend only)
+- **Package**: `@vis.gl/react-google-maps` (frontend only)
 - **Used for**: Address autocomplete during onboarding (location step)
 - **API Key**: `VITE_GOOGLE_MAPS_API_KEY` in `apps/web/.env`
 - **Fallback**: Manual address text input when API key is not configured

@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
@@ -15,17 +16,56 @@ import integrationsRoutes from './routes/integrations.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+type PortConfig = {
+    web: number;
+    api: number;
+    publisher: number;
+    strictInDevelopment?: boolean;
+};
+
+function getPortConfig(): PortConfig {
+    const fallback: PortConfig = {
+        web: 3000,
+        api: 3001,
+        publisher: 3002,
+        strictInDevelopment: true,
+    };
+
+    try {
+        const configPath = path.resolve(__dirname, '../../../config/ports.json');
+        const raw = fs.readFileSync(configPath, 'utf8');
+        const parsed = JSON.parse(raw) as Partial<PortConfig>;
+
+        return {
+            web: typeof parsed.web === 'number' ? parsed.web : fallback.web,
+            api: typeof parsed.api === 'number' ? parsed.api : fallback.api,
+            publisher: typeof parsed.publisher === 'number' ? parsed.publisher : fallback.publisher,
+            strictInDevelopment: typeof parsed.strictInDevelopment === 'boolean'
+                ? parsed.strictInDevelopment
+                : fallback.strictInDevelopment,
+        };
+    } catch {
+        return fallback;
+    }
+}
+
+const portConfig = getPortConfig();
+
 const env = loadAndValidateEnv({
     serviceName: 'api',
     envPath: path.resolve(process.cwd(), '.env'),
     schema: z.object({
         NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-        PORT: z.coerce.number().int().positive().default(3001),
-        CORS_ORIGIN: z.string().min(1).default('http://localhost:3000'),
+        PORT: z.coerce.number().int().positive().default(portConfig.api),
+        CORS_ORIGIN: z.string().min(1).default(`http://localhost:${portConfig.web}`),
         MONGODB_URI: z.string().min(1),
         MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
     }).passthrough(),
 });
+
+if (env.NODE_ENV === 'development' && portConfig.strictInDevelopment && env.PORT !== portConfig.api) {
+    throw new Error(`Invalid PORT for development. Expected ${portConfig.api}, received ${env.PORT}. Update config/ports.json or .env.`);
+}
 
 const app: Express = express();
 const PORT = env.PORT;
