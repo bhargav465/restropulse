@@ -1,73 +1,220 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { User, ChefHat, MapPin, UserCheck, ArrowRight, ArrowLeft, Check, Loader2 } from 'lucide-react';
-import { useLoadScript, GoogleMap, Marker, Autocomplete } from '@react-google-maps/api';
-import type { Restaurant, AccountManager } from '@restropulse/shared';
-import { restaurantAPI, accountManagerAPI } from '../api';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, User } from 'lucide-react';
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-const LIBRARIES: ('places')[] = ['places'];
+interface CustomSelectProps {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    disabled?: boolean;
+    options: { label: string; value: string }[];
+}
+
+const CustomSelect: React.FC<CustomSelectProps> = ({
+    value,
+    onChange,
+    options,
+    placeholder = 'Select...',
+    disabled,
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (
+                containerRef.current &&
+                !containerRef.current.contains(event.target as Node)
+            ) {
+                setIsOpen(false);
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
+    const handleSelect = (val: string) => {
+        onChange(val);
+        setIsOpen(false);
+    };
+
+    const selectedOption = options.find((opt) => opt.value === value);
+
+    return (
+        <div ref={containerRef} className="relative w-full">
+            <button
+                type="button"
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                disabled={disabled}
+                className={`w-full flex items-center justify-between text-left px-4 py-3.5 bg-white border rounded-xl transition-all outline-none ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-slate-300'
+                    } ${isOpen
+                        ? 'border-orange-500 ring-1 ring-orange-500'
+                        : 'border-slate-200 focus:border-orange-500 focus:ring-1 focus:ring-orange-500'
+                    }`}
+            >
+                <span className={selectedOption ? 'text-slate-900' : 'text-slate-500'}>
+                    {selectedOption ? selectedOption.label : placeholder}
+                </span>
+                <ChevronDown
+                    size={16}
+                    className={`text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''
+                        }`}
+                />
+            </button>
+
+            {isOpen && !disabled && (
+                <ul className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100">
+                    {options.length === 0 ? (
+                        <li className="px-4 py-3 text-sm text-slate-500 text-center">
+                            No options available
+                        </li>
+                    ) : (
+                        options.map((opt) => (
+                            <li key={opt.value}>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelect(opt.value)}
+                                    className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${value === opt.value
+                                        ? 'bg-orange-500/10 text-orange-400 font-medium'
+                                        : 'text-slate-700 hover:bg-slate-100 active:bg-slate-200'
+                                        }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            </li>
+                        ))
+                    )}
+                </ul>
+            )}
+        </div>
+    );
+};
+import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
+import type { Restaurant, AccountManager, City } from '@restropulse/shared';
+import { restaurantAPI, accountManagerAPI, citiesAPI } from '../api';
 
 interface OnboardingProps {
     onComplete: (restaurant: Restaurant) => void;
 }
 
-type OnboardingStep = 1 | 2 | 3 | 4;
+type OnboardingStep = 1 | 2 | 3;
 
-const STEP_LABELS = ['Your Details', 'Restaurant', 'Location', 'Account Manager'];
+const STEP_LABELS = ['About You', 'Your Restaurant', 'Account Manager'];
 
-const CITIES = ['Bangalore', 'Mumbai', 'Delhi', 'Chennai', 'Hyderabad', 'Pune', 'Kolkata'];
+
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
+    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    const isMountedRef = useRef(true);
     const [step, setStep] = useState<OnboardingStep>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Step 1 - User details
-    const [userName, setUserName] = useState('');
+    // Cities from API
+    const [cities, setCities] = useState<City[]>([]);
 
-    // Step 2 - Restaurant details
+    // Step 1 - About You
+    const [userName, setUserName] = useState('');
+    const [email, setEmail] = useState('');
+
+    // Step 2 - Your Restaurant
+    const [city, setCity] = useState('');
     const [restaurantName, setRestaurantName] = useState('');
     const [cuisine, setCuisine] = useState('');
-
-    // Step 3 - Location
     const [address, setAddress] = useState('');
     const [lat, setLat] = useState(0);
     const [lng, setLng] = useState(0);
     const [mapUrl, setMapUrl] = useState('');
-    const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 12.9716, lng: 77.5946 });
-    const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+    const [locationConfirmed, setLocationConfirmed] = useState(false);
 
-    // Step 4 - Account Manager
-    const [city, setCity] = useState('');
+    // Step 3 - Account Manager
     const [zone, setZone] = useState('');
     const [zones, setZones] = useState<string[]>([]);
     const [managers, setManagers] = useState<AccountManager[]>([]);
     const [selectedManager, setSelectedManager] = useState<AccountManager | null>(null);
     const [loadingManagers, setLoadingManagers] = useState(false);
 
-    const { isLoaded: mapsLoaded } = useLoadScript({
-        googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-        libraries: LIBRARIES,
-    });
+    useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
 
     const fetchManagers = useCallback(async (selectedCity: string, selectedZone?: string) => {
         if (!selectedCity) return;
+        if (!isMountedRef.current) return;
         setLoadingManagers(true);
         try {
             const result = await accountManagerAPI.getByCityAndZone(selectedCity, selectedZone);
+            if (!isMountedRef.current) return;
             setManagers(result);
 
             // Extract unique zones from results
             if (!selectedZone) {
                 const uniqueZones = [...new Set(result.map((m) => m.zone))];
                 setZones(uniqueZones);
+                if (uniqueZones.length === 1) {
+                    setZone(uniqueZones[0]);
+                }
+            }
+
+            // Auto-select if only one manager
+            if (result.length === 1) {
+                setSelectedManager(result[0]);
             }
         } catch {
-            setManagers([]);
+            if (isMountedRef.current) {
+                setManagers([]);
+            }
         } finally {
-            setLoadingManagers(false);
+            if (isMountedRef.current) {
+                setLoadingManagers(false);
+            }
         }
     }, []);
+
+    useEffect(() => {
+        let isActive = true;
+
+        citiesAPI.getAll()
+            .then((result) => {
+                if (!isActive || !isMountedRef.current) return;
+                setCities(result);
+                if (result.length === 1) {
+                    setCity(result[0].name);
+                }
+            })
+            .catch(() => {
+                if (isActive && isMountedRef.current) {
+                    setCities([]);
+                }
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, []);
+
+    const handlePlaceSelect = useCallback(
+        (result: { address: string; lat: number; lng: number; city?: string }) => {
+            setAddress(result.address);
+            setLat(result.lat);
+            setLng(result.lng);
+            setMapUrl(`https://www.google.com/maps?q=${result.lat},${result.lng}`);
+            setLocationConfirmed(true);
+
+            if (result.city) {
+                setCity((prev) => prev || result.city!);
+            }
+        },
+        [],
+    );
 
     useEffect(() => {
         if (city) {
@@ -84,47 +231,19 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     }, [zone, city, fetchManagers]);
 
-    const onPlaceChanged = () => {
-        const place = autocompleteRef.current?.getPlace();
-        if (place?.geometry?.location) {
-            const placeLat = place.geometry.location.lat();
-            const placeLng = place.geometry.location.lng();
-            setAddress(place.formatted_address || '');
-            setLat(placeLat);
-            setLng(placeLng);
-            setMapUrl(`https://www.google.com/maps?q=${placeLat},${placeLng}`);
-            setMapCenter({ lat: placeLat, lng: placeLng });
-
-            // Try to extract city from address components
-            const cityComponent = place.address_components?.find(
-                (c) => c.types.includes('locality'),
-            );
-            if (cityComponent) {
-                const matchedCity = CITIES.find(
-                    (c) => c.toLowerCase() === cityComponent.long_name.toLowerCase(),
-                );
-                if (matchedCity) {
-                    setCity(matchedCity);
-                }
-            }
-        }
-    };
-
     const canProceed = (): boolean => {
         switch (step) {
             case 1:
-                return userName.trim().length >= 2;
+                return userName.trim().length >= 2 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
             case 2:
-                return restaurantName.trim().length >= 2 && cuisine.trim().length >= 2;
+                return city.length > 0 && restaurantName.trim().length >= 2 && cuisine.trim().length >= 2 && address.trim().length > 0;
             case 3:
-                return address.trim().length > 0;
-            case 4:
-                return true; // Account manager is optional
+                return selectedManager !== null;
         }
     };
 
     const handleNext = () => {
-        if (step < 4) {
+        if (step < 3) {
             setStep((step + 1) as OnboardingStep);
             setError(null);
         }
@@ -144,6 +263,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         try {
             const result = await restaurantAPI.create({
                 userName: userName.trim(),
+                email: email.trim(),
                 name: restaurantName.trim(),
                 cuisine: cuisine.trim(),
                 location: {
@@ -154,11 +274,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 },
                 accountManager: selectedManager
                     ? {
-                          name: selectedManager.name,
-                          phone: selectedManager.phone,
-                          email: selectedManager.email,
-                          avatar: selectedManager.avatar,
-                      }
+                        name: selectedManager.name,
+                        phone: selectedManager.phone,
+                        email: selectedManager.email,
+                        avatar: selectedManager.avatar,
+                    }
                     : { name: '', phone: '', email: '', avatar: '' },
             });
 
@@ -175,67 +295,82 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     };
 
-    const renderStepIndicator = () => (
-        <div className="flex items-center justify-center gap-2 mb-8">
-            {STEP_LABELS.map((label, index) => {
-                const stepNum = (index + 1) as OnboardingStep;
-                const isActive = step === stepNum;
-                const isCompleted = step > stepNum;
+    const renderHeader = () => (
+        <div className="mb-8">
+            <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20 flex-shrink-0">
+                    <span className="text-slate-900 font-bold text-lg">R</span>
+                </div>
+                <span className="text-slate-900 font-semibold text-sm tracking-wide">RestroPulse</span>
+            </div>
+            <div className="flex items-start">
+                {STEP_LABELS.map((label, index) => {
+                    const stepNum = (index + 1) as OnboardingStep;
+                    const isActive = step === stepNum;
+                    const isCompleted = step > stepNum;
 
-                return (
-                    <React.Fragment key={label}>
-                        <div className="flex flex-col items-center">
-                            <div
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                                    isActive
-                                        ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/30'
+                    return (
+                        <React.Fragment key={label}>
+                            <div className="flex flex-col items-center" style={{ flex: '0 0 auto' }}>
+                                <div
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${isActive
+                                        ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-slate-900 shadow-lg shadow-orange-500/30 ring-4 ring-orange-500/20'
                                         : isCompleted
-                                          ? 'bg-green-500/20 text-green-400 border border-green-500/50'
-                                          : 'bg-slate-800 text-slate-500 border border-slate-700'
-                                }`}
-                            >
-                                {isCompleted ? <Check size={14} /> : stepNum}
+                                            ? 'bg-green-500/20 text-green-400 border-2 border-green-500/50'
+                                            : 'bg-white text-slate-500 border-2 border-slate-200'
+                                        }`}
+                                >
+                                    {isCompleted ? <Check size={14} /> : stepNum}
+                                </div>
+                                <span
+                                    className={`text-xs mt-2 text-center ${isActive ? 'text-orange-400 font-semibold' : isCompleted ? 'text-green-400 font-medium' : 'text-slate-500'
+                                        }`}
+                                >
+                                    {label}
+                                </span>
                             </div>
-                            <span
-                                className={`text-xs mt-1 hidden sm:block ${
-                                    isActive ? 'text-orange-400' : isCompleted ? 'text-green-400' : 'text-slate-500'
-                                }`}
-                            >
-                                {label}
-                            </span>
-                        </div>
-                        {index < STEP_LABELS.length - 1 && (
-                            <div
-                                className={`w-8 h-0.5 mb-4 sm:mb-0 ${
-                                    step > stepNum ? 'bg-green-500/50' : 'bg-slate-700'
-                                }`}
-                            />
-                        )}
-                    </React.Fragment>
-                );
-            })}
+                            {index < STEP_LABELS.length - 1 && (
+                                <div className="flex-1 h-8 flex items-center px-2">
+                                    <div
+                                        className={`w-full h-0.5 rounded-full ${step > stepNum ? 'bg-green-500/50' : 'bg-slate-100'
+                                            }`}
+                                    />
+                                </div>
+                            )}
+                        </React.Fragment>
+                    );
+                })}
+            </div>
         </div>
     );
 
     const renderStep1 = () => (
         <div className="space-y-6">
-            <div className="text-center mb-6">
-                <div className="w-14 h-14 bg-orange-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <User className="w-7 h-7 text-orange-500" />
-                </div>
-                <h2 className="text-xl font-bold text-white">Welcome to RestroPulse</h2>
-                <p className="text-slate-400 text-sm mt-1">Let's start with your name</p>
+            <div className="mb-2">
+                <h2 className="text-lg font-bold text-slate-900">Welcome to RestroPulse</h2>
+                <p className="text-slate-500 text-sm mt-0.5">Tell us about yourself</p>
             </div>
 
             <div>
-                <label className="block text-slate-400 text-sm mb-2">Your name</label>
+                <label className="block text-slate-500 text-sm mb-2">Your name</label>
                 <input
                     type="text"
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
                     placeholder="e.g. Arjun Mehta"
-                    className="w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-500"
+                    className="w-full bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
                     autoFocus
+                />
+            </div>
+
+            <div>
+                <label className="block text-slate-500 text-sm mb-2">Email address</label>
+                <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="e.g. arjun@example.com"
+                    className="w-full bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
                 />
             </div>
         </div>
@@ -243,108 +378,85 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     const renderStep2 = () => (
         <div className="space-y-6">
-            <div className="text-center mb-6">
-                <div className="w-14 h-14 bg-orange-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <ChefHat className="w-7 h-7 text-orange-500" />
-                </div>
-                <h2 className="text-xl font-bold text-white">Restaurant Details</h2>
-                <p className="text-slate-400 text-sm mt-1">Tell us about your restaurant</p>
+            <div className="mb-2">
+                <h2 className="text-lg font-bold text-slate-900">Your Restaurant</h2>
+                <p className="text-slate-500 text-sm mt-0.5">Tell us about your restaurant</p>
             </div>
 
             <div>
-                <label className="block text-slate-400 text-sm mb-2">Restaurant name</label>
+                <label className="block text-slate-500 text-sm mb-2">City</label>
+                <div className="relative">
+                    <CustomSelect
+                        value={city}
+                        onChange={(value) => setCity(value)}
+                        placeholder="Select city"
+                        options={cities.map((c) => ({ label: c.name, value: c.name }))}
+                    />
+                </div>
+            </div>
+
+            <div>
+                <label className="block text-slate-500 text-sm mb-2">Restaurant name</label>
                 <input
                     type="text"
                     value={restaurantName}
                     onChange={(e) => setRestaurantName(e.target.value)}
                     placeholder="e.g. The Spice Lounge"
-                    className="w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-500"
-                    autoFocus
+                    className="w-full bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
                 />
             </div>
 
             <div>
-                <label className="block text-slate-400 text-sm mb-2">Cuisine type</label>
+                <label className="block text-slate-500 text-sm mb-2">Cuisine type</label>
                 <input
                     type="text"
                     value={cuisine}
                     onChange={(e) => setCuisine(e.target.value)}
                     placeholder="e.g. Modern Indian Fusion"
-                    className="w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-500"
+                    className="w-full bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
                 />
             </div>
-        </div>
-    );
 
-    const renderStep3 = () => (
-        <div className="space-y-6">
-            <div className="text-center mb-6">
-                <div className="w-14 h-14 bg-orange-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <MapPin className="w-7 h-7 text-orange-500" />
-                </div>
-                <h2 className="text-xl font-bold text-white">Location</h2>
-                <p className="text-slate-400 text-sm mt-1">Where is your restaurant located?</p>
-            </div>
-
-            {mapsLoaded && GOOGLE_MAPS_API_KEY ? (
-                <>
+            {googleMapsApiKey ? (
+                <APIProvider apiKey={googleMapsApiKey}>
                     <div>
-                        <label className="block text-slate-400 text-sm mb-2">Search address</label>
-                        <Autocomplete
-                            onLoad={(autocomplete) => {
-                                autocompleteRef.current = autocomplete;
-                            }}
-                            onPlaceChanged={onPlaceChanged}
-                            options={{ componentRestrictions: { country: 'in' } }}
-                        >
-                            <input
-                                type="text"
-                                placeholder="Start typing your restaurant address..."
-                                className="w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-500"
-                                autoFocus
-                            />
-                        </Autocomplete>
+                        <label className="block text-slate-500 text-sm mb-2">Restaurant address</label>
+                        <PlacesAutocompleteInput onSelect={handlePlaceSelect} city={city} cityNames={cities.map(c => c.name)} initialValue={address} />
                     </div>
 
-                    {address && (
-                        <div className="text-sm text-slate-300 bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-                            <span className="text-slate-500">Selected:</span> {address}
+                    <div>
+                        <div
+                            className={`rounded-xl overflow-hidden border border-slate-200 transition-all duration-500 ease-out ${locationConfirmed
+                                ? 'max-h-56 opacity-100 mt-4'
+                                : 'max-h-0 opacity-0 overflow-hidden'
+                                }`}
+                            data-testid="map-container"
+                        >
+                            <Map
+                                style={{ width: '100%', height: '14rem' }}
+                                defaultCenter={{ lat, lng }}
+                                center={{ lat, lng }}
+                                zoom={16}
+                                disableDefaultUI
+                                
+                                mapId="onboarding-map"
+                            >
+                                {lat !== 0 && lng !== 0 && <AdvancedMarker position={{ lat, lng }} />}
+                            </Map>
                         </div>
-                    )}
-
-                    <div className="rounded-xl overflow-hidden border border-slate-700 h-48">
-                        <GoogleMap
-                            mapContainerStyle={{ width: '100%', height: '100%' }}
-                            center={mapCenter}
-                            zoom={lat ? 15 : 5}
-                            options={{
-                                disableDefaultUI: true,
-                                zoomControl: true,
-                                styles: [
-                                    { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-                                    { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
-                                    { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-                                    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#334155' }] },
-                                    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
-                                ],
-                            }}
-                        >
-                            {lat !== 0 && lng !== 0 && <Marker position={{ lat, lng }} />}
-                        </GoogleMap>
                     </div>
-                </>
+                </APIProvider>
             ) : (
                 <div>
-                    <label className="block text-slate-400 text-sm mb-2">Restaurant address</label>
+                    <label className="block text-slate-500 text-sm mb-2">Restaurant address</label>
                     <input
                         type="text"
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
                         placeholder="e.g. 12, Indiranagar, Bangalore, KA"
-                        className="w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-500"
-                        autoFocus
+                        className="w-full bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
                     />
-                    {!GOOGLE_MAPS_API_KEY && (
+                    {!googleMapsApiKey && (
                         <p className="text-slate-500 text-xs mt-2">
                             Google Maps API key not configured. Enter address manually.
                         </p>
@@ -354,53 +466,32 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         </div>
     );
 
-    const renderStep4 = () => (
+    const renderStep3 = () => (
         <div className="space-y-6">
-            <div className="text-center mb-6">
-                <div className="w-14 h-14 bg-orange-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                    <UserCheck className="w-7 h-7 text-orange-500" />
-                </div>
-                <h2 className="text-xl font-bold text-white">Account Manager</h2>
-                <p className="text-slate-400 text-sm mt-1">Choose your dedicated account manager (optional)</p>
+            <div className="mb-2">
+                <h2 className="text-lg font-bold text-slate-900">Account Manager</h2>
+                <p className="text-slate-500 text-sm mt-0.5">Choose your dedicated account manager</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-                <div>
-                    <label className="block text-slate-400 text-sm mb-2">City</label>
-                    <select
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        className="w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 appearance-none"
-                    >
-                        <option value="">Select city</option>
-                        {CITIES.map((c) => (
-                            <option key={c} value={c}>
-                                {c}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+            {city && (
+                <p className="text-slate-500 text-sm">Showing managers in <span className="text-slate-900 font-medium">{city}</span></p>
+            )}
 
-                <div>
-                    <label className="block text-slate-400 text-sm mb-2">Zone</label>
-                    <select
+            <div>
+                <label className="block text-slate-500 text-sm mb-2">Zone</label>
+                <div className="relative">
+                    <CustomSelect
                         value={zone}
-                        onChange={(e) => setZone(e.target.value)}
+                        onChange={(value) => setZone(value)}
+                        placeholder="All zones"
                         disabled={!city || zones.length === 0}
-                        className="w-full bg-slate-800 text-white px-4 py-3.5 rounded-xl border border-slate-700 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 appearance-none disabled:opacity-50"
-                    >
-                        <option value="">All zones</option>
-                        {zones.map((z) => (
-                            <option key={z} value={z}>
-                                {z}
-                            </option>
-                        ))}
-                    </select>
+                        options={zones.map((z) => ({ label: z, value: z }))}
+                    />
                 </div>
             </div>
 
             {loadingManagers && (
-                <div className="flex items-center justify-center py-6 text-slate-400">
+                <div className="flex items-center justify-center py-6 text-slate-500">
                     <Loader2 className="w-5 h-5 animate-spin mr-2" />
                     Loading managers...
                 </div>
@@ -408,7 +499,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
             {!loadingManagers && city && managers.length === 0 && (
                 <div className="text-center py-6 text-slate-500 text-sm">
-                    No account managers found for this area. You can skip this step.
+                    No account managers available for this area.
                 </div>
             )}
 
@@ -420,24 +511,29 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             onClick={() =>
                                 setSelectedManager(selectedManager?.id === manager.id ? null : manager)
                             }
-                            className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                                selectedManager?.id === manager.id
-                                    ? 'border-orange-500 bg-orange-500/10'
-                                    : 'border-slate-700 bg-slate-800 hover:border-slate-600'
-                            }`}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${selectedManager?.id === manager.id
+                                ? 'border-orange-500 bg-orange-500/10'
+                                : 'border-slate-200 bg-white hover:border-slate-300'
+                                }`}
                         >
-                            <img
-                                src={manager.avatar}
-                                alt={manager.name}
-                                className="w-10 h-10 rounded-full object-cover bg-slate-700"
-                            />
+                            {manager.avatar ? (
+                                <img
+                                    src={manager.avatar}
+                                    alt={manager.name}
+                                    className="w-10 h-10 rounded-full object-cover bg-slate-100"
+                                />
+                            ) : (
+                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                    <User size={20} className="text-slate-500" />
+                                </div>
+                            )}
                             <div className="flex-1 min-w-0">
-                                <p className="text-white font-medium text-sm truncate">{manager.name}</p>
-                                <p className="text-slate-400 text-xs truncate">{manager.phone}</p>
+                                <p className="text-slate-900 font-medium text-sm truncate">{manager.name}</p>
+                                <p className="text-slate-500 text-xs truncate">{manager.phone}</p>
                             </div>
                             {selectedManager?.id === manager.id && (
                                 <div className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center flex-shrink-0">
-                                    <Check size={14} className="text-white" />
+                                    <Check size={14} className="text-slate-900" />
                                 </div>
                             )}
                         </button>
@@ -448,51 +544,48 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     );
 
     return (
-        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        <div className="h-screen bg-slate-50 flex flex-col relative overflow-hidden">
             {/* Background Decor */}
             <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-500 rounded-full blur-[100px]"></div>
                 <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-amber-600 rounded-full blur-[100px]"></div>
             </div>
 
-            <div className="z-10 w-full max-w-md">
-                {/* Logo */}
-                <div className="text-center mb-6">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-2xl shadow-orange-500/20">
-                        <span className="text-white font-bold text-xl">R</span>
-                    </div>
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto z-10">
+                <div className="w-full max-w-md mx-auto px-6 pt-6 pb-4">
+                    {renderHeader()}
+
+                    {error && (
+                        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm text-center">
+                            {error}
+                        </div>
+                    )}
+
+                    {step === 1 && renderStep1()}
+                    {step === 2 && renderStep2()}
+                    {step === 3 && renderStep3()}
                 </div>
+            </div>
 
-                {renderStepIndicator()}
-
-                {error && (
-                    <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm text-center">
-                        {error}
-                    </div>
-                )}
-
-                {step === 1 && renderStep1()}
-                {step === 2 && renderStep2()}
-                {step === 3 && renderStep3()}
-                {step === 4 && renderStep4()}
-
-                {/* Navigation */}
-                <div className="flex gap-3 mt-8">
+            {/* Sticky Navigation */}
+            <div className="z-10 border-t border-slate-200 bg-white/95 backdrop-blur-sm px-6 py-4">
+                <div className="flex gap-3 max-w-md mx-auto">
                     {step > 1 && (
                         <button
                             onClick={handleBack}
-                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all border border-slate-700"
+                            className="flex-1 bg-white hover:bg-slate-100 text-slate-900 font-medium py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all border border-slate-200"
                         >
                             <ArrowLeft size={18} />
                             Back
                         </button>
                     )}
 
-                    {step < 4 ? (
+                    {step < 3 ? (
                         <button
                             onClick={handleNext}
                             disabled={!canProceed()}
-                            className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-slate-900 font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Next
                             <ArrowRight size={18} />
@@ -500,8 +593,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     ) : (
                         <button
                             onClick={handleSubmit}
-                            disabled={isSubmitting}
-                            className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={isSubmitting || !canProceed()}
+                            className="flex-1 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-slate-900 font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? (
                                 <>

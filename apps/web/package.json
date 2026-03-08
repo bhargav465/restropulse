@@ -13,8 +13,8 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@react-google-maps/api": "^2.20.8",
     "@restropulse/shared": "*",
+    "@vis.gl/react-google-maps": "^1.7.1",
     "firebase": "^12.8.0",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",

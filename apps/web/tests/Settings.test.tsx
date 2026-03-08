@@ -942,20 +942,20 @@ describe('Settings Branching Logic', () => {
         const editBtn = logo.nextElementSibling;
         fireEvent.click(editBtn!);
 
-        await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument());
 
-        let modalContainer = getModalContainer('Edit Profile');
+        let modalContainer = screen.getByLabelText('Restaurant Name').closest('div.bg-white');
         expect(modalContainer).not.toBeNull();
 
         if (modalContainer) {
             // 1. Drag down
             fireEvent.touchStart(modalContainer, { touches: [{ clientY: 100 }] });
 
-            modalContainer = getModalContainer('Edit Profile');
+            modalContainer = screen.getByLabelText('Restaurant Name').closest('div.bg-white');
             if (modalContainer) {
                 fireEvent.touchMove(modalContainer, { touches: [{ clientY: 150 }] });
 
-                modalContainer = getModalContainer('Edit Profile');
+                modalContainer = screen.getByLabelText('Restaurant Name').closest('div.bg-white');
                 if (modalContainer) {
                     // Should move
                     expect(modalContainer).toHaveStyle('transform: translateY(50px)');
@@ -963,7 +963,7 @@ describe('Settings Branching Logic', () => {
                     // 2. Drag up (negative) -> should stay at 0
                     fireEvent.touchMove(modalContainer, { touches: [{ clientY: 50 }] });
 
-                    modalContainer = getModalContainer('Edit Profile');
+                    modalContainer = screen.getByLabelText('Restaurant Name').closest('div.bg-white');
                     if (modalContainer) {
                         expect(modalContainer).toHaveStyle('transform: translateY(0px)');
                         fireEvent.touchEnd(modalContainer);
@@ -980,9 +980,9 @@ describe('Settings Branching Logic', () => {
         const editBtn = logo.nextElementSibling;
         fireEvent.click(editBtn!);
 
-        await waitFor(() => expect(screen.getByText('Edit Profile')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument());
 
-        const modalContainer = getModalContainer('Edit Profile');
+        const modalContainer = screen.getByLabelText('Restaurant Name').closest('div.bg-white');
         if (modalContainer) {
             fireEvent.touchMove(modalContainer, { touches: [{ clientY: 150 }] });
             expect(modalContainer).toHaveStyle('transform: translateY(0px)');

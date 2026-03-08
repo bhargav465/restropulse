@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle } from 'lucide-react';
+import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
+import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User } from 'lucide-react';
 import { SubscriptionTier, Restaurant, InstagramConnectionError, InstagramAccount } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI } from '../api';
 import { FacebookIcon, InstagramIcon } from './BrandIcons';
@@ -568,58 +570,136 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
         closeSubscription();
     };
 
-    const EditProfileModal = () => (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-            {/* Click outside */}
-            <div className="absolute inset-0" onClick={closeEditProfile}></div>
+    const EditProfileModal = () => {
+        const [editName, setEditName] = useState(restaurantData.name);
+        const [editCuisine, setEditCuisine] = useState(restaurantData.cuisine);
+        const [editAddress, setEditAddress] = useState(restaurantData.location.address);
+        const [editCoordinates, setEditCoordinates] = useState<[number, number]>(
+            restaurantData.location.coordinates || [0, 0]
+        );
+        const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-            <div
-                className="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 relative z-10"
-                style={{ transform: `translateY(${Math.max(0, dragOffset)}px)` }}
-                onTouchStart={(e) => {
-                    setDragStartY(e.touches[0].clientY);
-                }}
-                onTouchMove={(e) => {
-                    if (dragStartY !== null) {
-                        const offset = e.touches[0].clientY - dragStartY;
-                        setDragOffset(offset);
+        const handleSave = () => {
+            if (onRestaurantUpdate) {
+                onRestaurantUpdate({
+                    ...restaurantData,
+                    name: editName,
+                    cuisine: editCuisine,
+                    location: {
+                        ...restaurantData.location,
+                        address: editAddress,
+                        coordinates: editCoordinates
                     }
-                }}
-                onTouchEnd={() => {
-                    if (dragOffset > 100) {
-                        closeEditProfile();
-                    } else {
-                        setDragOffset(0);
-                    }
-                    setDragStartY(null);
-                }}
-            >
-                {/* Drag Handle */}
-                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 shrink-0 sm:hidden"></div>
+                });
+            }
+            closeEditProfile();
+        };
 
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-slate-800">Edit Profile</h3>
-                </div>
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Restaurant Name</label>
-                        <input type="text" defaultValue={restaurantData.name} aria-label="Restaurant Name" className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
+        return (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+                {/* Click outside */}
+                <div className="absolute inset-0" onClick={closeEditProfile}></div>
+
+                <div
+                    className="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 relative z-10"
+                    style={{ transform: `translateY(${Math.max(0, dragOffset)}px)` }}
+                    onTouchStart={(e) => {
+                        setDragStartY(e.touches[0].clientY);
+                    }}
+                    onTouchMove={(e) => {
+                        if (dragStartY !== null) {
+                            const offset = e.touches[0].clientY - dragStartY;
+                            setDragOffset(offset);
+                        }
+                    }}
+                    onTouchEnd={() => {
+                        if (dragOffset > 100) {
+                            closeEditProfile();
+                        } else {
+                            setDragOffset(0);
+                        }
+                        setDragStartY(null);
+                    }}
+                >
+                    {/* Drag Handle */}
+                    <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 shrink-0 sm:hidden"></div>
+
+                    <div className="space-y-5">
+                        <div>
+                            <label className="block text-slate-600 text-sm font-medium mb-1.5">Restaurant name</label>
+                            <input
+                                type="text"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                aria-label="Restaurant Name"
+                                className="w-full bg-white text-slate-900 px-4 py-3 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-slate-600 text-sm font-medium mb-1.5">Cuisine</label>
+                            <input
+                                type="text"
+                                value={editCuisine}
+                                onChange={(e) => setEditCuisine(e.target.value)}
+                                aria-label="Cuisine"
+                                className="w-full bg-white text-slate-900 px-4 py-3 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-slate-600 text-sm font-medium mb-1.5">Location</label>
+                            {googleMapsApiKey ? (
+                                <APIProvider apiKey={googleMapsApiKey}>
+                                    <PlacesAutocompleteInput
+                                        theme="light"
+                                        initialValue={editAddress}
+                                        onSelect={(place) => {
+                                            setEditAddress(place.address);
+                                            setEditCoordinates([place.lng, place.lat]);
+                                        }}
+                                        placeholder="Enter restaurant location"
+                                    />
+                                    {editCoordinates && (editCoordinates[0] !== 0 || editCoordinates[1] !== 0) && (
+                                        <div className="mt-4 rounded-xl overflow-hidden border border-slate-200 map-container">
+                                            <Map
+                                                style={{ width: '100%', height: '12rem' }}
+                                                defaultCenter={{ lat: editCoordinates[1], lng: editCoordinates[0] }}
+                                                center={{ lat: editCoordinates[1], lng: editCoordinates[0] }}
+                                                zoom={16}
+                                                disableDefaultUI
+                                                mapId="settings-map"
+                                            >
+                                                <AdvancedMarker position={{ lat: editCoordinates[1], lng: editCoordinates[0] }} />
+                                            </Map>
+                                        </div>
+                                    )}
+                                </APIProvider>
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={editAddress}
+                                    onChange={(e) => setEditAddress(e.target.value)}
+                                    aria-label="Location"
+                                    className="w-full bg-white text-slate-900 px-4 py-3 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
+                                />
+                            )}
+                        </div>
+                        
+                        <div className="pt-2">
+                            <button onClick={handleSave} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors shadow-sm">
+                                <Save size={18} /> Save Changes
+                            </button>
+                            <button 
+                                onClick={closeEditProfile} 
+                                className="w-full bg-transparent text-slate-600 hover:text-slate-900 py-3 rounded-xl font-bold mt-2 hover:bg-slate-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Cuisine</label>
-                        <input type="text" defaultValue={restaurantData.cuisine} aria-label="Cuisine" className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Location</label>
-                        <input type="text" defaultValue={restaurantData.location.address} aria-label="Location" className="w-full border-b border-slate-200 py-2 text-slate-800 focus:border-orange-500 outline-none" />
-                    </div>
-                    <button onClick={closeEditProfile} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold mt-4 flex items-center justify-center gap-2">
-                        <Save size={18} /> Save Changes
-                    </button>
                 </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const SubscriptionModal = () => {
         const currentPlan = SUBSCRIPTION_PLANS.find(p => p.id === subscription.tier);
@@ -856,7 +936,13 @@ const Settings: React.FC<SettingsProps> = ({ onLogout, restaurantData, onRestaur
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Your Team</h3>
                 <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <img src={restaurantData.accountManager.avatar} alt="AM" className="w-10 h-10 rounded-full" />
+                        {restaurantData.accountManager.avatar ? (
+                            <img src={restaurantData.accountManager.avatar} alt="AM" className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                                <User size={20} className="text-slate-400" />
+                            </div>
+                        )}
                         <div>
                             <p className="font-bold text-slate-800 text-sm">{restaurantData.accountManager.name}</p>
                             <p className="text-xs text-slate-500">Account Manager</p>
