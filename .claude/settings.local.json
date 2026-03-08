@@ -16,6 +16,7 @@
       "Bash(npm install:*)",
       "mcp__lsp-db__definition",
       "Bash(powershell:*)",
+      "Bash(rm:*)",
       "Bash(npm view:*)",
       "WebSearch",
       "WebFetch(domain:developers.google.com)",
