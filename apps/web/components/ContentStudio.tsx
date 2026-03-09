@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, CheckCircle, MessageCircle, RefreshCw, Send, Edit, Clock, Lock, Undo2, AlertTriangle, FileText, Image as ImageIcon, MoreHorizontal, CheckSquare, Square, AlertCircle, ChevronDown, LockKeyhole, History, Sparkles, Phone, Film, CircleDashed, Layers, Play, Video, ChevronLeft, ChevronRight, Pause, ScanEye, CalendarClock, Archive, X, Plus } from 'lucide-react';
+import { Calendar, CheckCircle, MessageCircle, RefreshCw, Send, Edit, Clock, Lock, Undo2, AlertTriangle, FileText, Image as ImageIcon, MoreHorizontal, CheckSquare, Square, AlertCircle, ChevronDown, LockKeyhole, History, Sparkles, Phone, Film, CircleDashed, Layers, Play, Video, ChevronLeft, ChevronRight, Pause, ScanEye, CalendarClock, Archive, X, Plus, PenTool } from 'lucide-react';
 import { Post, Restaurant } from '@restropulse/shared';
 import { postsAPI, restaurantAPI } from '../api';
-import AdhocPostModal from './AdhocPostModal';
+import { ActionNotice } from './ActionNotice';
 
 // Constants for Feedback configuration
 const FEEDBACK_CATEGORIES = [
@@ -19,19 +19,7 @@ const QUICK_OPTIONS: Record<string, string[]> = {
     Other: ["Check Pricing", "Wrong Location", "Tag Partner", "Link in Bio", "Regulatory Issue", "Competitor visible", "Music Choice", "Add Logo"]
 };
 
-// WhatsApp Icon Component
-const WhatsAppIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
-    <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        className={className}
-    >
-        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.008-.57-.008-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
-    </svg>
-);
+import { WhatsAppIcon } from './BrandIcons';
 
 // Helper to parse feedback string (JSON or Plain Text)
 interface FeedbackData {
@@ -131,9 +119,10 @@ interface PostCardProps {
     onApprove: (id: string) => void;
     onFeedback: (id: string, type: 'EDIT' | 'REVERT') => void;
     approving?: string | null;
+    instagramConnected?: boolean;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, approving }) => {
+const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, approving, instagramConnected = true }) => {
     // Local state for Carousel
     const [currentSlide, setCurrentSlide] = useState(0);
     const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -425,8 +414,9 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                                 <button
                                     type="button"
                                     onClick={() => onApprove(post.id)}
-                                    disabled={approving === post.id}
-                                    className={`text-[10px] font-bold uppercase tracking-wide transition-colors ${approving === post.id ? 'text-slate-300 cursor-wait' : 'text-slate-400 hover:text-green-600'}`}
+                                    disabled={approving === post.id || !instagramConnected}
+                                    className={`text-[10px] font-bold uppercase tracking-wide transition-colors ${!instagramConnected ? 'text-slate-300 cursor-not-allowed' : approving === post.id ? 'text-slate-300 cursor-wait' : 'text-slate-400 hover:text-green-600'}`}
+                                    title={!instagramConnected ? 'Connect Instagram first' : undefined}
                                 >
                                     {approving === post.id ? 'Approving...' : 'Approve'}
                                 </button>
@@ -444,8 +434,9 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                             <button
                                 type="button"
                                 onClick={() => onApprove(post.id)}
-                                disabled={approving === post.id}
-                                className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm transition-all ${approving === post.id ? 'bg-orange-400 text-white/80 cursor-wait' : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'}`}
+                                disabled={approving === post.id || !instagramConnected}
+                                className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm transition-all ${!instagramConnected ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : approving === post.id ? 'bg-orange-400 text-white/80 cursor-wait' : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'}`}
+                                title={!instagramConnected ? 'Connect Instagram first' : undefined}
                             >
                                 {approving === post.id ? (
                                     <><RefreshCw size={16} className="animate-spin" /> Approving...</>
@@ -512,15 +503,27 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
     );
 };
 
-const ContentStudio: React.FC = () => {
+interface ContentStudioProps {
+    onCreatePost?: () => void;
+    refreshKey?: number;
+    instagramConnected?: boolean;
+    onConnectInstagram?: () => void;
+}
+
+const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey, instagramConnected = false, onConnectInstagram }) => {
     type TabType = 'REVIEW' | 'SCHEDULED' | 'HISTORY';
     const [activeTab, setActiveTab] = useState<TabType>('REVIEW');
     const [posts, setPosts] = useState<Post[]>([]);
     const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
     const [loading, setLoading] = useState(true);
+    const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
 
-    // Adhoc Post Modal State
-    const [isAdhocModalOpen, setIsAdhocModalOpen] = useState(false);
+    // Auto-dismiss notice
+    useEffect(() => {
+        if (!notice) return;
+        const timer = setTimeout(() => setNotice(null), 4000);
+        return () => clearTimeout(timer);
+    }, [notice]);
 
     const loadPosts = async () => {
         try {
@@ -548,6 +551,14 @@ const ContentStudio: React.FC = () => {
         };
         loadData();
     }, []);
+
+    // Refresh posts when refreshKey changes (triggered by parent after adhoc post creation)
+    useEffect(() => {
+        if (refreshKey && refreshKey > 0) {
+            loadPosts();
+            setActiveTab('REVIEW');
+        }
+    }, [refreshKey]);
 
     // Feedback Modal State
     const [feedbackState, setFeedbackState] = useState<{
@@ -585,6 +596,14 @@ const ContentStudio: React.FC = () => {
 
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
+    }, [feedbackState.isOpen]);
+
+    // Escape key to dismiss feedback modal
+    useEffect(() => {
+        if (!feedbackState.isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') closeFeedbackModal(); };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
     }, [feedbackState.isOpen]);
 
     const closeFeedbackModal = () => {
@@ -800,7 +819,7 @@ const ContentStudio: React.FC = () => {
         } : p));
 
         if (feedbackState.type === 'REVERT') {
-            setTimeout(() => alert("Post reverted to Review tab."), 50);
+            setNotice({ message: 'Post moved back to Review.', type: 'success' });
         }
 
         // Hard Close: Immediately update state to closed, then sync history
@@ -834,31 +853,21 @@ const ContentStudio: React.FC = () => {
 
     const activeTabData = TABS.find(t => t.id === activeTab) || TABS[0];
 
-    const handleAdhocPostSuccess = () => {
-        // Refresh posts list and switch to Review tab to show the new draft
-        loadPosts();
-        setActiveTab('REVIEW');
-    };
+    if (loading) {
+        return (
+            <div className="p-4 space-y-4">
+                <div className="bg-slate-200/60 p-1 rounded-2xl h-12 animate-pulse" />
+                {[1, 2].map(i => <div key={i} className="bg-slate-100 rounded-3xl h-64 animate-pulse" />)}
+            </div>
+        );
+    }
 
     return (
         <div className="p-4 min-h-full relative">
 
-            {/* 1. Segmented Control Navigation with New Post Button */}
-            <div className="sticky top-0 z-30 pt-1 pb-4 bg-[#f8fafc]/95 backdrop-blur-sm">
-                {/* New Post Button */}
-                <div className="flex justify-end mb-3">
-                    <button
-                        type="button"
-                        onClick={() => setIsAdhocModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl font-semibold text-sm shadow-lg shadow-orange-500/25 transition-all active:scale-[0.97]"
-                        data-testid="new-post-button"
-                    >
-                        <Plus size={18} />
-                        <span>New Post</span>
-                    </button>
-                </div>
-
-                <div className="bg-slate-200/60 p-1 rounded-2xl flex relative">
+            {/* 1. Tab Navigation */}
+            <div className="sticky top-0 z-30 bg-[#f8fafc]/95 backdrop-blur-sm">
+                <div className="flex border-b border-slate-200">
                     {TABS.map((tab) => {
                         const isActive = activeTab === tab.id;
                         return (
@@ -866,28 +875,24 @@ const ContentStudio: React.FC = () => {
                                 type="button"
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${isActive ? 'text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-600'}`}
+                                className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-xs font-bold transition-all relative ${isActive ? 'text-slate-800' : 'text-slate-400 hover:text-slate-500'}`}
                             >
-                                {isActive && (
-                                    <div className="absolute inset-0 bg-white rounded-xl shadow-sm z-[-1] animate-in fade-in duration-200"></div>
-                                )}
-                                <tab.icon size={16} className={isActive ? tab.color : 'opacity-70'} />
+                                <tab.icon size={15} className={isActive ? tab.color : ''} />
                                 <span>{tab.label}</span>
                                 {tab.count > 0 && (
-                                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${isActive ? (tab.id === 'REVIEW' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700') : 'bg-slate-300 text-slate-600'}`}>
+                                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${isActive ? (tab.id === 'REVIEW' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700') : 'bg-slate-200 text-slate-500'}`}>
                                         {tab.count}
                                     </span>
+                                )}
+                                {isActive && (
+                                    <div className={`absolute bottom-0 left-3 right-3 h-0.5 rounded-full ${tab.id === 'REVIEW' ? 'bg-orange-500' : tab.id === 'SCHEDULED' ? 'bg-green-500' : 'bg-slate-500'}`}></div>
                                 )}
                             </button>
                         );
                     })}
                 </div>
 
-                <div className="flex items-center justify-center mt-3 gap-2 animate-in slide-in-from-top-1 fade-in duration-300">
-                    <span className={`text-[10px] font-bold uppercase tracking-widest ${activeTabData.id === 'REVIEW' ? 'text-orange-400' : activeTabData.id === 'SCHEDULED' ? 'text-green-500' : 'text-slate-400'}`}>
-                        {activeTabData.desc}
-                    </span>
-                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                <div className="flex items-center justify-center py-3 gap-2">
                     <span className="text-xs font-medium text-slate-500">
                         {activeTabData.id === 'REVIEW'
                             ? (reviewPosts.length > 0 ? `${reviewPosts.length} posts need your approval` : 'All caught up!')
@@ -898,6 +903,26 @@ const ContentStudio: React.FC = () => {
                     </span>
                 </div>
             </div>
+
+            {!instagramConnected && (
+                <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
+                    <p className="text-xs text-amber-800 font-medium">Connect Instagram to approve and publish posts.</p>
+                    {onConnectInstagram && (
+                        <button onClick={onConnectInstagram} className="shrink-0 px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition-colors">
+                            Connect
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {notice && (
+                <div className="mb-4">
+                    <ActionNotice
+                        message={notice.message}
+                        type={notice.type}
+                    />
+                </div>
+            )}
 
             {/* Content List */}
             <div className="space-y-4">
@@ -910,8 +935,25 @@ const ContentStudio: React.FC = () => {
                             onApprove={handleApprove}
                             onFeedback={openFeedbackModal}
                             approving={approving}
+                            instagramConnected={instagramConnected}
                         />
                     ))
+                ) : posts.length === 0 && onCreatePost ? (
+                    <div className="flex flex-col items-center justify-center py-20">
+                        <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mb-4 border border-orange-100">
+                            <PenTool size={32} className="text-orange-400" />
+                        </div>
+                        <p className="font-bold text-slate-700 text-lg">Create your first post</p>
+                        <p className="text-sm text-slate-500 mt-1 max-w-[260px] text-center">
+                            Describe your idea and our team will craft the perfect content.
+                        </p>
+                        <button
+                            onClick={onCreatePost}
+                            className="mt-6 px-6 py-3 bg-orange-600 text-white rounded-xl font-semibold text-sm hover:bg-orange-700 transition-colors active:scale-[0.97]"
+                        >
+                            Create Post
+                        </button>
+                    </div>
                 ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-400">
                         <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4 border border-slate-100">
@@ -1185,13 +1227,6 @@ const ContentStudio: React.FC = () => {
                     </div>
                 </div>
             )}
-
-            {/* Adhoc Post Modal */}
-            <AdhocPostModal
-                isOpen={isAdhocModalOpen}
-                onClose={() => setIsAdhocModalOpen(false)}
-                onSuccess={handleAdhocPostSuccess}
-            />
 
             <div className="h-12"></div>
         </div>

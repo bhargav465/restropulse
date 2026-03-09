@@ -1,47 +1,48 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Users, ArrowRight, Bell, Calendar, Eye, Tag, UtensilsCrossed, Lock, Activity, Sparkles, RefreshCw } from 'lucide-react';
+import { TrendingUp, ArrowRight, Calendar, Tag, UtensilsCrossed, BarChart3, RefreshCw, Image as ImageIcon, Film, Layers, Video } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { ViewState, Restaurant, User, Post } from '@restropulse/shared';
-import { authAPI, postsAPI, restaurantAPI } from '../api';
+import { ViewState, Restaurant, Post } from '@restropulse/shared';
+import { postsAPI, restaurantAPI } from '../api';
 
 interface DashboardProps {
     setView?: (view: ViewState) => void;
     restaurantData: Restaurant;
+    userName?: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
-    const [user, setUser] = useState<User | null>(null);
+const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData, userName }) => {
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [analyticsData, setAnalyticsData] = useState<{ name: string; posts: number }[]>([]);
+    const [contentMix, setContentMix] = useState<{ type: string; count: number }[]>([]);
+    const [totalPublished, setTotalPublished] = useState(0);
+
+    const loadData = async () => {
+        try {
+            const postsData = await postsAPI.getAll();
+            setPosts(postsData);
+
+            if (restaurantData.id) {
+                try {
+                    const analytics = await restaurantAPI.getAnalytics(restaurantData.id);
+                    const chartData = [...analytics.postsPerWeek]
+                        .reverse()
+                        .map(w => ({ name: `Week ${w.week}`, posts: w.posts }));
+                    setAnalyticsData(chartData);
+                    setContentMix(analytics.contentMix || []);
+                    setTotalPublished(analytics.contentMix?.reduce((sum, item) => sum + item.count, 0) || 0);
+                } catch {
+                    // Analytics may be empty for new restaurants
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load dashboard data:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const loadData = async () => {
-            try {
-                const [userData, postsData] = await Promise.all([
-                    authAPI.checkSession(),
-                    postsAPI.getAll()
-                ]);
-                setUser(userData.user ?? null);
-                setPosts(postsData);
-
-                if (restaurantData.id) {
-                    try {
-                        const analytics = await restaurantAPI.getAnalytics(restaurantData.id);
-                        const chartData = [...analytics.postsPerWeek]
-                            .reverse()
-                            .map(w => ({ name: `Week ${w.week}`, posts: w.posts }));
-                        setAnalyticsData(chartData);
-                    } catch {
-                        // Analytics may be empty for new restaurants
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to load dashboard data:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
         loadData();
     }, [restaurantData.id]);
 
@@ -71,10 +72,10 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
         const handleTouchEnd = () => {
             if (pullDistance > 60) {
                 setIsRefreshing(true);
-                setTimeout(() => {
+                loadData().finally(() => {
                     setIsRefreshing(false);
                     setPullDistance(0);
-                }, 1500);
+                });
             } else {
                 setPullDistance(0);
             }
@@ -118,15 +119,9 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
             )}
 
             {/* Welcome Header */}
-            <div className="flex justify-between items-end mb-2">
-                <div>
-                    <p className="text-slate-500 text-sm font-medium">Welcome back,</p>
-                    <h1 className="text-2xl font-bold text-slate-800">{user?.name.split(' ')[0] || 'User'} 👋</h1>
-                </div>
-                <div className="bg-white p-2 rounded-full border border-slate-100 shadow-sm relative">
-                    <Bell size={20} className="text-slate-600" />
-                    {pendingCount > 0 && <span className="absolute top-1 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
-                </div>
+            <div className="mb-2">
+                <p className="text-slate-500 text-sm font-medium">Welcome</p>
+                <h1 className="text-2xl font-bold text-slate-800">{userName?.split(' ')[0] || 'there'}</h1>
             </div>
 
             {/* Action Required Banner */}
@@ -182,39 +177,41 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
                         </div>
                     </div>
                 ) : (
-                    <div className="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-200 text-center">
-                        <p className="text-slate-400 text-sm">No upcoming posts scheduled.</p>
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-center">
+                        <Calendar size={28} className="text-slate-300 mx-auto mb-2" />
+                        <p className="text-slate-500 text-sm font-medium">No upcoming posts scheduled</p>
+                        <p className="text-slate-400 text-xs mt-1">Approved posts will appear here</p>
                     </div>
                 )}
             </div>
 
             {/* Live Context Snapshot */}
             {((activeOffers && activeOffers.length > 0) || (chefSpecials && chefSpecials.length > 0)) && (
-                <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 text-white shadow-md">
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-[10px] uppercase tracking-wider text-slate-400">Live on Profile</h3>
-                        <button onClick={() => setView && setView('INPUTS')} className="text-xs font-bold text-orange-400 hover:text-orange-300">Edit</button>
+                        <h3 className="font-bold text-[10px] uppercase tracking-wider text-slate-500">Live on Profile</h3>
+                        <button onClick={() => setView && setView('INPUTS')} className="text-xs font-bold text-orange-600 hover:text-orange-500">Edit</button>
                     </div>
                     <div className="space-y-4">
                         {activeOffers.slice(0, 1).map((offer, i) => (
                             <div key={`offer-${i}`} className="flex items-start gap-3">
-                                <div className="p-2 bg-white/10 rounded-lg shrink-0 mt-0.5">
-                                    <Tag size={16} className="text-purple-400" />
+                                <div className="p-2 bg-slate-100 rounded-lg shrink-0 mt-0.5">
+                                    <Tag size={16} className="text-purple-500" />
                                 </div>
                                 <div className="flex-1">
-                                    <p className="text-xs text-slate-400 font-bold mb-1">Active Offer</p>
-                                    <p className="font-medium text-sm leading-snug">{offer}</p>
+                                    <p className="text-xs text-slate-500 font-bold mb-1">Active Offer</p>
+                                    <p className="font-medium text-sm leading-snug text-slate-800">{offer}</p>
                                 </div>
                             </div>
                         ))}
                         {chefSpecials.slice(0, 1).map((special, i) => (
                             <div key={`special-${i}`} className="flex items-start gap-3">
-                                <div className="p-2 bg-white/10 rounded-lg shrink-0 mt-0.5">
-                                    <UtensilsCrossed size={16} className="text-orange-400" />
+                                <div className="p-2 bg-slate-100 rounded-lg shrink-0 mt-0.5">
+                                    <UtensilsCrossed size={16} className="text-orange-500" />
                                 </div>
                                 <div className="flex-1">
-                                    <p className="text-xs text-slate-400 font-bold mb-1">Chef's Special</p>
-                                    <p className="font-medium text-sm leading-snug">{special}</p>
+                                    <p className="text-xs text-slate-500 font-bold mb-1">Chef's Special</p>
+                                    <p className="font-medium text-sm leading-snug text-slate-800">{special}</p>
                                 </div>
                             </div>
                         ))}
@@ -222,104 +219,87 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData }) => {
                 </div>
             )}
 
-            {/* Engagement Pulse (Area Chart) */}
+            {/* Content Overview */}
             <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-5">
                     <div>
                         <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                            <Activity size={18} className="text-orange-500" />
-                            Engagement Pulse
+                            <BarChart3 size={18} className="text-orange-500" />
+                            Content Overview
                         </h3>
-                        <p className="text-xs text-slate-400">Interactions over last 4 weeks</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Publishing activity</p>
                     </div>
-                    <div className="bg-green-50 text-green-700 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1">
-                        <TrendingUp size={12} /> +12%
-                    </div>
+                    {totalPublished > 0 && (
+                        <div className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-bold">
+                            {totalPublished} total
+                        </div>
+                    )}
                 </div>
 
-                <div className="h-40 w-full" style={{ minHeight: '160px' }}>
-                    <ResponsiveContainer width="100%" height={160}>
-                        <AreaChart data={analyticsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="colorEngagement" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
-                                    <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <Tooltip
-                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.1)', fontSize: '12px', color: '#334155' }}
-                                itemStyle={{ color: '#ea580c', fontWeight: 'bold' }}
-                            />
-                            <XAxis dataKey="name" hide />
-                            <YAxis hide />
-                            <Area
-                                type="monotone"
-                                dataKey="posts"
-                                stroke="#f97316"
-                                strokeWidth={3}
-                                fillOpacity={1}
-                                fill="url(#colorEngagement)"
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                </div>
-            </div>
+                {/* Content type breakdown */}
+                {contentMix.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2 mb-5">
+                        {(() => {
+                            const typeConfig: Record<string, { icon: React.ElementType; label: string; color: string; bg: string }> = {
+                                IMAGE: { icon: ImageIcon, label: 'Posts', color: 'text-blue-600', bg: 'bg-blue-50' },
+                                REEL: { icon: Film, label: 'Reels', color: 'text-purple-600', bg: 'bg-purple-50' },
+                                CAROUSEL: { icon: Layers, label: 'Carousels', color: 'text-orange-600', bg: 'bg-orange-50' },
+                                VIDEO: { icon: Video, label: 'Videos', color: 'text-green-600', bg: 'bg-green-50' },
+                                STORY: { icon: Film, label: 'Stories', color: 'text-pink-600', bg: 'bg-pink-50' },
+                            };
+                            return contentMix.map(item => {
+                                const config = typeConfig[item.type] || { icon: ImageIcon, label: item.type, color: 'text-slate-600', bg: 'bg-slate-50' };
+                                const Icon = config.icon;
+                                return (
+                                    <div key={item.type} className={`${config.bg} rounded-xl p-3 flex items-center gap-3`}>
+                                        <Icon size={16} className={config.color} />
+                                        <div>
+                                            <p className="text-lg font-bold text-slate-800">{item.count}</p>
+                                            <p className="text-[10px] text-slate-500 font-medium">{config.label}</p>
+                                        </div>
+                                    </div>
+                                );
+                            });
+                        })()}
+                    </div>
+                ) : (
+                    <div className="text-center py-4 mb-5">
+                        <p className="text-sm text-slate-400">No content published yet</p>
+                    </div>
+                )}
 
-            {/* Advanced Insights (Locked) */}
-            <div className="space-y-4">
-                <h3 className="font-bold text-slate-400 text-sm uppercase tracking-wider flex items-center gap-2 px-1">
-                    <Sparkles size={16} /> Advanced Insights
-                </h3>
-
-                <div className="grid grid-cols-2 gap-4">
-                    {/* Reach Card */}
-                    <div className="relative overflow-hidden rounded-3xl p-5 border border-slate-100 bg-white shadow-sm">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="p-2 bg-blue-50 text-blue-500 rounded-xl">
-                                <Users size={18} />
-                            </div>
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Reach</span>
-                        </div>
-                        <div className="text-2xl font-black text-slate-800 mb-1 blur-[6px] select-none opacity-50">
-                            24.5k
-                        </div>
-                        <div className="text-xs text-green-500 font-bold flex items-center gap-1 blur-[4px] select-none opacity-50">
-                            <TrendingUp size={12} /> +15% vs last mo.
-                        </div>
-
-                        {/* Lock Overlay */}
-                        <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] flex flex-col items-center justify-center z-10">
-                            <div className="bg-slate-900 text-white p-2.5 rounded-full mb-2 shadow-lg scale-90">
-                                <Lock size={16} />
-                            </div>
-                            <span className="text-[10px] font-extrabold text-slate-800 uppercase tracking-wider bg-white border border-slate-100 px-2 py-1 rounded-lg shadow-sm">Coming Soon</span>
+                {/* Weekly trend (mini chart) */}
+                {analyticsData.length > 0 && (
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Weekly Trend</p>
+                        <div className="h-24 w-full">
+                            <ResponsiveContainer width="100%" height={96}>
+                                <AreaChart data={analyticsData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorOverview" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.1)', fontSize: '12px', color: '#334155' }}
+                                        itemStyle={{ color: '#ea580c', fontWeight: 'bold' }}
+                                    />
+                                    <XAxis dataKey="name" hide />
+                                    <YAxis hide />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="posts"
+                                        stroke="#f97316"
+                                        strokeWidth={2}
+                                        fillOpacity={1}
+                                        fill="url(#colorOverview)"
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
-
-                    {/* Engagement Card */}
-                    <div className="relative overflow-hidden rounded-3xl p-5 border border-slate-100 bg-white shadow-sm">
-                        <div className="flex items-center gap-2 mb-4">
-                            <div className="p-2 bg-purple-50 text-purple-500 rounded-xl">
-                                <Eye size={18} />
-                            </div>
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Engage</span>
-                        </div>
-                        <div className="text-2xl font-black text-slate-800 mb-1 blur-[6px] select-none opacity-50">
-                            4.2k
-                        </div>
-                        <div className="text-xs text-green-500 font-bold flex items-center gap-1 blur-[4px] select-none opacity-50">
-                            <TrendingUp size={12} /> +8% vs last mo.
-                        </div>
-
-                        {/* Lock Overlay */}
-                        <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] flex flex-col items-center justify-center z-10">
-                            <div className="bg-slate-900 text-white p-2.5 rounded-full mb-2 shadow-lg scale-90">
-                                <Lock size={16} />
-                            </div>
-                            <span className="text-[10px] font-extrabold text-slate-800 uppercase tracking-wider bg-white border border-slate-100 px-2 py-1 rounded-lg shadow-sm">Coming Soon</span>
-                        </div>
-                    </div>
-                </div>
+                )}
             </div>
 
             <div className="h-12"></div>

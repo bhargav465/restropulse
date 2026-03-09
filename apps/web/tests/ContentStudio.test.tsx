@@ -102,7 +102,7 @@ describe('ContentStudio Component', () => {
 
     describe('Initial Load', () => {
         it('should load and display posts', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Delicious pasta')).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe('ContentStudio Component', () => {
         });
 
         it('should load restaurant data', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(restaurantAPI.get).toHaveBeenCalledWith('r1');
@@ -118,7 +118,7 @@ describe('ContentStudio Component', () => {
         });
 
         it('should call postsAPI.getAll on mount', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(postsAPI.getAll).toHaveBeenCalled();
@@ -128,7 +128,7 @@ describe('ContentStudio Component', () => {
 
     describe('Tab Navigation', () => {
         it('should display Review tab by default', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Delicious pasta')).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('ContentStudio Component', () => {
         });
 
         it('should switch to Scheduled tab', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const scheduledTab = screen.getByText('Scheduled');
@@ -147,7 +147,7 @@ describe('ContentStudio Component', () => {
         });
 
         it('should switch to History tab', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const historyTab = screen.getByText('History');
@@ -158,7 +158,7 @@ describe('ContentStudio Component', () => {
         });
 
         it('should filter posts correctly by tab', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 // Review tab shows PENDING_APPROVAL and CHANGES_REQUESTED
@@ -179,7 +179,7 @@ describe('ContentStudio Component', () => {
 
     describe('Post Actions', () => {
         it('should render approve button for pending posts', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 // Verify approve button is rendered
@@ -204,7 +204,7 @@ describe('ContentStudio Component', () => {
                 },
             ]);
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 // Component renders even with empty review tab
@@ -224,7 +224,7 @@ describe('ContentStudio Component', () => {
                 },
             ]);
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const scheduledTab = screen.getByText('Scheduled');
@@ -239,7 +239,7 @@ describe('ContentStudio Component', () => {
             vi.mocked(postsAPI.getAll).mockRejectedValue(new Error('Loading failed'));
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(consoleSpy).toHaveBeenCalledWith('Failed to load content studio data:', expect.any(Error));
@@ -252,7 +252,7 @@ describe('ContentStudio Component', () => {
             vi.mocked(restaurantAPI.get).mockRejectedValue(new Error('Restaurant load failed'));
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(consoleSpy).toHaveBeenCalledWith('Failed to load content studio data:', expect.any(Error));
@@ -264,7 +264,7 @@ describe('ContentStudio Component', () => {
 
     describe('Post Display', () => {
         it('should display post captions', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Delicious pasta')).toBeInTheDocument();
@@ -273,7 +273,7 @@ describe('ContentStudio Component', () => {
         });
 
         it('should display post thumbnails', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const images = screen.getAllByRole('img');
@@ -284,7 +284,7 @@ describe('ContentStudio Component', () => {
 
     describe('Request Changes Button', () => {
         it('should render request edit button for pending posts', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
@@ -294,7 +294,7 @@ describe('ContentStudio Component', () => {
         });
 
         it('should find post to edit when clicking request edit', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
@@ -310,7 +310,7 @@ describe('ContentStudio Component', () => {
 
     describe('Post Count Display', () => {
         it('should show correct count for pending posts', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 // Check that post count is displayed
@@ -320,10 +320,13 @@ describe('ContentStudio Component', () => {
         });
 
         it('should show scheduled post count', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
-            const scheduledTab = screen.getByText('Scheduled');
-            fireEvent.click(scheduledTab);
+            await waitFor(() => {
+                expect(screen.getByText('Scheduled')).toBeInTheDocument();
+            });
+
+            fireEvent.click(screen.getByText('Scheduled'));
 
             await waitFor(() => {
                 // Verify scheduled posts are displayed
@@ -346,7 +349,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([carouselPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Carousel post')).toBeInTheDocument();
@@ -366,7 +369,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([carouselPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const images = screen.getAllByRole('img');
@@ -390,7 +393,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Video content')).toBeInTheDocument();
@@ -410,7 +413,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([storyPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Story post')).toBeInTheDocument();
@@ -420,10 +423,10 @@ describe('ContentStudio Component', () => {
 
     describe('Post Status Badges', () => {
         it('should display scheduled date for scheduled posts', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
-            const scheduledTab = screen.getByText('Scheduled');
-            fireEvent.click(scheduledTab);
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('Scheduled'));
 
             await waitFor(() => {
                 expect(screen.getByText('Weekend special')).toBeInTheDocument();
@@ -431,10 +434,10 @@ describe('ContentStudio Component', () => {
         });
 
         it('should display posted date for posted content', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
-            const historyTab = screen.getByText('History');
-            fireEvent.click(historyTab);
+            await waitFor(() => expect(screen.getByText('History')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('History'));
 
             await waitFor(() => {
                 expect(screen.getByText('Posted last week')).toBeInTheDocument();
@@ -458,7 +461,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([postWithFeedback]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Needs changes')).toBeInTheDocument();
@@ -479,7 +482,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([multiPlatformPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Multi-platform post')).toBeInTheDocument();
@@ -489,7 +492,7 @@ describe('ContentStudio Component', () => {
 
     describe('Approve Action', () => {
         it('should render approve button and handle click', async () => {
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
@@ -506,7 +509,7 @@ describe('ContentStudio Component', () => {
             };
             vi.mocked(postsAPI.update).mockResolvedValue(updatedPost);
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
@@ -528,7 +531,7 @@ describe('ContentStudio Component', () => {
             const updatePromise = new Promise(resolve => { resolveUpdate = resolve; });
             vi.mocked(postsAPI.update).mockReturnValue(updatePromise as any);
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
@@ -548,7 +551,7 @@ describe('ContentStudio Component', () => {
         it('should not update UI when API call fails', async () => {
             vi.mocked(postsAPI.update).mockRejectedValue(new Error('Network error'));
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
@@ -577,7 +580,7 @@ describe('ContentStudio Component', () => {
             vi.mocked(postsAPI.getAll).mockResolvedValue([adhocPost]);
             vi.mocked(postsAPI.update).mockResolvedValue({ ...adhocPost, status: 'SCHEDULED' as const, scheduledFor: new Date().toISOString() });
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
@@ -602,7 +605,7 @@ describe('ContentStudio Component', () => {
             };
             vi.mocked(postsAPI.update).mockResolvedValue(updatedPost);
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             // Wait for initial render, then click approve
             await waitFor(() => {
@@ -640,7 +643,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([missedPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Missed deadline')).toBeInTheDocument();
@@ -663,7 +666,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const images = screen.getAllByRole('img');
@@ -687,7 +690,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Video with duration')).toBeInTheDocument();
@@ -709,7 +712,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([carouselPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Carousel navigation')).toBeInTheDocument();
@@ -729,7 +732,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([carouselPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const container = document.querySelector('.touch-pan-y');
@@ -755,10 +758,10 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([futurePost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
-            const scheduledTab = screen.getByText('Scheduled');
-            fireEvent.click(scheduledTab);
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('Scheduled'));
 
             await waitFor(() => {
                 expect(screen.getByText('Future post')).toBeInTheDocument();
@@ -777,10 +780,10 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([pastPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
-            const historyTab = screen.getByText('History');
-            fireEvent.click(historyTab);
+            await waitFor(() => expect(screen.getByText('History')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('History'));
 
             await waitFor(() => {
                 expect(screen.getByText('Past post')).toBeInTheDocument();
@@ -806,7 +809,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([feedbackPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Post with structured feedback')).toBeInTheDocument();
@@ -826,7 +829,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([legacyFeedbackPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Post with legacy feedback')).toBeInTheDocument();
@@ -858,7 +861,7 @@ describe('ContentStudio Component', () => {
             ];
 
             vi.mocked(postsAPI.getAll).mockResolvedValue(pendingPosts);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('2')).toBeInTheDocument();
@@ -888,7 +891,7 @@ describe('ContentStudio Component', () => {
             ];
 
             vi.mocked(postsAPI.getAll).mockResolvedValue(mixedPosts);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const badges = screen.getAllByText('1');
@@ -921,7 +924,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([facebookPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Facebook exclusive')).toBeInTheDocument();
@@ -940,7 +943,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([bothPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Both platforms')).toBeInTheDocument();
@@ -952,7 +955,7 @@ describe('ContentStudio Component', () => {
         it('should show empty state for review tab', async () => {
             vi.mocked(postsAPI.getAll).mockResolvedValue([]);
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('All caught up!')).toBeInTheDocument();
@@ -972,10 +975,10 @@ describe('ContentStudio Component', () => {
                 },
             ]);
 
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
-            const scheduledTab = screen.getByText('Scheduled');
-            fireEvent.click(scheduledTab);
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('Scheduled'));
 
             await waitFor(() => {
                 expect(screen.getByText('Queue is empty')).toBeInTheDocument();
@@ -1009,7 +1012,7 @@ describe('ContentStudio Component', () => {
                 }
             ];
             vi.mocked(postsAPI.getAll).mockResolvedValue(problematicPosts);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 // Should fall back to valid text display logic
@@ -1036,7 +1039,7 @@ describe('ContentStudio Component', () => {
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Playable Video')).toBeInTheDocument());
 
@@ -1065,8 +1068,9 @@ describe('ContentStudio Component', () => {
                 scheduledFor: new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([lockedPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
 
             await waitFor(() => {
@@ -1089,8 +1093,9 @@ describe('ContentStudio Component', () => {
                 scheduledFor: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([readyPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
 
             await waitFor(() => {
@@ -1120,7 +1125,7 @@ describe('ContentStudio Component', () => {
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             // 1. Open Modal
             await waitFor(() => expect(screen.getByText('Pending Post')).toBeInTheDocument());
@@ -1169,7 +1174,7 @@ describe('ContentStudio Component', () => {
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Pending Post')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Request Edit'));
@@ -1201,8 +1206,9 @@ describe('ContentStudio Component', () => {
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([scheduledPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
             await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
 
@@ -1252,7 +1258,7 @@ describe('ContentStudio Component', () => {
                 }),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([updatePost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Original Note')).toBeInTheDocument();
@@ -1276,7 +1282,7 @@ describe('ContentStudio Component', () => {
                 platform: 'INSTAGRAM' as const,
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Pending Post')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Request Edit'));
@@ -1309,7 +1315,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([missingVideoPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Reel without video')).toBeInTheDocument();
@@ -1331,8 +1337,9 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([failedPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
+            await waitFor(() => expect(screen.getByText('History')).toBeInTheDocument());
             fireEvent.click(screen.getByText('History'));
 
             await waitFor(() => {
@@ -1360,8 +1367,9 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([limitedPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
             await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
 
@@ -1394,7 +1402,7 @@ describe('ContentStudio Component', () => {
             };
 
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
-            render(<ContentStudio />);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Video play error')).toBeInTheDocument());
 
@@ -1410,89 +1418,522 @@ describe('ContentStudio Component', () => {
         });
     });
 
-    describe('Adhoc Post Integration', () => {
-        it('should display New Post button', async () => {
-            render(<ContentStudio />);
+    describe('Carousel Arrow Navigation', () => {
+        it('should navigate forward and backward using arrow buttons', async () => {
+            const carouselPost = {
+                id: 'car-nav',
+                caption: 'Arrow carousel',
+                type: 'CAROUSEL' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/car1.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+                mediaUrls: ['/car1.jpg', '/car2.jpg', '/car3.jpg'],
+            };
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue([carouselPost]);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
-                expect(screen.getByTestId('new-post-button')).toBeInTheDocument();
-                expect(screen.getByText('New Post')).toBeInTheDocument();
+                expect(screen.getByText('Arrow carousel')).toBeInTheDocument();
+            });
+
+            // Click next slide button
+            const nextBtn = screen.getByRole('button', { name: /next slide/i });
+            fireEvent.click(nextBtn);
+
+            await waitFor(() => {
+                expect(screen.getByText('2/3')).toBeInTheDocument();
+            });
+
+            // Click prev slide button
+            const prevBtn = screen.getByRole('button', { name: /previous slide/i });
+            fireEvent.click(prevBtn);
+
+            await waitFor(() => {
+                expect(screen.getByText('1/3')).toBeInTheDocument();
             });
         });
 
-        it('should open AdhocPostModal when New Post button is clicked', async () => {
-            render(<ContentStudio />);
+        it('should handle touch swipe on carousel to advance slides', async () => {
+            const carouselPost = {
+                id: 'car-swipe',
+                caption: 'Swipe test carousel',
+                type: 'CAROUSEL' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/car1.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+                mediaUrls: ['/car1.jpg', '/car2.jpg'],
+            };
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue([carouselPost]);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
-                expect(screen.getByTestId('new-post-button')).toBeInTheDocument();
+                expect(screen.getByText('Swipe test carousel')).toBeInTheDocument();
             });
 
-            fireEvent.click(screen.getByTestId('new-post-button'));
+            const container = document.querySelector('.touch-pan-y');
+            expect(container).toBeTruthy();
+
+            // Left swipe (should go to next slide)
+            fireEvent.touchStart(container!, { targetTouches: [{ clientX: 200 }] });
+            fireEvent.touchMove(container!, { targetTouches: [{ clientX: 100 }] });
+            fireEvent.touchEnd(container!);
 
             await waitFor(() => {
-                expect(screen.getByTestId('adhoc-post-modal')).toBeInTheDocument();
-                expect(screen.getByText('Quick Post')).toBeInTheDocument();
+                expect(screen.getByText('2/2')).toBeInTheDocument();
+            });
+
+            // Right swipe (should go to prev slide)
+            fireEvent.touchStart(container!, { targetTouches: [{ clientX: 100 }] });
+            fireEvent.touchMove(container!, { targetTouches: [{ clientX: 250 }] });
+            fireEvent.touchEnd(container!);
+
+            await waitFor(() => {
+                expect(screen.getByText('1/2')).toBeInTheDocument();
             });
         });
 
-        it('should close AdhocPostModal when close button is clicked', async () => {
-            render(<ContentStudio />);
+        it('should not move when swipe is too short', async () => {
+            const carouselPost = {
+                id: 'car-short-swipe',
+                caption: 'Short swipe carousel',
+                type: 'CAROUSEL' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/car1.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+                mediaUrls: ['/car1.jpg', '/car2.jpg'],
+            };
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue([carouselPost]);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
-                expect(screen.getByTestId('new-post-button')).toBeInTheDocument();
+                expect(screen.getByText('Short swipe carousel')).toBeInTheDocument();
             });
 
-            fireEvent.click(screen.getByTestId('new-post-button'));
+            const container = document.querySelector('.touch-pan-y');
+            expect(container).toBeTruthy();
 
+            // Short swipe (less than 50px threshold)
+            fireEvent.touchStart(container!, { targetTouches: [{ clientX: 200 }] });
+            fireEvent.touchMove(container!, { targetTouches: [{ clientX: 180 }] });
+            fireEvent.touchEnd(container!);
+
+            // Should still be on slide 1
+            expect(screen.getByText('1/2')).toBeInTheDocument();
+        });
+    });
+
+    describe('Video Pause', () => {
+        it('should pause a playing video when clicked again', async () => {
+            const playSpy = vi.spyOn(window.HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+            const pauseSpy = vi.spyOn(window.HTMLMediaElement.prototype, 'pause').mockImplementation(() => { });
+
+            const videoPost = {
+                id: 'v-pause',
+                caption: 'Pausable Video',
+                type: 'VIDEO' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/thumb.jpg',
+                videoUrl: '/vid.mp4',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+            };
+            vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => expect(screen.getByText('Pausable Video')).toBeInTheDocument());
+
+            const overlay = document.querySelector('.cursor-pointer.z-10');
+            expect(overlay).toBeTruthy();
+
+            // First click: play
+            fireEvent.click(overlay!);
             await waitFor(() => {
-                expect(screen.getByTestId('adhoc-post-modal')).toBeInTheDocument();
+                expect(playSpy).toHaveBeenCalled();
             });
 
-            fireEvent.click(screen.getByTestId('close-button'));
+            // Second click: pause
+            fireEvent.click(overlay!);
+            await waitFor(() => {
+                expect(pauseSpy).toHaveBeenCalled();
+            });
+
+            playSpy.mockRestore();
+            pauseSpy.mockRestore();
+        });
+    });
+
+    describe('Changes Requested Actions', () => {
+        it('should show Add Note and Approve buttons for CHANGES_REQUESTED posts', async () => {
+            const changesPost = {
+                id: 'cr-1',
+                caption: 'Changes requested post',
+                type: 'IMAGE' as const,
+                status: 'CHANGES_REQUESTED' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+                feedback: JSON.stringify({
+                    tags: ['Caption'],
+                    details: { Caption: 'Too long' },
+                    note: 'Make it shorter',
+                }),
+            };
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue([changesPost]);
+            vi.mocked(postsAPI.update).mockResolvedValue({ ...changesPost, status: 'SCHEDULED' as const } as any);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
-                expect(screen.queryByTestId('adhoc-post-modal')).not.toBeInTheDocument();
+                expect(screen.getByText('Changes requested post')).toBeInTheDocument();
+                expect(screen.getByText('Add Note')).toBeInTheDocument();
+            });
+
+            // Click Add Note to open feedback modal in EDIT mode (read-only since has history)
+            fireEvent.click(screen.getByText('Add Note'));
+
+            await waitFor(() => {
+                // isReadOnly is true (has feedback), but not limit-reached, so shows "Review Notes"
+                expect(screen.getByText('Review Notes')).toBeInTheDocument();
             });
         });
 
-        it('should refresh posts and switch to Review tab after successful adhoc post creation', async () => {
-            vi.mocked(postsAPI.generate).mockResolvedValue({
-                id: 'adhoc-1',
-                type: 'IMAGE',
-                status: 'PENDING_APPROVAL',
-                thumbnail: '/api/placeholder/400/400',
-                caption: 'New adhoc post',
-                platform: 'INSTAGRAM',
-                isAdhoc: true,
-            });
+        it('should approve a CHANGES_REQUESTED post', async () => {
+            const changesPost = {
+                id: 'cr-approve',
+                caption: 'Approve after changes',
+                type: 'IMAGE' as const,
+                status: 'CHANGES_REQUESTED' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+                feedback: JSON.stringify({
+                    tags: ['Caption'],
+                    details: { Caption: 'Too long' },
+                    note: 'Fix it',
+                }),
+            };
 
-            render(<ContentStudio />);
-
-            // Click Scheduled tab first
-            await waitFor(() => {
-                fireEvent.click(screen.getByText('Scheduled'));
-            });
-
-            // Open modal
-            fireEvent.click(screen.getByTestId('new-post-button'));
-
-            await waitFor(() => {
-                expect(screen.getByTestId('adhoc-post-modal')).toBeInTheDocument();
-            });
-
-            // Fill in concept
-            fireEvent.change(screen.getByTestId('concept-input'), {
-                target: { value: 'New adhoc post' }
-            });
-
-            // Submit
-            fireEvent.click(screen.getByTestId('submit-button'));
+            vi.mocked(postsAPI.getAll).mockResolvedValue([changesPost]);
+            vi.mocked(postsAPI.update).mockResolvedValue({ ...changesPost, status: 'SCHEDULED' as const, scheduledFor: new Date().toISOString() } as any);
+            render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
-                // Modal should close
-                expect(screen.queryByTestId('adhoc-post-modal')).not.toBeInTheDocument();
-                // Posts should be refreshed (getAll called again)
-                expect(postsAPI.getAll).toHaveBeenCalledTimes(2); // Initial + refresh
+                expect(screen.getByText('Approve after changes')).toBeInTheDocument();
+            });
+
+            // The Approve button appears in CHANGES_REQUESTED row
+            const approveBtn = screen.getAllByRole('button').find(btn => btn.textContent?.trim() === 'Approve');
+            expect(approveBtn).toBeDefined();
+            fireEvent.click(approveBtn!);
+
+            await waitFor(() => {
+                expect(postsAPI.update).toHaveBeenCalledWith('cr-approve', expect.objectContaining({
+                    status: 'SCHEDULED',
+                }));
+            });
+        });
+    });
+
+    describe('RefreshKey', () => {
+        it('should reload posts and switch to REVIEW tab when refreshKey changes', async () => {
+            const initialPosts = [
+                {
+                    id: 'init-1',
+                    caption: 'Initial post',
+                    type: 'IMAGE' as const,
+                    status: 'PENDING_APPROVAL' as const,
+                    thumbnail: '/img.jpg',
+                    platform: 'INSTAGRAM' as const,
+                    createdAt: new Date().toISOString(),
+                },
+            ];
+            const refreshedPosts = [
+                ...initialPosts,
+                {
+                    id: 'new-1',
+                    caption: 'Newly created post',
+                    type: 'IMAGE' as const,
+                    status: 'PENDING_APPROVAL' as const,
+                    thumbnail: '/img2.jpg',
+                    platform: 'INSTAGRAM' as const,
+                    createdAt: new Date().toISOString(),
+                },
+            ];
+
+            vi.mocked(postsAPI.getAll).mockResolvedValue(initialPosts);
+            const { rerender } = render(<ContentStudio refreshKey={0} instagramConnected={true} />);
+
+            await waitFor(() => {
+                expect(screen.getByText('Initial post')).toBeInTheDocument();
+            });
+
+            // Now simulate refreshKey change
+            vi.mocked(postsAPI.getAll).mockResolvedValue(refreshedPosts);
+            rerender(<ContentStudio refreshKey={1} instagramConnected={true} />);
+
+            await waitFor(() => {
+                expect(postsAPI.getAll).toHaveBeenCalledTimes(2); // initial useEffect + refreshKey loadPosts
+            });
+        });
+    });
+
+    describe('Feedback Chip Toggle and Deselect', () => {
+        it('should deselect a chip and remove category when all chips cleared', async () => {
+            vi.mocked(postsAPI.update).mockResolvedValue({} as any);
+            const pendingPost = {
+                id: 'chip-toggle',
+                caption: 'Chip toggle test',
+                type: 'IMAGE' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+            };
+            vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => expect(screen.getByText('Chip toggle test')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('Request Edit'));
+
+            await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
+
+            // Click Caption tab
+            fireEvent.click(screen.getByText('Caption'));
+
+            // Select a chip
+            fireEvent.click(screen.getByText('Too long'));
+
+            // Deselect the same chip (covers line 710 and 723-726)
+            fireEvent.click(screen.getByText('Too long'));
+
+            // Now try to submit with no tags -- should show validation warning (covers 737-738)
+            fireEvent.click(screen.getByText('Submit Revision'));
+
+            await waitFor(() => {
+                expect(screen.getByText(/Please select at least one issue/)).toBeInTheDocument();
+            });
+        });
+    });
+
+    describe('Feedback Validation Warnings', () => {
+        it('should warn when reverting without a note on read-only modal', async () => {
+            vi.mocked(postsAPI.update).mockResolvedValue({} as any);
+            const scheduledPost = {
+                id: 'revert-no-note',
+                caption: 'Revert without note',
+                type: 'IMAGE' as const,
+                status: 'SCHEDULED' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
+                feedback: JSON.stringify({
+                    tags: ['Caption'],
+                    details: { Caption: 'Too long' },
+                    note: 'Fix caption',
+                }),
+            };
+            vi.mocked(postsAPI.getAll).mockResolvedValue([scheduledPost]);
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('Scheduled'));
+            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+
+            fireEvent.click(screen.getByText('Revert to Review'));
+
+            await waitFor(() => expect(screen.getByText('Review Notes')).toBeInTheDocument());
+
+            // In read-only mode, button text is "Add Note" (not "Submit Revision")
+            // Submit without adding a note -- should show revert-specific warning (covers 742-743)
+            fireEvent.click(screen.getByText('Add Note'));
+
+            await waitFor(() => {
+                expect(screen.getByText(/Please add a note explaining why/)).toBeInTheDocument();
+            });
+        });
+    });
+
+    describe('Read-only Feedback History in Modal', () => {
+        it('should display read-only feedback tags and details in modal', async () => {
+            const feedbackPost = {
+                id: 'readonly-fb',
+                caption: 'Readonly feedback post',
+                type: 'IMAGE' as const,
+                status: 'SCHEDULED' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
+                feedback: JSON.stringify({
+                    tags: ['Caption', 'Media'],
+                    details: { Caption: 'Too long, Check spelling', Media: 'Blurry/Low Quality' },
+                    note: 'Please fix these issues',
+                }),
+            };
+            vi.mocked(postsAPI.getAll).mockResolvedValue([feedbackPost]);
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('Scheduled'));
+            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+
+            fireEvent.click(screen.getByText('Revert to Review'));
+
+            // The modal is read-only since feedback exists, and shows history view (covers 1075-1083)
+            await waitFor(() => {
+                expect(screen.getByText('Review Notes')).toBeInTheDocument();
+                // Should show category labels in read-only view
+                const captionLabels = screen.getAllByText('Caption');
+                expect(captionLabels.length).toBeGreaterThan(0);
+                const mediaLabels = screen.getAllByText('Media');
+                expect(mediaLabels.length).toBeGreaterThan(0);
+                // Should show detail chips (may appear in both card and modal)
+                expect(screen.getAllByText('Too long').length).toBeGreaterThan(0);
+                expect(screen.getAllByText('Check spelling').length).toBeGreaterThan(0);
+                expect(screen.getAllByText('Blurry/Low Quality').length).toBeGreaterThan(0);
+            });
+        });
+
+        it('should submit read-only feedback with only previous note when no new note added', async () => {
+            vi.mocked(postsAPI.update).mockResolvedValue({} as any);
+            const feedbackPost = {
+                id: 'readonly-submit',
+                caption: 'Readonly submit test',
+                type: 'IMAGE' as const,
+                status: 'SCHEDULED' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
+                feedback: JSON.stringify({
+                    tags: ['Other'],
+                    details: { Other: 'Check Pricing' },
+                    note: 'Original note only',
+                }),
+            };
+            vi.mocked(postsAPI.getAll).mockResolvedValue([feedbackPost]);
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('Scheduled'));
+            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+
+            fireEvent.click(screen.getByText('Revert to Review'));
+
+            await waitFor(() => expect(screen.getByText('Review Notes')).toBeInTheDocument());
+
+            // In read-only mode, placeholder is different
+            const noteInput = screen.getByPlaceholderText('Type new feedback here...');
+            fireEvent.change(noteInput, { target: { value: 'Reverting because of timing' } });
+
+            // In read-only mode, submit button says "Add Note"
+            const addNoteButtons = screen.getAllByText('Add Note');
+            // The modal's submit button is the last one
+            fireEvent.click(addNoteButtons[addNoteButtons.length - 1]);
+
+            // covers line 769-770 (isReadOnly && previousNote && generalNote -> appends [Update])
+            await waitFor(() => {
+                expect(postsAPI.update).toHaveBeenCalledWith(
+                    'readonly-submit',
+                    expect.objectContaining({
+                        status: 'CHANGES_REQUESTED',
+                        feedback: expect.stringContaining('[Update]: Reverting because of timing')
+                    })
+                );
+            });
+        });
+    });
+
+    describe('Drag to Snap Back', () => {
+        it('should snap back when drag is below threshold', async () => {
+            const pendingPost = {
+                id: 'drag-snap',
+                caption: 'Drag snap test',
+                type: 'IMAGE' as const,
+                status: 'PENDING_APPROVAL' as const,
+                thumbnail: '/img.jpg',
+                platform: 'INSTAGRAM' as const,
+                createdAt: new Date().toISOString(),
+            };
+            vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => expect(screen.getByText('Drag snap test')).toBeInTheDocument());
+            fireEvent.click(screen.getByText('Request Edit'));
+
+            await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
+
+            const header = screen.getByText('Refine Content');
+
+            // Small drag (below 100px threshold) -- should snap back, not close (covers line 623)
+            fireEvent.touchStart(header, { touches: [{ clientY: 100 }] });
+            fireEvent.touchMove(header, { touches: [{ clientY: 150 }] });
+            fireEvent.touchEnd(header);
+
+            // Modal should still be open
+            expect(screen.getByText('Refine Content')).toBeInTheDocument();
+        });
+    });
+
+    describe('Empty State CTA', () => {
+        it('should show create post CTA when no posts exist and onCreatePost is provided', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([]);
+
+            const mockOnCreatePost = vi.fn();
+            render(<ContentStudio onCreatePost={mockOnCreatePost} instagramConnected={true} />);
+
+            await waitFor(() => {
+                expect(screen.getByText('Create your first post')).toBeInTheDocument();
+                expect(screen.getByText('Create Post')).toBeInTheDocument();
+            });
+        });
+
+        it('should call onCreatePost when CTA button is clicked', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([]);
+
+            const mockOnCreatePost = vi.fn();
+            render(<ContentStudio onCreatePost={mockOnCreatePost} instagramConnected={true} />);
+
+            await waitFor(() => {
+                fireEvent.click(screen.getByText('Create Post'));
+                expect(mockOnCreatePost).toHaveBeenCalledOnce();
+            });
+        });
+    });
+
+    describe('Instagram Connection Gate', () => {
+        it('should show connection banner when Instagram is not connected', async () => {
+            render(<ContentStudio instagramConnected={false} />);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Connect Instagram to/i)).toBeInTheDocument();
+            });
+        });
+
+        it('should not show connection banner when Instagram is connected', async () => {
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => {
+                expect(screen.getByText('Scheduled')).toBeInTheDocument();
+            });
+
+            expect(screen.queryByText(/Connect Instagram to/i)).not.toBeInTheDocument();
+        });
+
+        it('should disable approve button when Instagram is not connected', async () => {
+            render(<ContentStudio instagramConnected={false} />);
+
+            await waitFor(() => {
+                expect(screen.getByText('Review')).toBeInTheDocument();
+            });
+
+            const approveButtons = screen.getAllByRole('button').filter(btn => btn.textContent?.includes('Approve'));
+            approveButtons.forEach(btn => {
+                expect(btn).toBeDisabled();
             });
         });
     });

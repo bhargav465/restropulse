@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { authAPI, restaurantAPI, postsAPI, strategyAPI, instagramAPI } from '../api';
+import { authAPI, restaurantAPI, postsAPI, strategyAPI, instagramAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, citiesAPI, accountManagerAPI } from '../api';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -539,6 +539,333 @@ describe('API Service', () => {
 
             await expect(restaurantAPI.get('r1'))
                 .rejects.toThrow();
+        });
+    });
+
+    describe('subscriptionAPI', () => {
+        it('should get plans', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: [{ id: 'plan1', name: 'Starter' }] }),
+            });
+
+            const result = await subscriptionAPI.getPlans();
+            expect(result).toHaveLength(1);
+            expect(result[0].name).toBe('Starter');
+        });
+
+        it('should get current subscription', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: {
+                        subscription: { id: 'sub1', status: 'ACTIVE' },
+                        usage: { postsThisWeek: 2, weeklyLimit: 7 },
+                    },
+                }),
+            });
+
+            const result = await subscriptionAPI.getCurrent();
+            expect(result.subscription?.status).toBe('ACTIVE');
+            expect(result.usage?.postsThisWeek).toBe(2);
+        });
+
+        it('should subscribe to a plan', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { subscriptionId: 'sub_123', keyId: 'rzp_key' },
+                }),
+            });
+
+            const result = await subscriptionAPI.subscribe('starter', 'MONTHLY');
+            expect(result.subscriptionId).toBe('sub_123');
+            expect(result.keyId).toBe('rzp_key');
+        });
+
+        it('should subscribe with coupon code', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { subscriptionId: 'sub_456', keyId: 'rzp_key' },
+                }),
+            });
+
+            const result = await subscriptionAPI.subscribe('growth', 'ANNUAL', 'SAVE20');
+            expect(result.subscriptionId).toBe('sub_456');
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/subscriptions/subscribe'),
+                expect.objectContaining({
+                    method: 'POST',
+                    body: JSON.stringify({ planSlug: 'growth', billingCycle: 'ANNUAL', couponCode: 'SAVE20' }),
+                })
+            );
+        });
+
+        it('should cancel subscription', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true }),
+            });
+
+            await expect(subscriptionAPI.cancel()).resolves.not.toThrow();
+        });
+
+        it('should upgrade subscription', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true }),
+            });
+
+            await expect(subscriptionAPI.upgrade()).resolves.not.toThrow();
+        });
+
+        it('should purchase credits', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { orderId: 'ord_1', amount: 500, currency: 'INR', keyId: 'rzp_key', credits: 50 },
+                }),
+            });
+
+            const result = await subscriptionAPI.purchaseCredits('pack1');
+            expect(result.orderId).toBe('ord_1');
+            expect(result.credits).toBe(50);
+        });
+
+        it('should verify credits', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true }),
+            });
+
+            await expect(subscriptionAPI.verifyCredits('ord_1', 'pay_1', 'sig_1')).resolves.not.toThrow();
+        });
+    });
+
+    describe('couponAPI', () => {
+        it('should validate a coupon', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { valid: true, type: 'PERCENTAGE', value: 20 },
+                }),
+            });
+
+            const result = await couponAPI.validate('SAVE20', 'starter', 'MONTHLY');
+            expect(result.valid).toBe(true);
+            expect(result.value).toBe(20);
+        });
+
+        it('should validate coupon without optional params', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { valid: false, reason: 'Coupon expired' },
+                }),
+            });
+
+            const result = await couponAPI.validate('EXPIRED');
+            expect(result.valid).toBe(false);
+            expect(result.reason).toBe('Coupon expired');
+        });
+    });
+
+    describe('creditPacksAPI', () => {
+        it('should get all credit packs', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: [
+                        { id: 'cp1', name: 'Small Pack', credits: 10 },
+                        { id: 'cp2', name: 'Large Pack', credits: 50 },
+                    ],
+                }),
+            });
+
+            const result = await creditPacksAPI.getAll();
+            expect(result).toHaveLength(2);
+            expect(result[0].credits).toBe(10);
+        });
+    });
+
+    describe('invoiceAPI', () => {
+        it('should get all invoices', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: [{ id: 'inv1', amount: 999 }, { id: 'inv2', amount: 1999 }],
+                }),
+            });
+
+            const result = await invoiceAPI.getAll();
+            expect(result).toHaveLength(2);
+        });
+
+        it('should get invoice by id', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { id: 'inv1', amount: 999, status: 'PAID' },
+                }),
+            });
+
+            const result = await invoiceAPI.getById('inv1');
+            expect(result.id).toBe('inv1');
+            expect(result.amount).toBe(999);
+        });
+    });
+
+    describe('citiesAPI', () => {
+        it('should get all cities', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: [
+                        { name: 'Mumbai', zones: ['North', 'South'] },
+                        { name: 'Delhi', zones: ['East', 'West'] },
+                    ],
+                }),
+            });
+
+            const result = await citiesAPI.getAll();
+            expect(result).toHaveLength(2);
+            expect(result[0].name).toBe('Mumbai');
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/restaurant/cities'),
+                expect.anything()
+            );
+        });
+    });
+
+    describe('accountManagerAPI', () => {
+        it('should get account managers by city', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: [{ id: 'am1', name: 'Manager 1', city: 'Mumbai' }],
+                }),
+            });
+
+            const result = await accountManagerAPI.getByCityAndZone('Mumbai');
+            expect(result).toHaveLength(1);
+            expect(result[0].name).toBe('Manager 1');
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/restaurant/account-managers?city=Mumbai'),
+                expect.anything()
+            );
+        });
+
+        it('should get account managers by city and zone', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: [{ id: 'am2', name: 'Manager 2', city: 'Mumbai', zone: 'North' }],
+                }),
+            });
+
+            const result = await accountManagerAPI.getByCityAndZone('Mumbai', 'North');
+            expect(result).toHaveLength(1);
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/restaurant/account-managers?city=Mumbai&zone=North'),
+                expect.anything()
+            );
+        });
+    });
+
+    describe('restaurantAPI - additional', () => {
+        it('should create restaurant', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: {
+                        restaurant: { id: 'r1', name: 'New Restaurant' },
+                        token: 'new-token',
+                        refreshToken: 'new-refresh',
+                    },
+                }),
+            });
+
+            const result = await restaurantAPI.create({ name: 'New Restaurant', cuisine: 'Italian' });
+            expect(result.restaurant.name).toBe('New Restaurant');
+            expect(result.token).toBe('new-token');
+        });
+
+        it('should get analytics', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: {
+                        postsPerWeek: [{ week: 1, posts: 5 }],
+                        contentMix: [{ type: 'IMAGE', count: 3 }],
+                        platformMix: [{ platform: 'INSTAGRAM', count: 4 }],
+                    },
+                }),
+            });
+
+            const result = await restaurantAPI.getAnalytics('r1');
+            expect(result.postsPerWeek).toHaveLength(1);
+            expect(result.contentMix[0].type).toBe('IMAGE');
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/restaurant/r1/analytics'),
+                expect.anything()
+            );
+        });
+    });
+
+    describe('authAPI - additional', () => {
+        it('should store restaurantId on Firebase login when present', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    token: 'fb-token',
+                    refreshToken: 'fb-refresh',
+                    user: { id: 'u1', restaurantId: 'r1' },
+                }),
+            });
+
+            await authAPI.loginWithFirebase('firebase-id-token');
+            expect(localStorage.getItem('rp_restaurant_id')).toBe('r1');
+        });
+
+        it('should store restaurantId on verifyOtp when present', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    token: 'otp-token',
+                    refreshToken: 'otp-refresh',
+                    user: { id: 'u1', restaurantId: 'r2' },
+                }),
+            });
+
+            await authAPI.verifyOtp('+919876543210', '123456');
+            expect(localStorage.getItem('rp_restaurant_id')).toBe('r2');
+        });
+
+        it('should return false when refresh token response has no token', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true }),
+            });
+
+            const result = await authAPI.refreshToken('some-refresh');
+            expect(result).toBe(false);
         });
     });
 

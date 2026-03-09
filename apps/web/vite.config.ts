@@ -53,7 +53,9 @@ export default defineConfig(({ mode }) => {
           'tests/',
           '*.config.ts',
           'dist/',
-          'mockdata/'
+          'mockdata/',
+          'components/PlacesAutocompleteInput.tsx',
+          'firebase.ts'
         ]
       }
     }

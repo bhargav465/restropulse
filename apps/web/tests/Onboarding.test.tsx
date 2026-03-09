@@ -350,7 +350,7 @@ describe('Onboarding Component', () => {
         fireEvent.click(screen.getByRole('button', { name: /Get Started/i }));
 
         await waitFor(() => {
-            expect(screen.getByText(/Server error/i)).toBeInTheDocument();
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
         });
 
         expect(mockOnComplete).not.toHaveBeenCalled();

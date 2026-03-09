@@ -4,20 +4,35 @@ import Dashboard from './components/Dashboard';
 import ContentStudio from './components/ContentStudio';
 import Inputs from './components/Inputs';
 import Strategy from './components/Strategy';
-import Settings from './components/Settings';
+import ProfileSheet from './components/ProfileSheet';
+import AdhocPostModal from './components/AdhocPostModal';
 import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
-import { ViewState, Restaurant } from '@restropulse/shared';
-import { authAPI, restaurantAPI } from './api';
+import { ViewState, Restaurant, User, Post } from '@restropulse/shared';
+import { authAPI, restaurantAPI, postsAPI } from './api';
+
+function getUserInitials(name: string): string {
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
 
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('LOGIN');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
+    const [userData, setUserData] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [isInstagramCallback, setIsInstagramCallback] = useState(false);
+
+    // Profile sheet + adhoc modal state
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isAdhocModalOpen, setIsAdhocModalOpen] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
+    const [autoOpenInstagramSetup, setAutoOpenInstagramSetup] = useState(false);
+
+    // Pending count for bell badge
+    const [pendingCount, setPendingCount] = useState(0);
 
     // Check if this is an Instagram OAuth callback
     useEffect(() => {
@@ -44,8 +59,9 @@ const App: React.FC = () => {
 
             if (token && session) {
                 try {
-                    // Verify session
-                    await authAPI.checkSession();
+                    // Verify session and get user data
+                    const sessionData = await authAPI.checkSession();
+                    setUserData(sessionData.user ?? null);
 
                     const restaurantId = localStorage.getItem('rp_restaurant_id') || '';
 
@@ -57,6 +73,12 @@ const App: React.FC = () => {
                         // Load restaurant data
                         const restaurant = await restaurantAPI.get(restaurantId);
                         setRestaurantData(restaurant);
+
+                        // Load pending count
+                        try {
+                            const posts = await postsAPI.getAll();
+                            setPendingCount(posts.filter((p: Post) => p.status === 'PENDING_APPROVAL' || p.status === 'CHANGES_REQUESTED').length);
+                        } catch { /* ignore */ }
 
                         setIsLoggedIn(true);
                         if (!window.history.state) {
@@ -110,6 +132,13 @@ const App: React.FC = () => {
 
         const restaurant = await restaurantAPI.get(restaurantId);
         setRestaurantData(restaurant);
+
+        // Get user data
+        try {
+            const sessionData = await authAPI.checkSession();
+            setUserData(sessionData.user ?? null);
+        } catch { /* ignore */ }
+
         window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
         setCurrentView('DASHBOARD');
         setIsLoggedIn(true);
@@ -133,6 +162,8 @@ const App: React.FC = () => {
         } finally {
             setIsLoggedIn(false);
             setRestaurantData(null);
+            setUserData(null);
+            setIsProfileOpen(false);
             window.history.replaceState({ view: 'LOGIN' }, '', '/');
             setCurrentView('LOGIN');
         }
@@ -149,26 +180,32 @@ const App: React.FC = () => {
         }
     };
 
+    const handleAdhocPostSuccess = () => {
+        setIsAdhocModalOpen(false);
+        setRefreshKey(prev => prev + 1);
+    };
+
+    const handleConnectInstagram = () => {
+        setAutoOpenInstagramSetup(true);
+        setIsProfileOpen(true);
+    };
+
     const renderView = () => {
         if (!restaurantData) return <div>Loading...</div>;
 
+        const instagramConnected = restaurantData.integrations?.instagram || false;
+
         switch (currentView) {
             case 'DASHBOARD':
-                return <Dashboard setView={navigateTo} restaurantData={restaurantData} />;
+                return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
             case 'STUDIO':
-                return <ContentStudio />;
+                return <ContentStudio onCreatePost={instagramConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} />;
             case 'INPUTS':
                 return <Inputs restaurantData={restaurantData} onRefresh={refreshRestaurantData} />;
             case 'STRATEGY':
-                return <Strategy />;
-            case 'SETTINGS':
-                return <Settings
-                    onLogout={handleLogout}
-                    restaurantData={restaurantData}
-                    onRestaurantUpdate={refreshRestaurantData}
-                />;
+                return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} />;
             default:
-                return <Dashboard setView={navigateTo} restaurantData={restaurantData} />;
+                return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
         }
     };
 
@@ -176,9 +213,8 @@ const App: React.FC = () => {
         switch (currentView) {
             case 'DASHBOARD': return 'Dashboard';
             case 'STUDIO': return 'Content Studio';
-            case 'INPUTS': return 'Inputs';
-            case 'STRATEGY': return 'CONTENT STRATEGY';
-            case 'SETTINGS': return 'Settings';
+            case 'INPUTS': return 'Updates';
+            case 'STRATEGY': return 'Strategy';
             default: return 'RestroPulse';
         }
     };
@@ -229,9 +265,35 @@ const App: React.FC = () => {
                 currentView={currentView}
                 setView={navigateTo}
                 title={getPageTitle()}
+                restaurantName={restaurantData?.name || 'RestroPulse'}
+                userInitials={getUserInitials(userData?.name || '')}
+                pendingCount={pendingCount}
+                onCreatePost={restaurantData?.integrations?.instagram ? () => setIsAdhocModalOpen(true) : undefined}
+                onProfileOpen={() => setIsProfileOpen(true)}
             >
                 {renderView()}
             </Layout>
+
+            {/* Profile Sheet */}
+            {restaurantData && (
+                <ProfileSheet
+                    isOpen={isProfileOpen}
+                    onClose={() => { setIsProfileOpen(false); setAutoOpenInstagramSetup(false); }}
+                    onLogout={handleLogout}
+                    restaurantData={restaurantData}
+                    userName={userData?.name || ''}
+                    onRestaurantUpdate={(updated) => setRestaurantData(updated)}
+                    autoOpenInstagramSetup={autoOpenInstagramSetup}
+                    onAutoOpenHandled={() => setAutoOpenInstagramSetup(false)}
+                />
+            )}
+
+            {/* Adhoc Post Modal */}
+            <AdhocPostModal
+                isOpen={isAdhocModalOpen}
+                onClose={() => setIsAdhocModalOpen(false)}
+                onSuccess={handleAdhocPostSuccess}
+            />
         </ErrorBoundary>
     );
 };

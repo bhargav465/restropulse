@@ -75,7 +75,13 @@ restropulse/
 | STUDIO       | ContentStudio.tsx  | Content calendar, post management|
 | INPUTS       | Inputs.tsx         | Offers, chef specials, menu      |
 | STRATEGY     | Strategy.tsx       | Content strategy configuration   |
-| SETTINGS     | Settings.tsx       | Subscription, billing, Instagram, logout |
+
+**Overlay components** (not ViewState-routed):
+
+| Component          | Purpose                                              |
+|--------------------|------------------------------------------------------|
+| ProfileSheet.tsx   | Account settings bottom sheet (subscription, billing, Instagram, profile, logout) |
+| AdhocPostModal.tsx | Create new post modal (triggered from header or empty state) |
 
 **Auth Flow**:
 1. User enters phone number; Firebase sends OTP via RecaptchaVerifier

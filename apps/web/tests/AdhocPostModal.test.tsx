@@ -418,7 +418,7 @@ describe('AdhocPostModal Component', () => {
             fireEvent.click(screen.getByTestId('submit-button'));
 
             await waitFor(() => {
-                expect(screen.getByRole('alert')).toHaveTextContent('Network error');
+                expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong. Please try again.');
             });
 
             // Should not call onSuccess or onClose on failure

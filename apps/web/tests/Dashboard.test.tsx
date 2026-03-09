@@ -85,12 +85,11 @@ describe('Dashboard Component', () => {
 
     describe('Initial Load', () => {
         it('should load and display user name', async () => {
-            render(<Dashboard restaurantData={mockRestaurant} />);
+            render(<Dashboard restaurantData={mockRestaurant} userName="Test User" />);
 
             await waitFor(() => {
-                expect(screen.getByText('Welcome back,')).toBeInTheDocument();
-                // User name is displayed after API call
-                expect(authAPI.checkSession).toHaveBeenCalled();
+                expect(screen.getByText('Welcome')).toBeInTheDocument();
+                expect(screen.getByText('Test')).toBeInTheDocument();
             });
         });
 
@@ -98,13 +97,12 @@ describe('Dashboard Component', () => {
             render(<Dashboard restaurantData={mockRestaurant} />);
 
             await waitFor(() => {
-                expect(authAPI.checkSession).toHaveBeenCalled();
                 expect(postsAPI.getAll).toHaveBeenCalled();
             });
         });
 
         it('should handle API errors gracefully', async () => {
-            vi.mocked(authAPI.checkSession).mockRejectedValue(new Error('API Error'));
+            vi.mocked(postsAPI.getAll).mockRejectedValue(new Error('API Error'));
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
             render(<Dashboard restaurantData={mockRestaurant} />);
@@ -165,7 +163,7 @@ describe('Dashboard Component', () => {
             render(<Dashboard restaurantData={mockRestaurant} />);
 
             await waitFor(() => {
-                expect(screen.getByText('No upcoming posts scheduled.')).toBeInTheDocument();
+                expect(screen.getByText('No upcoming posts scheduled')).toBeInTheDocument();
             });
         });
 
@@ -225,12 +223,11 @@ describe('Dashboard Component', () => {
         });
     });
 
-    describe('Notification Bell', () => {
-        it('should show notification indicator when there are pending posts', async () => {
+    describe('Pending Posts Banner', () => {
+        it('should show action required banner when there are pending posts', async () => {
             render(<Dashboard restaurantData={mockRestaurant} />);
 
             await waitFor(() => {
-                // Verify pending posts are counted
                 expect(screen.getByText('Posts Need Review')).toBeInTheDocument();
                 expect(screen.getByText('2')).toBeInTheDocument();
             });

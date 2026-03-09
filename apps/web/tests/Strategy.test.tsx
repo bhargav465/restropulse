@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from './utils/test-utils';
 import Strategy from '../components/Strategy';
+import { Restaurant } from '@restropulse/shared';
 
 // Mock the API module
 vi.mock('../api', () => ({
@@ -14,6 +15,14 @@ vi.mock('../api', () => ({
 }));
 
 import { strategyAPI } from '../api';
+
+const mockRestaurantData: Restaurant = {
+    id: 'r1',
+    name: 'Test Restaurant',
+    cuisine: 'Italian',
+    accountManager: { name: 'Manager', phone: '1234567890', email: 'mgr@test.com', avatar: '' },
+    integrations: { whatsapp: true, instagram: true, facebook: false },
+} as Restaurant;
 
 // Mock window.history
 const mockHistoryPushState = vi.fn();
@@ -82,7 +91,7 @@ describe('Strategy Component', () => {
 
     describe('Initial Load', () => {
         it('should load cycles data', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(strategyAPI.getAllCycles).toHaveBeenCalled();
@@ -90,7 +99,7 @@ describe('Strategy Component', () => {
         });
 
         it('should call APIs on mount', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(strategyAPI.getAllCycles).toHaveBeenCalledTimes(1);
@@ -101,7 +110,7 @@ describe('Strategy Component', () => {
             vi.mocked(strategyAPI.getAllCycles).mockRejectedValue(new Error('Load failed'));
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(consoleSpy).toHaveBeenCalledWith('Failed to load cycles:', expect.any(Error));
@@ -113,7 +122,7 @@ describe('Strategy Component', () => {
 
     describe('Cycle Display', () => {
         it('should display active cycle', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('January 2024')).toBeInTheDocument();
@@ -121,7 +130,7 @@ describe('Strategy Component', () => {
         });
 
         it('should display cycle summary', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('Focus on new menu items and engagement')).toBeInTheDocument();
@@ -129,7 +138,7 @@ describe('Strategy Component', () => {
         });
 
         it('should show pending approval cycle', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(screen.getByText('March 2024')).toBeInTheDocument();
@@ -139,9 +148,9 @@ describe('Strategy Component', () => {
 
     describe('Cycle Actions', () => {
         it('should approve a strategy cycle', async () => {
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
+            vi.mocked(strategyAPI.updateCycle).mockResolvedValue({ ...mockCycles[2], status: 'APPROVED' });
 
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const approveButtons = screen.getAllByRole('button');
@@ -154,14 +163,15 @@ describe('Strategy Component', () => {
 
             if (approveButton) {
                 fireEvent.click(approveButton);
-                expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('Strategy Approved'));
+                await waitFor(() => {
+                    expect(strategyAPI.updateCycle).toHaveBeenCalledWith('c3', { status: 'APPROVED' });
+                    expect(screen.getByText(/Strategy approved/i)).toBeInTheDocument();
+                });
             }
-
-            alertSpy.mockRestore();
         });
 
         it('should open feedback modal when request changes clicked', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -185,7 +195,7 @@ describe('Strategy Component', () => {
 
     describe('Feedback Modal', () => {
         it('should toggle feedback area selection', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -209,7 +219,7 @@ describe('Strategy Component', () => {
         });
 
         it('should open feedback modal and display form elements', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -231,7 +241,7 @@ describe('Strategy Component', () => {
         });
 
         it('should render feedback modal when opened', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -253,7 +263,7 @@ describe('Strategy Component', () => {
         });
 
         it('should handle touch drag interactions', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -288,7 +298,7 @@ describe('Strategy Component', () => {
         it('should handle empty cycles list', async () => {
             vi.mocked(strategyAPI.getAllCycles).mockResolvedValue([]);
 
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 expect(strategyAPI.getAllCycles).toHaveBeenCalled();
@@ -298,7 +308,7 @@ describe('Strategy Component', () => {
 
     describe('Feedback Area Selection', () => {
         it('should toggle all feedback areas', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -320,7 +330,7 @@ describe('Strategy Component', () => {
         });
 
         it('should update feedback text area', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -340,9 +350,9 @@ describe('Strategy Component', () => {
         });
 
         it('should submit feedback and update cycle status', async () => {
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
+            vi.mocked(strategyAPI.updateCycle).mockResolvedValue({ ...mockCycles[2], status: 'CHANGES_REQUESTED' });
 
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -365,13 +375,15 @@ describe('Strategy Component', () => {
                 }
             });
 
-            alertSpy.mockRestore();
+            await waitFor(() => {
+                expect(strategyAPI.updateCycle).toHaveBeenCalled();
+            });
         });
     });
 
     describe('Modal Close Behavior', () => {
         it('should close modal on small drag', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -392,7 +404,7 @@ describe('Strategy Component', () => {
         });
 
         it('should handle popstate event', async () => {
-            render(<Strategy />);
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
                 const requestButtons = screen.getAllByRole('button');
@@ -410,6 +422,36 @@ describe('Strategy Component', () => {
                 // Modal should close or component should respond to popstate
                 const modals = document.querySelectorAll('.bg-white.rounded-t-3xl');
                 expect(modals.length).toBeGreaterThanOrEqual(0);
+            });
+        });
+    });
+
+    describe('Instagram Connection Gate', () => {
+        it('should show connection banner when Instagram is not connected', async () => {
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={false} />);
+
+            await waitFor(() => {
+                expect(screen.getByText(/Connect Instagram to approve strategies/i)).toBeInTheDocument();
+            });
+        });
+
+        it('should show "Connect Instagram to approve" instead of approve/request buttons', async () => {
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={false} />);
+
+            await waitFor(() => {
+                expect(screen.getByText('Connect Instagram to approve')).toBeInTheDocument();
+            });
+
+            expect(screen.queryByLabelText('Approve strategy')).not.toBeInTheDocument();
+            expect(screen.queryByLabelText('Request changes to strategy')).not.toBeInTheDocument();
+        });
+
+        it('should show approve/request buttons when Instagram is connected', async () => {
+            render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
+
+            await waitFor(() => {
+                expect(screen.getByLabelText('Approve strategy')).toBeInTheDocument();
+                expect(screen.getByLabelText('Request changes to strategy')).toBeInTheDocument();
             });
         });
     });

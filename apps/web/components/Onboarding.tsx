@@ -289,7 +289,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
             onComplete(result.restaurant);
         } catch (err: any) {
-            setError(err.message || 'Failed to create restaurant. Please try again.');
+            setError('Something went wrong. Please try again.');
         } finally {
             setIsSubmitting(false);
         }

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Camera, UtensilsCrossed, Tag, FileText, UploadCloud, X, ChevronRight, Trash2, CalendarCheck, CheckCircle, Plus } from 'lucide-react';
 import { Restaurant } from '@restropulse/shared';
 import { restaurantAPI } from '../api';
+import { ActionNotice } from './ActionNotice';
+import ConfirmDialog from './ConfirmDialog';
 
 interface InputsProps {
     restaurantData: Restaurant;
@@ -16,6 +18,13 @@ const Modal = ({ title, onClose, children }: any) => {
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
     }, [onClose]);
+
+    // Escape key to dismiss
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // Manual close handler to sync history
     const handleClose = () => {
@@ -77,6 +86,16 @@ const ActionButton = ({ icon: Icon, title, desc, id, color, isFull, isDisabled, 
 const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
     const [activeModal, setActiveModal] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+    const [confirmDelete, setConfirmDelete] = useState<{ type: 'OFFER' | 'SPECIAL'; index: number } | null>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+    // Auto-dismiss notice
+    useEffect(() => {
+        if (!notice) return;
+        const timer = setTimeout(() => setNotice(null), 6000);
+        return () => clearTimeout(timer);
+    }, [notice]);
 
     // Form Inputs State
     const [offerInput, setOfferInput] = useState("");
@@ -84,6 +103,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
 
     const closeModal = () => {
         setActiveModal(null);
+        setSelectedFile(null);
     };
 
     const handleAdd = async (type: 'OFFER' | 'SPECIAL' | 'MENU', value?: string) => {
@@ -105,7 +125,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
             setSpecialInput("");
         } catch (error) {
             console.error('Failed to update:', error);
-            alert('Failed to update. Please try again.');
+            setNotice({ message: 'Something went wrong. Please try again or contact your account manager.', type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -122,7 +142,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
             await onRefresh();
         } catch (error) {
             console.error('Failed to delete:', error);
-            alert('Failed to delete. Please try again.');
+            setNotice({ message: 'Something went wrong. Please try again or contact your account manager.', type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -130,11 +150,11 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
 
     const openActionModal = (id: string) => {
         if (id === 'offers' && (restaurantData.activeOffers?.length || 0) >= 3) {
-            alert("You can only have up to 3 active offers. Please delete an old one to add a new offer.");
+            setNotice({ message: 'You can have up to 3 active offers. Remove one first.', type: 'error' });
             return;
         }
         if (id === 'special' && (restaurantData.chefSpecials?.length || 0) >= 3) {
-            alert("You can only have up to 3 chef's specials. Please delete an old one to add a new special.");
+            setNotice({ message: 'You can have up to 3 chef\'s specials. Remove one first.', type: 'error' });
             return;
         }
         setActiveModal(id);
@@ -147,9 +167,16 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
 
     return (
         <div className="p-4 space-y-8">
-            <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-lg shadow-slate-900/20">
-                <h2 className="text-2xl font-bold mb-2">Update Us</h2>
-                <p className="text-slate-400 text-sm font-medium">Keep your AI content engine smart by sharing the latest updates from your restaurant.</p>
+            {notice && (
+                <ActionNotice
+                    message={notice.message}
+                    type={notice.type}
+                />
+            )}
+
+            <div className="bg-white border border-slate-200 rounded-3xl p-6">
+                <h2 className="text-2xl font-bold mb-2 text-slate-800">Update Us</h2>
+                <p className="text-slate-500 text-sm font-medium">Keep your AI content engine smart by sharing the latest updates from your restaurant.</p>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
@@ -218,7 +245,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                                         <div key={index} className="flex justify-between items-start gap-2 group">
                                             <p className="font-bold text-slate-800 text-sm leading-snug flex-1">{offer}</p>
                                             <button
-                                                onClick={() => handleDelete('OFFER', index)}
+                                                onClick={() => setConfirmDelete({ type: 'OFFER', index })}
                                                 aria-label={`Delete offer ${index + 1}`}
                                                 title="Delete offer"
                                                 className="text-slate-300 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
@@ -251,7 +278,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                                         <div key={index} className="flex justify-between items-start gap-2 group">
                                             <p className="font-bold text-slate-800 text-sm leading-snug flex-1">{special}</p>
                                             <button
-                                                onClick={() => handleDelete('SPECIAL', index)}
+                                                onClick={() => setConfirmDelete({ type: 'SPECIAL', index })}
                                                 aria-label={`Delete special ${index + 1}`}
                                                 title="Delete special"
                                                 className="text-slate-300 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
@@ -317,7 +344,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                         </div>
                         <button
                             onClick={() => handleAdd('OFFER', offerInput || "New Offer")}
-                            className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 active:scale-[0.98] transition-all shadow-lg"
+                            className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl hover:bg-slate-800 active:scale-[0.98] transition-all shadow-lg"
                         >
                             Add Offer
                         </button>
@@ -347,7 +374,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                         </div>
                         <button
                             onClick={() => handleAdd('SPECIAL', specialInput || "Special Dish")}
-                            className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 active:scale-[0.98] transition-all shadow-lg"
+                            className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl hover:bg-slate-800 active:scale-[0.98] transition-all shadow-lg"
                         >
                             Add Special
                         </button>
@@ -355,21 +382,38 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                 </Modal>
             )}
 
+            {/* Confirm Delete Dialog */}
+            {confirmDelete && (
+                <ConfirmDialog
+                    title="Remove this item?"
+                    message="This will remove it immediately."
+                    confirmLabel="Remove"
+                    onConfirm={() => {
+                        handleDelete(confirmDelete.type, confirmDelete.index);
+                        setConfirmDelete(null);
+                    }}
+                    onCancel={() => setConfirmDelete(null)}
+                />
+            )}
+
             {/* Modal - Menu */}
             {activeModal === 'menu' && (
                 <Modal title="Update Menu" onClose={closeModal}>
                     <div className="space-y-5">
                         <div className="border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-slate-400 hover:bg-slate-50 hover:border-slate-300 transition-all cursor-pointer relative group">
-                            <input type="file" aria-label="Upload Menu File" className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf,.jpg,.png" />
+                            <input type="file" aria-label="Upload Menu File" className="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf,.jpg,.png" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
                             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                                 <FileText size={32} className="text-slate-400" />
                             </div>
                             <p className="text-sm text-center font-medium text-slate-500">Upload Menu File</p>
                             <p className="text-xs text-slate-400 mt-1">PDF or Images</p>
+                            {selectedFile && (
+                                <p className="text-sm font-medium text-slate-700 mt-2 truncate max-w-[200px]">{selectedFile.name}</p>
+                            )}
                         </div>
                         <button
                             onClick={() => handleAdd('MENU')}
-                            className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl hover:bg-slate-800 active:scale-[0.98] transition-all shadow-lg"
+                            className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl hover:bg-slate-800 active:scale-[0.98] transition-all shadow-lg"
                         >
                             Update Menu
                         </button>

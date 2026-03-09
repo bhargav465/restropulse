@@ -22,7 +22,15 @@
       "WebFetch(domain:developers.google.com)",
       "Bash(npm:*)",
       "Bash(ls:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Read(//c/Users/ravik/.claude/projects/D--Work-restropulse--claude-worktrees-ui-ux-review/5962486e-b16c-4be0-bd3d-3957eb107562/subagents/**)",
+      "Bash(for f in a9d8ff679e3441a7b a8aefae238a7e1548 afefe87b2b455c872)",
+      "Bash(do echo \"==$f==\")",
+      "Read(//c/Users/ravik/AppData/Local/Temp/claude/D--Work-restropulse--claude-worktrees-ui-ux-review/tasks/**)",
+      "Bash(python -c \"import sys,json; d=json.loads\\(sys.stdin.read\\(\\)\\); print\\(d.get\\(''type'',''?''\\), d.get\\(''message'',{}\\).get\\(''content'',[{}]\\)[0].get\\(''type'',''?''\\) if ''message'' in d else ''''\\)\")",
+      "Bash(done)",
+      "Bash(npx vite:*)",
+      "Bash(curl:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

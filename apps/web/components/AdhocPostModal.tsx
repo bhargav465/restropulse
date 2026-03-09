@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Calendar, Image as ImageIcon, Video, Sparkles, Clock, Send, AlertCircle, Loader2 } from 'lucide-react';
 import { Post } from '@restropulse/shared';
 import { postsAPI } from '../api';
@@ -149,7 +149,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
             onClose();
         } catch (err) {
             console.error('Failed to create post:', err);
-            setError(err instanceof Error ? err.message : 'Failed to create post. Please try again.');
+            setError('Something went wrong. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
@@ -165,6 +165,14 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
         resetForm();
         onClose();
     };
+
+    // Escape key to dismiss
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen]);
 
     if (!isOpen) return null;
 

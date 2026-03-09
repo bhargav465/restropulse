@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from './utils/test-utils';
 import Inputs from '../components/Inputs';
-import { Restaurant } from '../types';
+import { Restaurant } from '@restropulse/shared';
 
 // Mock the API module
 vi.mock('../api', () => ({
@@ -183,19 +183,13 @@ describe('Inputs Component', () => {
                 activeOffers: ['Offer 1', 'Offer 2', 'Offer 3'],
             };
 
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
-
             render(<Inputs restaurantData={fullRestaurant} onRefresh={mockOnRefresh} />);
 
             const offersButton = screen.getByText('Upcoming Offers').closest('button');
             fireEvent.click(offersButton!);
 
-            expect(alertSpy).toHaveBeenCalledWith(
-                'You can only have up to 3 active offers. Please delete an old one to add a new offer.'
-            );
+            expect(screen.getByText(/You can have up to 3 active offers/i)).toBeInTheDocument();
             expect(screen.queryByText('Add New Offer')).not.toBeInTheDocument();
-
-            alertSpy.mockRestore();
         });
 
         it('should not open specials modal when at maximum capacity', () => {
@@ -203,8 +197,6 @@ describe('Inputs Component', () => {
                 ...mockRestaurant,
                 chefSpecials: ['Special 1', 'Special 2', 'Special 3'],
             };
-
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
 
             render(<Inputs restaurantData={fullRestaurant} onRefresh={mockOnRefresh} />);
 
@@ -217,12 +209,8 @@ describe('Inputs Component', () => {
             if (specialsButton) {
                 fireEvent.click(specialsButton);
 
-                expect(alertSpy).toHaveBeenCalledWith(
-                    "You can only have up to 3 chef's specials. Please delete an old one to add a new special."
-                );
+                expect(screen.getByText(/You can have up to 3 chef's specials/i)).toBeInTheDocument();
             }
-
-            alertSpy.mockRestore();
         });
     });
 
@@ -346,7 +334,6 @@ describe('Inputs Component', () => {
 
         it('should handle API error when adding offer', async () => {
             vi.mocked(restaurantAPI.updateOffers).mockRejectedValueOnce(new Error('API Error'));
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
@@ -359,21 +346,32 @@ describe('Inputs Component', () => {
 
             await waitFor(() => {
                 expect(consoleSpy).toHaveBeenCalledWith('Failed to update:', expect.any(Error));
-                expect(alertSpy).toHaveBeenCalledWith('Failed to update. Please try again.');
+                expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
             });
 
-            alertSpy.mockRestore();
             consoleSpy.mockRestore();
         });
     });
 
     describe('Delete Functionality', () => {
-        it('should delete an offer when delete button is clicked', async () => {
+        it('should show confirm dialog when delete button is clicked', () => {
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
 
             const offerDeleteButton = screen.getByRole('button', { name: 'Delete offer 1' });
-
             fireEvent.click(offerDeleteButton!);
+
+            expect(screen.getByText('Remove this item?')).toBeInTheDocument();
+            expect(screen.getByText('This will remove it immediately.')).toBeInTheDocument();
+        });
+
+        it('should delete an offer after confirming', async () => {
+            render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
+
+            const offerDeleteButton = screen.getByRole('button', { name: 'Delete offer 1' });
+            fireEvent.click(offerDeleteButton!);
+
+            const confirmButton = screen.getByRole('button', { name: 'Remove' });
+            fireEvent.click(confirmButton);
 
             await waitFor(() => {
                 expect(restaurantAPI.updateOffers).toHaveBeenCalledWith('r1', 'DELETE', 0);
@@ -381,12 +379,27 @@ describe('Inputs Component', () => {
             });
         });
 
-        it('should delete a special when delete button is clicked', async () => {
+        it('should cancel delete when cancel is clicked', () => {
+            render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
+
+            const offerDeleteButton = screen.getByRole('button', { name: 'Delete offer 1' });
+            fireEvent.click(offerDeleteButton!);
+
+            const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+            fireEvent.click(cancelButton);
+
+            expect(screen.queryByText('Remove this item?')).not.toBeInTheDocument();
+            expect(restaurantAPI.updateOffers).not.toHaveBeenCalled();
+        });
+
+        it('should delete a special after confirming', async () => {
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
 
             const specialDeleteButton = screen.getByRole('button', { name: 'Delete special 1' });
-
             fireEvent.click(specialDeleteButton!);
+
+            const confirmButton = screen.getByRole('button', { name: 'Remove' });
+            fireEvent.click(confirmButton);
 
             await waitFor(() => {
                 expect(restaurantAPI.updateSpecials).toHaveBeenCalledWith('r1', 'DELETE', 0);
@@ -396,20 +409,20 @@ describe('Inputs Component', () => {
 
         it('should handle delete error gracefully', async () => {
             vi.mocked(restaurantAPI.updateOffers).mockRejectedValueOnce(new Error('Delete failed'));
-            const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => { });
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
 
             const offerDeleteButton = screen.getByRole('button', { name: 'Delete offer 1' });
-
             fireEvent.click(offerDeleteButton!);
 
+            const confirmButton = screen.getByRole('button', { name: 'Remove' });
+            fireEvent.click(confirmButton);
+
             await waitFor(() => {
-                expect(alertSpy).toHaveBeenCalledWith('Failed to delete. Please try again.');
+                expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
             });
 
-            alertSpy.mockRestore();
             consoleSpy.mockRestore();
         });
     });

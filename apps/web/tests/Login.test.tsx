@@ -398,6 +398,171 @@ describe('Login Component', () => {
         vi.unstubAllEnvs();
     });
 
+    it('should fallback to onFallbackLogin when Firebase verifyOTP fails with No OTP request', async () => {
+        vi.stubEnv('VITE_FIREBASE_API_KEY', 'test-key');
+
+        (firebase.sendOTP as any).mockResolvedValueOnce(undefined);
+
+        const firebaseErr = new Error('No OTP request in progress');
+        (firebase.verifyOTP as any).mockRejectedValueOnce(firebaseErr);
+
+        const mockFallbackLogin = vi.fn().mockResolvedValue(undefined);
+
+        render(<Login onLogin={mockOnLogin} onFallbackLogin={mockFallbackLogin} />);
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        const phoneInput = screen.getByPlaceholderText(/98765 43210/i);
+        fireEvent.change(phoneInput, { target: { value: '9876543210' } });
+        fireEvent.click(screen.getByText(/Get OTP/i).closest('button')!);
+
+        await waitFor(() => screen.getByLabelText('OTP digit 1'));
+
+        const inputs = screen.getAllByRole('textbox', { name: /OTP digit/i });
+        for (let i = 0; i < 6; i++) {
+            fireEvent.change(inputs[i], { target: { value: String(i + 1) } });
+        }
+
+        await waitFor(() => {
+            expect(mockFallbackLogin).toHaveBeenCalledWith('+919876543210', '123456');
+        });
+
+        vi.unstubAllEnvs();
+    });
+
+    it('should not resend OTP when countdown is active', async () => {
+        mockFetch.mockResolvedValueOnce({
+            json: () => Promise.resolve({ success: true })
+        });
+
+        render(<Login onLogin={mockOnLogin} />);
+
+        const phoneInput = screen.getByPlaceholderText(/98765 43210/i);
+        fireEvent.change(phoneInput, { target: { value: '9876543210' } });
+        fireEvent.click(screen.getByText(/Get OTP/i).closest('button')!);
+
+        await waitFor(() => {
+            expect(screen.getByText(/Enter the code sent to/i)).toBeInTheDocument();
+        });
+
+        // Countdown should be active (30s), so Resend OTP button should not appear
+        expect(screen.getByText(/Resend code in/i)).toBeInTheDocument();
+        expect(screen.queryByText('Resend OTP')).not.toBeInTheDocument();
+    });
+
+    it('should call handleVerifyOtp via the Verify & Login button click', async () => {
+        mockFetch.mockResolvedValueOnce({
+            json: () => Promise.resolve({ success: true })
+        });
+        const mockFallbackLogin = vi.fn().mockResolvedValue(undefined);
+
+        render(<Login onLogin={mockOnLogin} onFallbackLogin={mockFallbackLogin} />);
+
+        const phoneInput = screen.getByPlaceholderText(/98765 43210/i);
+        fireEvent.change(phoneInput, { target: { value: '9876543210' } });
+        fireEvent.click(screen.getByText(/Get OTP/i).closest('button')!);
+
+        await waitFor(() => screen.getByLabelText('OTP digit 1'));
+
+        // Fill all 5 digits without triggering auto-submit (fill 1-5 only)
+        const inputs = screen.getAllByRole('textbox', { name: /OTP digit/i });
+        for (let i = 0; i < 5; i++) {
+            fireEvent.change(inputs[i], { target: { value: String(i + 1) } });
+        }
+        // Fill the last digit
+        fireEvent.change(inputs[5], { target: { value: '6' } });
+
+        // Wait for the auto-submit from filling digit 6
+        await waitFor(() => {
+            expect(mockFallbackLogin).toHaveBeenCalled();
+        });
+
+        // Reset mock and clear OTP to test the manual button click path
+        mockFallbackLogin.mockClear();
+
+        // Re-fill OTP digits for manual verify
+        for (let i = 0; i < 6; i++) {
+            fireEvent.change(inputs[i], { target: { value: String(i + 1) } });
+        }
+
+        // Click the Verify & Login button directly
+        const verifyButton = screen.getByText('Verify & Login');
+        fireEvent.click(verifyButton);
+
+        await waitFor(() => {
+            expect(mockFallbackLogin).toHaveBeenCalledWith('+919876543210', '123456');
+        });
+    });
+
+    it('should resend OTP when countdown reaches zero', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+
+        mockFetch.mockResolvedValueOnce({
+            json: () => Promise.resolve({ success: true })
+        });
+
+        render(<Login onLogin={mockOnLogin} />);
+
+        const phoneInput = screen.getByPlaceholderText(/98765 43210/i);
+        fireEvent.change(phoneInput, { target: { value: '9876543210' } });
+        fireEvent.click(screen.getByText(/Get OTP/i).closest('button')!);
+
+        // Wait for OTP step to render
+        await vi.waitFor(() => {
+            expect(screen.getByText(/Enter the code sent to/i)).toBeInTheDocument();
+        });
+
+        // Advance past the 30s countdown
+        for (let i = 0; i < 31; i++) {
+            await act(async () => {
+                vi.advanceTimersByTime(1000);
+            });
+        }
+
+        // Now Resend OTP button should appear
+        await vi.waitFor(() => {
+            expect(screen.getByText('Resend OTP')).toBeInTheDocument();
+        });
+
+        // Setup fetch for the resend call
+        mockFetch.mockResolvedValueOnce({
+            json: () => Promise.resolve({ success: true })
+        });
+
+        fireEvent.click(screen.getByText('Resend OTP'));
+
+        // Verify a second fetch call was made for resend
+        await vi.waitFor(() => {
+            expect(mockFetch).toHaveBeenCalledTimes(2);
+        });
+
+        vi.useRealTimers();
+    });
+
+    it('should show error when OTP is incomplete and verify button clicked', async () => {
+        mockFetch.mockResolvedValueOnce({
+            json: () => Promise.resolve({ success: true })
+        });
+
+        render(<Login onLogin={mockOnLogin} />);
+
+        const phoneInput = screen.getByPlaceholderText(/98765 43210/i);
+        fireEvent.change(phoneInput, { target: { value: '9876543210' } });
+        fireEvent.click(screen.getByText(/Get OTP/i).closest('button')!);
+
+        await waitFor(() => screen.getByLabelText('OTP digit 1'));
+
+        // Only fill 3 of 6 digits
+        const inputs = screen.getAllByRole('textbox', { name: /OTP digit/i });
+        for (let i = 0; i < 3; i++) {
+            fireEvent.change(inputs[i], { target: { value: String(i + 1) } });
+        }
+
+        // The button should be disabled with incomplete OTP
+        const verifyButton = screen.getByText('Verify & Login');
+        expect(verifyButton.closest('button')).toBeDisabled();
+    });
+
     it('should log recaptcha initialization failure', async () => {
         vi.stubEnv('VITE_FIREBASE_API_KEY', 'test-key');
         const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });

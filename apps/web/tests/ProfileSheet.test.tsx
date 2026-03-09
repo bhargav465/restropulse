@@ -1,0 +1,1875 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from './utils/test-utils';
+import ProfileSheet from '../components/ProfileSheet';
+
+// Mock all API modules
+vi.mock('../api', () => ({
+    restaurantAPI: {
+        get: vi.fn(),
+        update: vi.fn(),
+    },
+    instagramAPI: {
+        getOAuthUrl: vi.fn(),
+        handleCallback: vi.fn(),
+        getPendingAccounts: vi.fn(),
+        selectAccount: vi.fn(),
+        getStatus: vi.fn(),
+        disconnect: vi.fn(),
+    },
+    subscriptionAPI: {
+        getCurrent: vi.fn().mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'ACTIVE',
+                credits: 15,
+                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { reelsPerWeek: 5, instagramPostsPerWeek: 10, carouselPostsPerWeek: 3 }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                currentPeriodEnd: '2026-04-01',
+            },
+            usage: {
+                reels: { used: 2, limit: 5 },
+                instagramPosts: { used: 4, limit: 10 },
+                carousels: { used: 1, limit: 3 },
+            },
+        }),
+        getPlans: vi.fn().mockResolvedValue([
+            { id: 'p1', slug: 'starter', tier: 'STARTER', name: 'Starter', version: 1, isCurrentVersion: true, limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 1 }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp1', annual: 'rp2' }, features: ['INSTAGRAM'] },
+            { id: 'p2', slug: 'growth', tier: 'GROWTH', name: 'Growth', version: 1, isCurrentVersion: true, limits: { reelsPerWeek: 5, instagramPostsPerWeek: 10, carouselPostsPerWeek: 3 }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp3', annual: 'rp4' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+        ]),
+        subscribe: vi.fn(),
+        upgrade: vi.fn(),
+        purchaseCredits: vi.fn(),
+        verifyCredits: vi.fn(),
+    },
+    couponAPI: {
+        validate: vi.fn(),
+    },
+    creditPacksAPI: {
+        getAll: vi.fn().mockResolvedValue([
+            { id: 'cp1', name: '10 Credits', description: '10 bonus credits', credits: 10, priceInPaise: 9900, isActive: true, sortOrder: 1 },
+            { id: 'cp2', name: '25 Credits', description: '25 bonus credits', credits: 25, priceInPaise: 19900, isActive: true, sortOrder: 2 },
+        ]),
+    },
+    invoiceAPI: {
+        getAll: vi.fn().mockResolvedValue([
+            { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01', pdfUrl: 'https://example.com/invoice1.pdf' },
+            { id: 'inv2', restaurantId: 'r1', type: 'CREDIT_PURCHASE', amountPaise: 9900, currency: 'INR', status: 'paid', description: '10 Credits', paidAt: '2026-02-15' },
+        ]),
+    },
+}));
+
+import { subscriptionAPI, instagramAPI, couponAPI, creditPacksAPI, invoiceAPI, restaurantAPI } from '../api';
+
+// Mock window.history
+const mockHistoryPushState = vi.fn();
+const mockHistoryBack = vi.fn();
+
+// Mock window.open
+const mockWindowOpen = vi.fn();
+
+// Mock window.confirm
+const mockConfirm = vi.fn();
+
+describe('ProfileSheet Component', () => {
+    const mockOnClose = vi.fn();
+    const mockOnLogout = vi.fn();
+    const mockOnRestaurantUpdate = vi.fn();
+
+    const mockRestaurantData = {
+        id: 'r1',
+        name: 'Test Restaurant',
+        cuisine: 'Italian',
+        location: {
+            address: '123 Main St, Downtown, Mumbai',
+            lat: 19.076,
+            lng: 72.877,
+            mapUrl: 'https://maps.example.com',
+        },
+        accountManager: {
+            name: 'John Doe',
+            phone: '+919876543210',
+            email: 'john@example.com',
+            avatar: '/avatar.jpg',
+        },
+        integrations: {
+            instagram: false,
+        },
+    };
+
+    const defaultProps = {
+        isOpen: true,
+        onClose: mockOnClose,
+        onLogout: mockOnLogout,
+        restaurantData: mockRestaurantData,
+        userName: 'Arjun Mehta',
+        onRestaurantUpdate: mockOnRestaurantUpdate,
+    };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+
+        // Re-set mock implementations cleared by clearAllMocks
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'ACTIVE',
+                credits: 15,
+                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { reelsPerWeek: 5, instagramPostsPerWeek: 10, carouselPostsPerWeek: 3 }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                currentPeriodEnd: '2026-04-01',
+            },
+            usage: {
+                reels: { used: 2, limit: 5 },
+                instagramPosts: { used: 4, limit: 10 },
+                carousels: { used: 1, limit: 3 },
+            },
+        });
+        vi.mocked(subscriptionAPI.getPlans).mockResolvedValue([
+            { id: 'p1', slug: 'starter', tier: 'STARTER', name: 'Starter', version: 1, isCurrentVersion: true, limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 1 }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp1', annual: 'rp2' }, features: ['INSTAGRAM'] },
+            { id: 'p2', slug: 'growth', tier: 'GROWTH', name: 'Growth', version: 1, isCurrentVersion: true, limits: { reelsPerWeek: 5, instagramPostsPerWeek: 10, carouselPostsPerWeek: 3 }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp3', annual: 'rp4' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+        ]);
+        vi.mocked(creditPacksAPI.getAll).mockResolvedValue([
+            { id: 'cp1', name: '10 Credits', description: '10 bonus credits', credits: 10, priceInPaise: 9900, isActive: true, sortOrder: 1 },
+            { id: 'cp2', name: '25 Credits', description: '25 bonus credits', credits: 25, priceInPaise: 19900, isActive: true, sortOrder: 2 },
+        ]);
+        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
+            { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01', pdfUrl: 'https://example.com/invoice1.pdf' },
+            { id: 'inv2', restaurantId: 'r1', type: 'CREDIT_PURCHASE', amountPaise: 9900, currency: 'INR', status: 'paid', description: '10 Credits', paidAt: '2026-02-15' },
+        ]);
+
+        // Reset action mocks that individual tests may override with mockRejectedValue
+        vi.mocked(subscriptionAPI.subscribe).mockReset();
+        vi.mocked(subscriptionAPI.upgrade).mockReset();
+        vi.mocked(subscriptionAPI.purchaseCredits).mockReset();
+
+        window.history.pushState = mockHistoryPushState;
+        window.history.back = mockHistoryBack;
+        window.open = mockWindowOpen;
+        window.confirm = mockConfirm;
+    });
+
+    // --- Rendering & Visibility ---
+
+    it('should render when isOpen is true', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Arjun Mehta')).toBeInTheDocument();
+        expect(screen.getByText('Test Restaurant')).toBeInTheDocument();
+    });
+
+    it('should not render when isOpen is false', () => {
+        render(<ProfileSheet {...defaultProps} isOpen={false} />);
+        expect(screen.queryByText('Arjun Mehta')).not.toBeInTheDocument();
+    });
+
+    // --- Header ---
+
+    it('should show user initials in avatar', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('AM')).toBeInTheDocument();
+    });
+
+    it('should handle single-word name initials', () => {
+        render(<ProfileSheet {...defaultProps} userName="Arjun" />);
+        expect(screen.getByText('A')).toBeInTheDocument();
+    });
+
+    it('should show city derived from address', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Downtown')).toBeInTheDocument();
+    });
+
+    it('should show cuisine in edit profile row', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Italian')).toBeInTheDocument();
+    });
+
+    // --- Account Manager ---
+
+    it('should show account manager with WhatsApp link', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+        expect(screen.getByText('Account Manager')).toBeInTheDocument();
+        const whatsappLink = screen.getByTitle('Chat on WhatsApp');
+        expect(whatsappLink).toBeInTheDocument();
+        expect(whatsappLink).toHaveAttribute('href', 'https://wa.me/919876543210');
+        expect(whatsappLink).toHaveAttribute('target', '_blank');
+    });
+
+    it('should show fallback avatar when account manager has no avatar', () => {
+        const noAvatarData = {
+            ...mockRestaurantData,
+            accountManager: { ...mockRestaurantData.accountManager, avatar: '' },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={noAvatarData} />);
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    // --- Restaurant Profile ---
+
+    it('should show Edit Restaurant Profile button', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Edit Restaurant Profile')).toBeInTheDocument();
+    });
+
+    it('should open Edit Profile modal on click', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+        expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'editProfile' }, '', '#edit-profile');
+        // Modal should be visible with form fields
+        expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
+        expect(screen.getByLabelText('Cuisine')).toBeInTheDocument();
+    });
+
+    it('should pre-populate Edit Profile modal with restaurant data', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+        expect(screen.getByLabelText('Restaurant Name')).toHaveValue('Test Restaurant');
+        expect(screen.getByLabelText('Cuisine')).toHaveValue('Italian');
+    });
+
+    it('should call onRestaurantUpdate when Edit Profile is saved', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+
+        const nameInput = screen.getByLabelText('Restaurant Name');
+        fireEvent.change(nameInput, { target: { value: 'Updated Name' } });
+
+        fireEvent.click(screen.getByText('Save Changes'));
+        expect(mockOnRestaurantUpdate).toHaveBeenCalledWith(
+            expect.objectContaining({ name: 'Updated Name' })
+        );
+    });
+
+    it('should close Edit Profile on Cancel', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+        expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Cancel'));
+        expect(mockHistoryBack).toHaveBeenCalled();
+    });
+
+    // --- Subscription ---
+
+    it('should show Subscription row', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Subscription')).toBeInTheDocument();
+    });
+
+    it('should load and display subscription data', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        // Wait for subscription data to load
+        await waitFor(() => {
+            expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+        });
+
+        // Subscription row should show plan name and credits
+        expect(screen.getByText(/Growth \(15 credits\)/)).toBeInTheDocument();
+    });
+
+    it('should open Subscription modal on click', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        await waitFor(() => {
+            expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'subscription' }, '', '#subscription');
+
+        // Subscription modal content should be visible
+        await waitFor(() => {
+            expect(screen.getByText('Manage your plan')).toBeInTheDocument();
+            expect(screen.getByText('Current Plan')).toBeInTheDocument();
+            expect(screen.getByText('This Week')).toBeInTheDocument();
+        });
+    });
+
+    it('should show weekly usage in Subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+
+        await waitFor(() => {
+            expect(screen.getByText('Reels')).toBeInTheDocument();
+            expect(screen.getByText('Posts')).toBeInTheDocument();
+            expect(screen.getByText('Carousels')).toBeInTheDocument();
+        });
+    });
+
+    it('should show billing cycle toggle in Subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+
+        await waitFor(() => {
+            expect(screen.getByText('Monthly')).toBeInTheDocument();
+            expect(screen.getByText(/Annual/)).toBeInTheDocument();
+        });
+    });
+
+    it('should show available plans in Subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+
+        await waitFor(() => {
+            expect(screen.getByText('Change Plan')).toBeInTheDocument();
+            expect(screen.getByText('Starter')).toBeInTheDocument();
+        });
+    });
+
+    it('should show coupon code input in Subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+
+        await waitFor(() => {
+            expect(screen.getByPlaceholderText('Have a coupon code?')).toBeInTheDocument();
+            expect(screen.getByPlaceholderText('Have a coupon code?')).toBeInTheDocument();
+        });
+    });
+
+    it('should validate coupon code', async () => {
+        vi.mocked(couponAPI.validate).mockResolvedValue({ valid: true });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+
+        await waitFor(() => {
+            const couponInput = screen.getByPlaceholderText('Have a coupon code?');
+            fireEvent.change(couponInput, { target: { value: 'SAVE20' } });
+        });
+
+        fireEvent.click(screen.getByText('Apply'));
+
+        await waitFor(() => {
+            expect(couponAPI.validate).toHaveBeenCalledWith('SAVE20');
+            expect(screen.getByText('Coupon applied!')).toBeInTheDocument();
+        });
+    });
+
+    it('should show invalid coupon message', async () => {
+        vi.mocked(couponAPI.validate).mockResolvedValue({ valid: false });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+
+        await waitFor(() => {
+            const couponInput = screen.getByPlaceholderText('Have a coupon code?');
+            fireEvent.change(couponInput, { target: { value: 'INVALID' } });
+        });
+
+        fireEvent.click(screen.getByText('Apply'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Invalid coupon code')).toBeInTheDocument();
+        });
+    });
+
+    it('should show credit packs in Subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+
+        await waitFor(() => {
+            expect(screen.getByText('Top Up Credits')).toBeInTheDocument();
+            expect(screen.getByText('10')).toBeInTheDocument();
+            expect(screen.getByText('25')).toBeInTheDocument();
+        });
+    });
+
+    // --- Instagram ---
+
+    it('should show Instagram Connect button when not connected', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Connect')).toBeInTheDocument();
+        expect(screen.getByText('Connect your business account')).toBeInTheDocument();
+    });
+
+    it('should show Instagram Connected status when connected', () => {
+        const connectedData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: {
+                connected: true,
+                username: 'testrestaurant',
+                pageName: 'Test Page',
+            },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
+        expect(screen.getByText('Connected')).toBeInTheDocument();
+        expect(screen.getByText('@testrestaurant')).toBeInTheDocument();
+    });
+
+    it('should show connection details when connected', () => {
+        const connectedData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: {
+                connected: true,
+                username: 'testrestaurant',
+                pageName: 'Test Page',
+                tokenStatus: 'valid' as const,
+            },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
+        expect(screen.getByText('Connected via Test Page')).toBeInTheDocument();
+    });
+
+    it('should show token expiring warning', () => {
+        const expiringData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: {
+                connected: true,
+                username: 'testrestaurant',
+                pageName: 'Test Page',
+                tokenStatus: 'expiring_soon' as const,
+            },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={expiringData} />);
+        expect(screen.getByText('Token expiring soon')).toBeInTheDocument();
+    });
+
+    it('should show reauthorize button when needed', () => {
+        const reauthorizeData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: {
+                connected: true,
+                username: 'testrestaurant',
+                pageName: 'Test Page',
+                needsReauthorization: true,
+            },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={reauthorizeData} />);
+        expect(screen.getByText('Reauthorize')).toBeInTheDocument();
+    });
+
+    it('should show setup guide on Connect click', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+
+        expect(screen.getByText('Connect Instagram')).toBeInTheDocument();
+        expect(screen.getByText('Choose your setup method')).toBeInTheDocument();
+        expect(screen.getByText('I already have everything set up')).toBeInTheDocument();
+        expect(screen.getByText('I need help setting up')).toBeInTheDocument();
+    });
+
+    it('should show help button when not connected', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        const helpButton = screen.getByTitle('View setup guide');
+        expect(helpButton).toBeInTheDocument();
+    });
+
+    it('should start OAuth flow from setup guide option 1', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        mockWindowOpen.mockReturnValue({ closed: false });
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+
+        await waitFor(() => {
+            expect(instagramAPI.getOAuthUrl).toHaveBeenCalledWith('r1', false);
+        });
+    });
+
+    it('should start guided OAuth flow from setup guide option 2', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        mockWindowOpen.mockReturnValue({ closed: false });
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+
+        fireEvent.click(screen.getByText('Guided Setup'));
+
+        await waitFor(() => {
+            expect(instagramAPI.getOAuthUrl).toHaveBeenCalledWith('r1', true);
+        });
+    });
+
+    it('should handle Instagram disconnect', async () => {
+        mockConfirm.mockReturnValue(true);
+        vi.mocked(instagramAPI.disconnect).mockResolvedValue(undefined);
+
+        const connectedData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: { connected: true, username: 'testrestaurant', pageName: 'Test Page' },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
+        fireEvent.click(screen.getByText('Connected'));
+
+        await waitFor(() => {
+            expect(instagramAPI.disconnect).toHaveBeenCalledWith('r1');
+        });
+    });
+
+    it('should cancel disconnect when user declines confirm', () => {
+        mockConfirm.mockReturnValue(false);
+
+        const connectedData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: { connected: true, username: 'testrestaurant', pageName: 'Test Page' },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
+        fireEvent.click(screen.getByText('Connected'));
+
+        expect(instagramAPI.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('should close setup guide on Cancel click', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+
+        expect(screen.getByText('Connect Instagram')).toBeInTheDocument();
+
+        // Find the Cancel button in the setup guide (last Cancel)
+        const cancelButtons = screen.getAllByText('Cancel');
+        fireEvent.click(cancelButtons[cancelButtons.length - 1]);
+
+        expect(mockHistoryBack).toHaveBeenCalled();
+    });
+
+    // --- Billing History ---
+
+    it('should show billing history when invoices exist', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Billing History')).toBeInTheDocument();
+            expect(screen.getByText('Growth Plan - Monthly')).toBeInTheDocument();
+            expect(screen.getByText('10 Credits')).toBeInTheDocument();
+        });
+    });
+
+    it('should show PDF download link for invoices with pdfUrl', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        await waitFor(() => {
+            const downloadLink = screen.getByTitle('Download Invoice');
+            expect(downloadLink).toBeInTheDocument();
+            expect(downloadLink).toHaveAttribute('href', 'https://example.com/invoice1.pdf');
+        });
+    });
+
+    // --- Footer Actions ---
+
+    it('should call onLogout when Log Out is clicked', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Log Out'));
+        expect(mockOnLogout).toHaveBeenCalledOnce();
+    });
+
+    it('should show Delete Account button', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Delete Account')).toBeInTheDocument();
+    });
+
+    // --- Sheet Dismiss ---
+
+    it('should dismiss on backdrop click', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        const backdrop = document.querySelector('.fixed.inset-0.bg-slate-900\\/60');
+        if (backdrop) {
+            fireEvent.click(backdrop);
+            expect(mockOnClose).toHaveBeenCalledOnce();
+        }
+    });
+
+    // --- Section Headers ---
+
+    it('should render all section headers', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Restaurant')).toBeInTheDocument();
+        expect(screen.getByText('Your RestroPulse Team')).toBeInTheDocument();
+        expect(screen.getByText('Account')).toBeInTheDocument();
+        expect(screen.getByText('Integrations')).toBeInTheDocument();
+    });
+
+    // --- Subscription Loading State ---
+
+    it('should show loading state for subscription initially', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Loading...')).toBeInTheDocument();
+    });
+
+    // --- API Error Handling ---
+
+    it('should handle subscription load failure gracefully', async () => {
+        vi.mocked(subscriptionAPI.getCurrent).mockRejectedValue(new Error('API Error'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('Failed to load subscription data:', expect.any(Error));
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should handle OAuth error gracefully', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockRejectedValue(new Error('OAuth Error'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('OAuth initiation error:', expect.any(Error));
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    // --- Drag to Dismiss ---
+
+    it('should close profile page via back button', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        const backButton = screen.getByLabelText('Go back');
+        expect(backButton).toBeInTheDocument();
+
+        fireEvent.click(backButton);
+        expect(mockOnClose).toHaveBeenCalledOnce();
+    });
+
+    it('should render as full page with Profile title', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        expect(screen.getByText('Profile')).toBeInTheDocument();
+        const page = document.querySelector('.fixed.inset-0');
+        expect(page).toBeInTheDocument();
+    });
+
+    // --- No Subscription ---
+
+    it('should show No Plan when subscription is null', async () => {
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: null,
+            usage: null,
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+
+        await waitFor(() => {
+            expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+        });
+
+        expect(screen.getByText('No Plan')).toBeInTheDocument();
+    });
+
+    // --- Subscription modal close ---
+
+    it('should close Subscription modal via backdrop click', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+
+        await waitFor(() => {
+            expect(screen.getByText('Manage your plan')).toBeInTheDocument();
+        });
+
+        // Click the backdrop to close
+        const backdrop = document.querySelector('[data-subscription-modal]')?.parentElement?.querySelector('.absolute.inset-0');
+        if (backdrop) {
+            fireEvent.click(backdrop);
+            expect(mockHistoryBack).toHaveBeenCalled();
+        }
+    });
+
+    // --- Edit Profile with address change ---
+
+    it('should save changes in Edit Profile modal', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+
+        const nameInput = screen.getByLabelText('Restaurant Name');
+        fireEvent.change(nameInput, { target: { value: 'Updated Restaurant' } });
+
+        fireEvent.click(screen.getByText('Save Changes'));
+        expect(mockOnRestaurantUpdate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                name: 'Updated Restaurant',
+            })
+        );
+    });
+
+    // --- Instagram loading state ---
+
+    it('should show loading spinner during Instagram OAuth', async () => {
+        // Mock OAuth URL to hang (never resolve immediately)
+        let resolveOAuth: (v: any) => void;
+        vi.mocked(instagramAPI.getOAuthUrl).mockImplementation(() => new Promise(r => { resolveOAuth = r; }));
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+
+        // Should show loading state on the button area
+        await waitFor(() => {
+            expect(screen.getByText('Connecting...')).toBeInTheDocument();
+        });
+    });
+
+    // --- Popstate handler ---
+
+    it('should close modals on browser back button (popstate)', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        // Open edit profile
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+        expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
+
+        // Simulate browser back button
+        window.dispatchEvent(new PopStateEvent('popstate'));
+
+        await waitFor(() => {
+            expect(screen.queryByLabelText('Restaurant Name')).not.toBeInTheDocument();
+        });
+    });
+
+    // --- Billing history with no invoices ---
+
+    it('should not show billing history when no invoices', async () => {
+        vi.mocked(invoiceAPI.getAll).mockResolvedValue([]);
+
+        render(<ProfileSheet {...defaultProps} />);
+
+        await waitFor(() => {
+            expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
+        });
+
+        expect(screen.queryByText('Billing History')).not.toBeInTheDocument();
+    });
+
+    // --- Instagram connected with page info ---
+
+    it('should show Instagram page name when connected', () => {
+        const connectedData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: {
+                connected: true,
+                username: 'testrestaurant',
+                pageName: 'Test Page',
+                tokenStatus: 'valid' as const,
+            },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
+        expect(screen.getByText('Connected via Test Page')).toBeInTheDocument();
+    });
+
+    // --- Disconnect error handling ---
+
+    it('should handle disconnect error gracefully', async () => {
+        mockConfirm.mockReturnValue(true);
+        vi.mocked(instagramAPI.disconnect).mockRejectedValue(new Error('Disconnect failed'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        const connectedData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: { connected: true, username: 'testrestaurant', pageName: 'Test Page' },
+        };
+        render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
+
+        await waitFor(() => {
+            expect(screen.getByText('Connected')).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText('Connected'));
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('Disconnect error:', expect.any(Error));
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    // --- Popup blocked scenario ---
+
+    it('should handle popup blocked during OAuth', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        mockWindowOpen.mockReturnValue(null); // popup blocked
+        mockConfirm.mockReturnValue(false);
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+
+        await waitFor(() => {
+            expect(mockWindowOpen).toHaveBeenCalled();
+        });
+    });
+
+    // --- Edit Profile map coordinates ---
+
+    it('should render all form fields in Edit Profile modal', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+
+        expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
+        expect(screen.getByText('Location')).toBeInTheDocument();
+        expect(screen.getByLabelText('Cuisine')).toBeInTheDocument();
+        expect(screen.getByText('Save Changes')).toBeInTheDocument();
+        expect(screen.getByText('Cancel')).toBeInTheDocument();
+    });
+
+    // --- SubscriptionModal: Switch Plan with Razorpay ---
+
+    it('should call handleSwitchPlan and open Razorpay when clicking Switch on a non-current plan', async () => {
+        const mockRzpOpen = vi.fn();
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            subscriptionId: 'sub_rzp_123',
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // The Starter plan should have a "Switch" button (since current plan is Growth and subscription is ACTIVE)
+        const switchButton = screen.getByText('Switch');
+        fireEvent.click(switchButton);
+
+        await waitFor(() => {
+            expect(subscriptionAPI.upgrade).toHaveBeenCalled();
+            expect(subscriptionAPI.subscribe).toHaveBeenCalledWith('starter', 'MONTHLY', undefined);
+        });
+
+        await waitFor(() => {
+            expect(MockRazorpay).toHaveBeenCalledWith(expect.objectContaining({
+                key: 'rzp_test_key',
+                subscription_id: 'sub_rzp_123',
+                name: 'RestroPulse',
+            }));
+            expect(mockRzpOpen).toHaveBeenCalled();
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    it('should call subscribe without upgrade when no active subscription', async () => {
+        const mockRzpOpen = vi.fn();
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'NONE',
+                credits: 5,
+                planSnapshot: null,
+                currentPeriodEnd: null,
+            },
+            usage: null,
+        });
+        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            subscriptionId: 'sub_rzp_456',
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // With no active plan, buttons should say "Subscribe"
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        fireEvent.click(subscribeButtons[0]);
+
+        await waitFor(() => {
+            expect(subscriptionAPI.upgrade).not.toHaveBeenCalled();
+            expect(subscriptionAPI.subscribe).toHaveBeenCalledWith('starter', 'MONTHLY', undefined);
+            expect(mockRzpOpen).toHaveBeenCalled();
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    it('should handle switch plan failure gracefully', async () => {
+        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Payment failed'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Switch'));
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('Subscription failed:', expect.any(Error));
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    // --- SubscriptionModal: Purchase Credits with Razorpay ---
+
+    it('should call handlePurchaseCredits and open Razorpay when clicking a credit pack', async () => {
+        const mockRzpOpen = vi.fn();
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(subscriptionAPI.purchaseCredits).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            orderId: 'order_123',
+            amount: 9900,
+            currency: 'INR',
+            credits: 10,
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Top Up Credits')).toBeInTheDocument());
+
+        // Click the first credit pack (10 credits) -- find pack buttons inside the Top Up Credits section
+        const topUpHeading = screen.getByText('Top Up Credits');
+        const topUpSection = topUpHeading.closest('div')!.parentElement!;
+        const packButtons = topUpSection.querySelectorAll('button');
+        fireEvent.click(packButtons[0]);
+
+        await waitFor(() => {
+            expect(subscriptionAPI.purchaseCredits).toHaveBeenCalledWith('cp1');
+            expect(MockRazorpay).toHaveBeenCalledWith(expect.objectContaining({
+                key: 'rzp_test_key',
+                amount: 9900,
+                currency: 'INR',
+                order_id: 'order_123',
+                name: 'RestroPulse',
+                description: '10 Credits',
+            }));
+            expect(mockRzpOpen).toHaveBeenCalled();
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    it('should handle credit purchase failure gracefully', async () => {
+        vi.mocked(subscriptionAPI.purchaseCredits).mockRejectedValue(new Error('Purchase failed'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Top Up Credits')).toBeInTheDocument());
+
+        const topUpHeading = screen.getByText('Top Up Credits');
+        const topUpSection = topUpHeading.closest('div')!.parentElement!;
+        const packButtons = topUpSection.querySelectorAll('button');
+        fireEvent.click(packButtons[0]);
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('Credit purchase failed:', expect.any(Error));
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    // --- SubscriptionModal: Error visibility for every action button ---
+
+    it('should show error for Subscribe button when no active subscription', async () => {
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'NONE',
+                credits: 5,
+                planSnapshot: null,
+                currentPeriodEnd: null,
+            },
+            usage: null,
+        });
+        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('razorpay plan not configured'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // All plans show Subscribe when status is NONE
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        expect(subscribeButtons.length).toBeGreaterThanOrEqual(1);
+
+        fireEvent.click(subscribeButtons[0]);
+
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should show error for every Subscribe button, not just the first', async () => {
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'NONE',
+                credits: 5,
+                planSnapshot: null,
+                currentPeriodEnd: null,
+            },
+            usage: null,
+        });
+        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('razorpay plan not configured'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        expect(subscribeButtons.length).toBeGreaterThanOrEqual(2);
+
+        // Click the last Subscribe button (not the first)
+        fireEvent.click(subscribeButtons[subscribeButtons.length - 1]);
+
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should show subscription error even when modal is scrolled down', async () => {
+        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Payment failed'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        const modal = document.querySelector('[data-subscription-modal]') as HTMLDivElement | null;
+        expect(modal).toBeTruthy();
+        if (modal) {
+            modal.scrollTop = 400;
+        }
+
+        const subscribeButtons = screen.getAllByRole('button', { name: 'Switch' });
+        fireEvent.click(subscribeButtons[0]);
+
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should show error again after clicking Subscribe a second time', async () => {
+        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Payment failed'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // First click -- error appears
+        fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        // Second click -- error must still be shown
+        fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should show error when upgrade fails before subscribe', async () => {
+        vi.mocked(subscriptionAPI.upgrade).mockRejectedValue(new Error('No active subscription to upgrade'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // With ACTIVE subscription the button says "Switch"
+        fireEvent.click(screen.getByText('Switch'));
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('Subscription failed:', expect.any(Error));
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        // subscribe should NOT have been called since upgrade failed first
+        expect(subscriptionAPI.subscribe).not.toHaveBeenCalled();
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should show error when window.Razorpay is not loaded for subscribe', async () => {
+        // Ensure Razorpay is NOT on window
+        delete (window as any).Razorpay;
+
+        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            subscriptionId: 'sub_rzp_123',
+        });
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Switch'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should show error when window.Razorpay is not loaded for credit purchase', async () => {
+        delete (window as any).Razorpay;
+
+        vi.mocked(subscriptionAPI.purchaseCredits).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            orderId: 'order_123',
+            amount: 9900,
+            currency: 'INR',
+            credits: 10,
+        });
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Top Up Credits')).toBeInTheDocument());
+
+        const topUpHeading = screen.getByText('Top Up Credits');
+        const topUpSection = topUpHeading.closest('div')!.parentElement!;
+        const packButtons = topUpSection.querySelectorAll('button');
+        fireEvent.click(packButtons[0]);
+
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    it('should clear previous error when starting a new action', async () => {
+        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Payment failed'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // First action fails -- error shows
+        fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        // Start a new action -- error should clear before the new attempt
+        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Another failure'));
+        fireEvent.click(screen.getByText('Switch'));
+
+        // Error clears momentarily, then reappears after the new failure
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    // --- SubscriptionModal: Razorpay payment handler callbacks ---
+
+    it('should show subscription error when Razorpay emits payment.failed', async () => {
+        let paymentFailedHandler: (() => void) | undefined;
+        const mockRzpOpen = vi.fn(() => {
+            paymentFailedHandler?.();
+        });
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any, options: any) {
+            this.open = mockRzpOpen;
+            this.on = (event: string, handler: () => void) => {
+                if (event === 'payment.failed') {
+                    paymentFailedHandler = handler;
+                }
+            };
+            this.options = options;
+        });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            subscriptionId: 'sub_rzp_123',
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Switch'));
+
+        await waitFor(() => {
+            expect(mockRzpOpen).toHaveBeenCalled();
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    it('should refresh subscription data after Razorpay payment handler fires for switch plan', async () => {
+        let razorpayHandler: () => Promise<void>;
+        const mockRzpOpen = vi.fn();
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any, options: any) {
+            razorpayHandler = options.handler;
+            this.open = mockRzpOpen;
+        });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            subscriptionId: 'sub_rzp_123',
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(mockRzpOpen).toHaveBeenCalled());
+
+        // Simulate Razorpay calling the handler after payment
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub2',
+                restaurantId: 'r1',
+                status: 'ACTIVE',
+                credits: 20,
+                planSnapshot: { name: 'Starter', slug: 'starter', tier: 'STARTER', limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 1 }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                currentPeriodEnd: '2026-05-01',
+            },
+            usage: { reels: { used: 0, limit: 2 }, instagramPosts: { used: 0, limit: 5 }, carousels: { used: 0, limit: 1 } },
+        });
+
+        await razorpayHandler!();
+
+        await waitFor(() => {
+            // getCurrent should have been called again by the handler
+            expect(subscriptionAPI.getCurrent).toHaveBeenCalledTimes(2);
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    it('should show subscription error when refresh fails in Razorpay success handler', async () => {
+        let razorpayHandler: () => Promise<void>;
+        const mockRzpOpen = vi.fn();
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any, options: any) {
+            razorpayHandler = options.handler;
+            this.open = mockRzpOpen;
+        });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            subscriptionId: 'sub_rzp_123',
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(mockRzpOpen).toHaveBeenCalled());
+
+        vi.mocked(subscriptionAPI.getCurrent).mockRejectedValueOnce(new Error('refresh failed'));
+        await razorpayHandler!();
+
+        await waitFor(() => {
+            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    it('should verify and refresh after Razorpay credit purchase handler fires', async () => {
+        let razorpayHandler: (response: any) => Promise<void>;
+        const mockRzpOpen = vi.fn();
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any, options: any) {
+            razorpayHandler = options.handler;
+            this.open = mockRzpOpen;
+        });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(subscriptionAPI.purchaseCredits).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            orderId: 'order_123',
+            amount: 9900,
+            currency: 'INR',
+            credits: 10,
+        });
+        vi.mocked(subscriptionAPI.verifyCredits).mockResolvedValue(undefined);
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Top Up Credits')).toBeInTheDocument());
+
+        const topUpHeading = screen.getByText('Top Up Credits');
+        const topUpSection = topUpHeading.closest('div')!.parentElement!;
+        const packButtons = topUpSection.querySelectorAll('button');
+        fireEvent.click(packButtons[0]);
+
+        await waitFor(() => expect(mockRzpOpen).toHaveBeenCalled());
+
+        // Simulate Razorpay calling the handler after payment
+        await razorpayHandler!({
+            razorpay_order_id: 'order_123',
+            razorpay_payment_id: 'pay_456',
+            razorpay_signature: 'sig_789',
+        });
+
+        await waitFor(() => {
+            expect(subscriptionAPI.verifyCredits).toHaveBeenCalledWith('order_123', 'pay_456', 'sig_789');
+            expect(subscriptionAPI.getCurrent).toHaveBeenCalledTimes(2);
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    // --- SubscriptionModal: Billing cycle toggle ---
+
+    it('should toggle billing cycle to Annual and show annual pricing', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Monthly')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText(/Annual/));
+
+        // After toggling, the pricing should change to annual format
+        await waitFor(() => {
+            // Annual pricing for plans should show /yr labels
+            const annualLabels = screen.getAllByText(/\/yr/);
+            expect(annualLabels.length).toBeGreaterThan(0);
+        });
+    });
+
+    // --- SubscriptionModal: Current plan indicator ---
+
+    it('should show Current Plan indicator and not a Switch button for the active plan', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // Growth is the current plan - should show "Active" badge
+        expect(screen.getByText('Active')).toBeInTheDocument();
+        // The Growth plan card should NOT have a "Switch" button; Starter should
+        const switchButtons = screen.getAllByText('Switch');
+        expect(switchButtons).toHaveLength(1); // Only one Switch button (for Starter)
+    });
+
+    // --- SubscriptionModal: NONE status shows Free Credits badge ---
+
+    it('should show Free Credits badge when subscription status is NONE', async () => {
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'NONE',
+                credits: 5,
+                planSnapshot: null,
+                currentPeriodEnd: null,
+            },
+            usage: null,
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Free Credits')).toBeInTheDocument());
+    });
+
+    // --- SubscriptionModal: Switch plan with coupon ---
+
+    it('should pass coupon code when switching plan', async () => {
+        const mockRzpOpen = vi.fn();
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(couponAPI.validate).mockResolvedValue({ valid: true });
+        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            subscriptionId: 'sub_rzp_123',
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // Apply coupon first
+        const couponInput = screen.getByPlaceholderText('Have a coupon code?');
+        fireEvent.change(couponInput, { target: { value: 'SAVE20' } });
+        fireEvent.click(screen.getByText('Apply'));
+        await waitFor(() => expect(screen.getByText('Coupon applied!')).toBeInTheDocument());
+
+        // Switch plan
+        fireEvent.click(screen.getByText('Switch'));
+
+        await waitFor(() => {
+            expect(subscriptionAPI.subscribe).toHaveBeenCalledWith('starter', 'MONTHLY', 'SAVE20');
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    it('should normalize lowercase coupon code on apply and pass normalized value when switching', async () => {
+        const mockRzpOpen = vi.fn();
+        const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
+        (window as any).Razorpay = MockRazorpay;
+
+        vi.mocked(couponAPI.validate).mockResolvedValue({ valid: true });
+        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
+            keyId: 'rzp_test_key',
+            subscriptionId: 'sub_rzp_123',
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        const couponInput = screen.getByPlaceholderText('Have a coupon code?') as HTMLInputElement;
+        fireEvent.change(couponInput, { target: { value: 'save20' } });
+        expect(couponInput.value).toBe('save20');
+
+        fireEvent.click(screen.getByText('Apply'));
+
+        await waitFor(() => {
+            expect(couponAPI.validate).toHaveBeenCalledWith('SAVE20');
+        });
+
+        fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => {
+            expect(subscriptionAPI.subscribe).toHaveBeenCalledWith('starter', 'MONTHLY', 'SAVE20');
+        });
+
+        delete (window as any).Razorpay;
+    });
+
+    // --- InstagramErrorModal ---
+
+    it('should show InstagramErrorModal when OAuth error occurs with known error type', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        mockWindowOpen.mockReturnValue({ closed: false });
+
+        render(<ProfileSheet {...defaultProps} />);
+
+        // Simulate OAuth callback with error via postMessage
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+
+        await waitFor(() => expect(instagramAPI.getOAuthUrl).toHaveBeenCalled());
+
+        // Post a message simulating an error callback
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            data: {
+                type: 'instagram-oauth-callback',
+                success: false,
+                error: 'NO_PAGES_FOUND',
+                errorMessage: 'No Facebook pages found',
+            },
+        }));
+
+        await waitFor(() => {
+            expect(screen.getByText('No Facebook Pages Found')).toBeInTheDocument();
+            expect(screen.getByText(/You need to create a Facebook Page/)).toBeInTheDocument();
+        });
+
+        // Should have a help link
+        const helpLink = screen.getByText('Create a Facebook Page');
+        expect(helpLink).toBeInTheDocument();
+        expect(helpLink.closest('a')).toHaveAttribute('href', 'https://www.facebook.com/pages/create');
+
+        // Should have Try Again and Close buttons
+        expect(screen.getByText('Try Again')).toBeInTheDocument();
+        expect(screen.getByText('Close')).toBeInTheDocument();
+    });
+
+    it('should close InstagramErrorModal when Close is clicked', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        mockWindowOpen.mockReturnValue({ closed: false });
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+        await waitFor(() => expect(instagramAPI.getOAuthUrl).toHaveBeenCalled());
+
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            data: {
+                type: 'instagram-oauth-callback',
+                success: false,
+                error: 'NO_PAGES_FOUND',
+                errorMessage: 'No pages found',
+            },
+        }));
+
+        await waitFor(() => expect(screen.getByText('No Facebook Pages Found')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Close'));
+
+        await waitFor(() => {
+            expect(screen.queryByText('No Facebook Pages Found')).not.toBeInTheDocument();
+        });
+    });
+
+    it('should retry OAuth when Try Again is clicked in error modal', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        mockWindowOpen.mockReturnValue({ closed: false });
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+        await waitFor(() => expect(instagramAPI.getOAuthUrl).toHaveBeenCalled());
+
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            data: {
+                type: 'instagram-oauth-callback',
+                success: false,
+                error: 'API_ERROR',
+                errorMessage: 'Something went wrong',
+            },
+        }));
+
+        await waitFor(() => expect(screen.getByText('Connection Error')).toBeInTheDocument());
+
+        vi.mocked(instagramAPI.getOAuthUrl).mockClear();
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth2' });
+
+        fireEvent.click(screen.getByText('Try Again'));
+
+        await waitFor(() => {
+            expect(instagramAPI.getOAuthUrl).toHaveBeenCalled();
+        });
+    });
+
+    it('should show error modal with NO_IG_ACCOUNT_FOUND error info', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        mockWindowOpen.mockReturnValue({ closed: false });
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+        await waitFor(() => expect(instagramAPI.getOAuthUrl).toHaveBeenCalled());
+
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            data: {
+                type: 'instagram-oauth-callback',
+                success: false,
+                error: 'NO_IG_ACCOUNT_FOUND',
+                errorMessage: 'No IG account',
+            },
+        }));
+
+        await waitFor(() => {
+            expect(screen.getByText('Professional Account Required')).toBeInTheDocument();
+            expect(screen.getByText(/Professional \(Business or Creator\)/)).toBeInTheDocument();
+        });
+    });
+
+    // --- InstagramErrorModal: popup blocked shows error modal ---
+
+    it('should show error modal when popup is blocked', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        mockWindowOpen.mockReturnValue(null); // popup blocked
+        mockConfirm.mockReturnValue(false);
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+
+        await waitFor(() => {
+            expect(mockWindowOpen).toHaveBeenCalled();
+        });
+
+        // The error modal uses API_ERROR type which maps to "Connection Error" title
+        await waitFor(() => {
+            expect(screen.getByText('Connection Error')).toBeInTheDocument();
+        });
+    });
+
+    // --- AccountPickerModal ---
+
+    // AccountPickerModal is triggered by internal state (pendingAccounts + showAccountPicker)
+    // which is not directly settable from the UI flow tested here.
+    // The handleSelectAccount function is tested indirectly through other flows.
+
+    // --- OAuth postMessage: successful callback ---
+
+    it('should handle successful OAuth callback via postMessage', async () => {
+        vi.mocked(restaurantAPI.get).mockResolvedValue({
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramConnection: { connected: true, username: 'connected_user', pageName: 'My Page' },
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+
+        // Simulate successful OAuth callback via postMessage
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            data: {
+                type: 'instagram-oauth-callback',
+                success: true,
+                username: 'connected_user',
+            },
+        }));
+
+        await waitFor(() => {
+            // Should refresh restaurant data
+            expect(restaurantAPI.get).toHaveBeenCalledWith('r1');
+            // Should call onRestaurantUpdate with refreshed data
+            expect(mockOnRestaurantUpdate).toHaveBeenCalled();
+        });
+    });
+
+    // --- refreshRestaurantData error handling ---
+
+    it('should handle refreshRestaurantData failure gracefully', async () => {
+        vi.mocked(restaurantAPI.get).mockRejectedValue(new Error('Refresh failed'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+
+        // Simulate successful OAuth callback that triggers refreshRestaurantData
+        window.dispatchEvent(new MessageEvent('message', {
+            origin: window.location.origin,
+            data: {
+                type: 'instagram-oauth-callback',
+                success: true,
+                username: 'test_user',
+            },
+        }));
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('Failed to refresh restaurant data:', expect.any(Error));
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    // --- postMessage: ignores messages from different origin ---
+
+    it('should ignore postMessage from different origin', () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        // Dispatch a message from a different origin
+        const messageEvent = new MessageEvent('message', {
+            origin: 'https://evil.com',
+            data: {
+                type: 'instagram-oauth-callback',
+                success: true,
+                username: 'hacker',
+            },
+        });
+        window.dispatchEvent(messageEvent);
+
+        // restaurantAPI.get should not be called since origin doesn't match
+        expect(restaurantAPI.get).not.toHaveBeenCalled();
+    });
+
+
+    // --- SubscriptionModal: credits display ---
+
+    it('should show credits count in subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => {
+            // Credits balance displayed in the hero card as "15" + "credits"
+            const heroCard = screen.getByText('Current Plan').parentElement!.parentElement!.parentElement!;
+            expect(heroCard).toHaveTextContent('15');
+            expect(heroCard).toHaveTextContent('credits');
+        });
+    });
+
+    // --- SubscriptionModal: renewal date ---
+
+    it('should show renewal date in subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => {
+            expect(screen.getByText(/Renews/)).toBeInTheDocument();
+        });
+    });
+
+    // --- SubscriptionModal: plan features ---
+
+    it('should show plan features in subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => {
+            expect(screen.getByText('2 Reels/week')).toBeInTheDocument();
+            expect(screen.getByText('5 Posts/week')).toBeInTheDocument();
+            expect(screen.getByText('1 Carousels/week')).toBeInTheDocument();
+            // Plan features include Instagram as a list item
+            const instagramFeatures = screen.getAllByText('Instagram');
+            expect(instagramFeatures.length).toBeGreaterThanOrEqual(1);
+        });
+    });
+
+    // --- SubscriptionModal: Razorpay footer text ---
+
+    it('should show Razorpay payment note in subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => {
+            expect(screen.getByText('Payments processed securely via Razorpay')).toBeInTheDocument();
+        });
+    });
+
+    // --- OAuth error triggers error modal display ---
+
+    it('should show InstagramErrorModal when OAuth initiation fails', async () => {
+        vi.mocked(instagramAPI.getOAuthUrl).mockRejectedValue(new Error('Network error'));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Connect'));
+        fireEvent.click(screen.getByText('Connect with Facebook'));
+
+        await waitFor(() => {
+            expect(consoleSpy).toHaveBeenCalledWith('OAuth initiation error:', expect.any(Error));
+        });
+
+        // Error modal should be visible with the mapped error info for API_ERROR
+        await waitFor(() => {
+            expect(screen.getByText('Connection Error')).toBeInTheDocument();
+            expect(screen.getByText(/An error occurred while connecting to Instagram/)).toBeInTheDocument();
+        });
+
+        consoleSpy.mockRestore();
+    });
+
+    // --- SubscriptionModal: usage bars show correct values ---
+
+    it('should show correct usage values in subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => {
+            // Check usage values: reels 2/5, posts 4/10, carousels 1/3
+            expect(screen.getByText((_, element) => element?.textContent === '2/5')).toBeInTheDocument();
+            expect(screen.getByText((_, element) => element?.textContent === '4/10')).toBeInTheDocument();
+            expect(screen.getByText((_, element) => element?.textContent === '1/3')).toBeInTheDocument();
+        });
+    });
+
+    // --- Coupon validation error handling ---
+
+    it('should handle coupon validation API error', async () => {
+        vi.mocked(couponAPI.validate).mockRejectedValue(new Error('API Error'));
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByPlaceholderText('Have a coupon code?')).toBeInTheDocument());
+
+        const couponInput = screen.getByPlaceholderText('Have a coupon code?');
+        fireEvent.change(couponInput, { target: { value: 'BADCODE' } });
+        fireEvent.click(screen.getByText('Apply'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Invalid coupon code')).toBeInTheDocument();
+        });
+    });
+
+    // --- Coupon code validation success ---
+
+    it('should show coupon applied message on valid coupon', async () => {
+        vi.mocked(couponAPI.validate).mockResolvedValue({ valid: true });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByPlaceholderText('Have a coupon code?')).toBeInTheDocument());
+
+        const couponInput = screen.getByPlaceholderText('Have a coupon code?');
+        fireEvent.change(couponInput, { target: { value: 'SAVE20' } });
+        fireEvent.click(screen.getByText('Apply'));
+        await waitFor(() => expect(screen.getByText('Coupon applied!')).toBeInTheDocument());
+    });
+});

@@ -1,11 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Clock, CalendarCheck, Zap, ChevronRight, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
 import { strategyAPI } from '../api';
-import { StrategyCycle } from '@restropulse/shared';
+import { StrategyCycle, Restaurant } from '@restropulse/shared';
+import { ActionNotice } from './ActionNotice';
 
-const Strategy: React.FC = () => {
+interface StrategyProps {
+    restaurantData: Restaurant;
+    instagramConnected?: boolean;
+    onConnectInstagram?: () => void;
+}
+
+const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected = false, onConnectInstagram }) => {
     const [cycles, setCycles] = useState<StrategyCycle[]>([]);
     const [loading, setLoading] = useState(true);
+    const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+
+    // Auto-dismiss notice
+    useEffect(() => {
+        if (!notice) return;
+        const timer = setTimeout(() => setNotice(null), 6000);
+        return () => clearTimeout(timer);
+    }, [notice]);
 
     useEffect(() => {
         const loadCycles = async () => {
@@ -42,6 +57,14 @@ const Strategy: React.FC = () => {
         return () => window.removeEventListener('popstate', handlePopState);
     }, [feedbackState.isOpen]);
 
+    // Escape key to dismiss feedback modal
+    useEffect(() => {
+        if (!feedbackState.isOpen) return;
+        const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') closeFeedbackModal(); };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [feedbackState.isOpen]);
+
     const closeFeedbackModal = () => {
         setDragOffset(0);
         window.history.back();
@@ -55,10 +78,14 @@ const Strategy: React.FC = () => {
     const approvedCycle = cycles.find(c => c.status === 'APPROVED');
     const activeCycle = cycles.find(c => c.status === 'ACTIVE');
 
-    const handleApprove = (id: string) => {
-        // In a real app, this would be an API call
-        setCycles(prev => prev.map(c => c.id === id ? { ...c, status: 'APPROVED' } : c));
-        alert("Strategy Approved! Content creation will begin shortly.");
+    const handleApprove = async (id: string) => {
+        try {
+            await strategyAPI.updateCycle(id, { status: 'APPROVED' });
+            setCycles(prev => prev.map(c => c.id === id ? { ...c, status: 'APPROVED' } : c));
+            setNotice({ message: 'Strategy approved! Content creation will begin shortly.', type: 'success' });
+        } catch {
+            setNotice({ message: 'Something went wrong. Please try again.', type: 'error' });
+        }
     };
 
     const openFeedbackModal = (id: string) => {
@@ -68,22 +95,31 @@ const Strategy: React.FC = () => {
         setFeedbackNote("");
     };
 
-    const submitFeedback = () => {
+    const submitFeedback = async () => {
         if (!feedbackState.cycleId) return;
 
-        // Construct feedback payload
         const feedbackData = {
             areas: selectedAreas,
             note: feedbackNote
         };
+        const feedbackString = JSON.stringify(feedbackData);
 
-        setCycles(prev => prev.map(c => c.id === feedbackState.cycleId ? {
-            ...c,
-            status: 'CHANGES_REQUESTED',
-            feedback: JSON.stringify(feedbackData)
-        } : c));
+        try {
+            await strategyAPI.updateCycle(feedbackState.cycleId, {
+                status: 'CHANGES_REQUESTED',
+                feedback: feedbackString,
+            });
+            setCycles(prev => prev.map(c => c.id === feedbackState.cycleId ? {
+                ...c,
+                status: 'CHANGES_REQUESTED',
+                feedback: feedbackString
+            } : c));
+            setNotice({ message: 'Feedback submitted. Your account manager will review it.', type: 'success' });
+        } catch {
+            setNotice({ message: 'Something went wrong. Please try again.', type: 'error' });
+        }
 
-        window.history.back(); // Close modal
+        window.history.back();
     };
 
     const toggleArea = (area: string) => {
@@ -167,16 +203,22 @@ const Strategy: React.FC = () => {
                             <div className="col-span-2 bg-slate-100 text-slate-500 py-3 rounded-xl text-center text-xs font-bold">
                                 Awaiting Revision from Team
                             </div>
+                        ) : !instagramConnected ? (
+                            <div className="col-span-2 bg-amber-50 text-amber-700 py-3 rounded-xl text-center text-xs font-bold border border-amber-200">
+                                Connect Instagram to approve
+                            </div>
                         ) : (
                             <>
                                 <button
                                     onClick={() => openFeedbackModal(cycle.id)}
+                                    aria-label="Request changes to strategy"
                                     className="py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                 >
                                     <RefreshCw size={16} /> Request Changes
                                 </button>
                                 <button
                                     onClick={() => handleApprove(cycle.id)}
+                                    aria-label="Approve strategy"
                                     className="py-3.5 rounded-xl bg-slate-900 text-white font-bold text-xs shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                                 >
                                     <CheckCircle size={16} /> Approve Strategy
@@ -189,9 +231,34 @@ const Strategy: React.FC = () => {
         );
     };
 
+    if (loading) {
+        return (
+            <div className="p-4 space-y-4">
+                {[1, 2].map(i => <div key={i} className="bg-slate-100 rounded-3xl h-48 animate-pulse" />)}
+            </div>
+        );
+    }
+
     return (
         <div className="p-4 space-y-8">
-            {/* ... [Main Strategy List UI remains unchanged] ... */}
+            {!instagramConnected && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
+                    <p className="text-xs text-amber-800 font-medium">Connect Instagram to approve strategies and start publishing.</p>
+                    {onConnectInstagram && (
+                        <button onClick={onConnectInstagram} className="shrink-0 px-3 py-1.5 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition-colors">
+                            Connect
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {notice && (
+                <ActionNotice
+                    message={notice.message}
+                    type={notice.type}
+                />
+            )}
+
             {/* Pending Action Section */}
             {pendingCycle && (
                 <div className="animate-in slide-in-from-top duration-500">
@@ -309,7 +376,7 @@ const Strategy: React.FC = () => {
                             <button
                                 onClick={submitFeedback}
                                 disabled={selectedAreas.length === 0}
-                                className="w-full bg-slate-900 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl shadow-lg hover:bg-slate-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Send size={18} /> Submit Feedback
                             </button>

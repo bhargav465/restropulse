@@ -34,8 +34,8 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit, retry = true
     }
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Network error' }));
-        throw new Error(error.message || `HTTP ${response.status}`);
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error || errorBody.message || `HTTP ${response.status}`);
     }
 
     return response.json();
