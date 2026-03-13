@@ -2,6 +2,29 @@ import '@testing-library/jest-dom';
 import { expect, afterEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
+// Mock browser telemetry
+vi.mock('@restropulse/telemetry/browser', () => ({
+    initBrowserTelemetry: vi.fn(),
+    getAppInsights: vi.fn().mockReturnValue(null),
+    reportError: vi.fn(),
+    trackPageView: vi.fn(),
+    trackEvent: vi.fn(),
+    trackMetric: vi.fn(),
+    browserEvents: {
+        login: vi.fn(),
+        logout: vi.fn(),
+        onboardingStep: vi.fn(),
+        onboardingCompleted: vi.fn(),
+        postCreated: vi.fn(),
+        instagramConnected: vi.fn(),
+        instagramDisconnected: vi.fn(),
+        subscriptionStarted: vi.fn(),
+        paymentCompleted: vi.fn(),
+        networkError: vi.fn(),
+        viewTransition: vi.fn(),
+    },
+}));
+
 // Cleanup after each test
 afterEach(() => {
     cleanup();

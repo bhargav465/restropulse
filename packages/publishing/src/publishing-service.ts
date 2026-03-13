@@ -25,6 +25,9 @@
 import axios, { AxiosError } from 'axios';
 import FormData from 'form-data';
 import { decrypt } from './encryption.js';
+import { createLogger } from '@restropulse/telemetry/server';
+
+const log = createLogger('publishing-service');
 
 // API Configuration
 const META_GRAPH_API = 'https://graph.facebook.com/v18.0';
@@ -61,7 +64,7 @@ async function uploadImageToFacebook(
     pageId: string,
     accessToken: string
 ): Promise<string> {
-    console.log(`[Publishing] Uploading image to Facebook CDN: ${imageUrl}`);
+    log.info({ imageUrl }, 'Uploading image to Facebook CDN');
 
     // Step 1: Download the image (following all redirects)
     const downloadResponse = await axios.get(imageUrl, {
@@ -75,7 +78,7 @@ async function uploadImageToFacebook(
     const contentType = downloadResponse.headers['content-type'] || 'image/jpeg';
     const fileSize = imageBuffer.length;
 
-    console.log(`[Publishing] Downloaded image: ${fileSize} bytes, type: ${contentType}`);
+    log.info({ fileSize, contentType }, 'Downloaded image');
 
     // Determine file extension from content type
     const extMap: Record<string, string> = {
@@ -112,7 +115,7 @@ async function uploadImageToFacebook(
         throw new Error('No photo ID returned from Facebook upload');
     }
 
-    console.log(`[Publishing] Uploaded to Facebook as unpublished photo: ${photoId}`);
+    log.info({ photoId }, 'Uploaded to Facebook as unpublished photo');
 
     // Step 3: Get the CDN URL from the uploaded photo
     const photoDetails = await metaApi.get(`/${photoId}`, {
@@ -131,7 +134,7 @@ async function uploadImageToFacebook(
     images.sort((a: any, b: any) => (b.width * b.height) - (a.width * a.height));
     const cdnUrl = images[0].source;
 
-    console.log(`[Publishing] Facebook CDN URL ready: ${cdnUrl.substring(0, 80)}...`);
+    log.info('Facebook CDN URL ready');
     return cdnUrl;
 }
 
@@ -146,9 +149,9 @@ async function getPublishableImageUrl(
     pageId: string,
     accessToken: string
 ): Promise<string> {
-    console.log(`[Publishing] getPublishableImageUrl called for: ${imageUrl}`);
+    log.info({ imageUrl }, 'getPublishableImageUrl called');
     const cdnUrl = await uploadImageToFacebook(imageUrl, pageId, accessToken);
-    console.log(`[Publishing] getPublishableImageUrl success: ${cdnUrl.substring(0, 80)}...`);
+    log.info('getPublishableImageUrl success');
     return cdnUrl;
 }
 
@@ -246,7 +249,7 @@ async function createImageContainer(
         throw new Error('No container ID returned from Instagram API');
     }
 
-    console.log(`[Publishing] Created image container: ${containerId}${isCarouselItem ? ' (carousel item)' : ''}`);
+    log.info({ containerId, isCarouselItem }, 'Created image container');
     return containerId;
 }
 
@@ -278,7 +281,7 @@ async function createVideoContainer(
         throw new Error('No container ID returned from Instagram API');
     }
 
-    console.log(`[Publishing] Created ${mediaType} container: ${containerId}`);
+    log.info({ containerId, mediaType }, 'Created video container');
     return containerId;
 }
 
@@ -305,7 +308,7 @@ async function createCarouselContainer(
         throw new Error('No carousel container ID returned from Instagram API');
     }
 
-    console.log(`[Publishing] Created carousel container: ${containerId} with ${childIds.length} children`);
+    log.info({ containerId, childCount: childIds.length }, 'Created carousel container');
     return containerId;
 }
 
@@ -316,7 +319,7 @@ async function createCarouselContainer(
  * Required for video-based media types (REELS, STORIES with video).
  */
 async function waitForContainerReady(containerId: string, accessToken: string): Promise<ContainerStatusResult> {
-    console.log(`[Publishing] Polling container ${containerId} status...`);
+    log.info({ containerId }, 'Polling container status');
 
     for (let attempt = 0; attempt < VIDEO_POLL_MAX_ATTEMPTS; attempt++) {
         const response = await metaApi.get(`/${containerId}`, {
@@ -327,7 +330,7 @@ async function waitForContainerReady(containerId: string, accessToken: string): 
         });
 
         const statusCode = response.data.status_code;
-        console.log(`[Publishing] Container ${containerId} status: ${statusCode} (attempt ${attempt + 1})`);
+        log.info({ containerId, statusCode, attempt: attempt + 1 }, 'Container status check');
 
         if (statusCode === 'FINISHED') {
             return { ready: true, statusCode };
@@ -367,7 +370,7 @@ async function publishContainer(igUserId: string, accessToken: string, container
         throw new Error('No media ID returned from publish call');
     }
 
-    console.log(`[Publishing] Published media: ${mediaId}`);
+    log.info({ mediaId }, 'Published media');
     return mediaId;
 }
 
@@ -392,7 +395,7 @@ async function publishImagePost(
         return { success: true, instagramMediaId: mediaId, retryable: false };
     } catch (error) {
         const parsed = parsePublishError(error);
-        console.error(`[Publishing] Image post failed:`, parsed.message);
+        log.error({ error: parsed.message }, 'Image post failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
@@ -436,7 +439,7 @@ async function publishCarouselPost(
         return { success: true, instagramMediaId: mediaId, retryable: false };
     } catch (error) {
         const parsed = parsePublishError(error);
-        console.error(`[Publishing] Carousel post failed:`, parsed.message);
+        log.error({ error: parsed.message }, 'Carousel post failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
@@ -476,7 +479,7 @@ async function publishReelPost(
         return { success: true, instagramMediaId: mediaId, retryable: false };
     } catch (error) {
         const parsed = parsePublishError(error);
-        console.error(`[Publishing] Reel post failed:`, parsed.message);
+        log.error({ error: parsed.message }, 'Reel post failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
@@ -532,7 +535,7 @@ async function publishStoryPost(
         return { success: true, instagramMediaId: mediaId, retryable: false };
     } catch (error) {
         const parsed = parsePublishError(error);
-        console.error(`[Publishing] Story post failed:`, parsed.message);
+        log.error({ error: parsed.message }, 'Story post failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
@@ -551,7 +554,7 @@ export async function publishToInstagram(
     post: PublishablePost,
     credentials: InstagramCredentialsForPublishing
 ): Promise<PublishResult> {
-    console.log(`[Publishing] Starting publish for post ${post.id} (${post.type}) to Instagram`);
+    log.info({ postId: post.id, postType: post.type, platform: 'Instagram' }, 'Starting publish to Instagram');
 
     // Decrypt access token
     const accessToken = decrypt(credentials.accessToken);
@@ -578,7 +581,7 @@ export async function publishToInstagram(
             return publishStoryPost(igUserId, pageId, accessToken, post);
         case 'VIDEO':
             // VIDEO type uses the reel flow (Instagram deprecated standalone video posts in favor of reels)
-            console.log('[Publishing] VIDEO type will be published as a Reel');
+            log.info('VIDEO type will be published as a Reel');
             return publishReelPost(igUserId, pageId, accessToken, post);
         default:
             return {
@@ -608,7 +611,7 @@ export async function publishToFacebook(
     post: PublishablePost,
     credentials: InstagramCredentialsForPublishing
 ): Promise<PublishResult> {
-    console.log(`[Publishing] Starting publish for post ${post.id} (${post.type}) to Facebook`);
+    log.info({ postId: post.id, postType: post.type, platform: 'Facebook' }, 'Starting publish to Facebook');
 
     const accessToken = decrypt(credentials.accessToken);
     if (!accessToken) {
@@ -657,7 +660,7 @@ export async function publishToFacebook(
                 { headers: formData.getHeaders(), timeout: API_TIMEOUT_MS }
             );
 
-            console.log(`[Publishing] Facebook photo posted: ${response.data.post_id || response.data.id}`);
+            log.info({ facebookPostId: response.data.post_id || response.data.id }, 'Facebook photo posted');
             return {
                 success: true,
                 facebookPostId: response.data.post_id || response.data.id,
@@ -690,7 +693,7 @@ export async function publishToFacebook(
                     { headers: fd.getHeaders(), timeout: API_TIMEOUT_MS }
                 );
 
-                console.log(`[Publishing] Facebook single-photo carousel posted: ${response.data.post_id || response.data.id}`);
+                log.info({ facebookPostId: response.data.post_id || response.data.id }, 'Facebook single-photo carousel posted');
                 return {
                     success: true,
                     facebookPostId: response.data.post_id || response.data.id,
@@ -743,7 +746,7 @@ export async function publishToFacebook(
                 }
             );
 
-            console.log(`[Publishing] Facebook multi-photo carousel posted: ${feedResponse.data.id}`);
+            log.info({ facebookPostId: feedResponse.data.id }, 'Facebook multi-photo carousel posted');
             return {
                 success: true,
                 facebookPostId: feedResponse.data.id,
@@ -756,7 +759,7 @@ export async function publishToFacebook(
             if (!post.videoUrl) {
                 // Graceful fallback: If no video but has thumbnail, post as image instead
                 if (post.thumbnail) {
-                    console.log(`[Publishing] REEL has no videoUrl, falling back to IMAGE for Facebook: ${post.id}`);
+                    log.info({ postId: post.id }, 'REEL has no videoUrl, falling back to IMAGE for Facebook');
                     const fbImageUrl = await uploadImageToFacebook(post.thumbnail, pageId, accessToken);
 
                     const response = await metaApi.post(`/${pageId}/photos`, null, {
@@ -767,7 +770,7 @@ export async function publishToFacebook(
                         }
                     });
 
-                    console.log(`[Publishing] Facebook photo posted (REEL fallback): ${response.data.post_id || response.data.id}`);
+                    log.info({ facebookPostId: response.data.post_id || response.data.id }, 'Facebook photo posted (REEL fallback)');
                     return {
                         success: true,
                         facebookPostId: response.data.post_id || response.data.id,
@@ -802,7 +805,7 @@ export async function publishToFacebook(
                 }
             });
 
-            console.log(`[Publishing] Facebook Reel posted: ${videoId}`);
+            log.info({ facebookPostId: videoId }, 'Facebook Reel posted');
             return {
                 success: true,
                 facebookPostId: videoId,
@@ -822,7 +825,7 @@ export async function publishToFacebook(
                     }
                 });
 
-                console.log(`[Publishing] Facebook video story posted: ${response.data.id}`);
+                log.info({ facebookPostId: response.data.id }, 'Facebook video story posted');
                 return {
                     success: true,
                     facebookPostId: response.data.id,
@@ -839,7 +842,7 @@ export async function publishToFacebook(
                     }
                 });
 
-                console.log(`[Publishing] Facebook photo story posted: ${response.data.id}`);
+                log.info({ facebookPostId: response.data.id }, 'Facebook photo story posted');
                 return {
                     success: true,
                     facebookPostId: response.data.id,
@@ -867,7 +870,7 @@ export async function publishToFacebook(
                 }
             });
 
-            console.log(`[Publishing] Facebook video posted: ${response.data.id}`);
+            log.info({ facebookPostId: response.data.id }, 'Facebook video posted');
             return {
                 success: true,
                 facebookPostId: response.data.id,
@@ -883,7 +886,7 @@ export async function publishToFacebook(
         };
     } catch (error) {
         const parsed = parsePublishError(error);
-        console.error(`[Publishing] Facebook publish failed:`, parsed.message);
+        log.error({ error: parsed.message }, 'Facebook publish failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }

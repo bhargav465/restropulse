@@ -14,6 +14,9 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createLogger } from '@restropulse/telemetry/server';
+
+const logger = createLogger('content-engine:asset-server');
 
 // Resolve assets/ relative to this file so it works for both
 // `tsx` (src/services/) and compiled output (dist/services/).
@@ -56,7 +59,7 @@ export function startAssetServer(port: number): http.Server {
   });
 
   server.listen(port, () => {
-    console.log(`[Asset Server] Serving local assets at http://localhost:${port}`);
+    logger.info({ port, url: `http://localhost:${port}` }, 'Serving local assets');
   });
 
   return server;

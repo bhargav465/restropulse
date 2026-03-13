@@ -15,6 +15,9 @@ import cron from 'node-cron';
 import { getPostsCollection, getRestaurantsCollection, toApiFormat } from '@restropulse/db';
 import { publishPost, PublishResult } from './publishing-service.js';
 import { Post } from '@restropulse/shared';
+import { createLogger, tracedCronJob, trackEvent } from '@restropulse/telemetry/server';
+
+const log = createLogger('publishing-cron');
 
 // Constants
 const MAX_PUBLISH_ATTEMPTS = 3;
@@ -79,7 +82,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
     const restaurantId = postDoc.restaurantId;
     const currentAttempts = postDoc.publishAttempts || 0;
 
-    console.log(`[Publishing Cron] Processing post ${postId} (attempt ${currentAttempts + 1}/${MAX_PUBLISH_ATTEMPTS})`);
+    log.info({ postId, attempt: currentAttempts + 1, maxAttempts: MAX_PUBLISH_ATTEMPTS }, 'Processing post for publishing');
 
     // Atomically mark post as PUBLISHING to prevent race conditions
     const updateResult = await postsCol.findOneAndUpdate(
@@ -98,13 +101,13 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
 
     // If update failed, post is already being processed or status changed
     if (!updateResult) {
-        console.log(`[Publishing Cron] Post ${postId} is already being processed or status changed, skipping`);
+        log.info({ postId }, 'Post is already being processed or status changed, skipping');
         return false;
     }
 
     // Validate restaurant ID exists
     if (!restaurantId) {
-        console.error(`[Publishing Cron] Post ${postId} has no restaurantId, marking as MISSED_DEADLINE`);
+        log.error({ postId }, 'Post has no restaurantId, marking as MISSED_DEADLINE');
         await postsCol.updateOne(
             { _id: postDoc._id },
             {
@@ -122,7 +125,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
     // Get restaurant credentials
     const restaurant = await getRestaurantCredentials(restaurantId);
     if (!restaurant || !restaurant.instagramCredentials) {
-        console.error(`[Publishing Cron] No Instagram credentials for restaurant ${restaurantId}`);
+        log.error({ postId, restaurantId }, 'No Instagram credentials for restaurant');
 
         const newAttempts = currentAttempts + 1;
         const isFinalAttempt = newAttempts >= MAX_PUBLISH_ATTEMPTS;
@@ -186,7 +189,8 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
 
     if (overallSuccess) {
         // Success - update post status
-        console.log(`[Publishing Cron] Post ${postId} published successfully`);
+        log.info({ postId, platform: publishablePost.platform }, 'Post published successfully');
+        trackEvent('post.published', { postId, postType: publishablePost.type, platform: publishablePost.platform });
 
         // Ensure database update completes before returning
         const updateResult = await postsCol.updateOne(
@@ -205,7 +209,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
         );
 
         if (updateResult.modifiedCount === 0) {
-            console.warn(`[Publishing Cron] Warning: Post ${postId} database update may have failed`);
+            log.warn({ postId }, 'Post database update may have failed');
         }
 
         publishAttempts.push({
@@ -230,7 +234,8 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
         }
         const combinedError = errorMessages.join('; ');
 
-        console.error(`[Publishing Cron] Post ${postId} publish failed: ${combinedError}`);
+        log.error({ postId, error: combinedError }, 'Post publish failed');
+        trackEvent('post.publish_failed', { postId, error: combinedError });
 
         // If not retryable or final attempt, mark as MISSED_DEADLINE
         const shouldFail = isFinalAttempt || !anyRetryable;
@@ -249,13 +254,13 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
         );
 
         if (updateResult.modifiedCount === 0) {
-            console.warn(`[Publishing Cron] Warning: Post ${postId} failure status update may have failed`);
+            log.warn({ postId }, 'Post failure status update may have failed');
         }
 
         if (shouldFail) {
-            console.error(`[Publishing Cron] Post ${postId} permanently failed after ${newAttempts} attempts`);
+            log.error({ postId, attempts: newAttempts }, 'Post permanently failed after max attempts');
         } else {
-            console.log(`[Publishing Cron] Post ${postId} will be retried (attempt ${newAttempts}/${MAX_PUBLISH_ATTEMPTS})`);
+            log.info({ postId, attempt: newAttempts, maxAttempts: MAX_PUBLISH_ATTEMPTS }, 'Post will be retried');
         }
 
         publishAttempts.push({
@@ -275,7 +280,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
  * Run the publishing job - processes all posts due for publishing.
  */
 export async function runPublishingJob(): Promise<{ published: number; failed: number; skipped: number }> {
-    console.log(`[Publishing Cron] Starting publishing job at ${new Date().toISOString()}`);
+    log.info('Starting publishing job');
 
     const stats = { published: 0, failed: 0, skipped: 0 };
 
@@ -283,11 +288,11 @@ export async function runPublishingJob(): Promise<{ published: number; failed: n
         const posts = await getPostsDueForPublishing();
 
         if (posts.length === 0) {
-            console.log('[Publishing Cron] No posts due for publishing');
+            log.info('No posts due for publishing');
             return stats;
         }
 
-        console.log(`[Publishing Cron] Found ${posts.length} posts due for publishing`);
+        log.info({ count: posts.length }, 'Found posts due for publishing');
 
         for (const postDoc of posts) {
             try {
@@ -298,7 +303,7 @@ export async function runPublishingJob(): Promise<{ published: number; failed: n
                     stats.failed++;
                 }
             } catch (error) {
-                console.error(`[Publishing Cron] Unexpected error processing post ${postDoc._id}:`, error);
+                log.error({ postId: String(postDoc._id), error: String(error) }, 'Unexpected error processing post');
                 stats.failed++;
             }
 
@@ -306,9 +311,9 @@ export async function runPublishingJob(): Promise<{ published: number; failed: n
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        console.log(`[Publishing Cron] Completed: ${stats.published} published, ${stats.failed} failed`);
+        log.info({ published: stats.published, failed: stats.failed }, 'Publishing job completed');
     } catch (error) {
-        console.error('[Publishing Cron] Job failed:', error);
+        log.error({ error: String(error) }, 'Publishing job failed');
     }
 
     return stats;
@@ -327,18 +332,18 @@ export function getRecentPublishAttempts(limit: number = 50): PublishAttempt[] {
  */
 export function startPublishingCron(): void {
     const job = cron.schedule(CRON_SCHEDULE, async () => {
-        await runPublishingJob();
+        await tracedCronJob('publishing-job', () => runPublishingJob());
     }, {
         timezone: 'Asia/Kolkata'
     });
 
-    console.log('[Publishing Cron] Cron job scheduled: Every 5 minutes');
+    log.info('Cron job scheduled: Every 5 minutes');
 
     // In development, run initial check after a short delay
     if (process.env.NODE_ENV === 'development') {
-        console.log('[Publishing Cron] Development mode: Running initial check in 10 seconds...');
+        log.info('Development mode: Running initial check in 10 seconds...');
         setTimeout(async () => {
-            await runPublishingJob();
+            await tracedCronJob('publishing-job', () => runPublishingJob());
         }, 10000);
     }
 }
@@ -347,6 +352,6 @@ export function startPublishingCron(): void {
  * Manually trigger the publishing job (for admin/testing).
  */
 export async function triggerManualPublish(): Promise<{ published: number; failed: number; skipped: number }> {
-    console.log('[Publishing Cron] Manual publish triggered');
+    log.info('Manual publish triggered');
     return await runPublishingJob();
 }

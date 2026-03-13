@@ -4,6 +4,10 @@ import { AuthResponse, LoginRequest, OtpRequest, OtpVerifyRequest } from '@restr
 import { generateTokens, verifyToken, refreshAccessToken } from '../services/jwt.js';
 import { verifyFirebaseToken, isFirebaseInitialized } from '../services/firebase-admin.js';
 import { handle } from '../middleware/async-handler.js';
+import { createLogger } from '@restropulse/telemetry/server';
+import { hashForCorrelation } from '@restropulse/telemetry';
+
+const log = createLogger('auth');
 
 const router = express.Router();
 
@@ -117,7 +121,7 @@ router.post('/send-otp', handle(async (req: Request<{}, {}, OtpRequest>, res: Re
     await col.insertOne({ phone, otp, expiresAt, attempts: 0 });
 
     // Log OTP for development
-    console.log(`[OTP] ${phone}: ${otp}`);
+    log.debug({ phoneHash: hashForCorrelation(phone) }, 'OTP generated');
 
     res.json({
         success: true,

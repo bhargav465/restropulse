@@ -5,6 +5,9 @@ import { ApiResponse, Post } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { enforcePlanLimits } from '../middleware/enforce-plan-limits.js';
+import { createLogger } from '@restropulse/telemetry/server';
+
+const log = createLogger('posts');
 
 const router = express.Router();
 
@@ -119,7 +122,7 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         });
     }
 
-    console.log(`[Content Generation] Creating ${type} post for: ${concept.substring(0, 50)}...`);
+    log.info({ type, concept: concept.substring(0, 50) }, 'Creating post for content generation');
 
     // TODO: Replace with actual AI content generation service
     // For now, generate placeholder media based on type
@@ -138,7 +141,7 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
             // Video content types - use actual video URL
             thumbnail = placeholderImage;
             videoUrl = placeholderVideo;
-            console.log(`[Content Generation] Generated video content with URL: ${videoUrl}`);
+            log.info({ videoUrl }, 'Generated video content');
             break;
 
         case 'CAROUSEL':
@@ -149,14 +152,14 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
                 `https://picsum.photos/seed/${seed + 1}/1080/1080`,
                 `https://picsum.photos/seed/${seed + 2}/1080/1080`
             ];
-            console.log(`[Content Generation] Generated carousel with ${mediaUrls.length} images`);
+            log.info({ imageCount: mediaUrls.length }, 'Generated carousel content');
             break;
 
         case 'IMAGE':
         default:
             // Single image
             thumbnail = placeholderImage;
-            console.log(`[Content Generation] Generated image content`);
+            log.info('Generated image content');
             break;
     }
 
@@ -184,7 +187,7 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         }
     }
 
-    console.log(`[Content Generation] Post created successfully: ${newPost.id}`);
+    log.info({ postId: newPost.id }, 'Post created successfully');
 
     res.status(201).json({
         success: true,
@@ -251,17 +254,16 @@ router.post('/:id/test-publish', async (req: Request, res: Response) => {
             platform: post.platform
         };
 
-        console.log('[Test Publish] Starting diagnostic publish for post', id);
-        console.log('[Test Publish] Post data:', JSON.stringify(publishablePost, null, 2));
-        console.log('[Test Publish] Credentials: userId=%s, pageId=%s, tokenLength=%d',
-            credentials.userId, credentials.pageId, credentials.accessToken?.length || 0);
+        log.info({ postId: id }, 'Starting diagnostic publish');
+        log.debug({ post: publishablePost }, 'Test publish post data');
+        log.debug({ userId: credentials.userId, pageId: credentials.pageId, tokenLength: credentials.accessToken?.length || 0 }, 'Test publish credentials');
 
         const startTime = Date.now();
         const results = await publishPost(publishablePost, credentials);
         const duration = Date.now() - startTime;
 
-        console.log('[Test Publish] Results:', JSON.stringify(results, null, 2));
-        console.log(`[Test Publish] Duration: ${duration}ms`);
+        log.debug({ results }, 'Test publish results');
+        log.info({ postId: id, durationMs: duration }, 'Test publish completed');
 
         // Return full raw results -- do NOT update the DB
         return res.json({
@@ -274,7 +276,7 @@ router.post('/:id/test-publish', async (req: Request, res: Response) => {
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         const stack = error instanceof Error ? error.stack : undefined;
-        console.error('[Test Publish] Unhandled error:', message, stack);
+        log.error({ err: message, stack }, 'Test publish unhandled error');
         return res.status(500).json({
             success: false,
             error: message,
@@ -475,7 +477,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
             });
         }
     } catch (error) {
-        console.error('Publish post error:', error);
+        log.error({ err: error }, 'Publish post error');
 
         // Ensure we revert the PUBLISHING status on unexpected errors
         if (postId) {
@@ -492,7 +494,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
                     }
                 );
             } catch (dbError) {
-                console.error('Failed to revert PUBLISHING status:', dbError);
+                log.error({ err: dbError, postId }, 'Failed to revert PUBLISHING status');
             }
         }
 

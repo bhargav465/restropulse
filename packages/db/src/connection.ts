@@ -4,6 +4,9 @@
  */
 
 import { MongoClient, Db, Collection, ObjectId, WithId, Document } from 'mongodb';
+import { createLogger } from '@restropulse/telemetry/server';
+
+const log = createLogger('db');
 
 let client: MongoClient | null = null;
 let db: Db | null = null;
@@ -35,7 +38,7 @@ export async function connectDB(): Promise<Db> {
   await client.connect();
   db = client.db(config.database);
 
-  console.log(`[DB] Connected to MongoDB: ${config.database}`);
+  log.info({ database: config.database }, 'Connected to MongoDB');
   return db;
 }
 
@@ -44,7 +47,7 @@ export async function disconnectDB(): Promise<void> {
     await client.close();
     client = null;
     db = null;
-    console.log('[DB] Disconnected from MongoDB');
+    log.info('Disconnected from MongoDB');
   }
 }
 

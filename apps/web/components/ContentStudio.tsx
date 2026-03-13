@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, CheckCircle, MessageCircle, RefreshCw, Send, Edit, Clock, Lock, Undo2, AlertTriangle, FileText, Image as ImageIcon, MoreHorizontal, CheckSquare, Square, AlertCircle, ChevronDown, LockKeyhole, History, Sparkles, Phone, Film, CircleDashed, Layers, Play, Video, ChevronLeft, ChevronRight, Pause, ScanEye, CalendarClock, Archive, X, Plus, PenTool } from 'lucide-react';
 import { Post, Restaurant } from '@restropulse/shared';
 import { postsAPI, restaurantAPI } from '../api';
+import { browserEvents } from '@restropulse/telemetry/browser';
 import { ActionNotice } from './ActionNotice';
 
 // Constants for Feedback configuration
@@ -713,6 +714,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
             // Persist to backend first, then update UI with the real response
             const updatedPost = await postsAPI.update(id, updateData);
             setPosts(prev => prev.map(p => p.id === id ? updatedPost : p));
+            browserEvents.postCreated(post?.type || 'unknown');
         } catch (err) {
             console.error('Failed to approve post:', err);
         } finally {

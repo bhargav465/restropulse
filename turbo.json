@@ -7,7 +7,9 @@
   "globalEnv": [
     "NODE_ENV",
     "MONGODB_URI",
-    "MONGODB_DB_NAME"
+    "MONGODB_DB_NAME",
+    "APPLICATIONINSIGHTS_CONNECTION_STRING",
+    "LOG_LEVEL"
   ],
   "tasks": {
     "build": {

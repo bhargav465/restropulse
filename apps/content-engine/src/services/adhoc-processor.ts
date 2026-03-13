@@ -7,7 +7,10 @@
 
 import { getPostsCollection } from '@restropulse/db';
 import type { PostType, Platform } from '@restropulse/shared';
+import { createLogger } from '@restropulse/telemetry/server';
 import { generateContent } from './content-generator.js';
+
+const logger = createLogger('content-engine:adhoc-processor');
 
 export async function processAdhocRequests(): Promise<{ processed: number; failed: number }> {
   const col = getPostsCollection();
@@ -22,7 +25,7 @@ export async function processAdhocRequests(): Promise<{ processed: number; faile
     return stats;
   }
 
-  console.log(`[Content Engine] Found ${pendingPosts.length} adhoc posts pending content generation`);
+  logger.info({ count: pendingPosts.length }, 'Found adhoc posts pending content generation');
 
   for (const postDoc of pendingPosts) {
     const postId = postDoc._id.toString();
@@ -50,10 +53,10 @@ export async function processAdhocRequests(): Promise<{ processed: number; faile
         },
       );
 
-      console.log(`[Content Engine] Generated content for post ${postId}`);
+      logger.info({ postId }, 'Generated content for post');
       stats.processed++;
     } catch (error) {
-      console.error(`[Content Engine] Failed to generate content for post ${postId}:`, error);
+      logger.error({ postId, err: error }, 'Failed to generate content for post');
       stats.failed++;
     }
   }

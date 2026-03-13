@@ -12,7 +12,10 @@
  */
 
 import type { PostType, Platform } from '@restropulse/shared';
+import { createLogger } from '@restropulse/telemetry/server';
 import { getRandomImage, getRandomCarousel, getRandomVideo, buildCaption } from './asset-manager.js';
+
+const logger = createLogger('content-engine:content-generator');
 
 export interface GeneratedContent {
   caption: string;
@@ -37,7 +40,7 @@ export async function generateContent(options: GenerateOptions): Promise<Generat
   const { concept, type, restaurantName, themes } = options;
   const theme = themes?.[0] ?? 'default';
 
-  console.log(`[Content Engine] Generating ${type} content for concept: "${concept}"`);
+  logger.debug({ type, concept }, 'Generating content');
 
   const caption = buildCaption(concept, theme, restaurantName);
 
@@ -94,7 +97,7 @@ export async function generateCycleContent(options: {
   const totalWeeks = Math.ceil(totalDays / 7);
   const totalPosts = totalWeeks * postsPerWeek;
 
-  console.log(`[Content Engine] Generating ${totalPosts} posts for cycle (${startDate} to ${endDate})`);
+  logger.info({ totalPosts, startDate, endDate }, 'Generating posts for cycle');
 
   const results: GeneratedContent[] = [];
 

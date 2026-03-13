@@ -56,6 +56,14 @@ Rules:
 *JWT_SECRET has a dev default but must be changed in production.
 *RAZORPAY_* vars are optional in dev; service throws if called without config.
 
+### Telemetry (all Node.js apps)
+
+| Variable                               | Required | Default       | Purpose                                       |
+|----------------------------------------|----------|---------------|-----------------------------------------------|
+| APPLICATIONINSIGHTS_CONNECTION_STRING  | No       | (none)        | Azure Monitor connection. Telemetry disabled if absent. |
+| LOG_LEVEL                              | No       | info          | pino log level (debug, info, warn, error)     |
+| OTEL_TRACES_SAMPLER_ARG               | No       | 1.0 (dev)     | Trace sampling ratio (0.1 recommended for prod) |
+
 ### apps/web (.env)
 
 | Variable                         | Required | Default                    | Purpose                     |
@@ -69,6 +77,8 @@ Rules:
 | VITE_FIREBASE_APP_ID             | Yes*     | placeholder                | Firebase app ID             |
 | VITE_GOOGLE_MAPS_API_KEY         | No       | (none)                     | Google Maps Places API key  |
 | VITE_RAZORPAY_KEY_ID             | No       | (none)                     | Razorpay key for checkout   |
+| VITE_APPINSIGHTS_CONNECTION_STRING | No     | (none)                     | App Insights browser SDK    |
+| VITE_TELEMETRY_SAMPLE_RATE      | No       | 100                        | Trace sampling % (1-100)    |
 
 *Required for production; dev uses fallback values.
 **VITE_GOOGLE_MAPS_API_KEY is optional; when absent, the onboarding location step falls back to manual address entry.

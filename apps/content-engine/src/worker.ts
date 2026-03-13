@@ -20,14 +20,19 @@
  *   npm run download-assets  -- download placeholder images and videos to assets/
  */
 
+import './instrument.js';
+
 import http from 'node:http';
 import path from 'node:path';
 import cron from 'node-cron';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
+import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
 import { processAdhocRequests } from './services/adhoc-processor.js';
 import { processApprovedCycles, processStrategyRequests } from './services/strategy-processor.js';
 import { startAssetServer } from './services/asset-server.js';
+
+const logger = createLogger('content-engine');
 
 const env = loadAndValidateEnv({
   serviceName: 'content-engine',
@@ -44,28 +49,28 @@ const env = loadAndValidateEnv({
 const ASSET_PORT = env.ASSET_SERVER_PORT;
 
 async function runContentJob(): Promise<void> {
-  console.log(`[Content Engine] Running content generation job at ${new Date().toISOString()}`);
+  logger.info({ timestamp: new Date().toISOString() }, 'Running content generation job');
 
   try {
     // Process adhoc post requests
     const adhocStats = await processAdhocRequests();
     if (adhocStats.processed > 0 || adhocStats.failed > 0) {
-      console.log(`[Content Engine] Adhoc: ${adhocStats.processed} processed, ${adhocStats.failed} failed`);
+      logger.info({ processed: adhocStats.processed, failed: adhocStats.failed }, 'Adhoc processing complete');
     }
 
     // Process approved strategy cycles
     const cycleStats = await processApprovedCycles();
     if (cycleStats.processed > 0 || cycleStats.failed > 0) {
-      console.log(`[Content Engine] Cycles: ${cycleStats.processed} processed, ${cycleStats.failed} failed`);
+      logger.info({ processed: cycleStats.processed, failed: cycleStats.failed }, 'Cycle processing complete');
     }
 
     // Process strategy generation requests
     const strategyStats = await processStrategyRequests();
     if (strategyStats.processed > 0 || strategyStats.failed > 0) {
-      console.log(`[Content Engine] Strategies: ${strategyStats.processed} processed, ${strategyStats.failed} failed`);
+      logger.info({ processed: strategyStats.processed, failed: strategyStats.failed }, 'Strategy processing complete');
     }
   } catch (error) {
-    console.error('[Content Engine] Job failed:', error);
+    logger.error({ err: error }, 'Content generation job failed');
   }
 }
 
@@ -73,12 +78,7 @@ let assetServer: http.Server | null = null;
 
 const startWorker = async () => {
   try {
-    console.log(`
-  RestroPulse Content Engine
-
-  Environment: ${process.env.NODE_ENV || 'development'}
-  Database: Connecting...
-`);
+    logger.info({ environment: process.env.NODE_ENV || 'development' }, 'RestroPulse Content Engine starting');
 
     await connectDB();
 
@@ -92,37 +92,35 @@ const startWorker = async () => {
       timezone: 'Asia/Kolkata',
     });
 
-    console.log(`  Content engine is running.
-  - Asset server:            http://localhost:${ASSET_PORT}
-  - Content generation poll: every 2 minutes
-  - Processes: adhoc posts, strategy cycles, strategy generation
-`);
+    logger.info({ assetServerUrl: `http://localhost:${ASSET_PORT}`, pollInterval: '2 minutes' }, 'Content engine is running -- Processes: adhoc posts, strategy cycles, strategy generation');
 
     // Run initial check in development
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Content Engine] Development mode: Running initial check in 5 seconds...');
+      logger.info('Development mode: Running initial check in 5 seconds...');
       setTimeout(async () => {
         await runContentJob();
       }, 5000);
     }
   } catch (error) {
-    console.error('[Content Engine] Failed to start worker:', error);
+    logger.error({ err: error }, 'Failed to start worker');
     process.exit(1);
   }
 };
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n[Content Engine] Shutting down gracefully...');
+  logger.info('Shutting down gracefully...');
   assetServer?.close();
   await disconnectDB();
+  await shutdownServerTelemetry();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n[Content Engine] Shutting down gracefully...');
+  logger.info('Shutting down gracefully...');
   assetServer?.close();
   await disconnectDB();
+  await shutdownServerTelemetry();
   process.exit(0);
 });
 

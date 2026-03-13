@@ -13,10 +13,15 @@
  *   npm run start -- production (node dist/worker.js)
  */
 
+import './instrument.js';
+
 import path from 'node:path';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { startPublishingCron, startTokenRefreshCron } from '@restropulse/publishing';
+import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
+
+const logger = createLogger('publisher');
 
 loadAndValidateEnv({
   serviceName: 'publisher',
@@ -34,12 +39,7 @@ loadAndValidateEnv({
 
 const startWorker = async () => {
   try {
-    console.log(`
-  RestroPulse Publisher Worker
-  
-  Environment: ${process.env.NODE_ENV || 'development'}
-  Database: Connecting...
-`);
+    logger.info({ environment: process.env.NODE_ENV || 'development' }, 'RestroPulse Publisher Worker starting');
 
     await connectDB();
 
@@ -47,26 +47,25 @@ const startWorker = async () => {
     startPublishingCron();
     startTokenRefreshCron();
 
-    console.log(`  Publisher worker is running.
-  - Publishing cron: every 5 minutes
-  - Token refresh cron: daily at 2:00 AM IST
-`);
+    logger.info('Publisher worker is running -- Publishing cron: every 5 minutes, Token refresh cron: daily at 2:00 AM IST');
   } catch (error) {
-    console.error('[Publisher] Failed to start worker:', error);
+    logger.error({ err: error }, 'Failed to start worker');
     process.exit(1);
   }
 };
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n[Publisher] Shutting down gracefully...');
+  logger.info('Shutting down gracefully...');
   await disconnectDB();
+  await shutdownServerTelemetry();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n[Publisher] Shutting down gracefully...');
+  logger.info('Shutting down gracefully...');
   await disconnectDB();
+  await shutdownServerTelemetry();
   process.exit(0);
 });
 

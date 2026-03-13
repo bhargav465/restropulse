@@ -26,6 +26,7 @@
     "license": "ISC",
     "dependencies": {
         "@restropulse/shared": "*",
+        "@restropulse/telemetry": "*",
         "@restropulse/db": "*",
         "@restropulse/publishing": "*",
         "axios": "^1.13.2",

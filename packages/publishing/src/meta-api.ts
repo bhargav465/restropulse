@@ -6,6 +6,9 @@
 import axios, { AxiosError } from 'axios';
 import { generateStateToken, encrypt, decrypt } from './encryption.js';
 import { getOauthSessionsCollection } from '@restropulse/db';
+import { createLogger } from '@restropulse/telemetry/server';
+
+const log = createLogger('meta-api');
 
 // Instagram OAuth Configuration
 const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID || '';
@@ -110,9 +113,9 @@ export async function generateOAuthUrl(restaurantId: string, useOnboarding: bool
             }
         });
         params.append('extras', extras);
-        console.log('[OAuth] Using IG_API_ONBOARDING flow for guided setup');
+        log.info({ flow: 'IG_API_ONBOARDING' }, 'Using onboarding flow for guided setup');
     } else {
-        console.log('[OAuth] Using standard OAuth flow');
+        log.info({ flow: 'standard' }, 'Using standard OAuth flow');
     }
 
     return {
@@ -178,7 +181,7 @@ function parseMetaApiError(error: unknown): { code: number | null; message: stri
  * Exchange authorization code for access token
  */
 async function exchangeCodeForToken(code: string): Promise<{ accessToken: string; expiresIn: number } | null> {
-    console.log('[OAuth] Step 1: Exchanging code for short-lived token...');
+    log.info({ step: 1 }, 'Exchanging code for short-lived token');
     try {
         const response = await metaApi.get('/oauth/access_token', {
             params: {
@@ -188,11 +191,11 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
                 code: code
             }
         });
-        console.log('[OAuth] Step 1 SUCCESS: Got short-lived token');
+        log.info({ step: 1 }, 'Got short-lived token');
 
         // Exchange short-lived token for long-lived token
         const shortLivedToken = response.data.access_token;
-        console.log('[OAuth] Step 2: Exchanging for long-lived token...');
+        log.info({ step: 2 }, 'Exchanging for long-lived token');
 
         const longLivedResponse = await metaApi.get('/oauth/access_token', {
             params: {
@@ -202,14 +205,14 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
                 fb_exchange_token: shortLivedToken
             }
         });
-        console.log('[OAuth] Step 2 SUCCESS: Got long-lived token, expires in', longLivedResponse.data.expires_in, 'seconds');
+        log.info({ step: 2, expiresIn: longLivedResponse.data.expires_in }, 'Got long-lived token');
 
         return {
             accessToken: longLivedResponse.data.access_token,
             expiresIn: longLivedResponse.data.expires_in || 5184000 // Default 60 days
         };
     } catch (error) {
-        console.error('[OAuth] Token exchange FAILED:', error instanceof AxiosError ? error.response?.data : error);
+        log.error({ error: error instanceof AxiosError ? error.response?.data : String(error) }, 'Token exchange failed');
         return null;
     }
 }
@@ -218,7 +221,7 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
  * Fetch user's managed Facebook Pages
  */
 async function getUserPages(accessToken: string): Promise<Array<{ id: string; name: string; access_token: string }>> {
-    console.log('[OAuth] Step 3: Fetching Facebook Pages...');
+    log.info({ step: 3 }, 'Fetching Facebook Pages');
 
     // First, let's see who we're authenticated as
     try {
@@ -228,9 +231,9 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
                 fields: 'id,name,email'
             }
         });
-        console.log('[OAuth] Authenticated as:', JSON.stringify(meResponse.data, null, 2));
+        log.info({ user: meResponse.data }, 'Authenticated as');
     } catch (err) {
-        console.error('[OAuth] Failed to get /me:', err);
+        log.error({ error: String(err) }, 'Failed to get /me');
     }
 
     // Debug: Check token info and extract granular_scopes
@@ -244,7 +247,7 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
                 access_token: `${INSTAGRAM_APP_ID}|${INSTAGRAM_APP_SECRET}`
             }
         });
-        console.log('[OAuth] Token debug info:', JSON.stringify(debugResponse.data, null, 2));
+        log.info({ tokenDebug: debugResponse.data }, 'Token debug info');
 
         // Extract page IDs from granular_scopes (fallback for Development mode)
         const granularScopes = debugResponse.data.data?.granular_scopes || [];
@@ -262,14 +265,14 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
 
         granularPageIds = Array.from(pageIdSet);
         granularIgIds = Array.from(igIdSet);
-        console.log('[OAuth] Extracted from granular_scopes - Page IDs:', granularPageIds, 'IG IDs:', granularIgIds);
+        log.info({ granularPageIds, granularIgIds }, 'Extracted from granular_scopes');
     } catch (err) {
-        console.log('[OAuth] Could not get token debug info');
+        log.info('Could not get token debug info');
     }
 
     try {
         // Try /me/accounts first (standard approach)
-        console.log('[OAuth] Step 3a: Trying /me/accounts...');
+        log.info({ step: '3a' }, 'Trying /me/accounts');
         const response = await metaApi.get('/me/accounts', {
             params: {
                 access_token: accessToken,
@@ -278,24 +281,24 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
         });
 
         let pages = response.data.data || [];
-        console.log('[OAuth] Step 3a Response - /me/accounts:', JSON.stringify(response.data, null, 2));
+        log.info({ step: '3a', response: response.data }, '/me/accounts response');
 
         // If empty, try alternative endpoint with nested fields
         if (pages.length === 0) {
-            console.log('[OAuth] Step 3b: /me/accounts empty, trying /me?fields=accounts...');
+            log.info({ step: '3b' }, '/me/accounts empty, trying /me?fields=accounts');
             const altResponse = await metaApi.get('/me', {
                 params: {
                     access_token: accessToken,
                     fields: 'accounts{id,name,access_token,instagram_business_account}'
                 }
             });
-            console.log('[OAuth] Step 3b Response - /me?fields=accounts:', JSON.stringify(altResponse.data, null, 2));
+            log.info({ step: '3b', response: altResponse.data }, '/me?fields=accounts response');
             pages = altResponse.data.accounts?.data || [];
         }
 
         // If still empty, check business accounts
         if (pages.length === 0) {
-            console.log('[OAuth] Step 3c: Still empty, trying /me/businesses...');
+            log.info({ step: '3c' }, 'Still empty, trying /me/businesses');
             try {
                 const bizResponse = await metaApi.get('/me/businesses', {
                     params: {
@@ -303,7 +306,7 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
                         fields: 'id,name,owned_pages{id,name,access_token}'
                     }
                 });
-                console.log('[OAuth] Step 3c Response - /me/businesses:', JSON.stringify(bizResponse.data, null, 2));
+                log.info({ step: '3c', response: bizResponse.data }, '/me/businesses response');
 
                 // Extract pages from businesses
                 const businesses = bizResponse.data.data || [];
@@ -312,7 +315,7 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
                     pages.push(...bizPages);
                 }
             } catch (bizErr) {
-                console.log('[OAuth] Step 3c: /me/businesses failed (might need business_management permission)');
+                log.info({ step: '3c' }, '/me/businesses failed (might need business_management permission)');
             }
         }
 
@@ -320,7 +323,7 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
         // This handles a Meta bug in Development mode where /me/accounts returns empty
         // even though the user granted page permissions
         if (pages.length === 0 && granularPageIds.length > 0) {
-            console.log('[OAuth] Step 3d: Using granular_scopes fallback - fetching pages directly by ID...');
+            log.info({ step: '3d', granularPageIds }, 'Using granular_scopes fallback - fetching pages directly by ID');
 
             for (const pageId of granularPageIds) {
                 try {
@@ -332,7 +335,7 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
                             fields: 'id,name,access_token,instagram_business_account'
                         }
                     });
-                    console.log(`[OAuth] Step 3d: Fetched page ${pageId}:`, JSON.stringify(pageResponse.data, null, 2));
+                    log.info({ step: '3d', pageId, response: pageResponse.data }, 'Fetched page');
 
                     if (pageResponse.data.id) {
                         pages.push({
@@ -343,19 +346,16 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
                         });
                     }
                 } catch (pageErr) {
-                    console.log(`[OAuth] Step 3d: Could not fetch page ${pageId}:`, pageErr instanceof Error ? pageErr.message : pageErr);
+                    log.info({ step: '3d', pageId, error: pageErr instanceof Error ? pageErr.message : String(pageErr) }, 'Could not fetch page');
                 }
             }
         }
 
-        console.log('[OAuth] Step 3 FINAL RESULT: Found', pages.length, 'pages:', pages.map((p: any) => ({ id: p.id, name: p.name })));
+        log.info({ step: 3, pageCount: pages.length, pages: pages.map((p: any) => ({ id: p.id, name: p.name })) }, 'Fetched pages final result');
         return pages;
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        console.error('[OAuth] Step 3 FAILED - Get pages error:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
-        if (error instanceof AxiosError) {
-            console.error('[OAuth] Full error response:', JSON.stringify(error.response?.data, null, 2));
-        }
+        log.error({ step: 3, error: parsed.message, code: parsed.code, fullError: error instanceof AxiosError ? error.response?.data : undefined }, 'Get pages failed');
         return [];
     }
 }
@@ -366,33 +366,33 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
 async function getInstagramBusinessAccount(pageId: string, pageAccessToken: string): Promise<InstagramAccount | null> {
     try {
         // Get Instagram Business Account ID linked to the page
-        console.log('[OAuth] Step 4b: Fetching IG account for page', pageId);
+        log.info({ step: '4b', pageId }, 'Fetching IG account for page');
         const pageResponse = await metaApi.get(`/${pageId}`, {
             params: {
                 access_token: pageAccessToken,
                 fields: 'instagram_business_account,name'
             }
         });
-        console.log('[OAuth] Page response:', JSON.stringify(pageResponse.data, null, 2));
+        log.info({ step: '4b', response: pageResponse.data }, 'Page response');
 
         const igAccountId = pageResponse.data.instagram_business_account?.id;
         const pageName = pageResponse.data.name;
 
         if (!igAccountId) {
-            console.log('[OAuth] No Instagram Business Account linked to page', pageName);
+            log.info({ pageName }, 'No Instagram Business Account linked to page');
             return null;
         }
-        console.log('[OAuth] Found IG account ID:', igAccountId, 'for page:', pageName);
+        log.info({ igAccountId, pageName }, 'Found IG account for page');
 
         // Get Instagram account details
-        console.log('[OAuth] Step 4c: Fetching IG account details...');
+        log.info({ step: '4c', igAccountId }, 'Fetching IG account details');
         const igResponse = await metaApi.get(`/${igAccountId}`, {
             params: {
                 access_token: pageAccessToken,
                 fields: 'id,username,name,profile_picture_url'
             }
         });
-        console.log('[OAuth] IG account details:', JSON.stringify(igResponse.data, null, 2));
+        log.info({ step: '4c', igAccount: igResponse.data }, 'IG account details');
 
         return {
             id: igResponse.data.id,
@@ -405,10 +405,7 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
         };
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        console.error('[OAuth] Get IG account FAILED:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
-        if (error instanceof AxiosError) {
-            console.error('[OAuth] Full error:', JSON.stringify(error.response?.data, null, 2));
-        }
+        log.error({ error: parsed.message, code: parsed.code, fullError: error instanceof AxiosError ? error.response?.data : undefined }, 'Get IG account failed');
         return null;
     }
 }
@@ -417,29 +414,29 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
  * Validate Instagram permissions
  */
 async function validatePermissions(accessToken: string): Promise<boolean> {
-    console.log('[OAuth] Checking granted permissions...');
+    log.info('Checking granted permissions');
     try {
         const response = await metaApi.get('/me/permissions', {
             params: { access_token: accessToken }
         });
 
-        console.log('[OAuth] All permissions:', JSON.stringify(response.data.data, null, 2));
+        log.info({ permissions: response.data.data }, 'All permissions');
 
         const grantedPermissions = response.data.data
             .filter((p: any) => p.status === 'granted')
             .map((p: any) => p.permission);
 
-        console.log('[OAuth] Granted permissions:', grantedPermissions);
+        log.info({ grantedPermissions }, 'Granted permissions');
 
         // Only require the essential permissions
         const requiredPermissions = ['instagram_basic', 'pages_show_list'];
         const hasAll = requiredPermissions.every(p => grantedPermissions.includes(p));
-        console.log('[OAuth] Required permissions:', requiredPermissions, '| Has all:', hasAll);
+        log.info({ requiredPermissions, hasAll }, 'Permission check result');
 
         return hasAll;
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        console.error('[OAuth] Permission validation FAILED:', parsed.message);
+        log.error({ error: parsed.message }, 'Permission validation failed');
         return false;
     }
 }
@@ -529,7 +526,7 @@ export async function handleOAuthCallback(code: string, state: string, skipState
     if (instagramAccounts.length === 1) {
         // Prefer page access token for Content Publishing API; fall back to user token
         const publishToken = instagramAccounts[0].pageAccessToken || tokenResult.accessToken;
-        console.log('[OAuth] Using', instagramAccounts[0].pageAccessToken ? 'page' : 'user', 'access token for publishing');
+        log.info({ tokenType: instagramAccounts[0].pageAccessToken ? 'page' : 'user' }, 'Using access token for publishing');
         return {
             success: true,
             account: instagramAccounts[0],
@@ -555,7 +552,7 @@ export async function refreshAccessToken(encryptedToken: string): Promise<{ acce
     try {
         const currentToken = decrypt(encryptedToken);
         if (!currentToken) {
-            console.error('Failed to decrypt token for refresh');
+            log.error('Failed to decrypt token for refresh');
             return null;
         }
 
@@ -578,9 +575,9 @@ export async function refreshAccessToken(encryptedToken: string): Promise<{ acce
         };
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        console.error('Token refresh error:', parsed.message, parsed.code ? `(code: ${parsed.code})` : '');
+        log.error({ error: parsed.message, code: parsed.code, isRateLimit: parsed.isRateLimit }, 'Token refresh error');
         if (parsed.isRateLimit) {
-            console.warn('Rate limited during token refresh - will retry later');
+            log.warn('Rate limited during token refresh - will retry later');
         }
         return null;
     }
@@ -622,7 +619,7 @@ export async function getInstagramProfile(encryptedToken: string, igUserId: stri
         return response.data;
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        console.error('Get profile error:', parsed.message);
+        log.error({ error: parsed.message }, 'Get profile error');
         return null;
     }
 }

@@ -13,7 +13,10 @@ import {
   findRestaurantById,
 } from '@restropulse/db';
 import type { PostType } from '@restropulse/shared';
+import { createLogger } from '@restropulse/telemetry/server';
 import { generateContent, generateCycleContent } from './content-generator.js';
+
+const logger = createLogger('content-engine:strategy-processor');
 
 export function parseDateOrFallback(value: unknown, fallback: Date): Date {
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -76,7 +79,7 @@ export async function processApprovedCycles(): Promise<{ processed: number; fail
     return stats;
   }
 
-  console.log(`[Content Engine] Found ${approvedCycles.length} approved cycles needing content generation`);
+  logger.info({ count: approvedCycles.length }, 'Found approved cycles needing content generation');
 
   for (const cycleDoc of approvedCycles) {
     const cycleId = cycleDoc._id.toString();
@@ -155,10 +158,10 @@ export async function processApprovedCycles(): Promise<{ processed: number; fail
         },
       );
 
-      console.log(`[Content Engine] Generated ${contents.length} posts for cycle ${cycleId}`);
+      logger.info({ cycleId, postCount: contents.length }, 'Generated posts for cycle');
       stats.processed++;
     } catch (error) {
-      console.error(`[Content Engine] Failed to process cycle ${cycleId}:`, error);
+      logger.error({ cycleId, err: error }, 'Failed to process cycle');
       stats.failed++;
     }
   }
@@ -182,7 +185,7 @@ export async function processStrategyRequests(): Promise<{ processed: number; fa
     return stats;
   }
 
-  console.log(`[Content Engine] Found ${pendingCycles.length} strategy generation requests`);
+  logger.info({ count: pendingCycles.length }, 'Found strategy generation requests');
 
   for (const cycleDoc of pendingCycles) {
     const cycleId = cycleDoc._id.toString();
@@ -210,10 +213,10 @@ export async function processStrategyRequests(): Promise<{ processed: number; fa
         },
       );
 
-      console.log(`[Content Engine] Generated strategy for cycle ${cycleId}`);
+      logger.info({ cycleId }, 'Generated strategy for cycle');
       stats.processed++;
     } catch (error) {
-      console.error(`[Content Engine] Failed to generate strategy for ${cycleId}:`, error);
+      logger.error({ cycleId, err: error }, 'Failed to generate strategy for cycle');
       stats.failed++;
     }
   }

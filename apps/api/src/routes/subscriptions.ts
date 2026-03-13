@@ -35,6 +35,9 @@ import {
     verifyPaymentSignature,
     getRazorpayKeyId,
 } from '../services/razorpay.js';
+import { createLogger, trackEvent } from '@restropulse/telemetry/server';
+
+const log = createLogger('subscriptions');
 
 const router = express.Router();
 
@@ -197,7 +200,8 @@ router.post('/webhook', async (req: Request, res: Response) => {
         const eventType = event.event;
         const payload = event.payload;
 
-        console.log(`[Razorpay Webhook] ${eventType}`);
+        log.info({ eventType }, 'Razorpay webhook received');
+        trackEvent('webhook.received', { eventType });
 
         switch (eventType) {
             case 'subscription.authenticated': {
@@ -225,6 +229,12 @@ router.post('/webhook', async (req: Request, res: Response) => {
                             status: 'ACTIVE',
                             currentPeriodEnd: periodEnd,
                             razorpayCustomerId: entity.customer_id,
+                        });
+
+                        trackEvent('subscription.activated', {
+                            subscriptionId: sub.id,
+                            restaurantId: sub.restaurantId,
+                            razorpaySubscriptionId: subId,
                         });
 
                         // Record coupon redemption if applicable
@@ -265,6 +275,13 @@ router.post('/webhook', async (req: Request, res: Response) => {
                             status: 'ACTIVE',
                             currentPeriodStart: periodStart,
                             currentPeriodEnd: periodEnd,
+                        });
+
+                        trackEvent('payment.completed', {
+                            subscriptionId: sub.id,
+                            restaurantId: sub.restaurantId,
+                            razorpaySubscriptionId: subId,
+                            amountPaise: String(payload?.payment?.entity?.amount || 0),
                         });
 
                         // Create invoice record from payment
@@ -329,12 +346,12 @@ router.post('/webhook', async (req: Request, res: Response) => {
             }
 
             default:
-                console.log(`[Razorpay Webhook] Unhandled event: ${eventType}`);
+                log.warn({ eventType }, 'Unhandled Razorpay webhook event');
         }
 
         res.json({ success: true });
     } catch (error) {
-        console.error('[Razorpay Webhook] Error:', error);
+        log.error({ err: error }, 'Razorpay webhook processing error');
         res.status(500).json({ success: false, error: 'Webhook processing failed' });
     }
 });

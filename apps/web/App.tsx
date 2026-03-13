@@ -12,6 +12,7 @@ import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
 import { ViewState, Restaurant, User, Post } from '@restropulse/shared';
 import { authAPI, restaurantAPI, postsAPI } from './api';
+import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
 
 function getUserInitials(name: string): string {
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
@@ -114,6 +115,7 @@ const App: React.FC = () => {
 
     const navigateTo = (view: ViewState) => {
         setCurrentView(view);
+        trackPageView(view);
         window.history.pushState({ view }, '', `?view=${view.toLowerCase()}`);
     };
 
@@ -147,11 +149,13 @@ const App: React.FC = () => {
     // Firebase Authentication (Primary)
     const handleFirebaseLogin = async (firebaseIdToken: string) => {
         await onLoginSuccess(await authAPI.loginWithFirebase(firebaseIdToken));
+        browserEvents.login('firebase');
     };
 
     // Fallback OTP Authentication (Development)
     const handleFallbackLogin = async (phone: string, otp: string) => {
         await onLoginSuccess(await authAPI.verifyOtp(phone, otp));
+        browserEvents.login('fallback');
     };
 
     const handleLogout = async () => {

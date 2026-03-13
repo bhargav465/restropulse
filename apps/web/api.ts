@@ -1,4 +1,5 @@
 import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice } from '@restropulse/shared';
+import { browserEvents } from '@restropulse/telemetry/browser';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -8,6 +9,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit, retry = true
 
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
+        'X-Session-Id': sessionStorage.getItem('ai_session') || '',
         ...(token && { Authorization: `Bearer ${token}` }),
         ...options?.headers,
     };
@@ -35,6 +37,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit, retry = true
 
     if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
+        browserEvents.networkError(endpoint, String(response.status));
         throw new Error(errorBody.error || errorBody.message || `HTTP ${response.status}`);
     }
 

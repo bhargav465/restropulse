@@ -1,3 +1,4 @@
+import './instrument.js';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -5,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
+import { createLogger, requestLoggingMiddleware, errorHandlerMiddleware, shutdownServerTelemetry } from '@restropulse/telemetry/server';
 import { initializeFirebaseAdmin } from './services/firebase-admin.js';
 // NOTE: Cron jobs (publishing + token refresh) are now handled by apps/publisher
 import authRoutes from './routes/auth.js';
@@ -74,6 +76,7 @@ if (env.NODE_ENV === 'development' && portConfig.strictInDevelopment && env.PORT
     throw new Error(`Invalid PORT for development. Expected ${portConfig.api}, received ${env.PORT}. Update config/ports.json or .env.`);
 }
 
+const log = createLogger('server');
 const app: Express = express();
 const PORT = env.PORT;
 const CORS_ORIGIN = env.CORS_ORIGIN;
@@ -95,10 +98,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
-app.use((req: Request, _res: Response, next: NextFunction) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-    next();
-});
+app.use(requestLoggingMiddleware());
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {
@@ -125,14 +125,7 @@ app.use((_req: Request, res: Response) => {
 });
 
 // Error handler
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-    console.error('Error:', err);
-    res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-});
+app.use(errorHandlerMiddleware());
 
 // Start server
 const startServer = async () => {
@@ -141,34 +134,29 @@ const startServer = async () => {
         await connectDB();
 
         app.listen(PORT, () => {
-            console.log(`
-  RestroPulse Backend Server
-  
-  Environment: ${process.env.NODE_ENV || 'development'}
-  Port: ${PORT}
-  CORS Origin: ${CORS_ORIGIN}
-  Database: MongoDB Connected
-  
-  Server is running at http://localhost:${PORT}
-  Health check: http://localhost:${PORT}/health
-  API Base: http://localhost:${PORT}/api
-  `);
+            log.info({
+                port: PORT,
+                corsOrigin: CORS_ORIGIN,
+                nodeEnv: process.env.NODE_ENV || 'development',
+            }, `Server running at http://localhost:${PORT}`);
         });
     } catch (error) {
-        console.error('Failed to start server:', error);
+        log.error({ err: error }, 'Failed to start server');
         process.exit(1);
     }
 };
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-    console.log('\nShutting down gracefully...');
+    log.info('Shutting down gracefully (SIGINT)');
+    await shutdownServerTelemetry();
     await disconnectDB();
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-    console.log('\nShutting down gracefully...');
+    log.info('Shutting down gracefully (SIGTERM)');
+    await shutdownServerTelemetry();
     await disconnectDB();
     process.exit(0);
 });

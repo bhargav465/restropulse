@@ -19,6 +19,7 @@
   "dependencies": {
     "@restropulse/shared": "*",
     "@restropulse/db": "*",
+    "@restropulse/telemetry": "*",
     "node-cron": "^4.2.1"
   },
   "devDependencies": {

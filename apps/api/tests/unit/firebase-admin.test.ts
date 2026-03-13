@@ -29,8 +29,6 @@ const firebaseService = await import('../../src/services/firebase-admin');
 
 describe('Firebase Admin Service', () => {
     const originalEnv = process.env;
-    const originalConsoleWarn = console.warn;
-    const originalConsoleLog = console.log;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -39,14 +37,10 @@ describe('Firebase Admin Service', () => {
         if ((firebaseService as any).resetFirebaseConfigForTesting) {
             (firebaseService as any).resetFirebaseConfigForTesting();
         }
-        console.warn = vi.fn();
-        console.log = vi.fn();
     });
 
     afterAll(() => {
         process.env = originalEnv;
-        console.warn = originalConsoleWarn;
-        console.log = originalConsoleLog;
     });
 
     describe('Initialization', () => {
@@ -91,7 +85,6 @@ describe('Firebase Admin Service', () => {
 
             expect(mockInitializeApp).not.toHaveBeenCalled();
             expect(firebaseService.isFirebaseInitialized()).toBe(false);
-            expect(console.warn).toHaveBeenCalled();
         });
 
         it('should not re-initialize if already initialized', () => {

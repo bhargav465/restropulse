@@ -4,6 +4,7 @@ import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
 import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft } from 'lucide-react';
 import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Restaurant, InstagramConnectionError, InstagramAccount, Invoice } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI } from '../api';
+import { browserEvents } from '@restropulse/telemetry/browser';
 import { FacebookIcon, InstagramIcon, WhatsAppIcon } from './BrandIcons';
 import { ActionNotice } from './ActionNotice';
 
@@ -192,6 +193,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     setInstagramConnected(true);
                     setInstagramUsername(event.data.username || '');
                     setInstagramError(null);
+                    browserEvents.instagramConnected();
                     refreshRestaurantData();
                 } else if (event.data.error) {
                     setInstagramError({
@@ -262,6 +264,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     await instagramAPI.disconnect(restaurantData.id);
                     setInstagramConnected(false);
                     setInstagramUsername('');
+                    browserEvents.instagramDisconnected();
                     refreshRestaurantData();
                 } catch (err) {
                     console.error('Disconnect error:', err);
@@ -333,6 +336,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             const result = await instagramAPI.selectAccount(pendingSelectionId, account.id, restaurantData.id);
             setInstagramConnected(true);
             setInstagramUsername(result.username);
+            browserEvents.instagramConnected();
             setPendingAccounts([]);
             setPendingSelectionId(null);
             refreshRestaurantData();
@@ -411,6 +415,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                 await subscriptionAPI.upgrade();
             }
             const data = await subscriptionAPI.subscribe(planSlug, billingCycle, normalizedCouponCode || undefined);
+            browserEvents.subscriptionStarted(planSlug, billingCycle);
             if (!(window as any).Razorpay) {
                 throw new Error('Payment service not available');
             }

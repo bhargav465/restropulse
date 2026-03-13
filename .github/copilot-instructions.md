@@ -31,6 +31,7 @@ packages/
   shared/           @restropulse/shared -- unified TypeScript types
   db/               @restropulse/db -- shared MongoDB connection + helpers
   publishing/       @restropulse/publishing -- Meta API, encryption, publishing/token-refresh crons
+  telemetry/        @restropulse/telemetry -- structured logging, tracing, metrics (Azure Monitor)
   tsconfig/         Shared tsconfig presets (base, react, node)
   eslint-config/    Shared ESLint flat config
 ```
@@ -78,6 +79,16 @@ packages/
 ### No Special Characters
 - Do not use special characters like emoji in code, documentation, print statements, or logs
 - Use plain text indicators instead
+
+### Logging
+- Use `@restropulse/telemetry/server` for all server-side logging -- never use console.log/error/warn
+- Use `@restropulse/telemetry/browser` for all client-side telemetry (events, page views, crash reporting)
+- Import `createLogger` and create a component-scoped logger: `const log = createLogger('component-name');`
+- Use structured fields in the first argument: `log.info({ postId, attempt }, 'Processing post')`
+- Never log PII (phone numbers, emails, addresses, tokens, names) -- the privacy layer redacts automatically
+- Track business events via `trackEvent()` (server) or `browserEvents.*` (client)
+- Server-side: pino JSON to stdout (dev: pino-pretty), exported to Azure Monitor in production
+- Client-side: Application Insights JS SDK with offline buffering, session management
 
 ## Database
 

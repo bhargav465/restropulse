@@ -20,6 +20,9 @@ import {
     checkAndRefreshTokenIfNeeded
 } from '@restropulse/publishing';
 import { getRestaurantsCollection, getOauthSessionsCollection, getDataDeletionAuditsCollection } from '@restropulse/db';
+import { createLogger } from '@restropulse/telemetry/server';
+
+const log = createLogger('integrations');
 
 const router = express.Router();
 
@@ -51,13 +54,13 @@ function verifySignedRequest(signedRequest: string): { userId: string } | null {
             .replace(/=+$/, '');
 
         if (encodedSig !== expectedSig) {
-            console.error('Signed request signature verification failed');
+            log.error('Signed request signature verification failed');
             return null;
         }
 
         return { userId: data.user_id };
     } catch (error) {
-        console.error('Error parsing signed request:', error);
+        log.error({ err: error }, 'Error parsing signed request');
         return null;
     }
 }
@@ -102,7 +105,7 @@ router.get('/instagram/oauth-url', async (req: Request, res: Response) => {
             }
         });
     } catch (error) {
-        console.error('OAuth URL generation error:', error);
+        log.error({ err: error }, 'OAuth URL generation error');
         res.status(500).json({
             success: false,
             error: 'Failed to generate authorization URL'
@@ -121,7 +124,7 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
 
     // Handle OAuth errors
     if (oauthError) {
-        console.error('OAuth error:', oauthError, error_description);
+        log.error({ oauthError, error_description }, 'OAuth error from provider');
         return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=oauth_denied&message=${encodeURIComponent(String(error_description || 'Authorization denied'))}`);
     }
 
@@ -133,25 +136,25 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
         // Validate state first to get restaurant ID
         const stateValidation = await validateStateToken(String(state));
         if (!stateValidation.valid || !stateValidation.restaurantId) {
-            console.log('[DEBUG] Invalid state token');
+            log.debug('Invalid state token');
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=invalid_state&message=${encodeURIComponent('Invalid or expired authorization request. Please try again.')}`);
         }
 
         const restaurantId = stateValidation.restaurantId;
-        console.log('[DEBUG] OAuth callback - restaurantId:', restaurantId);
+        log.debug({ restaurantId }, 'OAuth callback processing');
 
         // Process OAuth callback (skip state validation since we already did it above)
         const result = await handleOAuthCallback(String(code), String(state), true);
-        console.log('[DEBUG] OAuth callback result:', JSON.stringify({
+        log.debug({
             success: result.success,
             error: result.error,
             hasAccount: !!result.account,
             hasAccounts: !!result.accounts,
             accountsCount: result.accounts?.length
-        }));
+        }, 'OAuth callback result');
 
         if (!result.success) {
-            console.log('[DEBUG] OAuth failed:', result.error, result.errorMessage);
+            log.debug({ error: result.error, errorMessage: result.errorMessage }, 'OAuth failed');
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=${result.error}&message=${encodeURIComponent(result.errorMessage || 'Connection failed')}`);
         }
 
@@ -164,7 +167,7 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
             );
 
             // Save to database
-            console.log('[DEBUG] Saving Instagram credentials for restaurant:', restaurantId);
+            log.debug({ restaurantId }, 'Saving Instagram credentials');
             const col = getRestaurantsCollection();
             const updateResult = await col.updateOne(
                 { _id: restaurantId as any },
@@ -176,7 +179,7 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
                     }
                 }
             );
-            console.log('[DEBUG] Update result:', JSON.stringify(updateResult));
+            log.debug({ matchedCount: updateResult.matchedCount, modifiedCount: updateResult.modifiedCount }, 'Credentials update result');
 
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?success=true&username=${encodeURIComponent(result.account.username)}`);
         }
@@ -202,7 +205,7 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
         // Shouldn't reach here
         return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=unknown&message=${encodeURIComponent('Unexpected error occurred')}`);
     } catch (error) {
-        console.error('OAuth callback error:', error);
+        log.error({ err: error }, 'OAuth callback error');
         return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=server_error&message=${encodeURIComponent('Server error during authorization')}`);
     }
 });
@@ -283,7 +286,7 @@ router.post('/instagram/callback', async (req: Request, res: Response) => {
             message: 'Unexpected error occurred'
         });
     } catch (error) {
-        console.error('OAuth callback error:', error);
+        log.error({ err: error }, 'OAuth callback error');
         return res.status(500).json({
             success: false,
             error: 'SERVER_ERROR',
@@ -369,7 +372,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
     try {
         // Prefer page access token for Content Publishing API; fall back to user token
         const publishToken = selectedAccount.pageAccessToken || pending.accessToken;
-        console.log('[DEBUG] select-account: Using', selectedAccount.pageAccessToken ? 'page' : 'user', 'access token');
+        log.debug({ tokenType: selectedAccount.pageAccessToken ? 'page' : 'user' }, 'select-account: token type');
 
         const credentials = prepareCredentialsForStorage(
             selectedAccount,
@@ -378,7 +381,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
         );
 
         // Save to database
-        console.log('[DEBUG] select-account: Saving Instagram credentials for restaurant:', targetRestaurantId);
+        log.debug({ restaurantId: targetRestaurantId }, 'select-account: saving Instagram credentials');
         const restaurantsCol = getRestaurantsCollection();
         const updateResult = await restaurantsCol.updateOne(
             { _id: targetRestaurantId as any },
@@ -390,7 +393,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
                 }
             }
         );
-        console.log('[DEBUG] select-account: Update result:', JSON.stringify(updateResult));
+        log.debug({ matchedCount: updateResult.matchedCount, modifiedCount: updateResult.modifiedCount }, 'select-account: update result');
 
         // Clean up pending selection
         await col.deleteOne({ type: 'pending_selection', sessionId: selectionId });
@@ -403,7 +406,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
             }
         });
     } catch (error) {
-        console.error('Account selection error:', error);
+        log.error({ err: error }, 'Account selection error');
         res.status(500).json({
             success: false,
             error: 'Failed to save Instagram connection'
@@ -449,7 +452,7 @@ router.delete('/instagram/disconnect/:restaurantId', async (req: Request, res: R
             message: 'Instagram disconnected successfully'
         });
     } catch (error) {
-        console.error('Disconnect error:', error);
+        log.error({ err: error }, 'Disconnect error');
         res.status(500).json({
             success: false,
             error: 'Failed to disconnect Instagram'
@@ -506,7 +509,7 @@ router.get('/instagram/status/:restaurantId', async (req: Request, res: Response
             }
         });
     } catch (error) {
-        console.error('Status check error:', error);
+        log.error({ err: error }, 'Status check error');
         res.status(500).json({
             success: false,
             error: 'Failed to check connection status'
@@ -536,7 +539,7 @@ router.post('/instagram/refresh/:restaurantId', async (req: Request, res: Respon
             message: 'Token refreshed successfully'
         });
     } catch (error) {
-        console.error('Manual refresh error:', error);
+        log.error({ err: error }, 'Manual refresh error');
         res.status(500).json({
             success: false,
             error: 'Failed to refresh token'
@@ -594,7 +597,7 @@ router.post('/instagram/validate/:restaurantId', async (req: Request, res: Respo
             }
         });
     } catch (error) {
-        console.error('Validation error:', error);
+        log.error({ err: error }, 'Validation error');
         res.status(500).json({
             success: false,
             error: 'Failed to validate connection'
@@ -640,7 +643,7 @@ router.get('/instagram/profile/:restaurantId', async (req: Request, res: Respons
             data: profile
         });
     } catch (error) {
-        console.error('Profile fetch error:', error);
+        log.error({ err: error }, 'Profile fetch error');
         res.status(500).json({
             success: false,
             error: 'Failed to fetch profile'
@@ -657,24 +660,24 @@ router.get('/instagram/profile/:restaurantId', async (req: Request, res: Respons
  * Called by Facebook when a user removes the app
  */
 router.post('/instagram/deauthorize', async (req: Request, res: Response) => {
-    console.log('[Instagram Deauthorize] Received callback');
+    log.info('Instagram deauthorize callback received');
 
     const { signed_request } = req.body;
 
     if (!signed_request) {
-        console.error('[Instagram Deauthorize] Missing signed_request');
+        log.error('Instagram deauthorize: missing signed_request');
         return res.status(400).json({ error: 'Missing signed_request' });
     }
 
     const userData = verifySignedRequest(signed_request);
 
     if (!userData) {
-        console.error('[Instagram Deauthorize] Invalid signed_request');
+        log.error('Instagram deauthorize: invalid signed_request');
         return res.status(400).json({ error: 'Invalid signed_request' });
     }
 
     try {
-        console.log(`[Instagram Deauthorize] User ${userData.userId} deauthorized the app`);
+        log.info({ userId: userData.userId }, 'User deauthorized the app');
 
         // Find and update restaurants with this Instagram user ID
         const col = getRestaurantsCollection();
@@ -690,12 +693,12 @@ router.post('/instagram/deauthorize', async (req: Request, res: Response) => {
             }
         );
 
-        console.log(`[Instagram Deauthorize] Updated ${result.modifiedCount} restaurant(s)`);
+        log.info({ modifiedCount: result.modifiedCount }, 'Deauthorize: updated restaurants');
 
         // Facebook expects a 200 response
         res.status(200).json({ success: true });
     } catch (error) {
-        console.error('[Instagram Deauthorize] Error:', error);
+        log.error({ err: error }, 'Instagram deauthorize error');
         // Still return 200 to acknowledge receipt
         res.status(200).json({ success: true });
     }
@@ -706,24 +709,24 @@ router.post('/instagram/deauthorize', async (req: Request, res: Response) => {
  * GDPR Data Deletion Request Callback
  */
 router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
-    console.log('[Instagram Data Deletion] Received request');
+    log.info('Instagram data deletion request received');
 
     const { signed_request } = req.body;
 
     if (!signed_request) {
-        console.error('[Instagram Data Deletion] Missing signed_request');
+        log.error('Instagram data deletion: missing signed_request');
         return res.status(400).json({ error: 'Missing signed_request' });
     }
 
     const userData = verifySignedRequest(signed_request);
 
     if (!userData) {
-        console.error('[Instagram Data Deletion] Invalid signed_request');
+        log.error('Instagram data deletion: invalid signed_request');
         return res.status(400).json({ error: 'Invalid signed_request' });
     }
 
     try {
-        console.log(`[Instagram Data Deletion] Request for user ${userData.userId}`);
+        log.info({ userId: userData.userId }, 'Processing data deletion request');
 
         // Generate a confirmation code
         const confirmationCode = crypto.randomBytes(16).toString('hex');
@@ -754,7 +757,7 @@ router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
             }
         );
 
-        console.log(`[Instagram Data Deletion] Deleted data from ${result.modifiedCount} restaurant(s)`);
+        log.info({ modifiedCount: result.modifiedCount }, 'Data deletion: removed data from restaurants');
 
         // Update deletion request status
         await auditsCol.updateOne(
@@ -772,7 +775,7 @@ router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
             confirmation_code: confirmationCode
         });
     } catch (error) {
-        console.error('[Instagram Data Deletion] Error:', error);
+        log.error({ err: error }, 'Instagram data deletion error');
         res.status(500).json({ error: 'Failed to process deletion request' });
     }
 });
@@ -915,7 +918,7 @@ router.get('/instagram/debug-token/:restaurantId', async (req: Request, res: Res
             }
         });
     } catch (error: any) {
-        console.error('Debug token error:', error.response?.data || error.message);
+        log.error({ err: error.response?.data || error.message }, 'Debug token error');
         res.status(500).json({
             success: false,
             error: error.response?.data?.error?.message || error.message
@@ -949,7 +952,7 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
         }
 
         const storedPageId = restaurant.instagramCredentials.pageId;
-        console.log(`[Token Migration] Looking for page token for page ${storedPageId}...`);
+        log.info({ pageId: storedPageId }, 'Looking for page token');
 
         // Use the user token to get page access tokens via /me/accounts
         const axios = (await import('axios')).default;
@@ -961,13 +964,13 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
         });
 
         const pages = pagesRes.data.data || [];
-        console.log(`[Token Migration] Found ${pages.length} pages:`, pages.map((p: any) => ({ id: p.id, name: p.name })));
+        log.info({ pageCount: pages.length, pages: pages.map((p: any) => ({ id: p.id, name: p.name })) }, 'Found pages for token migration');
 
         // Find the page matching the stored pageId
         const matchingPage = pages.find((p: any) => p.id === storedPageId);
 
         if (!matchingPage) {
-            console.log(`[Token Migration] Page ${storedPageId} not in /me/accounts, trying direct fetch...`);
+            log.info({ pageId: storedPageId }, 'Page not in /me/accounts, trying direct fetch');
             try {
                 const directRes = await axios.get(`https://graph.facebook.com/v18.0/${storedPageId}`, {
                     params: {
@@ -979,7 +982,7 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
                     pages.push(directRes.data);
                 }
             } catch (directErr: any) {
-                console.error(`[Token Migration] Direct page fetch failed:`, directErr.response?.data?.error?.message || directErr.message);
+                log.error({ err: directErr.response?.data?.error?.message || directErr.message }, 'Direct page fetch failed');
             }
         }
 
@@ -1003,12 +1006,12 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
         });
         const debugData = debugRes.data.data;
 
-        console.log(`[Token Migration] Page token debug:`, JSON.stringify({
+        log.debug({
             type: debugData.type,
             isValid: debugData.is_valid,
             scopes: debugData.scopes,
             expiresAt: debugData.expires_at
-        }));
+        }, 'Page token debug info');
 
         if (!debugData.is_valid) {
             return res.status(400).json({ success: false, error: 'Page token is not valid' });
@@ -1027,7 +1030,7 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
             }
         );
 
-        console.log(`[Token Migration] Successfully migrated to page token for restaurant ${restaurantId}`);
+        log.info({ restaurantId }, 'Successfully migrated to page token');
 
         res.json({
             success: true,
@@ -1039,7 +1042,7 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
             }
         });
     } catch (error: any) {
-        console.error('Token migration error:', error.response?.data || error.message);
+        log.error({ err: error.response?.data || error.message }, 'Token migration error');
         res.status(500).json({
             success: false,
             error: error.response?.data?.error?.message || error.message

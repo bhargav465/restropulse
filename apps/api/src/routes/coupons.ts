@@ -11,6 +11,9 @@ import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole } from '../middleware/require-role.js';
 import { createRazorpayOffer } from '../services/razorpay.js';
+import { createLogger } from '@restropulse/telemetry/server';
+
+const log = createLogger('coupons');
 
 const router = express.Router();
 
@@ -54,7 +57,7 @@ router.post('/', requireAuth, requireRole('ADMIN'), handle(async (req: Request, 
         });
         razorpayOfferId = offer.id;
     } catch (error) {
-        console.log('[Coupons] Razorpay offer creation skipped:', (error as Error).message);
+        log.info({ err: (error as Error).message }, 'Razorpay offer creation skipped');
     }
 
     const coupon = await createCoupon({

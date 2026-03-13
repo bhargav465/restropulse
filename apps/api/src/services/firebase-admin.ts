@@ -11,6 +11,9 @@
 
 import admin from 'firebase-admin';
 import { DecodedIdToken } from 'firebase-admin/auth';
+import { createLogger } from '@restropulse/telemetry/server';
+
+const log = createLogger('firebase-admin');
 
 let initialized = false;
 
@@ -29,14 +32,14 @@ export function initializeFirebaseAdmin(): void {
             admin.initializeApp({
                 credential: admin.credential.cert(serviceAccount)
             });
-            console.log('Firebase Admin initialized with service account');
+            log.info('Firebase Admin initialized with service account');
         }
         // Option 2: GOOGLE_APPLICATION_CREDENTIALS env var (file path)
         else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
             admin.initializeApp({
                 credential: admin.credential.applicationDefault()
             });
-            console.log('Firebase Admin initialized with application default credentials');
+            log.info('Firebase Admin initialized with application default credentials');
         }
         // Option 3: Development mode - use project ID only (limited functionality)
         else {
@@ -45,16 +48,16 @@ export function initializeFirebaseAdmin(): void {
                 admin.initializeApp({
                     projectId
                 });
-                console.log('Firebase Admin initialized in limited mode (project ID only)');
+                log.info('Firebase Admin initialized in limited mode (project ID only)');
             } else {
-                console.warn('Firebase Admin not configured. Set FIREBASE_SERVICE_ACCOUNT_KEY or FIREBASE_PROJECT_ID');
+                log.warn('Firebase Admin not configured. Set FIREBASE_SERVICE_ACCOUNT_KEY or FIREBASE_PROJECT_ID');
                 return;
             }
         }
 
         initialized = true;
     } catch (error) {
-        console.error('Failed to initialize Firebase Admin:', error);
+        log.error({ err: error }, 'Failed to initialize Firebase Admin');
     }
 }
 
@@ -63,7 +66,7 @@ export function initializeFirebaseAdmin(): void {
  */
 export async function verifyFirebaseToken(idToken: string): Promise<DecodedIdToken | null> {
     if (!initialized) {
-        console.error('Firebase Admin not initialized');
+        log.error('Firebase Admin not initialized');
         return null;
     }
 
@@ -71,7 +74,7 @@ export async function verifyFirebaseToken(idToken: string): Promise<DecodedIdTok
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         return decodedToken;
     } catch (error) {
-        console.error('Error verifying Firebase token:', error);
+        log.error({ err: error }, 'Error verifying Firebase token');
         return null;
     }
 }
@@ -85,7 +88,7 @@ export async function getFirebaseUser(uid: string) {
     try {
         return await admin.auth().getUser(uid);
     } catch (error) {
-        console.error('Error getting Firebase user:', error);
+        log.error({ err: error }, 'Error getting Firebase user');
         return null;
     }
 }

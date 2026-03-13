@@ -2,6 +2,37 @@ import { beforeAll, afterAll, vi } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { connectDB, disconnectDB } from '@restropulse/db';
 
+// Mock telemetry before any app code loads
+vi.mock('@restropulse/telemetry/server', () => {
+    const noopLogger = {
+        info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(),
+        child: vi.fn().mockReturnThis(), fatal: vi.fn(), trace: vi.fn(),
+    };
+    return {
+        initServerTelemetry: vi.fn(),
+        shutdownServerTelemetry: vi.fn(),
+        initLogger: vi.fn(),
+        createLogger: vi.fn(() => noopLogger),
+        requestLoggingMiddleware: vi.fn(() => (_req: unknown, _res: unknown, next: () => void) => next()),
+        errorHandlerMiddleware: vi.fn(() => (err: Error, _req: unknown, res: { status: (n: number) => { json: (o: unknown) => void } }, _next: unknown) => {
+            res.status(500).json({ success: false, error: 'Internal server error' });
+        }),
+        tracedCronJob: vi.fn(async (_name: string, fn: () => Promise<unknown>) => fn()),
+        trackEvent: vi.fn(),
+        serverMetrics: {
+            publishDuration: { record: vi.fn() },
+            publishAttempts: { add: vi.fn() },
+            tokenRefreshes: { add: vi.fn() },
+            cronJobDuration: { record: vi.fn() },
+            contentGenerated: { add: vi.fn() },
+            webhooksReceived: { add: vi.fn() },
+        },
+        recordMetric: vi.fn(),
+        incrementCounter: vi.fn(),
+        trackAIUsage: vi.fn(),
+    };
+});
+
 // Store original console methods
 const originalConsoleError = console.error;
 const originalConsoleWarn = console.warn;

@@ -7,6 +7,9 @@ import cron from 'node-cron';
 import { getRestaurantsCollection } from '@restropulse/db';
 import { refreshAccessToken } from './meta-api.js';
 import { encrypt } from './encryption.js';
+import { createLogger, tracedCronJob, trackEvent } from '@restropulse/telemetry/server';
+
+const log = createLogger('token-refresh');
 
 // Track failed refresh attempts for analytics
 interface RefreshAttempt {
@@ -42,17 +45,18 @@ export async function refreshRestaurantToken(restaurant: any): Promise<boolean> 
     const credentials = restaurant.instagramCredentials;
 
     if (!credentials?.accessToken) {
-        console.log(`[Token Refresh] No credentials for restaurant ${restaurantId}`);
+        log.info({ restaurantId }, 'No credentials for restaurant');
         return false;
     }
 
-    console.log(`[Token Refresh] Refreshing token for restaurant ${restaurantId} (@${credentials.username})`);
+    log.info({ restaurantId, username: credentials.username }, 'Refreshing token for restaurant');
 
     try {
         const result = await refreshAccessToken(credentials.accessToken);
 
         if (!result) {
-            console.error(`[Token Refresh] Failed to refresh token for ${restaurantId}`);
+            log.error({ restaurantId }, 'Failed to refresh token');
+            trackEvent('token.refresh_failed', { restaurantId, error: 'Token refresh API call failed' });
             refreshAttempts.push({
                 restaurantId,
                 timestamp: new Date(),
@@ -76,7 +80,8 @@ export async function refreshRestaurantToken(restaurant: any): Promise<boolean> 
             }
         );
 
-        console.log(`[Token Refresh] Successfully refreshed token for ${restaurantId}, expires: ${result.expiresAt.toISOString()}`);
+        log.info({ restaurantId, expiresAt: result.expiresAt.toISOString() }, 'Successfully refreshed token');
+        trackEvent('token.refreshed', { restaurantId });
         refreshAttempts.push({
             restaurantId,
             timestamp: new Date(),
@@ -85,7 +90,8 @@ export async function refreshRestaurantToken(restaurant: any): Promise<boolean> 
 
         return true;
     } catch (error) {
-        console.error(`[Token Refresh] Error refreshing token for ${restaurantId}:`, error);
+        log.error({ restaurantId, error: error instanceof Error ? error.message : String(error) }, 'Error refreshing token');
+        trackEvent('token.refresh_failed', { restaurantId, error: error instanceof Error ? error.message : String(error) });
         refreshAttempts.push({
             restaurantId,
             timestamp: new Date(),
@@ -100,17 +106,17 @@ export async function refreshRestaurantToken(restaurant: any): Promise<boolean> 
  * Run the token refresh job
  */
 async function runTokenRefreshJob(): Promise<void> {
-    console.log(`[Token Refresh] Starting scheduled token refresh job at ${new Date().toISOString()}`);
+    log.info('Starting scheduled token refresh job');
 
     try {
         const restaurants = await getRestaurantsNeedingRefresh();
 
         if (restaurants.length === 0) {
-            console.log('[Token Refresh] No tokens need refreshing');
+            log.info('No tokens need refreshing');
             return;
         }
 
-        console.log(`[Token Refresh] Found ${restaurants.length} restaurants needing token refresh`);
+        log.info({ count: restaurants.length }, 'Found restaurants needing token refresh');
 
         let successCount = 0;
         let failCount = 0;
@@ -127,9 +133,9 @@ async function runTokenRefreshJob(): Promise<void> {
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        console.log(`[Token Refresh] Completed: ${successCount} successful, ${failCount} failed`);
+        log.info({ successful: successCount, failed: failCount }, 'Token refresh job completed');
     } catch (error) {
-        console.error('[Token Refresh] Job failed:', error);
+        log.error({ error: String(error) }, 'Token refresh job failed');
     }
 }
 
@@ -150,7 +156,7 @@ export async function checkAndRefreshTokenIfNeeded(restaurantId: string): Promis
 
     // If token expires in less than 7 days, refresh it now
     if (new Date(credentials.tokenExpiresAt) < sevenDaysFromNow) {
-        console.log(`[Token Refresh] On-demand refresh for restaurant ${restaurantId}`);
+        log.info({ restaurantId }, 'On-demand token refresh');
         return await refreshRestaurantToken(restaurant);
     }
 
@@ -171,18 +177,18 @@ export function getRecentRefreshAttempts(limit: number = 50): RefreshAttempt[] {
 export function startTokenRefreshCron(): void {
     // Schedule: At 2:00 AM every day
     const job = cron.schedule('0 2 * * *', async () => {
-        await runTokenRefreshJob();
+        await tracedCronJob('token-refresh-job', () => runTokenRefreshJob());
     }, {
         timezone: 'Asia/Kolkata' // Adjust timezone as needed
     });
 
-    console.log('[Token Refresh] Cron job scheduled: Daily at 2:00 AM IST');
+    log.info('Cron job scheduled: Daily at 2:00 AM IST');
 
     // Also run immediately on startup in development (for testing)
     if (process.env.NODE_ENV === 'development') {
-        console.log('[Token Refresh] Development mode: Running initial check...');
+        log.info('Development mode: Running initial check...');
         setTimeout(async () => {
-            await runTokenRefreshJob();
+            await tracedCronJob('token-refresh-job', () => runTokenRefreshJob());
         }, 5000); // Wait 5 seconds for DB connection
     }
 }
@@ -191,7 +197,7 @@ export function startTokenRefreshCron(): void {
  * Manually trigger token refresh job (for admin/testing)
  */
 export async function triggerManualRefresh(): Promise<{ success: number; failed: number }> {
-    console.log('[Token Refresh] Manual refresh triggered');
+    log.info('Manual refresh triggered');
 
     const restaurants = await getRestaurantsNeedingRefresh();
     let success = 0;
