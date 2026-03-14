@@ -880,6 +880,85 @@ describe('Restaurant Routes - Unit Tests', () => {
         });
     });
 
+    describe('PUT /api/restaurant/:id - 404 path', () => {
+        it('should return 404 when updateRestaurant returns null (restaurant not found)', async () => {
+            mockUpdateRestaurant.mockResolvedValueOnce(null);
+
+            const response = await request(app)
+                .put('/api/restaurant/r1')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ name: 'Ghost Restaurant' });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({ success: false, error: 'Restaurant not found' });
+        });
+    });
+
+    describe('PATCH /api/restaurant/:id/offers - 404 path', () => {
+        it('should return 404 when removeOffer returns null (restaurant not found)', async () => {
+            mockRemoveOffer.mockResolvedValueOnce(null);
+
+            const response = await request(app)
+                .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ action: 'DELETE', payload: 0 });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({ success: false, error: 'Restaurant not found' });
+        });
+
+        it('should return 404 when addOffer returns null (restaurant not found)', async () => {
+            mockAddOffer.mockResolvedValueOnce(null);
+
+            const response = await request(app)
+                .patch('/api/restaurant/r1/offers')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ action: 'ADD', payload: 'Some Offer' });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({ success: false, error: 'Restaurant not found' });
+        });
+    });
+
+    describe('PATCH /api/restaurant/:id/specials - 404 path', () => {
+        it('should return 404 when removeSpecial returns null (restaurant not found)', async () => {
+            mockRemoveSpecial.mockResolvedValueOnce(null);
+
+            const response = await request(app)
+                .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ action: 'DELETE', payload: 0 });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({ success: false, error: 'Restaurant not found' });
+        });
+
+        it('should return 404 when addSpecial returns null (restaurant not found)', async () => {
+            mockAddSpecial.mockResolvedValueOnce(null);
+
+            const response = await request(app)
+                .patch('/api/restaurant/r1/specials')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ action: 'ADD', payload: 'Some Special' });
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({ success: false, error: 'Restaurant not found' });
+        });
+    });
+
+    describe('PATCH /api/restaurant/:id/menu - 404 path', () => {
+        it('should return 404 when updateMenuTimestamp returns null (restaurant not found)', async () => {
+            mockUpdateMenuTimestamp.mockResolvedValueOnce(null);
+
+            const response = await request(app)
+                .patch('/api/restaurant/r1/menu')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(response.status).toBe(404);
+            expect(response.body).toEqual({ success: false, error: 'Restaurant not found' });
+        });
+    });
+
     describe('GET /api/restaurant/account-managers', () => {
         beforeEach(async () => {
             const col = getAccountManagersCollection();

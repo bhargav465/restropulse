@@ -10,9 +10,12 @@ vi.mock('../api', () => ({
     postsAPI: {
         getAll: vi.fn(),
     },
+    restaurantAPI: {
+        getAnalytics: vi.fn(),
+    },
 }));
 
-import { authAPI, postsAPI } from '../api';
+import { authAPI, postsAPI, restaurantAPI } from '../api';
 
 describe('Dashboard Component', () => {
     const mockUser = {
@@ -31,7 +34,7 @@ describe('Dashboard Component', () => {
             type: 'IMAGE' as const,
             status: 'PENDING_APPROVAL' as const,
             thumbnail: '/pasta.jpg',
-            platform: 'INSTAGRAM' as const,
+            platforms: ['INSTAGRAM'] as const,
         },
         {
             id: 'p2',
@@ -39,7 +42,7 @@ describe('Dashboard Component', () => {
             type: 'VIDEO' as const,
             status: 'CHANGES_REQUESTED' as const,
             thumbnail: '/ingredients.jpg',
-            platform: 'FACEBOOK' as const,
+            platforms: ['FACEBOOK'] as const,
         },
         {
             id: 'p3',
@@ -47,7 +50,7 @@ describe('Dashboard Component', () => {
             type: 'IMAGE' as const,
             status: 'SCHEDULED' as const,
             thumbnail: '/special.jpg',
-            platform: 'BOTH' as const,
+            platforms: ['INSTAGRAM', 'FACEBOOK'] as const,
             scheduledFor: '2024-12-25',
         },
     ];
@@ -81,6 +84,7 @@ describe('Dashboard Component', () => {
         vi.clearAllMocks();
         vi.mocked(authAPI.checkSession).mockResolvedValue({ user: mockUser } as any);
         vi.mocked(postsAPI.getAll).mockResolvedValue(mockPosts);
+        vi.mocked(restaurantAPI.getAnalytics).mockRejectedValue(new Error('No analytics'));
     });
 
     describe('Initial Load', () => {
@@ -164,6 +168,26 @@ describe('Dashboard Component', () => {
 
             await waitFor(() => {
                 expect(screen.getByText('No upcoming posts scheduled')).toBeInTheDocument();
+            });
+        });
+
+        it('should display single-platform label for a scheduled post with one platform', async () => {
+            const singlePlatformPost = {
+                ...mockPosts[2],
+                platforms: ['INSTAGRAM'] as const,
+            };
+            vi.mocked(postsAPI.getAll).mockResolvedValue([singlePlatformPost]);
+            render(<Dashboard restaurantData={mockRestaurant} />);
+            await waitFor(() => {
+                expect(screen.getByText(/Scheduled for Instagram/i)).toBeInTheDocument();
+            });
+        });
+
+        it('should render when restaurantData has no activeOffers or chefSpecials', async () => {
+            const restaurantWithoutExtras = { ...mockRestaurant, activeOffers: undefined as any, chefSpecials: undefined as any };
+            render(<Dashboard restaurantData={restaurantWithoutExtras} />);
+            await waitFor(() => {
+                expect(screen.getByText('Weekend special')).toBeInTheDocument();
             });
         });
 
@@ -252,6 +276,97 @@ describe('Dashboard Component', () => {
         });
     });
 
+    describe('Analytics and Content Mix', () => {
+        it('should display content mix cards when analytics returns data', async () => {
+            vi.mocked(restaurantAPI.getAnalytics).mockResolvedValue({
+                postsPerWeek: [
+                    { week: 1, posts: 3 },
+                    { week: 2, posts: 5 },
+                ],
+                contentMix: [
+                    { type: 'IMAGE', count: 8 },
+                    { type: 'REEL', count: 3 },
+                ],
+            });
+
+            render(<Dashboard restaurantData={mockRestaurant} />);
+
+            await waitFor(() => {
+                expect(screen.getByText('Posts')).toBeInTheDocument();
+                expect(screen.getByText('Reels')).toBeInTheDocument();
+                expect(screen.getByText('8')).toBeInTheDocument();
+                expect(screen.getByText('3')).toBeInTheDocument();
+            });
+        });
+
+        it('should display CAROUSEL content mix card when returned in analytics', async () => {
+            vi.mocked(restaurantAPI.getAnalytics).mockResolvedValue({
+                postsPerWeek: [],
+                contentMix: [
+                    { type: 'CAROUSEL', count: 2 },
+                    { type: 'VIDEO', count: 1 },
+                    { type: 'STORY', count: 4 },
+                ],
+            });
+
+            render(<Dashboard restaurantData={mockRestaurant} />);
+
+            await waitFor(() => {
+                expect(screen.getByText('Carousels')).toBeInTheDocument();
+                expect(screen.getByText('Videos')).toBeInTheDocument();
+                expect(screen.getByText('Stories')).toBeInTheDocument();
+            });
+        });
+
+        it('should remove animate-pulse from image after onLoad fires', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([mockPosts[2]]);
+
+            render(<Dashboard restaurantData={mockRestaurant} />);
+
+            const img = await screen.findByAltText('Next Post');
+            expect(img).toHaveClass('animate-pulse');
+            fireEvent.load(img);
+            expect(img).not.toHaveClass('animate-pulse');
+        });
+
+        it('should handle analytics response with no contentMix', async () => {
+            vi.mocked(restaurantAPI.getAnalytics).mockResolvedValue({
+                postsPerWeek: [{ week: 1, posts: 2 }],
+                contentMix: undefined as any,
+            });
+
+            render(<Dashboard restaurantData={mockRestaurant} />);
+
+            await waitFor(() => {
+                expect(restaurantAPI.getAnalytics).toHaveBeenCalled();
+            });
+        });
+
+        it('should skip analytics when restaurantData has no id', async () => {
+            const restaurantWithoutId = { ...mockRestaurant, id: undefined as any };
+            render(<Dashboard restaurantData={restaurantWithoutId} />);
+
+            await waitFor(() => {
+                expect(postsAPI.getAll).toHaveBeenCalled();
+            });
+            expect(restaurantAPI.getAnalytics).not.toHaveBeenCalled();
+        });
+
+        it('should use fallback config for unknown content mix type', async () => {
+            vi.mocked(restaurantAPI.getAnalytics).mockResolvedValue({
+                postsPerWeek: [],
+                contentMix: [{ type: 'UNKNOWN_TYPE', count: 7 }],
+            });
+
+            render(<Dashboard restaurantData={mockRestaurant} />);
+
+            await waitFor(() => {
+                expect(screen.getByText('UNKNOWN_TYPE')).toBeInTheDocument();
+                expect(screen.getByText('7')).toBeInTheDocument();
+            });
+        });
+    });
+
     describe('Pull to Refresh', () => {
         it('should handle touch start at scroll top', () => {
             render(<Dashboard restaurantData={mockRestaurant} />);
@@ -313,6 +428,19 @@ describe('Dashboard Component', () => {
 
             fireEvent.touchStart(container, { touches: [{ clientY: 100 }] });
             fireEvent.touchMove(container, { touches: [{ clientY: 150 }] });
+        });
+
+        it('should not update pull distance when touch moves upward (distance <= 0)', () => {
+            render(<Dashboard restaurantData={mockRestaurant} />);
+
+            const container = document.body;
+
+            Object.defineProperty(window, 'scrollY', { value: 0, writable: true });
+
+            // Start at y=200, move to y=150 — distance is negative (pull up)
+            fireEvent.touchStart(container, { touches: [{ clientY: 200 }] });
+            fireEvent.touchMove(container, { touches: [{ clientY: 150 }] });
+            fireEvent.touchEnd(container);
         });
     });
 });

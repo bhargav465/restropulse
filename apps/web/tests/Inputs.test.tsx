@@ -136,6 +136,39 @@ describe('Inputs Component', () => {
     });
 
     describe('Modal Interactions', () => {
+        it('should show notice when trying to add a 4th offer (max 3)', () => {
+            const restaurantWith3Offers = {
+                ...mockRestaurant,
+                activeOffers: ['Offer 1', 'Offer 2', 'Offer 3'],
+            };
+            render(<Inputs restaurantData={restaurantWith3Offers} onRefresh={mockOnRefresh} />);
+
+            const offersButton = screen.getByText('Upcoming Offers').closest('button');
+            fireEvent.click(offersButton!);
+
+            expect(screen.queryByText('Add New Offer')).not.toBeInTheDocument();
+            expect(screen.getByText(/You can have up to 3 active offers/i)).toBeInTheDocument();
+        });
+
+        it('should show notice when trying to add a 4th special (max 3)', () => {
+            const restaurantWith3Specials = {
+                ...mockRestaurant,
+                chefSpecials: ['Special 1', 'Special 2', 'Special 3'],
+            };
+            render(<Inputs restaurantData={restaurantWith3Specials} onRefresh={mockOnRefresh} />);
+
+            const buttons = screen.getAllByRole('button');
+            const specialsButton = buttons.find(btn =>
+                btn.textContent?.includes("Chef's Specials") &&
+                btn.textContent?.includes('Highlight')
+            );
+            expect(specialsButton).toBeDefined();
+            fireEvent.click(specialsButton!);
+
+            expect(screen.queryByText("Add Chef's Special")).not.toBeInTheDocument();
+            expect(screen.getByText(/You can have up to 3 chef/i)).toBeInTheDocument();
+        });
+
         it('should open offers modal when button is clicked', () => {
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
 
@@ -404,6 +437,58 @@ describe('Inputs Component', () => {
             await waitFor(() => {
                 expect(restaurantAPI.updateSpecials).toHaveBeenCalledWith('r1', 'DELETE', 0);
                 expect(mockOnRefresh).toHaveBeenCalled();
+            });
+        });
+
+        it('should close modal when backdrop is clicked (covers handleClose + history.back)', async () => {
+            render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
+
+            // Open offers modal
+            const offersButton = screen.getByText('Upcoming Offers').closest('button');
+            fireEvent.click(offersButton!);
+            expect(screen.getByText('Add New Offer')).toBeInTheDocument();
+
+            // Click the backdrop (absolute inset-0 div)
+            const backdrop = document.querySelector('.fixed.inset-0 .absolute.inset-0') as HTMLElement;
+            fireEvent.click(backdrop);
+
+            // history.back() should be called (triggers popstate which closes modal)
+            expect(mockHistoryBack).toHaveBeenCalled();
+        });
+
+        it('should close modal via popstate (covers closeModal)', async () => {
+            render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
+
+            // Open offers modal
+            const offersButton = screen.getByText('Upcoming Offers').closest('button');
+            fireEvent.click(offersButton!);
+            expect(screen.getByText('Add New Offer')).toBeInTheDocument();
+
+            // Fire popstate (simulates back button navigation) — calls onClose=closeModal
+            fireEvent(window, new PopStateEvent('popstate', {}));
+
+            await waitFor(() => {
+                expect(screen.queryByText('Add New Offer')).not.toBeInTheDocument();
+            });
+        });
+
+        it('should select file in menu modal (covers onChange handler)', async () => {
+            render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
+
+            // Open menu modal
+            const menuButton = screen.getAllByText('Update Menu')[0].closest('button')!;
+            fireEvent.click(menuButton);
+
+            await waitFor(() => expect(screen.getByText('Upload Menu File')).toBeInTheDocument());
+
+            // Simulate file selection
+            const fileInput = screen.getByLabelText('Upload Menu File');
+            const testFile = new File(['menu content'], 'menu.pdf', { type: 'application/pdf' });
+            Object.defineProperty(fileInput, 'files', { value: [testFile] });
+            fireEvent.change(fileInput);
+
+            await waitFor(() => {
+                expect(screen.getByText('menu.pdf')).toBeInTheDocument();
             });
         });
 

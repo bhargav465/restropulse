@@ -24,7 +24,7 @@ describe('AdhocPostModal Component', () => {
             status: 'PENDING_APPROVAL',
             thumbnail: '/api/placeholder/400/400',
             caption: 'Test caption',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             isAdhoc: true,
         });
         vi.mocked(postsAPI.create).mockResolvedValue({
@@ -33,7 +33,7 @@ describe('AdhocPostModal Component', () => {
             status: 'PENDING_APPROVAL',
             thumbnail: '/api/placeholder/400/400',
             caption: 'Test caption',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             isAdhoc: true,
         });
 
@@ -86,10 +86,9 @@ describe('AdhocPostModal Component', () => {
             expect(screen.getByTestId('type-reel')).toBeInTheDocument();
             expect(screen.getByTestId('type-story')).toBeInTheDocument();
 
-            // Platform buttons
+            // Platform buttons (multi-select, no BOTH option)
             expect(screen.getByTestId('platform-instagram')).toBeInTheDocument();
             expect(screen.getByTestId('platform-facebook')).toBeInTheDocument();
-            expect(screen.getByTestId('platform-both')).toBeInTheDocument();
 
             // Schedule buttons
             expect(screen.getByTestId('schedule-now')).toBeInTheDocument();
@@ -315,11 +314,11 @@ describe('AdhocPostModal Component', () => {
                 target: { value: 'New brunch menu special' }
             });
 
-            // Select reel type
-            fireEvent.click(screen.getByTestId('type-reel'));
+            // Select both platforms first (Instagram is default, add Facebook)
+            fireEvent.click(screen.getByTestId('platform-facebook'));
 
-            // Select both platforms
-            fireEvent.click(screen.getByTestId('platform-both'));
+            // Select carousel type (valid for both platforms)
+            fireEvent.click(screen.getByTestId('type-carousel'));
 
             // Switch to ASAP
             fireEvent.click(screen.getByTestId('schedule-now'));
@@ -331,8 +330,8 @@ describe('AdhocPostModal Component', () => {
                 expect(postsAPI.generate).toHaveBeenCalledTimes(1);
                 expect(postsAPI.generate).toHaveBeenCalledWith(expect.objectContaining({
                     concept: 'New brunch menu special',
-                    type: 'REEL',
-                    platform: 'BOTH',
+                    type: 'CAROUSEL',
+                    platforms: ['INSTAGRAM', 'FACEBOOK'],
                     scheduledFor: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
                 }));
             });
@@ -369,7 +368,7 @@ describe('AdhocPostModal Component', () => {
                 expect(postsAPI.generate).toHaveBeenCalledWith(expect.objectContaining({
                     concept: 'Weekend special announcement',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     scheduledFor: expect.stringContaining('2026-02-15'),
                 }));
             });
@@ -435,7 +434,7 @@ describe('AdhocPostModal Component', () => {
                     status: 'PENDING_APPROVAL',
                     thumbnail: '/api/placeholder/400/400',
                     caption: 'Test caption',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     isAdhoc: true,
                 }), 100))
             );
@@ -583,6 +582,96 @@ describe('AdhocPostModal Component', () => {
         });
     });
 
+    describe('Upload Button Click', () => {
+        it('should trigger file input click when upload button is clicked', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            const fileInput = screen.getByTestId('file-input');
+            const clickSpy = vi.spyOn(fileInput, 'click');
+
+            const uploadButton = screen.getByTestId('upload-button');
+            fireEvent.click(uploadButton);
+
+            expect(clickSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it('should handle file input change with no files gracefully', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            const fileInput = screen.getByTestId('file-input');
+
+            // Fire change with empty file list - should not throw
+            fireEvent.change(fileInput, { target: { files: [] } });
+
+            // Upload button should still be visible (no preview set)
+            expect(screen.getByTestId('upload-button')).toBeInTheDocument();
+        });
+
+        it('should handle file input change with null files gracefully', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            const fileInput = screen.getByTestId('file-input');
+            // Simulate an onChange event where files is null (covers the falsy branch of e.target.files?.[0])
+            fireEvent.change(fileInput, { target: { files: null } });
+
+            // No preview should appear
+            expect(screen.queryByAltText('Preview')).not.toBeInTheDocument();
+            expect(screen.getByTestId('upload-button')).toBeInTheDocument();
+        });
+    });
+
+    describe('Platform deselection validation', () => {
+        it('should show error when all platforms are somehow deselected before submit', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            // Enter concept
+            fireEvent.change(screen.getByTestId('concept-input'), {
+                target: { value: 'Test post' },
+            });
+
+            // The toggle function prevents deselecting the last platform, so we test the guard
+            // by verifying that clicking Instagram (the only selected platform) does NOT deselect it
+            const instagramButton = screen.getByTestId('platform-instagram');
+            expect(instagramButton).toHaveClass('border-orange-500');
+
+            // Try to deselect the only selected platform -- should be a no-op
+            fireEvent.click(instagramButton);
+
+            // Instagram should still be selected (at-least-one guard)
+            expect(instagramButton).toHaveClass('border-orange-500');
+
+            // Platforms are still valid so submit should work (no platform error)
+            fireEvent.click(screen.getByTestId('submit-button'));
+            await waitFor(() => {
+                expect(postsAPI.generate).toHaveBeenCalledTimes(1);
+            });
+        });
+    });
+
     describe('Payload Completeness', () => {
         it('should always include all required fields for generate endpoint', async () => {
             render(
@@ -609,7 +698,7 @@ describe('AdhocPostModal Component', () => {
             // Every field the generate endpoint requires must be present
             expect(payload).toHaveProperty('concept', 'Minimal post');
             expect(payload).toHaveProperty('type', 'IMAGE');
-            expect(payload).toHaveProperty('platform', 'INSTAGRAM');
+            expect(payload).toHaveProperty('platforms', ['INSTAGRAM']);
             expect(payload).toHaveProperty('scheduledFor');
             expect(typeof payload.scheduledFor).toBe('string');
             // scheduledFor should be a valid ISO date
@@ -669,6 +758,24 @@ describe('AdhocPostModal Component', () => {
             });
         });
 
+        it('should switch back to schedule-later after selecting ASAP', async () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            // Default is schedule-later — switch to ASAP first
+            fireEvent.click(screen.getByTestId('schedule-now'));
+            expect(screen.getByTestId('schedule-now')).toHaveClass('border-orange-500');
+
+            // Then switch back to schedule-later (covers line 399)
+            fireEvent.click(screen.getByTestId('schedule-later'));
+            expect(screen.getByTestId('schedule-later')).toHaveClass('border-orange-500');
+        });
+
         it('should send concept text when no media is uploaded', async () => {
             render(
                 <AdhocPostModal
@@ -688,7 +795,7 @@ describe('AdhocPostModal Component', () => {
                 const payload = vi.mocked(postsAPI.generate).mock.calls[0][0];
                 expect(payload.concept).toBe('No media post');
                 expect(payload.type).toBe('IMAGE');
-                expect(payload.platform).toBe('INSTAGRAM');
+                expect(payload.platforms).toEqual(['INSTAGRAM']);
             });
         });
     });

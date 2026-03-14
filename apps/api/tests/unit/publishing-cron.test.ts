@@ -128,7 +128,7 @@ describe('Publishing Cron Service', () => {
             type: 'IMAGE',
             caption: 'Test post',
             thumbnail: 'https://example.com/img.jpg',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 0
         };
 
@@ -311,7 +311,7 @@ describe('Publishing Cron Service', () => {
                     type: 'IMAGE',
                     caption: 'Post 1',
                     thumbnail: 'https://example.com/1.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     publishAttempts: 0
                 },
                 {
@@ -320,7 +320,7 @@ describe('Publishing Cron Service', () => {
                     type: 'IMAGE',
                     caption: 'Post 2',
                     thumbnail: 'https://example.com/2.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     publishAttempts: 0
                 }
             ];

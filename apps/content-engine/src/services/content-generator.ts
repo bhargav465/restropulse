@@ -12,6 +12,7 @@
  */
 
 import type { PostType, Platform } from '@restropulse/shared';
+
 import { createLogger } from '@restropulse/telemetry/server';
 import { getRandomImage, getRandomCarousel, getRandomVideo, buildCaption } from './asset-manager.js';
 
@@ -27,7 +28,7 @@ export interface GeneratedContent {
 export interface GenerateOptions {
   concept: string;
   type: PostType;
-  platform: Platform;
+  platforms: Platform[];
   restaurantName?: string;
   themes?: string[];
 }
@@ -108,7 +109,7 @@ export async function generateCycleContent(options: {
     const content = await generateContent({
       concept: `${theme} - Post ${i + 1}`,
       type,
-      platform: 'BOTH',
+      platforms: ['INSTAGRAM', 'FACEBOOK'],
       restaurantName: options.restaurantName,
       themes: [theme],
     });

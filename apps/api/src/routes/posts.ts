@@ -77,9 +77,10 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
     const postWithDefaults = {
         type: postData.type || 'IMAGE',
         status: postData.status || 'PENDING_APPROVAL',
-        platform: postData.platform || 'INSTAGRAM',
         thumbnail: postData.thumbnail || placeholderImage,
         ...postData,
+        // Ensure platforms is always an array
+        platforms: postData.platforms || ['INSTAGRAM'],
         // Ensure restaurantId is always set from auth context
         restaurantId: req.user!.restaurantId,
         // Mark as adhoc if no strategyId
@@ -105,7 +106,7 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
 
 // Generate post with AI-created content (for adhoc posts)
 router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
-    const { concept, type, platform, scheduledFor } = req.body;
+    const { concept, type, platforms, scheduledFor } = req.body;
 
     // Validate required fields
     if (!concept || concept.trim().length === 0) {
@@ -167,7 +168,7 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
     const postData = {
         type: type as Post['type'],
         status: 'PENDING_APPROVAL' as const,
-        platform: platform || 'INSTAGRAM',
+        platforms: platforms || ['INSTAGRAM'],
         caption: concept,
         thumbnail,
         videoUrl,
@@ -251,7 +252,7 @@ router.post('/:id/test-publish', async (req: Request, res: Response) => {
             thumbnail: post.thumbnail,
             mediaUrls: post.mediaUrls,
             videoUrl: post.videoUrl,
-            platform: post.platform
+            platforms: post.platforms
         };
 
         log.info({ postId: id }, 'Starting diagnostic publish');
@@ -407,7 +408,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
             thumbnail: post.thumbnail,
             mediaUrls: post.mediaUrls,
             videoUrl: post.videoUrl,
-            platform: post.platform
+            platforms: post.platforms
         };
 
         // Publish the post

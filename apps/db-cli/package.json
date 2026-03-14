@@ -17,7 +17,10 @@
     "seed": "tsx src/index.ts seed",
     "seed:clean": "tsx src/index.ts seed --clean",
     "reset": "tsx src/index.ts reset",
-    "reset:main": "tsx src/index.ts reset --main"
+    "reset:main": "tsx src/index.ts reset --main",
+    "razorpay:setup": "tsx src/index.ts razorpay-setup",
+    "razorpay:setup:main": "tsx src/index.ts razorpay-setup --main",
+    "razorpay:setup:dry-run": "tsx src/index.ts razorpay-setup --dry-run"
   },
   "pkg": {
     "scripts": "dist/**/*.js",

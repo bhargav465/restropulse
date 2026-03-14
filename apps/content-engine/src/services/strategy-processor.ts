@@ -136,7 +136,7 @@ export async function processApprovedCycles(): Promise<{ processed: number; fail
           thumbnail: content.thumbnail,
           mediaUrls: content.mediaUrls || null,
           videoUrl: content.videoUrl || null,
-          platform: 'BOTH',
+          platforms: ['INSTAGRAM', 'FACEBOOK'],
           restaurantId,
           strategyId: cycleId,
           isAdhoc: false,

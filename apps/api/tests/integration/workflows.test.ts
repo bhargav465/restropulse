@@ -134,7 +134,7 @@ describe('Integration Tests - Complete Workflows', () => {
                     status: 'PENDING_APPROVAL',
                     thumbnail: '/it.jpg',
                     caption: 'Test Post',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 });
 
             expect(createResponse.status).toBe(201);
@@ -183,7 +183,7 @@ describe('Integration Tests - Complete Workflows', () => {
                     status: 'PENDING_APPROVAL',
                     thumbnail: '/carousel.jpg',
                     caption: 'Pending Post',
-                    platform: 'FACEBOOK'
+                    platforms: ['FACEBOOK']
                 });
 
             const postId = createResponse.body.data.id;
@@ -232,7 +232,7 @@ describe('Integration Tests - Complete Workflows', () => {
                     status: 'POSTED',
                     thumbnail: '/img1.jpg',
                     caption: 'Posted Image',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 });
 
             await request(app).post('/api/posts')
@@ -242,7 +242,7 @@ describe('Integration Tests - Complete Workflows', () => {
                     status: 'SCHEDULED',
                     thumbnail: '/vid1.jpg',
                     caption: 'Scheduled Video',
-                    platform: 'FACEBOOK'
+                    platforms: ['FACEBOOK']
                 });
 
             const response = await request(app)
@@ -386,7 +386,7 @@ describe('Integration Tests - Complete Workflows', () => {
                     status: 'SCHEDULED',
                     thumbnail: '/sale.jpg',
                     caption: 'Summer Sale is here! 30% Off on all items',
-                    platform: 'BOTH'
+                    platforms: ['INSTAGRAM', 'FACEBOOK']
                 });
 
             expect(postResponse.status).toBe(201);

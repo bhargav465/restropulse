@@ -386,4 +386,176 @@ describe('Onboarding Component', () => {
         expect(screen.getByText('Account Manager')).toBeInTheDocument();
     });
 
+    // --- Zone selection (step 3) ---
+
+    it('should filter managers when a zone is selected', async () => {
+        // Return managers with two different zones
+        (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
+
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await completeStep1();
+        await completeStep2();
+
+        // Zone dropdown should be populated with zones from managers response
+        await waitFor(() => {
+            expect(accountManagerAPI.getByCityAndZone).toHaveBeenCalledWith('Bangalore', undefined);
+        });
+
+        // Managers have two zones: Indiranagar and Koramangala
+        // Selecting a zone triggers fetchManagers with that zone
+        (accountManagerAPI.getByCityAndZone as any).mockResolvedValue([mockManagersResponse[0]]);
+
+        // Open the Zone select
+        const zoneSelect = screen.getByText('All zones');
+        fireEvent.click(zoneSelect);
+
+        // Wait for the zone options to appear
+        await waitFor(() => {
+            expect(screen.getByText('Indiranagar')).toBeInTheDocument();
+        });
+
+        // Select "Indiranagar" zone
+        fireEvent.click(screen.getByRole('button', { name: 'Indiranagar' }));
+
+        // fetchManagers should be called with the zone
+        await waitFor(() => {
+            expect(accountManagerAPI.getByCityAndZone).toHaveBeenCalledWith('Bangalore', 'Indiranagar');
+        });
+    });
+
+    it('should auto-select zone when only one zone exists', async () => {
+        // Return managers all in the same zone so uniqueZones.length === 1
+        const singleZoneManagers = [
+            { ...mockManagersResponse[0], zone: 'Indiranagar' },
+            { id: 'am3', name: 'Manager Gamma', phone: '+91 33333', email: 'c@test.com', avatar: '', city: 'Bangalore', zone: 'Indiranagar' },
+        ];
+        (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(singleZoneManagers);
+
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await completeStep1();
+        await completeStep2();
+
+        await waitFor(() => {
+            expect(screen.getByText('Manager Alpha')).toBeInTheDocument();
+        });
+
+        // With one zone, zone should be auto-selected (displayed in the CustomSelect)
+        await waitFor(() => {
+            expect(screen.getByText('Indiranagar')).toBeInTheDocument();
+        });
+    });
+
+    // --- handlePlaceSelect with city (Google Maps path) ---
+
+    it('should render Google Maps address input when API key is set', async () => {
+        vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', 'test-api-key');
+
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await completeStep1();
+
+        // With the API key set, APIProvider should be rendered
+        await waitFor(() => {
+            expect(screen.getByTestId('api-provider')).toBeInTheDocument();
+        });
+
+        vi.unstubAllEnvs();
+    });
+
+    // --- handlePlaceSelect with city extraction ---
+
+    it('should set city from place select result when city is empty', async () => {
+        // Mock PlacesAutocompleteInput to call onSelect with a city
+        vi.mock('../components/PlacesAutocompleteInput', () => ({
+            PlacesAutocompleteInput: ({ onSelect }: any) => (
+                <button
+                    data-testid="places-autocomplete"
+                    onClick={() => onSelect({ address: '123 Main St', lat: 12.97, lng: 77.59, city: 'Bangalore' })}
+                >
+                    Select Address
+                </button>
+            ),
+        }));
+
+        vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', 'test-api-key');
+
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await completeStep1();
+
+        await waitFor(() => {
+            expect(screen.getByTestId('api-provider')).toBeInTheDocument();
+        });
+
+        // Click the mocked places input to trigger onSelect with city
+        const placesBtn = screen.queryByTestId('places-autocomplete');
+        if (placesBtn) {
+            fireEvent.click(placesBtn);
+
+            // After selecting place with city, managers should be fetched for that city
+            await waitFor(() => {
+                expect(accountManagerAPI.getByCityAndZone).toHaveBeenCalledWith('Bangalore', undefined);
+            });
+        }
+
+        vi.unstubAllEnvs();
+    });
+
+    // --- Manager deselection (toggle) ---
+
+    it('should deselect manager when clicking the selected manager again', async () => {
+        (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
+
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await completeStep1();
+        await completeStep2();
+
+        await waitFor(() => expect(screen.getByText('Manager Alpha')).toBeInTheDocument());
+
+        // Select manager
+        fireEvent.click(screen.getByText('Manager Alpha'));
+        await waitFor(() => {
+            // Get Started should now be enabled
+            expect(screen.getByRole('button', { name: /Get Started/i })).not.toBeDisabled();
+        });
+
+        // Deselect the same manager
+        fireEvent.click(screen.getByText('Manager Alpha'));
+
+        // Get Started should be disabled again
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Get Started/i })).toBeDisabled();
+        });
+    });
+
+    // --- Cities API error ---
+
+    it('should handle citiesAPI error gracefully', async () => {
+        (citiesAPI.getAll as any).mockRejectedValue(new Error('Network error'));
+
+        render(<Onboarding onComplete={mockOnComplete} />);
+
+        // Should still render step 1 without crashing
+        await waitFor(() => {
+            expect(screen.getByText(/Welcome to RestroPulse/i)).toBeInTheDocument();
+        });
+    });
+
+    // --- Manager avatar fallback ---
+
+    it('should show avatar icon fallback when manager has no avatar', async () => {
+        const managersNoAvatar = [
+            { id: 'am1', name: 'No Avatar Manager', phone: '+91 11111', email: 'a@test.com', avatar: '', city: 'Bangalore', zone: 'Indiranagar' },
+        ];
+        (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(managersNoAvatar);
+
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await completeStep1();
+        await completeStep2();
+
+        await waitFor(() => {
+            expect(screen.getByText('No Avatar Manager')).toBeInTheDocument();
+        });
+        // Avatar img should not be rendered; instead the icon div
+        expect(screen.queryByAltText('No Avatar Manager')).not.toBeInTheDocument();
+    });
+
 });

@@ -35,7 +35,7 @@ export async function processAdhocRequests(): Promise<{ processed: number; faile
       const content = await generateContent({
         concept: postDoc.caption || postDoc.concept || '',
         type: (postDoc.type as PostType) || 'IMAGE',
-        platform: (postDoc.platform as Platform) || 'BOTH',
+        platforms: (postDoc.platforms as Platform[]) || ['INSTAGRAM'],
       });
 
       // Update the post with generated content and advance status

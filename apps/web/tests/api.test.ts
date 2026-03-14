@@ -335,7 +335,7 @@ describe('API Service', () => {
                 type: 'IMAGE',
                 status: 'PENDING_APPROVAL',
                 thumbnail: '/mock.jpg',
-                platform: 'INSTAGRAM'
+                platforms: ['INSTAGRAM']
             });
 
             expect(result.caption).toBe('New post');
@@ -356,14 +356,14 @@ describe('API Service', () => {
                 ok: true,
                 json: async () => ({
                     success: true,
-                    data: { id: 'pgen1', caption: 'Promo post', type: 'IMAGE', platform: 'INSTAGRAM' },
+                    data: { id: 'pgen1', caption: 'Promo post', type: 'IMAGE', platforms: ['INSTAGRAM'] },
                 }),
             });
 
             const result = await postsAPI.generate({
                 concept: 'Promo post',
                 type: 'IMAGE',
-                platform: 'INSTAGRAM',
+                platforms: ['INSTAGRAM'],
             });
 
             expect(result.id).toBe('pgen1');

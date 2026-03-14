@@ -75,7 +75,7 @@ const mockPlan = {
     isCurrentVersion: true,
     tier: 'GROWTH',
     name: 'Growth',
-    limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 3 },
+    limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 3, REEL: 2, VIDEO: 2 }, FACEBOOK: { IMAGE: 5, CAROUSEL: 3, VIDEO: 2, STORY: 5 } } },
     pricing: { monthly: 999900, annual: 9999000, currency: 'INR' },
     razorpayPlanIds: { monthly: 'plan_monthly_growth', annual: 'plan_annual_growth' },
     features: ['INSTAGRAM', 'FACEBOOK'],
@@ -116,7 +116,8 @@ describe('Subscription Routes', () => {
         test('should return current subscription with usage', async () => {
             mockFindActiveSubscription.mockResolvedValue(mockSubscription);
             mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 2, VIDEO: 0, STORY: 0, CAROUSEL: 1, REEL: 0,
+                INSTAGRAM: { IMAGE: 2, VIDEO: 0, STORY: 0, CAROUSEL: 1, REEL: 0 },
+                FACEBOOK: { IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0 },
             });
 
             const res = await request(app)
@@ -125,8 +126,8 @@ describe('Subscription Routes', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.data.subscription.status).toBe('ACTIVE');
-            expect(res.body.data.usage.instagramPosts.used).toBe(2);
-            expect(res.body.data.usage.carousels.used).toBe(1);
+            expect(res.body.data.usage.INSTAGRAM.IMAGE.used).toBe(2);
+            expect(res.body.data.usage.INSTAGRAM.CAROUSEL.used).toBe(1);
         });
 
         test('should return null when no subscription exists', async () => {
@@ -138,6 +139,22 @@ describe('Subscription Routes', () => {
 
             expect(res.status).toBe(200);
             expect(res.body.data.subscription).toBeNull();
+            expect(res.body.data.usage).toBeNull();
+        });
+
+        test('should return usage=null when subscription has no planSnapshot limits (covers line 62 false branch)', async () => {
+            // planSnapshot exists but without limits -> usage remains null
+            mockFindActiveSubscription.mockResolvedValue({
+                ...mockSubscription,
+                planSnapshot: { slug: 'growth', tier: 'GROWTH' }, // no limits
+            });
+
+            const res = await request(app)
+                .get('/api/subscriptions/current')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.subscription).toBeDefined();
             expect(res.body.data.usage).toBeNull();
         });
 
@@ -805,6 +822,228 @@ describe('Subscription Routes', () => {
                 });
 
             expect(res.status).toBe(404);
+        });
+
+        test('should add credits without active subscription (subscription is null)', async () => {
+            // Covers the branch at line 469: if (subscription) -> false path
+            mockVerifyPaymentSignature.mockReturnValue(true);
+            mockFindCreditPurchaseByOrderId.mockResolvedValue({
+                id: 'cp-no-sub', restaurantId: 'r1', creditsAdded: 10,
+                amountPaise: 9900, status: 'PENDING',
+            });
+            // No active subscription
+            mockFindActiveSubscription.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/credits/verify')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    razorpayOrderId: 'order_nosub',
+                    razorpayPaymentId: 'pay_nosub',
+                    razorpaySignature: 'sig_nosub',
+                });
+
+            expect(res.status).toBe(200);
+            // addCredits should NOT have been called since there's no subscription
+            expect(mockAddCredits).not.toHaveBeenCalled();
+            expect(mockCreateInvoice).toHaveBeenCalled();
+        });
+    });
+
+    describe('POST /api/subscriptions/webhook - when subscription not found in DB', () => {
+        // These tests cover the false branches of "if (sub)" inside each webhook case
+        // when findSubscriptionByRazorpayId returns null (subscription not in our DB)
+        const webhookNoSubBase = {
+            'x-razorpay-signature': 'valid_sig',
+        };
+
+        test('should handle subscription.authenticated when sub not found in DB', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set(webhookNoSubBase)
+                .send({
+                    event: 'subscription.authenticated',
+                    payload: { subscription: { entity: { id: 'sub_rzp_unknown' } } },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+        });
+
+        test('should handle subscription.activated when sub not found in DB', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set(webhookNoSubBase)
+                .send({
+                    event: 'subscription.activated',
+                    payload: { subscription: { entity: { id: 'sub_rzp_unknown', customer_id: 'c1' } } },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+        });
+
+        test('should handle subscription.charged when sub not found in DB', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set(webhookNoSubBase)
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: { entity: { id: 'sub_rzp_unknown' } },
+                        payment: { entity: { id: 'pay_unknown', amount: 100 } },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+        });
+
+        test('should handle subscription.pending when sub not found in DB', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set(webhookNoSubBase)
+                .send({
+                    event: 'subscription.pending',
+                    payload: { subscription: { entity: { id: 'sub_rzp_unknown' } } },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+        });
+
+        test('should handle subscription.halted when sub not found in DB', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set(webhookNoSubBase)
+                .send({
+                    event: 'subscription.halted',
+                    payload: { subscription: { entity: { id: 'sub_rzp_unknown' } } },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+        });
+
+        test('should handle subscription.cancelled when sub not found in DB', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set(webhookNoSubBase)
+                .send({
+                    event: 'subscription.cancelled',
+                    payload: { subscription: { entity: { id: 'sub_rzp_unknown' } } },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('POST /api/subscriptions/webhook - error path', () => {
+        test('should return 500 when webhook processing throws an unexpected error', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            // Make the subscription lookup throw to trigger the catch block (lines 358-360)
+            mockFindSubscriptionByRazorpayId.mockRejectedValue(new Error('DB connection lost'));
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: { entity: { id: 'sub_rzp_error' } },
+                        payment: { entity: { id: 'pay_err', amount: 100, currency: 'INR' } },
+                    },
+                });
+
+            expect(res.status).toBe(500);
+            expect(res.body.success).toBe(false);
+            expect(res.body.error).toBe('Webhook processing failed');
+        });
+
+        test('should handle subscription.charged when entity has no current_end or current_start (undefined branches)', async () => {
+            // Covers the ternary branches for periodEnd and periodStart being undefined
+            // and planSnapshot?.name fallback to 'Subscription'
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({
+                ...mockSubscription,
+                // Omit planSnapshot.name to exercise fallback
+                planSnapshot: { ...mockSubscription.planSnapshot, name: undefined },
+                billingCycle: undefined,
+            });
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: {
+                            // No current_start or current_end fields -> periodStart/periodEnd = undefined
+                            entity: { id: 'sub_rzp_123' },
+                        },
+                        payment: {
+                            entity: {
+                                id: 'pay_no_periods',
+                                invoice_id: undefined,
+                                amount: 500,
+                                currency: 'INR',
+                            },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith(mockSubscription.id, expect.objectContaining({
+                status: 'ACTIVE',
+                currentPeriodStart: undefined,
+                currentPeriodEnd: undefined,
+            }));
+        });
+
+        test('should handle subscription.activated when entity has no current_end (periodEnd undefined)', async () => {
+            // Covers the ternary branch for periodEnd being undefined in subscription.activated
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({
+                ...mockSubscription, couponCode: undefined,
+            });
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.activated',
+                    payload: {
+                        subscription: {
+                            // No current_end -> periodEnd = undefined
+                            entity: { id: 'sub_rzp_123', customer_id: 'cust_789' },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith(mockSubscription.id, expect.objectContaining({
+                status: 'ACTIVE',
+                currentPeriodEnd: undefined,
+            }));
         });
     });
 });

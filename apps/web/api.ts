@@ -1,7 +1,8 @@
 import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice } from '@restropulse/shared';
 import { browserEvents } from '@restropulse/telemetry/browser';
+import { getApiUrl } from './utils/env';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = getApiUrl();
 
 // Helper function for API calls with auto token refresh
 async function fetchAPI<T>(endpoint: string, options?: RequestInit, retry = true): Promise<T> {
@@ -224,7 +225,7 @@ export const postsAPI = {
     generate: async (params: {
         concept: string;
         type: Post['type'];
-        platform: Post['platform'];
+        platforms: Post['platforms'];
         scheduledFor?: string;
     }): Promise<Post> => {
         const response = await fetchAPI<ApiResponse<Post>>('/posts/generate', {

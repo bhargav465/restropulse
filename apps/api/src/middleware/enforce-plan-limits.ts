@@ -1,20 +1,21 @@
 import { RequestHandler } from 'express';
 import { findActiveSubscription, getWeeklyPostCounts } from '@restropulse/db';
-import { POST_TYPE_CREDIT_COSTS, PostType } from '@restropulse/shared';
+import { POST_TYPE_CREDIT_COSTS, PostType, Platform } from '@restropulse/shared';
 
 /**
  * enforcePlanLimits middleware.
- * Checks weekly post counts against plan limits. If over limit (or no active plan),
- * checks credit balance. Sets req.creditCost if credit deduction is needed.
- * Returns 403 if no credits available.
+ * Checks weekly post counts against per-platform per-post-type plan limits.
+ * If over limit on ANY requested platform (or no active plan), checks credit balance.
+ * Sets req.creditCost if credit deduction is needed. Returns 403 if no credits available.
  *
- * Expects req.body.type to contain the PostType.
+ * Expects req.body.type and req.body.platforms.
  * Must be used after requireAuth.
  */
 export const enforcePlanLimits: RequestHandler = async (req, res, next) => {
     try {
         const restaurantId = req.user!.restaurantId;
         const postType = (req.body.type || 'IMAGE') as PostType;
+        const platforms = (req.body.platforms || ['INSTAGRAM']) as Platform[];
         const creditCost = POST_TYPE_CREDIT_COSTS[postType] ?? 1;
 
         const subscription = await findActiveSubscription(restaurantId);
@@ -32,24 +33,27 @@ export const enforcePlanLimits: RequestHandler = async (req, res, next) => {
         const isActive = subscription.status === 'ACTIVE' || subscription.status === 'PAST_DUE';
 
         if (isActive && subscription.planSnapshot?.limits) {
-            // Check weekly limits by post type category
             const counts = await getWeeklyPostCounts(restaurantId);
-            const limits = subscription.planSnapshot.limits;
+            const weeklyLimits = subscription.planSnapshot.limits.weekly;
 
-            let withinLimit = false;
-
-            if (postType === 'REEL') {
-                withinLimit = counts.REEL < limits.reelsPerWeek;
-            } else if (postType === 'CAROUSEL') {
-                withinLimit = counts.CAROUSEL < limits.carouselPostsPerWeek;
-            } else {
-                // IMAGE, VIDEO, STORY all count toward instagramPostsPerWeek
-                const instagramPostCount = counts.IMAGE + counts.VIDEO + counts.STORY;
-                withinLimit = instagramPostCount < limits.instagramPostsPerWeek;
+            // Check if within limits on ALL requested platforms
+            let withinLimit = true;
+            for (const platform of platforms) {
+                const platformLimits = weeklyLimits[platform];
+                const limit = platformLimits?.[postType];
+                if (limit === undefined) {
+                    // No limit defined for this platform/type -- falls to credits
+                    withinLimit = false;
+                    break;
+                }
+                const used = counts[platform]?.[postType] ?? 0;
+                if (used >= limit) {
+                    withinLimit = false;
+                    break;
+                }
             }
 
             if (withinLimit) {
-                // Within plan limits, no credit deduction needed
                 next();
                 return;
             }

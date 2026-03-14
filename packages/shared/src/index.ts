@@ -33,7 +33,7 @@ export type PostStatus =
   | 'POSTED'                 // Successfully published
   | 'MISSED_DEADLINE';       // Failed after max retries
 
-export type Platform = 'INSTAGRAM' | 'FACEBOOK' | 'BOTH';
+export type Platform = 'INSTAGRAM' | 'FACEBOOK';
 
 export type StrategyCycleStatus =
   | 'PENDING_GENERATION'     // Awaiting strategy generation by content-engine
@@ -163,7 +163,7 @@ export interface Post {
   mediaUrls?: string[];
   videoUrl?: string;
   caption: string;
-  platform: Platform;
+  platforms: Platform[];
   restaurantId?: string;
   scheduledFor?: string;
   postedAt?: string;
@@ -210,18 +210,22 @@ export interface StrategyCycle {
 
 export const POST_TYPE_CREDIT_COSTS: Record<PostType, number> = {
   IMAGE: 1,
-  VIDEO: 1,
+  VIDEO: 2,
   STORY: 1,
   CAROUSEL: 3,
-  REEL: 5,
+  REEL: 4,
+};
+
+export const PLATFORM_POST_TYPES: Record<Platform, PostType[]> = {
+  INSTAGRAM: ['IMAGE', 'CAROUSEL', 'VIDEO', 'REEL', 'STORY'],
+  FACEBOOK: ['IMAGE', 'VIDEO', 'CAROUSEL', 'STORY'],
 };
 
 export const FREE_SIGNUP_CREDITS = 20;
 
+export type PostTypeLimits = Partial<Record<PostType, number>>;
 export interface PlanLimits {
-  reelsPerWeek: number;
-  instagramPostsPerWeek: number;
-  carouselPostsPerWeek: number;
+  weekly: Partial<Record<Platform, PostTypeLimits>>;
 }
 
 export interface PlanPricing {
@@ -340,11 +344,8 @@ export interface Invoice {
   updatedAt?: string | Date;
 }
 
-export interface PlanUsage {
-  reels: { used: number; limit: number };
-  instagramPosts: { used: number; limit: number };
-  carousels: { used: number; limit: number };
-}
+export type PostTypeUsage = Partial<Record<PostType, { used: number; limit: number }>>;
+export type PlanUsage = Partial<Record<Platform, PostTypeUsage>>;
 
 export interface SubscribeRequest {
   planSlug: string;
@@ -385,7 +386,7 @@ export interface ApiResponse<T = unknown> {
 export interface GeneratePostRequest {
   concept: string;
   type: PostType;
-  platform: Platform;
+  platforms: Platform[];
   scheduledFor?: string;
 }
 

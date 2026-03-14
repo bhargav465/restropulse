@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
+import type { Platform } from '@restropulse/shared';
 
 // -- Mock Setup --
 
@@ -67,7 +68,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'Delicious food!',
                 thumbnail: 'https://example.com/food.jpg',
-                platform: 'INSTAGRAM' as const
+                platforms: ['INSTAGRAM'] as Platform[]
             };
 
             it('should publish an image post successfully', async () => {
@@ -152,7 +153,7 @@ describe('Publishing Service', () => {
                 caption: 'Multi-photo post!',
                 thumbnail: 'https://example.com/img1.jpg',
                 mediaUrls: ['https://example.com/img1.jpg', 'https://example.com/img2.jpg', 'https://example.com/img3.jpg'],
-                platform: 'INSTAGRAM' as const
+                platforms: ['INSTAGRAM'] as Platform[]
             };
 
             it('should publish a carousel post successfully', async () => {
@@ -227,7 +228,7 @@ describe('Publishing Service', () => {
                 caption: 'Check out this reel!',
                 thumbnail: 'https://example.com/thumb.jpg',
                 videoUrl: 'https://example.com/reel.mp4',
-                platform: 'INSTAGRAM' as const
+                platforms: ['INSTAGRAM'] as Platform[]
             };
 
             it('should publish a reel successfully', async () => {
@@ -296,7 +297,7 @@ describe('Publishing Service', () => {
                     type: 'STORY' as const,
                     caption: '',
                     thumbnail: 'https://example.com/story.jpg',
-                    platform: 'INSTAGRAM' as const
+                    platforms: ['INSTAGRAM'] as Platform[]
                 };
 
                 // CDN upload flow for story image
@@ -326,7 +327,7 @@ describe('Publishing Service', () => {
                     caption: '',
                     thumbnail: 'https://example.com/thumb.jpg',
                     videoUrl: 'https://example.com/story.mp4',
-                    platform: 'INSTAGRAM' as const
+                    platforms: ['INSTAGRAM'] as Platform[]
                 };
 
                 // Create video story container
@@ -351,7 +352,7 @@ describe('Publishing Service', () => {
                     caption: 'Video post',
                     thumbnail: 'https://example.com/thumb.jpg',
                     videoUrl: 'https://example.com/video.mp4',
-                    platform: 'INSTAGRAM' as const
+                    platforms: ['INSTAGRAM'] as Platform[]
                 };
 
                 mockPost.mockResolvedValueOnce({ data: { id: 'video-container' } });
@@ -374,7 +375,7 @@ describe('Publishing Service', () => {
                     type: 'IMAGE' as const,
                     caption: 'Test',
                     thumbnail: 'https://example.com/img.jpg',
-                    platform: 'INSTAGRAM' as const
+                    platforms: ['INSTAGRAM'] as Platform[]
                 };
 
                 const result = await publishToInstagram(post, mockCredentials);
@@ -394,7 +395,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'IG only',
                 thumbnail: 'https://example.com/img.jpg',
-                platform: 'INSTAGRAM' as const
+                platforms: ['INSTAGRAM'] as Platform[]
             };
 
             // CDN upload flow
@@ -423,7 +424,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'FB only',
                 thumbnail: 'https://example.com/img.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             // Facebook image download and upload
@@ -446,7 +447,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'Both platforms',
                 thumbnail: 'https://example.com/img.jpg',
-                platform: 'BOTH' as const
+                platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[]
             };
 
             // Instagram: CDN upload + container + publish
@@ -482,7 +483,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'FB image',
                 thumbnail: 'https://example.com/img.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             // Download image
@@ -506,7 +507,7 @@ describe('Publishing Service', () => {
                 caption: 'FB carousel',
                 thumbnail: 'https://example.com/img1.jpg',
                 mediaUrls: ['https://example.com/img1.jpg', 'https://example.com/img2.jpg', 'https://example.com/img3.jpg'],
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             // Download each image and upload as unpublished photo
@@ -533,7 +534,7 @@ describe('Publishing Service', () => {
                 caption: 'Single carousel',
                 thumbnail: 'https://example.com/img1.jpg',
                 mediaUrls: ['https://example.com/img1.jpg'],
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             // Download and upload as regular photo
@@ -556,7 +557,7 @@ describe('Publishing Service', () => {
                 caption: 'FB video',
                 thumbnail: 'https://example.com/thumb.jpg',
                 videoUrl: 'https://example.com/video.mp4',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             mockPost.mockResolvedValueOnce({ data: { id: 'fb-vid-123' } });
@@ -574,7 +575,7 @@ describe('Publishing Service', () => {
                 caption: 'FB reel',
                 thumbnail: 'https://example.com/thumb.jpg',
                 videoUrl: 'https://example.com/reel.mp4',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             // Step 1: start upload returns video_id
@@ -595,7 +596,7 @@ describe('Publishing Service', () => {
                 type: 'REEL' as const,
                 caption: 'FB reel fallback',
                 thumbnail: 'https://example.com/fallback.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             // uploadImageToFacebook: download image
@@ -625,7 +626,7 @@ describe('Publishing Service', () => {
                 type: 'VIDEO' as const,
                 caption: 'FB video no url',
                 thumbnail: 'https://example.com/thumb.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             const result = await publishToFacebook(post, mockCredentials);
@@ -640,7 +641,7 @@ describe('Publishing Service', () => {
                 type: 'STORY' as const,
                 caption: '',
                 thumbnail: 'https://example.com/story.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             // uploadImageToFacebook: download image
@@ -670,7 +671,7 @@ describe('Publishing Service', () => {
                 caption: 'Video story',
                 thumbnail: 'https://example.com/story-thumb.jpg',
                 videoUrl: 'https://example.com/story.mp4',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             mockPost.mockResolvedValueOnce({ data: { id: 'story-video-fb-1' } });
@@ -688,7 +689,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'No page',
                 thumbnail: 'https://example.com/img.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             const noPageCredentials = {
@@ -711,7 +712,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'Test',
                 thumbnail: 'https://example.com/img.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             const result = await publishToFacebook(post, mockCredentials);
@@ -726,7 +727,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'Error test',
                 thumbnail: 'https://example.com/img.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             // Download fails
@@ -744,7 +745,7 @@ describe('Publishing Service', () => {
                 type: 'UNKNOWN' as any,
                 caption: 'Unknown type',
                 thumbnail: 'https://example.com/img.jpg',
-                platform: 'FACEBOOK' as const
+                platforms: ['FACEBOOK'] as Platform[]
             };
 
             const result = await publishToFacebook(post, mockCredentials);

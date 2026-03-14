@@ -81,7 +81,7 @@ describe('Invoice Routes', () => {
             credits: 100,
             planSnapshot: {
                 name: 'Growth',
-                limits: { reelsPerWeek: 100, instagramPostsPerWeek: 100, carouselPostsPerWeek: 100 },
+                limits: { weekly: { INSTAGRAM: { IMAGE: 100, STORY: 100, CAROUSEL: 100, REEL: 100, VIDEO: 100 }, FACEBOOK: { IMAGE: 100, CAROUSEL: 100, VIDEO: 100, STORY: 100 } } },
             },
         });
     });

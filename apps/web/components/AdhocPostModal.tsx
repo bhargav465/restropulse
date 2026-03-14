@@ -1,32 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Calendar, Image as ImageIcon, Video, Sparkles, Clock, Send, AlertCircle, Loader2 } from 'lucide-react';
-import { Post } from '@restropulse/shared';
+import { Post, Platform, PLATFORM_POST_TYPES } from '@restropulse/shared';
 import { postsAPI } from '../api';
 import { FacebookIcon, InstagramIcon } from './BrandIcons';
 
 // Post type options for user selection
 const POST_TYPES = [
-    { id: 'IMAGE' as const, label: 'Image Post', icon: ImageIcon, desc: 'Single photo', platforms: ['INSTAGRAM', 'FACEBOOK'] },
-    { id: 'CAROUSEL' as const, label: 'Carousel', icon: ImageIcon, desc: 'Multiple photos', platforms: ['INSTAGRAM', 'FACEBOOK'] },
-    { id: 'REEL' as const, label: 'Reel', icon: Video, desc: 'Short video', platforms: ['INSTAGRAM', 'FACEBOOK'] },
-    { id: 'STORY' as const, label: 'Story', icon: Clock, desc: '24hr content', platforms: ['INSTAGRAM', 'FACEBOOK'] },
+    { id: 'IMAGE' as const, label: 'Image Post', icon: ImageIcon, desc: 'Single photo' },
+    { id: 'CAROUSEL' as const, label: 'Carousel', icon: ImageIcon, desc: 'Multiple photos' },
+    { id: 'REEL' as const, label: 'Reel', icon: Video, desc: 'Short video' },
+    { id: 'STORY' as const, label: 'Story', icon: Clock, desc: '24hr content' },
 ];
 
-// Helper to check if a content type is compatible with the selected platform
-function isContentTypeCompatible(contentType: Post['type'], platform: Post['platform']): { compatible: boolean; message?: string } {
-    const postType = POST_TYPES.find(t => t.id === contentType);
-    if (!postType) return { compatible: true };
-
-    if (platform === 'BOTH') {
-        // All content types are now supported on both platforms
-        return { compatible: true };
-    }
-
-    const supportsPlatform = postType.platforms.includes(platform as 'INSTAGRAM' | 'FACEBOOK');
-    return {
-        compatible: supportsPlatform,
-        message: supportsPlatform ? undefined : `${postType.label} is not supported on ${platform}`
-    };
+// Helper to get valid post types for selected platforms
+function getValidPostTypes(platforms: Platform[]): Post['type'][] {
+    if (platforms.length === 0) return [];
+    const sets = platforms.map(p => new Set(PLATFORM_POST_TYPES[p]));
+    // Intersection of all platform post types
+    const first = sets[0];
+    return [...first].filter(t => sets.every(s => s.has(t))) as Post['type'][];
 }
 
 interface AdhocPostModalProps {
@@ -38,7 +30,7 @@ interface AdhocPostModalProps {
 interface FormData {
     concept: string;
     postType: Post['type'];
-    platform: Post['platform'];
+    platforms: Platform[];
     scheduleType: 'now' | 'later';
     scheduledDate: string;
     scheduledTime: string;
@@ -64,7 +56,7 @@ function getDefaultFormData(): FormData {
     return {
         concept: '',
         postType: 'IMAGE',
-        platform: 'INSTAGRAM',
+        platforms: ['INSTAGRAM'],
         scheduleType: 'later',
         scheduledDate,
         scheduledTime,
@@ -112,10 +104,33 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
         }
     };
 
+    const togglePlatform = (platform: Platform) => {
+        setFormData(prev => {
+            const current = prev.platforms;
+            let next: Platform[];
+            if (current.includes(platform)) {
+                next = current.filter(p => p !== platform);
+                // Must have at least one platform
+                if (next.length === 0) return prev;
+            } else {
+                next = [...current, platform];
+            }
+            // If current post type is not valid for the new platform set, reset to first valid
+            const validTypes = getValidPostTypes(next);
+            const postType = validTypes.includes(prev.postType) ? prev.postType : (validTypes[0] || 'IMAGE');
+            return { ...prev, platforms: next, postType };
+        });
+    };
+
     const handleSubmit = async () => {
         // Validation
         if (!formData.concept.trim()) {
             setError('Please describe what you want to post');
+            return;
+        }
+
+        if (formData.platforms.length === 0) {
+            setError('Please select at least one platform');
             return;
         }
 
@@ -128,7 +143,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
         setError(null);
 
         try {
-            // Build the scheduled time — default to 10 min from now for ASAP posts
+            // Build the scheduled time -- default to 10 min from now for ASAP posts
             const scheduledFor = formData.scheduleType === 'later'
                 ? new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString()
                 : new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -137,7 +152,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
             await postsAPI.generate({
                 concept: formData.concept,
                 type: formData.postType,
-                platform: formData.platform,
+                platforms: formData.platforms,
                 scheduledFor
             });
 
@@ -178,6 +193,8 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
 
     // Get minimum date (today) for date picker
     const today = new Date().toISOString().split('T')[0];
+
+    const validPostTypes = getValidPostTypes(formData.platforms);
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -245,26 +262,61 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                         </p>
                     </div>
 
+                    {/* Platform Selection (multi-select checkboxes) */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">
+                            Platforms
+                        </label>
+                        <div className="flex gap-2">
+                            {([
+                                { id: 'INSTAGRAM' as const, label: 'Instagram', icon: InstagramIcon },
+                                { id: 'FACEBOOK' as const, label: 'Facebook', icon: FacebookIcon },
+                            ]).map((platform) => {
+                                const selected = formData.platforms.includes(platform.id);
+                                return (
+                                    <button
+                                        key={platform.id}
+                                        onClick={() => togglePlatform(platform.id)}
+                                        className={`flex-1 p-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${selected
+                                            ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                            : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                                            }`}
+                                        data-testid={`platform-${platform.id.toLowerCase()}`}
+                                    >
+                                        <platform.icon size={16} />
+                                        <span className="text-xs font-medium">{platform.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     {/* Post Type Selection */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">
                             Content Type
                         </label>
                         <div className="grid grid-cols-4 gap-2">
-                            {POST_TYPES.map((type) => (
-                                <button
-                                    key={type.id}
-                                    onClick={() => setFormData(prev => ({ ...prev, postType: type.id }))}
-                                    className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${formData.postType === type.id
-                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                                        : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                                        }`}
-                                    data-testid={`type-${type.id.toLowerCase()}`}
-                                >
-                                    <type.icon size={20} />
-                                    <span className="text-[10px] font-medium">{type.label}</span>
-                                </button>
-                            ))}
+                            {POST_TYPES.map((type) => {
+                                const isValid = validPostTypes.includes(type.id);
+                                return (
+                                    <button
+                                        key={type.id}
+                                        onClick={() => isValid && setFormData(prev => ({ ...prev, postType: type.id }))}
+                                        disabled={!isValid}
+                                        className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1 ${!isValid
+                                            ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed'
+                                            : formData.postType === type.id
+                                                ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                                : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                                            }`}
+                                        data-testid={`type-${type.id.toLowerCase()}`}
+                                    >
+                                        <type.icon size={20} />
+                                        <span className="text-[10px] font-medium">{type.label}</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -324,41 +376,6 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                 <span className="text-xs text-slate-400">or leave blank for team to source</span>
                             </button>
                         )}
-                    </div>
-
-                    {/* Platform Selection */}
-                    <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">
-                            Platform
-                        </label>
-                        <div className="flex gap-2">
-                            {[
-                                { id: 'INSTAGRAM' as const, label: 'Instagram', icon: InstagramIcon },
-                                { id: 'FACEBOOK' as const, label: 'Facebook', icon: FacebookIcon },
-                                { id: 'BOTH' as const, label: 'Both', icon: () => <span className="text-xs font-bold">IG+FB</span> },
-                            ].map((platform) => (
-                                <button
-                                    key={platform.id}
-                                    onClick={() => setFormData(prev => ({ ...prev, platform: platform.id }))}
-                                    className={`flex-1 p-3 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${formData.platform === platform.id
-                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                                        : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                                        }`}
-                                    data-testid={`platform-${platform.id.toLowerCase()}`}
-                                >
-                                    <platform.icon size={16} />
-                                    <span className="text-xs font-medium">{platform.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                        {/* Platform compatibility info */}
-                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                            <p className="text-xs text-blue-700 font-medium mb-1">Platform Support:</p>
-                            <ul className="text-xs text-blue-600 space-y-0.5">
-                                <li>• All content types (Image, Carousel, Reel, Story) are supported on both Instagram and Facebook</li>
-                                <li>• Choose "Both" to post to Instagram and Facebook simultaneously</li>
-                            </ul>
-                        </div>
                     </div>
 
                     {/* Schedule Selection */}

@@ -300,6 +300,22 @@ describe('Integration Routes', () => {
             expect(response.status).toBe(302);
             expect(response.header.location).toContain('error=server_error');
         });
+
+        it('should redirect with error=unknown when success=true but no account or accounts (covers line 206)', async () => {
+            // validateStateToken is valid, but handleOAuthCallback returns success=true with neither account nor accounts
+            mockValidateStateToken.mockReturnValue({ valid: true, restaurantId: 'r1' });
+            mockHandleOAuthCallback.mockResolvedValue({
+                success: true
+                // no account, no accounts array
+            });
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/callback')
+                .query({ code: 'code-fallthru', state: 'state-fallthru' });
+
+            expect(response.status).toBe(302);
+            expect(response.header.location).toContain('error=unknown');
+        });
     });
 
     describe('POST /api/integrations/instagram/callback', () => {
@@ -315,6 +331,51 @@ describe('Integration Routes', () => {
             expect(res.status).toBe(400);
             expect(res.body.error).toBe('fail');
         });
+
+        it('should return single account directly when result.account is present (covers line 241)', async () => {
+            // Single account path - result.account is set, no accounts array
+            mockHandleOAuthCallback.mockResolvedValue({
+                success: true,
+                account: { id: 'ig-single', username: 'single_user', name: 'Single User' },
+                accessToken: 'tok-single',
+                tokenExpiresAt: new Date()
+            });
+
+            const res = await request(app)
+                .post('/api/integrations/instagram/callback')
+                .send({ code: 'code-single', state: 'state-single' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+            expect(res.body.data.account.id).toBe('ig-single');
+            expect(res.body.data.requiresSelection).toBe(false);
+        });
+
+        it('should return 500 UNKNOWN_ERROR when success=true but no account or accounts (covers line 283)', async () => {
+            // Neither result.account nor result.accounts is set -> unknown error path
+            mockHandleOAuthCallback.mockResolvedValue({
+                success: true
+                // no account, no accounts
+            });
+
+            const res = await request(app)
+                .post('/api/integrations/instagram/callback')
+                .send({ code: 'code-unknown', state: 'state-unknown' });
+
+            expect(res.status).toBe(500);
+            expect(res.body.error).toBe('UNKNOWN_ERROR');
+        });
+
+        it('should return 500 SERVER_ERROR when handleOAuthCallback throws (covers lines 289-290)', async () => {
+            mockHandleOAuthCallback.mockRejectedValue(new Error('Unexpected OAuth error'));
+
+            const res = await request(app)
+                .post('/api/integrations/instagram/callback')
+                .send({ code: 'code-err', state: 'state-err' });
+
+            expect(res.status).toBe(500);
+            expect(res.body.error).toBe('SERVER_ERROR');
+        });
     });
 
     describe('GET /api/integrations/instagram/status/:restaurantId', () => {
@@ -322,7 +383,13 @@ describe('Integration Routes', () => {
             // Setup DB state
             const col = realConnection.getRestaurantsCollection();
             await col.updateOne({ _id: 'r1' } as any, {
-                $set: { integrations: { instagram: true }, instagramCredentials: { username: 'my_ig' } }
+                $set: {
+                    integrations: { instagram: true },
+                    instagramCredentials: {
+                        username: 'my_ig',
+                        tokenExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+                    }
+                }
             });
 
             const response = await request(app)
@@ -330,6 +397,64 @@ describe('Integration Routes', () => {
 
             expect(response.status).toBe(200);
             expect(response.body.data.connected).toBe(true);
+        });
+
+        it('should return connected=false when instagram integration flag is false (covers line 484)', async () => {
+            // instagramCredentials exists but integrations.instagram is false
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne({ _id: 'r1' } as any, {
+                $set: {
+                    integrations: { instagram: false },
+                    instagramCredentials: { username: 'my_ig', tokenExpiresAt: new Date() }
+                }
+            });
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/status/r1');
+
+            expect(response.status).toBe(200);
+            expect(response.body.data.connected).toBe(false);
+        });
+
+        it('should show tokenStatus=expired when token is past expiry', async () => {
+            // Covers lines 623, 646-647 equivalent - token status expiry branches
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne({ _id: 'r1' } as any, {
+                $set: {
+                    integrations: { instagram: true },
+                    instagramCredentials: {
+                        username: 'expired_ig',
+                        tokenExpiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000) // expired yesterday
+                    }
+                }
+            });
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/status/r1');
+
+            expect(response.status).toBe(200);
+            expect(response.body.data.connected).toBe(true);
+            expect(response.body.data.tokenStatus).toBe('expired');
+            expect(response.body.data.needsReauthorization).toBe(true);
+        });
+
+        it('should show tokenStatus=expiring_soon when token expires within 7 days', async () => {
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne({ _id: 'r1' } as any, {
+                $set: {
+                    integrations: { instagram: true },
+                    instagramCredentials: {
+                        username: 'expiring_ig',
+                        tokenExpiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) // 3 days from now
+                    }
+                }
+            });
+
+            const response = await request(app)
+                .get('/api/integrations/instagram/status/r1');
+
+            expect(response.status).toBe(200);
+            expect(response.body.data.tokenStatus).toBe('expiring_soon');
         });
 
         it('should handle database error', async () => {
@@ -365,6 +490,16 @@ describe('Integration Routes', () => {
 
             const r = await col.findOne({ _id: 'r1' } as any);
             expect(r?.instagramCredentials).toBeUndefined();
+        });
+
+        it('should return 404 when restaurant not found for disconnect (covers line 444)', async () => {
+            // Use a non-existent restaurant ID so matchedCount will be 0
+            const response = await request(app)
+                .delete('/api/integrations/instagram/disconnect/non-existent-restaurant');
+
+            expect(response.status).toBe(404);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Restaurant not found');
         });
 
         it('should handle database error', async () => {
@@ -584,6 +719,17 @@ describe('Integration Routes', () => {
             expect(response.body.data.valid).toBe(true);
         });
 
+        it('should return 500 when validateToken throws an exception', async () => {
+            // Covers lines 600-601: catch block in validate route
+            mockValidateToken.mockRejectedValue(new Error('Meta API down'));
+
+            const response = await request(app).post('/api/integrations/instagram/validate/r1');
+
+            expect(response.status).toBe(500);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Failed to validate connection');
+        });
+
         it('should handle invalid token (updates DB)', async () => {
             mockValidateToken.mockResolvedValue(false);
             const response = await request(app).post('/api/integrations/instagram/validate/r1');
@@ -623,6 +769,29 @@ describe('Integration Routes', () => {
             const response = await request(app).get('/api/integrations/instagram/profile/r1');
 
             expect(response.status).toBe(400);
+        });
+
+        it('should return 400 when no Instagram credentials (covers line 623)', async () => {
+            // Remove instagramCredentials from the restaurant
+            mockCheckAndRefreshTokenIfNeeded.mockResolvedValue(true);
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne({ _id: 'r1' } as any, { $unset: { instagramCredentials: '' } });
+
+            const response = await request(app).get('/api/integrations/instagram/profile/r1');
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('No Instagram connection found');
+        });
+
+        it('should return 500 when profile fetch throws an exception (covers lines 646-647)', async () => {
+            // checkAndRefreshTokenIfNeeded throws to trigger the catch block
+            mockCheckAndRefreshTokenIfNeeded.mockRejectedValue(new Error('Token refresh network error'));
+
+            const response = await request(app).get('/api/integrations/instagram/profile/r1');
+
+            expect(response.status).toBe(500);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Failed to fetch profile');
         });
     });
 
@@ -800,6 +969,151 @@ describe('Integration Routes', () => {
             process.env.NODE_ENV = previousEnv;
         });
 
+        it('should return 500 when decrypt fails in migrate route (covers decrypt null path)', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne(
+                { _id: 'r1' } as any,
+                {
+                    $set: {
+                        instagramCredentials: {
+                            userId: 'ig-user-1',
+                            pageId: 'page-bad',
+                            accessToken: 'invalid-no-colon' // decrypt returns null for this format
+                        }
+                    }
+                }
+            );
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/migrate-to-page-token/r1');
+
+            expect(response.status).toBe(500);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Failed to decrypt stored token');
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should return 400 when page not found in accounts and direct fetch also fails (covers lines 973-994)', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne(
+                { _id: 'r1' } as any,
+                {
+                    $set: {
+                        instagramCredentials: {
+                            userId: 'ig-user-1',
+                            pageId: 'page-not-found',
+                            accessToken: encrypt('user-token-abc')
+                        }
+                    }
+                }
+            );
+
+            // /me/accounts returns pages but not the stored pageId
+            // Direct fetch also fails (throws)
+            mockAxiosGet.mockImplementation((url: string) => {
+                if (url.includes('/me/accounts')) {
+                    return Promise.resolve({
+                        data: { data: [{ id: 'other-page', name: 'Other', access_token: 'tok' }] }
+                    });
+                }
+                // Direct fetch of storedPageId throws
+                return Promise.reject(new Error('Page not accessible'));
+            });
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/migrate-to-page-token/r1');
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toContain('Could not get page access token');
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should return 400 when page debug_token is invalid (covers line 1017)', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            process.env.INSTAGRAM_APP_ID = 'test-app-id';
+            process.env.INSTAGRAM_APP_SECRET = 'test-app-secret';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne(
+                { _id: 'r1' } as any,
+                {
+                    $set: {
+                        instagramCredentials: {
+                            userId: 'ig-user-1',
+                            pageId: 'page-invalid-tok',
+                            accessToken: encrypt('user-token-abc')
+                        }
+                    }
+                }
+            );
+
+            mockAxiosGet.mockImplementation((url: string) => {
+                if (url.includes('/me/accounts')) {
+                    return Promise.resolve({
+                        data: {
+                            data: [{ id: 'page-invalid-tok', name: 'Test Page', access_token: 'bad-page-token' }]
+                        }
+                    });
+                }
+                if (url.includes('/debug_token')) {
+                    return Promise.resolve({
+                        data: { data: { is_valid: false, type: 'PAGE', scopes: [] } }
+                    });
+                }
+                return Promise.resolve({ data: {} });
+            });
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/migrate-to-page-token/r1');
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toBe('Page token is not valid');
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
+        it('should return 500 when migrate throws an unexpected exception (covers lines 1045-1046)', async () => {
+            const previousEnv = process.env.NODE_ENV;
+            process.env.NODE_ENV = 'test';
+
+            const col = realConnection.getRestaurantsCollection();
+            await col.updateOne(
+                { _id: 'r1' } as any,
+                {
+                    $set: {
+                        instagramCredentials: {
+                            userId: 'ig-user-1',
+                            pageId: 'page-crash',
+                            accessToken: encrypt('user-token-crash')
+                        }
+                    }
+                }
+            );
+
+            // Make the axios call throw an unexpected error
+            mockAxiosGet.mockRejectedValue(new Error('Network timeout'));
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/migrate-to-page-token/r1');
+
+            expect(response.status).toBe(500);
+            expect(response.body.success).toBe(false);
+
+            process.env.NODE_ENV = previousEnv;
+        });
+
         it('should migrate to page token successfully', async () => {
             const previousEnv = process.env.NODE_ENV;
             process.env.NODE_ENV = 'test';
@@ -897,6 +1211,20 @@ describe('Integration Routes', () => {
             const response = await request(app)
                 .post('/api/integrations/instagram/deauthorize')
                 .send({ signed_request: 'nodotseparator' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.error).toBe('Invalid signed_request');
+        });
+
+        it('should fail with signed_request that has valid format but wrong signature (covers lines 57-58)', async () => {
+            // Create a payload with a wrong (mismatched) signature - valid base64 payload but wrong sig
+            const payload = Buffer.from(JSON.stringify({ user_id: 'some-user' })).toString('base64');
+            const wrongSig = 'wrongsignaturehere';
+            const signedRequest = `${wrongSig}.${payload}`;
+
+            const response = await request(app)
+                .post('/api/integrations/instagram/deauthorize')
+                .send({ signed_request: signedRequest });
 
             expect(response.status).toBe(400);
             expect(response.body.error).toBe('Invalid signed_request');

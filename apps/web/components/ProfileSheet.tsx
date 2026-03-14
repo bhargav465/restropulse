@@ -7,6 +7,7 @@ import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { FacebookIcon, InstagramIcon, WhatsAppIcon } from './BrandIcons';
 import { ActionNotice } from './ActionNotice';
+import { getGoogleMapsApiKey } from '../utils/env';
 
 interface ProfileSheetProps {
     isOpen: boolean;
@@ -90,12 +91,17 @@ function formatPaise(paise: number): string {
 }
 
 function planFeatures(plan: SubscriptionPlan): string[] {
-    return [
-        `${plan.limits.reelsPerWeek} Reels/week`,
-        `${plan.limits.instagramPostsPerWeek} Posts/week`,
-        `${plan.limits.carouselPostsPerWeek} Carousels/week`,
-        ...plan.features.map((f: string) => f === 'INSTAGRAM' ? 'Instagram' : f === 'FACEBOOK' ? 'Facebook' : f),
-    ];
+    const features: string[] = [];
+    const weekly = plan.limits.weekly;
+    for (const [platform, typeLimits] of Object.entries(weekly)) {
+        const entries = Object.entries(typeLimits as Record<string, number>).filter(([, v]) => v > 0);
+        if (entries.length > 0) {
+            const summary = entries.map(([type, limit]) => `${limit} ${type}`).join(', ');
+            features.push(`${platform}: ${summary}/week`);
+        }
+    }
+    features.push(...plan.features.map((f: string) => f === 'INSTAGRAM' ? 'Instagram' : f === 'FACEBOOK' ? 'Facebook' : f));
+    return features;
 }
 
 function getInitials(name: string): string {
@@ -649,7 +655,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         const [editCoordinates, setEditCoordinates] = useState<[number, number]>(
             [restaurantData.location.lng, restaurantData.location.lat] || [0, 0]
         );
-        const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+        const googleMapsApiKey = getGoogleMapsApiKey();
 
         const handleSave = () => {
             onRestaurantUpdate({
@@ -800,19 +806,27 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     {usage && (
                         <div className="mb-6">
                             <h4 className="font-bold text-slate-800 mb-2 text-sm">This Week</h4>
-                            <div className="grid grid-cols-3 gap-2">
-                                {[
-                                    { label: 'Reels', used: usage.reels.used, limit: usage.reels.limit },
-                                    { label: 'Posts', used: usage.instagramPosts.used, limit: usage.instagramPosts.limit },
-                                    { label: 'Carousels', used: usage.carousels.used, limit: usage.carousels.limit },
-                                ].map((item) => {
-                                    const pct = item.limit > 0 ? Math.min((item.used / item.limit) * 100, 100) : 0;
+                            <div className="space-y-3">
+                                {Object.entries(usage).map(([platform, postTypes]) => {
+                                    const items = Object.entries(postTypes || {}).filter(([, v]) => v && v.limit > 0);
+                                    if (items.length === 0) return null;
                                     return (
-                                        <div key={item.label} className="bg-slate-50 rounded-xl p-3">
-                                            <p className="text-[10px] text-slate-500 font-medium mb-1">{item.label}</p>
-                                            <p className="text-lg font-bold text-slate-800">{item.used}<span className="text-sm text-slate-400">/{item.limit}</span></p>
-                                            <div className="w-full h-1 bg-slate-200 rounded-full mt-1.5">
-                                                <div className={`h-1 rounded-full transition-all ${pct >= 100 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${pct}%` }}></div>
+                                        <div key={platform}>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">{platform}</p>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {items.map(([type, val]) => {
+                                                    const { used, limit } = val!;
+                                                    const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+                                                    return (
+                                                        <div key={`${platform}-${type}`} className="bg-slate-50 rounded-xl p-3">
+                                                            <p className="text-[10px] text-slate-500 font-medium mb-1">{type}</p>
+                                                            <p className="text-lg font-bold text-slate-800">{used}<span className="text-sm text-slate-400">/{limit}</span></p>
+                                                            <div className="w-full h-1 bg-slate-200 rounded-full mt-1.5">
+                                                                <div className={`h-1 rounded-full transition-all ${pct >= 100 ? 'bg-red-500' : pct >= 75 ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${pct}%` }}></div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     );

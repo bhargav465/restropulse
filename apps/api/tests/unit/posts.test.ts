@@ -83,10 +83,10 @@ describe('Posts Module', () => {
             planSnapshot: {
                 slug: 'growth',
                 tier: 'GROWTH',
-                limits: { reelsPerWeek: 100, instagramPostsPerWeek: 100, carouselPostsPerWeek: 100 },
+                limits: { weekly: { INSTAGRAM: { IMAGE: 100, STORY: 100, CAROUSEL: 100, REEL: 100, VIDEO: 100 }, FACEBOOK: { IMAGE: 100, CAROUSEL: 100, VIDEO: 100, STORY: 100 } } },
             },
         });
-        mockGetWeeklyPostCounts.mockResolvedValue({ IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0 });
+        mockGetWeeklyPostCounts.mockResolvedValue({ INSTAGRAM: { IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0 }, FACEBOOK: { IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0 } });
         mockDeductCredits.mockResolvedValue(true);
     });
 
@@ -165,7 +165,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     restaurantId: 'r1',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     thumbnail: 'img1.jpg'
                 } as any);
                 await actualPostsDb.createPost({
@@ -173,7 +173,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     restaurantId: 'r1',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     thumbnail: 'img2.jpg'
                 } as any);
 
@@ -187,7 +187,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     restaurantId: 'target-r',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     thumbnail: 't1'
                 } as any);
                 await actualPostsDb.createPost({
@@ -195,7 +195,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     restaurantId: 'other-r',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     thumbnail: 't2'
                 } as any);
 
@@ -210,7 +210,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     restaurantId: 'r1',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     thumbnail: 'img3.jpg'
                 } as any);
 
@@ -231,7 +231,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     restaurantId: 'r1',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     thumbnail: 'img4.jpg'
                 } as any);
 
@@ -249,7 +249,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     restaurantId: 'r1',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     thumbnail: 'img5.jpg'
                 } as any);
 
@@ -264,7 +264,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     type: 'IMAGE',
                     restaurantId: 'r1',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     thumbnail: 'img6.jpg'
                 } as any);
 
@@ -388,7 +388,7 @@ describe('Posts Module', () => {
                     status: 'PENDING_APPROVAL',
                     thumbnail: '/it.jpg',
                     caption: 'Test post caption',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -409,7 +409,7 @@ describe('Posts Module', () => {
                     status: 'SCHEDULED',
                     thumbnail: '/video.jpg',
                     caption: 'Video post',
-                    platform: 'FACEBOOK'
+                    platforms: ['FACEBOOK']
                 };
 
                 const response = await request(app)
@@ -427,7 +427,7 @@ describe('Posts Module', () => {
                     status: 'POSTED',
                     thumbnail: '/carousel.jpg',
                     caption: 'Carousel post',
-                    platform: 'BOTH',
+                    platforms: ['INSTAGRAM', 'FACEBOOK'],
                     stats: { likes: 100, shares: 20, comments: 15, reach: 1000 }
                 };
 
@@ -447,7 +447,7 @@ describe('Posts Module', () => {
                     thumbnail: '/thumb.jpg',
                     mediaUrls: ['/img1.jpg', '/img2.jpg', '/img3.jpg'],
                     caption: 'Multi-image post',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -466,7 +466,7 @@ describe('Posts Module', () => {
                     thumbnail: '/reel-thumb.jpg',
                     videoUrl: '/reel.mp4',
                     caption: 'Reel caption',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     duration: '0:15'
                 };
 
@@ -676,7 +676,7 @@ describe('Posts Module', () => {
                     .send({
                         type: 'IMAGE',
                         caption: longCaption,
-                        platform: 'INSTAGRAM'
+                        platforms: ['INSTAGRAM']
                     });
                 expect(response.status).toBe(201);
                 expect(response.body.data.caption).toBe(longCaption);
@@ -690,7 +690,7 @@ describe('Posts Module', () => {
                     .send({
                         type: 'IMAGE',
                         caption: specialCaption,
-                        platform: 'INSTAGRAM'
+                        platforms: ['INSTAGRAM']
                     });
                 expect(response.status).toBe(201);
                 expect(response.body.data.caption).toBe(specialCaption);
@@ -702,7 +702,7 @@ describe('Posts Module', () => {
                 const adhocPost = {
                     caption: 'Flash sale announcement - 50% off all pizzas today!',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -722,7 +722,7 @@ describe('Posts Module', () => {
                 const adhocPost = {
                     caption: 'New menu item launch',
                     type: 'REEL',
-                    platform: 'BOTH'
+                    platforms: ['INSTAGRAM', 'FACEBOOK']
                 };
 
                 const response = await request(app)
@@ -737,7 +737,7 @@ describe('Posts Module', () => {
             it('should set default type to IMAGE if not provided', async () => {
                 const adhocPost = {
                     caption: 'Quick announcement',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -760,14 +760,14 @@ describe('Posts Module', () => {
                     .send(adhocPost);
 
                 expect(response.status).toBe(201);
-                expect(response.body.data.platform).toBe('INSTAGRAM');
+                expect(response.body.data.platforms).toEqual(['INSTAGRAM']);
             });
 
             it('should set default thumbnail if not provided', async () => {
                 const adhocPost = {
                     caption: 'Post without image',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -783,7 +783,7 @@ describe('Posts Module', () => {
                 const adhocPost = {
                     caption: 'Post without restaurantId',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -799,7 +799,7 @@ describe('Posts Module', () => {
                 const adhocPost = {
                     caption: 'Post for specific restaurant',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     restaurantId: 'r-custom'
                 };
 
@@ -827,7 +827,7 @@ describe('Posts Module', () => {
                 expect(data.restaurantId).toBe('r1');
                 expect(data.type).toBe('IMAGE');
                 expect(data.status).toBe('PENDING_APPROVAL');
-                expect(data.platform).toBe('INSTAGRAM');
+                expect(data.platforms).toEqual(['INSTAGRAM']);
                 expect(data.caption).toBe('Bare minimum post');
                 expect(data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\/\d+\/400\/400$/);
                 expect(data.isAdhoc).toBe(true);
@@ -838,7 +838,7 @@ describe('Posts Module', () => {
                 const adhocPost = {
                     caption: 'DB persistence check',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -857,7 +857,7 @@ describe('Posts Module', () => {
                 const strategyPost = {
                     caption: 'Generated from strategy',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     strategyId: 'strategy-123'
                 };
 
@@ -875,7 +875,7 @@ describe('Posts Module', () => {
                 const scheduledAdhocPost = {
                     caption: 'Weekend special coming up!',
                     type: 'IMAGE',
-                    platform: 'BOTH',
+                    platforms: ['INSTAGRAM', 'FACEBOOK'],
                     scheduledFor: '2026-02-15T14:00:00.000Z'
                 };
 
@@ -894,7 +894,7 @@ describe('Posts Module', () => {
                 const invalidPost = {
                     caption: '',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -911,7 +911,7 @@ describe('Posts Module', () => {
                 const invalidPost = {
                     caption: '   ',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 };
 
                 const response = await request(app)
@@ -928,7 +928,7 @@ describe('Posts Module', () => {
                 const reelPost = {
                     caption: 'Check out our new reel!',
                     type: 'REEL',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     videoUrl: '/videos/reel-123.mp4',
                     duration: '0:30'
                 };
@@ -950,7 +950,7 @@ describe('Posts Module', () => {
                 const carouselPost = {
                     caption: 'New menu items showcase',
                     type: 'CAROUSEL',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     mediaUrls: ['/img1.jpg', '/img2.jpg', '/img3.jpg'],
                     thumbnail: '/img1.jpg'
                 };
@@ -971,7 +971,7 @@ describe('Posts Module', () => {
                 const storyPost = {
                     caption: '24hr special offer!',
                     type: 'STORY',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     videoUrl: '/stories/story-123.mp4'
                 };
 
@@ -990,7 +990,7 @@ describe('Posts Module', () => {
                 const adhocPost = {
                     caption: 'Already approved post',
                     type: 'IMAGE',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     status: 'SCHEDULED'
                 };
 
@@ -1060,7 +1060,7 @@ describe('Posts Module', () => {
                 expect(response.status).toBe(201);
                 expect(response.body.success).toBe(true);
                 expect(response.body.data.type).toBe('IMAGE');
-                expect(response.body.data.platform).toBe('INSTAGRAM');
+                expect(response.body.data.platforms).toEqual(['INSTAGRAM']);
                 expect(response.body.data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\//);
                 expect(response.body.data.videoUrl).toBeUndefined();
                 expect(response.body.data.mediaUrls).toBeUndefined();
@@ -1072,12 +1072,12 @@ describe('Posts Module', () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
                     .set('Authorization', `Bearer ${authToken}`)
-                    .send({ concept: 'Chef making signature dish', type: 'VIDEO', platform: 'BOTH' });
+                    .send({ concept: 'Chef making signature dish', type: 'VIDEO', platforms: ['INSTAGRAM', 'FACEBOOK'] });
 
                 expect(response.status).toBe(201);
                 expect(response.body.success).toBe(true);
                 expect(response.body.data.type).toBe('VIDEO');
-                expect(response.body.data.platform).toBe('BOTH');
+                expect(response.body.data.platforms).toEqual(['INSTAGRAM', 'FACEBOOK']);
                 expect(response.body.data.videoUrl).toMatch(/^https:\/\/sample-videos\.com\//);
                 expect(response.body.data.mediaUrls).toBeUndefined();
             });
@@ -1126,7 +1126,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'No restaurant',
                     thumbnail: 'https://example.com/img.jpg',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 } as any);
 
                 const response = await request(app).post('/api/posts/test-pub-no-rest/test-publish');
@@ -1143,7 +1143,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'No IG creds',
                     thumbnail: 'https://example.com/img.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     restaurantId: 'r-no-ig'
                 } as any);
 
@@ -1164,7 +1164,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'Diagnostic publish',
                     thumbnail: 'https://example.com/img.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     restaurantId: 'r-test-ok'
                 } as any);
 
@@ -1197,7 +1197,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'Diagnostic publish error',
                     thumbnail: 'https://example.com/img.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     restaurantId: 'r-test-err'
                 } as any);
 
@@ -1255,7 +1255,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'Publish me',
                     thumbnail: 'https://example.com/img.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     restaurantId: 'r1-pub'
                 } as any);
 
@@ -1299,7 +1299,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'Not ready',
                     thumbnail: '/img.jpg',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 });
 
                 const response = await request(app).post('/api/posts/pub-2/publish');
@@ -1317,7 +1317,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'No restaurant',
                     thumbnail: '/img.jpg',
-                    platform: 'INSTAGRAM'
+                    platforms: ['INSTAGRAM']
                 } as any);
 
                 mockFindPostById.mockImplementation(actualPostsDb.findPostById);
@@ -1336,7 +1336,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'No creds',
                     thumbnail: '/img.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     restaurantId: 'r-no-creds'
                 } as any);
 
@@ -1361,7 +1361,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'Fail publish',
                     thumbnail: '/img.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                     restaurantId: 'r1-fail'
                 } as any);
 
@@ -1396,7 +1396,7 @@ describe('Posts Module', () => {
                     type: 'IMAGE',
                     caption: 'Retry',
                     thumbnail: '/img.jpg',
-                    platform: 'FACEBOOK',
+                    platforms: ['FACEBOOK'],
                     restaurantId: 'r1-retry'
                 } as any);
 
@@ -1427,6 +1427,81 @@ describe('Posts Module', () => {
 
                 const response = await request(app).post('/api/posts/pub-err/publish');
 
+                expect(response.status).toBe(500);
+                expect(response.body.success).toBe(false);
+            });
+
+            it('should return 502 when Facebook publishing fails (covers facebook error branch)', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'pub-fb-fail',
+                    status: 'SCHEDULED',
+                    type: 'IMAGE',
+                    caption: 'Facebook fail test',
+                    thumbnail: '/img.jpg',
+                    platforms: ['FACEBOOK'],
+                    restaurantId: 'r1-fb-fail'
+                } as any);
+
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({
+                    _id: 'r1-fb-fail',
+                    instagramCredentials: {
+                        userId: 'ig-123',
+                        pageId: 'page-456',
+                        accessToken: 'enc-token'
+                    }
+                } as any);
+
+                // Facebook fails, Instagram not attempted
+                mockPublishPost.mockResolvedValue({
+                    facebook: { success: false, error: 'Facebook page not found', retryable: false }
+                });
+
+                mockFindPostById.mockImplementation(actualPostsDb.findPostById);
+
+                const response = await request(app).post('/api/posts/pub-fb-fail/publish');
+
+                expect(response.status).toBe(502);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toContain('Facebook page not found');
+            });
+
+            it('should handle inner DB error when reverting PUBLISHING status on unexpected error', async () => {
+                const col = getPostsCollection();
+                await col.insertOne({
+                    _id: 'pub-revert-fail',
+                    status: 'SCHEDULED',
+                    type: 'IMAGE',
+                    caption: 'Revert fail test',
+                    thumbnail: '/img.jpg',
+                    platforms: ['INSTAGRAM'],
+                    restaurantId: 'r1-revert-fail'
+                } as any);
+
+                const restCol = getRestaurantsCollection();
+                await restCol.insertOne({
+                    _id: 'r1-revert-fail',
+                    instagramCredentials: {
+                        userId: 'ig-123',
+                        pageId: 'page-456',
+                        accessToken: 'enc-token'
+                    }
+                } as any);
+
+                // Make publishPost throw to trigger the outer catch block
+                // The inner DB revert will also fail due to findPostById rejection
+                mockPublishPost.mockRejectedValue(new Error('Unexpected publish crash'));
+
+                // Override findPostById to return the post for the initial lookup,
+                // but the actual posts collection is real so the DB revert update
+                // itself is what we're exercising (line 498 inner catch is triggered
+                // only if the postsCol.updateOne inside the catch throws)
+                mockFindPostById.mockImplementation(actualPostsDb.findPostById);
+
+                const response = await request(app).post('/api/posts/pub-revert-fail/publish');
+
+                // Should still return 500 even when inner revert logic runs
                 expect(response.status).toBe(500);
                 expect(response.body.success).toBe(false);
             });

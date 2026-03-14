@@ -328,7 +328,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                     {getTypeIcon()}
                     <span>{post.type}</span>
                     <span className="w-px h-3 bg-slate-300 mx-0.5"></span>
-                    <span>{post.platform}</span>
+                    <span>{post.platforms.join('+')}</span>
                 </div>
 
                 {/* Status Overlay for Scheduled */}

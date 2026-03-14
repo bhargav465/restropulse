@@ -81,7 +81,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 0
         };
 
@@ -119,7 +119,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 0
         };
 
@@ -156,7 +156,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 0
         };
 
@@ -226,7 +226,7 @@ describe('publishing cron service', () => {
         const postDocument = {
             _id: 'post-no-creds',
             restaurantId: 'restaurant-2',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 1
         };
 
@@ -244,7 +244,7 @@ describe('publishing cron service', () => {
         const postDocument = {
             _id: 'post-no-creds-final',
             restaurantId: 'restaurant-2',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 2
         };
 
@@ -269,7 +269,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platform: 'BOTH',
+            platforms: ['INSTAGRAM', 'FACEBOOK'],
             publishAttempts: 0
         };
 
@@ -308,7 +308,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platform: 'BOTH',
+            platforms: ['INSTAGRAM', 'FACEBOOK'],
             publishAttempts: 2
         };
 
@@ -360,7 +360,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'One',
             thumbnail: 'https://example.com/one.jpg',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 0
         });
 
@@ -370,7 +370,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Two',
             thumbnail: 'https://example.com/two.jpg',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 0
         });
 
@@ -389,7 +389,7 @@ describe('publishing cron service', () => {
                 type: 'IMAGE',
                 caption: 'Caption A',
                 thumbnail: 'https://example.com/a.jpg',
-                platform: 'INSTAGRAM',
+                platforms: ['INSTAGRAM'],
                 publishAttempts: 0
             },
             {
@@ -398,7 +398,7 @@ describe('publishing cron service', () => {
                 type: 'IMAGE',
                 caption: 'Caption B',
                 thumbnail: 'https://example.com/b.jpg',
-                platform: 'INSTAGRAM',
+                platforms: ['INSTAGRAM'],
                 publishAttempts: 0
             }
         ];
@@ -447,7 +447,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Cron callback',
             thumbnail: 'https://example.com/callback.jpg',
-            platform: 'INSTAGRAM',
+            platforms: ['INSTAGRAM'],
             publishAttempts: 0
         };
 

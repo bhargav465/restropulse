@@ -54,34 +54,42 @@ const { createTestApp, generateAuthToken } = await import('../helpers/testHelper
 const authToken = generateAuthToken();
 const app = createTestApp();
 
+const emptyCounts = () => ({
+    INSTAGRAM: { IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0 },
+    FACEBOOK: { IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0 },
+});
+
+const growthLimits = {
+    weekly: {
+        INSTAGRAM: { IMAGE: 3, STORY: 3, CAROUSEL: 2, REEL: 2, VIDEO: 2 },
+        FACEBOOK: { IMAGE: 3, CAROUSEL: 2, VIDEO: 2, STORY: 2 },
+    },
+};
+
 describe('enforcePlanLimits Middleware', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         mockCreatePost.mockResolvedValue({
             id: 'p-new', type: 'IMAGE', status: 'PENDING_APPROVAL',
-            caption: 'Test', thumbnail: '/test.jpg', platform: 'INSTAGRAM',
+            caption: 'Test', thumbnail: '/test.jpg', platforms: ['INSTAGRAM'],
             restaurantId: 'r1',
         });
     });
 
     describe('Active subscription within limits', () => {
-        test('should allow post creation when within plan limits', async () => {
+        test('should allow post creation when within plan limits (single platform)', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 3 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 1, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0,
-            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts());
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(201);
@@ -91,43 +99,37 @@ describe('enforcePlanLimits Middleware', () => {
         test('should allow REEL when within reel limit', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 3 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 1,
-            });
+            const counts = emptyCounts();
+            counts.INSTAGRAM.REEL = 1;
+            mockGetWeeklyPostCounts.mockResolvedValue(counts);
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'REEL', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(201);
             expect(mockDeductCredits).not.toHaveBeenCalled();
         });
 
-        test('should allow CAROUSEL when within carousel limit', async () => {
+        test('should allow multi-platform post when within limits on BOTH', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 3 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 2, REEL: 0,
-            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts());
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
-                    type: 'CAROUSEL', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['INSTAGRAM', 'FACEBOOK'],
                 });
 
             expect(res.status).toBe(201);
@@ -136,73 +138,138 @@ describe('enforcePlanLimits Middleware', () => {
     });
 
     describe('Over plan limits - uses credits', () => {
-        test('should deduct credits when IMAGE exceeds plan limit', async () => {
+        test('should deduct credits when IMAGE exceeds plan limit on Instagram', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 2, instagramPostsPerWeek: 2, carouselPostsPerWeek: 3 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 2, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0,
-            });
+            const counts = emptyCounts();
+            counts.INSTAGRAM.IMAGE = 3; // at limit
+            mockGetWeeklyPostCounts.mockResolvedValue(counts);
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(201);
-            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 1); // IMAGE costs 1 credit
+            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 1);
         });
 
-        test('should deduct 5 credits for REEL when over limit', async () => {
+        test('should deduct 4 credits for REEL when over limit', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 1, instagramPostsPerWeek: 5, carouselPostsPerWeek: 3 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 1,
-            });
+            const counts = emptyCounts();
+            counts.INSTAGRAM.REEL = 2; // at limit
+            mockGetWeeklyPostCounts.mockResolvedValue(counts);
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'REEL', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(201);
-            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 5);
+            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 4);
         });
 
         test('should deduct 3 credits for CAROUSEL when over limit', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 1 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 1, REEL: 0,
-            });
+            const counts = emptyCounts();
+            counts.INSTAGRAM.CAROUSEL = 2; // at limit
+            mockGetWeeklyPostCounts.mockResolvedValue(counts);
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'CAROUSEL', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(201);
             expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 3);
+        });
+
+        test('should use credits when over limit on Facebook only (multi-platform)', async () => {
+            mockFindActiveSubscription.mockResolvedValue({
+                id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
+                planSnapshot: { limits: growthLimits },
+            });
+            const counts = emptyCounts();
+            counts.FACEBOOK.IMAGE = 3; // Facebook at limit, Instagram still has room
+            mockGetWeeklyPostCounts.mockResolvedValue(counts);
+
+            const res = await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['INSTAGRAM', 'FACEBOOK'],
+                });
+
+            expect(res.status).toBe(201);
+            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 1);
+        });
+
+        test('should use credits when Facebook not in plan (Starter)', async () => {
+            const starterLimits = {
+                weekly: {
+                    INSTAGRAM: { IMAGE: 2, STORY: 2, CAROUSEL: 1, REEL: 1, VIDEO: 1 },
+                },
+            };
+            mockFindActiveSubscription.mockResolvedValue({
+                id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
+                planSnapshot: { limits: starterLimits },
+            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts());
+
+            const res = await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['FACEBOOK'],
+                });
+
+            expect(res.status).toBe(201);
+            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 1);
+        });
+
+        test('should use credits when REEL on Facebook (not in PLATFORM_POST_TYPES for FB)', async () => {
+            // Facebook limits don't include REEL
+            const fbNoReelLimits = {
+                weekly: {
+                    INSTAGRAM: { IMAGE: 3, REEL: 2 },
+                    FACEBOOK: { IMAGE: 3, VIDEO: 2, STORY: 2 }, // no REEL
+                },
+            };
+            mockFindActiveSubscription.mockResolvedValue({
+                id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
+                planSnapshot: { limits: fbNoReelLimits },
+            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts());
+
+            const res = await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'REEL', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['FACEBOOK'],
+                });
+
+            expect(res.status).toBe(201);
+            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 4);
         });
     });
 
@@ -215,7 +282,7 @@ describe('enforcePlanLimits Middleware', () => {
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(403);
@@ -225,20 +292,18 @@ describe('enforcePlanLimits Middleware', () => {
         test('should return 403 when over limit and no credits', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 0,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 1, instagramPostsPerWeek: 1, carouselPostsPerWeek: 1 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 1, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0,
-            });
+            const counts = emptyCounts();
+            counts.INSTAGRAM.IMAGE = 3;
+            mockGetWeeklyPostCounts.mockResolvedValue(counts);
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(403);
@@ -249,24 +314,22 @@ describe('enforcePlanLimits Middleware', () => {
         test('should return 403 when REEL costs more credits than available', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 3,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 0, instagramPostsPerWeek: 5, carouselPostsPerWeek: 3 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0,
-            });
+            const counts = emptyCounts();
+            counts.INSTAGRAM.REEL = 2; // at limit
+            mockGetWeeklyPostCounts.mockResolvedValue(counts);
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'REEL', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(403);
-            expect(res.body.creditsNeeded).toBe(5);
+            expect(res.body.creditsNeeded).toBe(4);
             expect(res.body.creditsAvailable).toBe(3);
         });
     });
@@ -282,7 +345,7 @@ describe('enforcePlanLimits Middleware', () => {
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(201);
@@ -299,7 +362,7 @@ describe('enforcePlanLimits Middleware', () => {
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(201);
@@ -311,50 +374,20 @@ describe('enforcePlanLimits Middleware', () => {
         test('should still check plan limits when status is PAST_DUE', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'PAST_DUE', credits: 5,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 3 },
-                },
+                planSnapshot: { limits: growthLimits },
             });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0,
-            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts());
 
             const res = await request(app)
                 .post('/api/posts')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
+                    platforms: ['INSTAGRAM'],
                 });
 
             expect(res.status).toBe(201);
             expect(mockDeductCredits).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('Combined post types count toward instagramPostsPerWeek', () => {
-        test('VIDEO + STORY + IMAGE all count toward instagram limit', async () => {
-            mockFindActiveSubscription.mockResolvedValue({
-                id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
-                planSnapshot: {
-                    limits: { reelsPerWeek: 2, instagramPostsPerWeek: 3, carouselPostsPerWeek: 3 },
-                },
-            });
-            mockGetWeeklyPostCounts.mockResolvedValue({
-                IMAGE: 1, VIDEO: 1, STORY: 1, CAROUSEL: 0, REEL: 0,
-            });
-
-            // 3 instagram posts used (1+1+1) >= 3 limit, so this should use credits
-            const res = await request(app)
-                .post('/api/posts')
-                .set('Authorization', `Bearer ${authToken}`)
-                .send({
-                    type: 'STORY', caption: 'Test', thumbnail: '/test.jpg',
-                    platform: 'INSTAGRAM',
-                });
-
-            expect(res.status).toBe(201);
-            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 1);
         });
     });
 });

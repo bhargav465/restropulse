@@ -8,6 +8,7 @@ import { setupCommand } from './commands/setup.js';
 import { validateCommand } from './commands/validate.js';
 import { seedCommand } from './commands/seed.js';
 import { resetCommand } from './commands/reset.js';
+import { razorpaySetupCommand } from './commands/razorpay-setup.js';
 
 // Load .env from api app (single source of truth for MongoDB config)
 const envCandidates = [
@@ -56,5 +57,13 @@ program
     .description('Drop all collections and recreate empty database with indexes')
     .option('--main', 'Reset main database instead of test (60s safety delay)')
     .action(resetCommand);
+
+program
+    .command('razorpay-setup')
+    .description('Create Razorpay subscription plans and write plan IDs back to MongoDB')
+    .option('--dry-run', 'Preview what would be created without making API calls or DB writes')
+    .option('--force', 'Overwrite existing Razorpay plan IDs in MongoDB')
+    .option('--main', 'Target main database instead of test')
+    .action(razorpaySetupCommand);
 
 program.parse();

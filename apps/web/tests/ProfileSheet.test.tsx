@@ -1,6 +1,26 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from './utils/test-utils';
+import { render, screen, fireEvent, waitFor, act } from './utils/test-utils';
 import ProfileSheet from '../components/ProfileSheet';
+import { getGoogleMapsApiKey } from '../utils/env';
+
+// Mock env utils so both truthy and falsy branches are reachable
+vi.mock('../utils/env', () => ({
+    getGoogleMapsApiKey: vi.fn(() => undefined),
+    getFirebaseApiKey: vi.fn(() => undefined),
+    getApiUrl: vi.fn(() => 'http://localhost:3001/api'),
+}));
+
+// Mock Google Maps components to avoid jsdom errors when VITE_GOOGLE_MAPS_API_KEY is set
+vi.mock('@vis.gl/react-google-maps', () => ({
+    APIProvider: ({ children }: { children: React.ReactNode }) => React.createElement('div', { 'data-testid': 'api-provider' }, children),
+    Map: () => React.createElement('div', { 'data-testid': 'google-map' }),
+    AdvancedMarker: () => React.createElement('div', { 'data-testid': 'advanced-marker' }),
+}));
+vi.mock('../components/PlacesAutocompleteInput', () => ({
+    PlacesAutocompleteInput: ({ initialValue }: { initialValue?: string }) =>
+        React.createElement('input', { 'data-testid': 'places-autocomplete', defaultValue: initialValue, 'aria-label': 'Address' }),
+}));
 
 // Mock all API modules
 vi.mock('../api', () => ({
@@ -23,18 +43,17 @@ vi.mock('../api', () => ({
                 restaurantId: 'r1',
                 status: 'ACTIVE',
                 credits: 15,
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { reelsPerWeek: 5, instagramPostsPerWeek: 10, carouselPostsPerWeek: 3 }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
                 currentPeriodEnd: '2026-04-01',
             },
             usage: {
-                reels: { used: 2, limit: 5 },
-                instagramPosts: { used: 4, limit: 10 },
-                carousels: { used: 1, limit: 3 },
+                INSTAGRAM: { IMAGE: { used: 4, limit: 10 }, STORY: { used: 0, limit: 10 }, CAROUSEL: { used: 1, limit: 3 }, REEL: { used: 2, limit: 5 }, VIDEO: { used: 0, limit: 5 } },
+                FACEBOOK: { IMAGE: { used: 0, limit: 10 }, CAROUSEL: { used: 0, limit: 3 }, VIDEO: { used: 0, limit: 5 }, STORY: { used: 0, limit: 10 } },
             },
         }),
         getPlans: vi.fn().mockResolvedValue([
-            { id: 'p1', slug: 'starter', tier: 'STARTER', name: 'Starter', version: 1, isCurrentVersion: true, limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 1 }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp1', annual: 'rp2' }, features: ['INSTAGRAM'] },
-            { id: 'p2', slug: 'growth', tier: 'GROWTH', name: 'Growth', version: 1, isCurrentVersion: true, limits: { reelsPerWeek: 5, instagramPostsPerWeek: 10, carouselPostsPerWeek: 3 }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp3', annual: 'rp4' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+            { id: 'p1', slug: 'starter', tier: 'STARTER', name: 'Starter', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp1', annual: 'rp2' }, features: ['INSTAGRAM'] },
+            { id: 'p2', slug: 'growth', tier: 'GROWTH', name: 'Growth', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp3', annual: 'rp4' }, features: ['INSTAGRAM', 'FACEBOOK'] },
         ]),
         subscribe: vi.fn(),
         upgrade: vi.fn(),
@@ -115,18 +134,17 @@ describe('ProfileSheet Component', () => {
                 restaurantId: 'r1',
                 status: 'ACTIVE',
                 credits: 15,
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { reelsPerWeek: 5, instagramPostsPerWeek: 10, carouselPostsPerWeek: 3 }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
                 currentPeriodEnd: '2026-04-01',
             },
             usage: {
-                reels: { used: 2, limit: 5 },
-                instagramPosts: { used: 4, limit: 10 },
-                carousels: { used: 1, limit: 3 },
+                INSTAGRAM: { IMAGE: { used: 4, limit: 10 }, STORY: { used: 0, limit: 10 }, CAROUSEL: { used: 1, limit: 3 }, REEL: { used: 2, limit: 5 }, VIDEO: { used: 0, limit: 5 } },
+                FACEBOOK: { IMAGE: { used: 0, limit: 10 }, CAROUSEL: { used: 0, limit: 3 }, VIDEO: { used: 0, limit: 5 }, STORY: { used: 0, limit: 10 } },
             },
         });
         vi.mocked(subscriptionAPI.getPlans).mockResolvedValue([
-            { id: 'p1', slug: 'starter', tier: 'STARTER', name: 'Starter', version: 1, isCurrentVersion: true, limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 1 }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp1', annual: 'rp2' }, features: ['INSTAGRAM'] },
-            { id: 'p2', slug: 'growth', tier: 'GROWTH', name: 'Growth', version: 1, isCurrentVersion: true, limits: { reelsPerWeek: 5, instagramPostsPerWeek: 10, carouselPostsPerWeek: 3 }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp3', annual: 'rp4' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+            { id: 'p1', slug: 'starter', tier: 'STARTER', name: 'Starter', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp1', annual: 'rp2' }, features: ['INSTAGRAM'] },
+            { id: 'p2', slug: 'growth', tier: 'GROWTH', name: 'Growth', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp3', annual: 'rp4' }, features: ['INSTAGRAM', 'FACEBOOK'] },
         ]);
         vi.mocked(creditPacksAPI.getAll).mockResolvedValue([
             { id: 'cp1', name: '10 Credits', description: '10 bonus credits', credits: 10, priceInPaise: 9900, isActive: true, sortOrder: 1 },
@@ -293,9 +311,11 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
 
         await waitFor(() => {
-            expect(screen.getByText('Reels')).toBeInTheDocument();
-            expect(screen.getByText('Posts')).toBeInTheDocument();
-            expect(screen.getByText('Carousels')).toBeInTheDocument();
+            expect(screen.getByText('This Week')).toBeInTheDocument();
+            // Usage shows platform headers and post type labels
+            expect(screen.getByText('INSTAGRAM')).toBeInTheDocument();
+            expect(screen.getAllByText('IMAGE').length).toBeGreaterThanOrEqual(1);
+            expect(screen.getAllByText('REEL').length).toBeGreaterThanOrEqual(1);
         });
     });
 
@@ -1294,10 +1314,10 @@ describe('ProfileSheet Component', () => {
                 restaurantId: 'r1',
                 status: 'ACTIVE',
                 credits: 20,
-                planSnapshot: { name: 'Starter', slug: 'starter', tier: 'STARTER', limits: { reelsPerWeek: 2, instagramPostsPerWeek: 5, carouselPostsPerWeek: 1 }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                planSnapshot: { name: 'Starter', slug: 'starter', tier: 'STARTER', limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
                 currentPeriodEnd: '2026-05-01',
             },
-            usage: { reels: { used: 0, limit: 2 }, instagramPosts: { used: 0, limit: 5 }, carousels: { used: 0, limit: 1 } },
+            usage: { INSTAGRAM: { IMAGE: { used: 0, limit: 5 }, STORY: { used: 0, limit: 5 }, CAROUSEL: { used: 0, limit: 1 }, REEL: { used: 0, limit: 2 }, VIDEO: { used: 0, limit: 2 } } },
         });
 
         await razorpayHandler!();
@@ -1777,13 +1797,16 @@ describe('ProfileSheet Component', () => {
 
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => {
-            expect(screen.getByText('2 Reels/week')).toBeInTheDocument();
-            expect(screen.getByText('5 Posts/week')).toBeInTheDocument();
-            expect(screen.getByText('1 Carousels/week')).toBeInTheDocument();
-            // Plan features include Instagram as a list item
-            const instagramFeatures = screen.getAllByText('Instagram');
-            expect(instagramFeatures.length).toBeGreaterThanOrEqual(1);
+            expect(screen.getByText('Manage your plan')).toBeInTheDocument();
         });
+        // Plan features now show per-platform limits dynamically
+        // Each plan card shows features like "INSTAGRAM: 5 IMAGE, .../week"
+        const featureItems = screen.getAllByRole('listitem');
+        const hasFeature = featureItems.some(item => item.textContent?.includes('INSTAGRAM:') && item.textContent?.includes('IMAGE'));
+        expect(hasFeature).toBe(true);
+        // Plan features include Instagram as a list item
+        const instagramFeatures = screen.getAllByText('Instagram');
+        expect(instagramFeatures.length).toBeGreaterThanOrEqual(1);
     });
 
     // --- SubscriptionModal: Razorpay footer text ---
@@ -1829,7 +1852,7 @@ describe('ProfileSheet Component', () => {
 
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => {
-            // Check usage values: reels 2/5, posts 4/10, carousels 1/3
+            // Check usage values: INSTAGRAM.REEL 2/5, INSTAGRAM.IMAGE 4/10, INSTAGRAM.CAROUSEL 1/3
             expect(screen.getByText((_, element) => element?.textContent === '2/5')).toBeInTheDocument();
             expect(screen.getByText((_, element) => element?.textContent === '4/10')).toBeInTheDocument();
             expect(screen.getByText((_, element) => element?.textContent === '1/3')).toBeInTheDocument();
@@ -1856,6 +1879,73 @@ describe('ProfileSheet Component', () => {
         });
     });
 
+    // --- Delete Account button ---
+
+    it('should show action error message when Delete Account is clicked', () => {
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Delete Account'));
+        expect(screen.getByText(/To delete your account, please contact your account manager/i)).toBeInTheDocument();
+    });
+
+    // --- Swipe to close profile page ---
+
+    it('should close profile page on right swipe from left edge', () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        const page = document.querySelector('.fixed.inset-0.bg-white');
+        expect(page).toBeTruthy();
+
+        // Swipe starting from left edge (x < 60) and going right > 80px with vertical delta < 100
+        fireEvent.touchStart(page!, { touches: [{ clientX: 10, clientY: 200 }] });
+        fireEvent.touchEnd(page!, { changedTouches: [{ clientX: 100, clientY: 200 }] });
+
+        expect(mockOnClose).toHaveBeenCalledOnce();
+    });
+
+    it('should not close profile page on short right swipe', () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        const page = document.querySelector('.fixed.inset-0.bg-white');
+        expect(page).toBeTruthy();
+
+        // Short swipe (deltaX = 50, not > 80)
+        fireEvent.touchStart(page!, { touches: [{ clientX: 10, clientY: 200 }] });
+        fireEvent.touchEnd(page!, { changedTouches: [{ clientX: 60, clientY: 200 }] });
+
+        expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('should not close profile page on swipe from non-left-edge', () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        const page = document.querySelector('.fixed.inset-0.bg-white');
+        expect(page).toBeTruthy();
+
+        // Swipe starting from non-left-edge (x >= 60)
+        fireEvent.touchStart(page!, { touches: [{ clientX: 100, clientY: 200 }] });
+        fireEvent.touchEnd(page!, { changedTouches: [{ clientX: 200, clientY: 200 }] });
+
+        expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('should not trigger swipe-to-close when a sub-modal is open', () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        // Open Edit Profile modal (which sets isEditingProfile = true)
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+        expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
+
+        const page = document.querySelector('.fixed.inset-0.bg-white');
+        expect(page).toBeTruthy();
+
+        // Attempt swipe - should not set swipe start while a modal is open
+        fireEvent.touchStart(page!, { touches: [{ clientX: 10, clientY: 200 }] });
+        fireEvent.touchEnd(page!, { changedTouches: [{ clientX: 100, clientY: 200 }] });
+
+        // onClose should NOT be called because isEditingProfile is true
+        expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
     // --- Coupon code validation success ---
 
     it('should show coupon applied message on valid coupon', async () => {
@@ -1871,5 +1961,195 @@ describe('ProfileSheet Component', () => {
         fireEvent.change(couponInput, { target: { value: 'SAVE20' } });
         fireEvent.click(screen.getByText('Apply'));
         await waitFor(() => expect(screen.getByText('Coupon applied!')).toBeInTheDocument());
+    });
+
+    // --- Line 769: "Tap to retry" in subscription modal actionError ---
+
+    it('should show Tap to retry button when subscription action fails and retry clears error', async () => {
+        // Make disconnect error to trigger setActionError in the subscription modal
+        vi.mocked(instagramAPI.disconnect).mockRejectedValueOnce(new Error('Network error'));
+        window.confirm = vi.fn().mockReturnValue(true);
+
+        const connectedData = {
+            ...mockRestaurantData,
+            integrations: { instagram: true },
+            instagramUsername: 'testuser',
+        };
+
+        render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
+
+        // Open subscription modal to expose actionError inside it
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByPlaceholderText('Have a coupon code?')).toBeInTheDocument());
+
+        // Now trigger an action error inside subscription modal via purchaseCredits failure
+        vi.mocked(subscriptionAPI.purchaseCredits).mockRejectedValueOnce(new Error('payment failed'));
+
+        // Click a credit pack to trigger purchaseCredits
+        const creditPackButtons = screen.getAllByText('10');
+        // The first button with text '10' is the credit pack
+        fireEvent.click(creditPackButtons[0]);
+
+        // Wait for actionError to appear (shown via ActionNotice in the subscription modal)
+        await waitFor(() => {
+            expect(screen.getByText('Tap to retry')).toBeInTheDocument();
+        });
+
+        // Click "Tap to retry" - should clear actionError and reload
+        fireEvent.click(screen.getByText('Tap to retry'));
+
+        // After clicking retry, it calls loadSubscriptionData again -- the error should be cleared
+        await waitFor(() => {
+            expect(screen.queryByText('Tap to retry')).not.toBeInTheDocument();
+        });
+    });
+
+    // --- Line 865: Annual billing cycle toggle ---
+
+    it('should switch to Annual billing cycle in subscription modal', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Monthly')).toBeInTheDocument());
+
+        // Click Annual billing toggle
+        fireEvent.click(screen.getByText('Annual'));
+
+        // Annual prices should now be shown (annual price formatted for plans)
+        await waitFor(() => {
+            // The annual button should now have the active styling
+            expect(screen.getByText('Annual')).toBeInTheDocument();
+        });
+
+        // Switch back to Monthly
+        fireEvent.click(screen.getByText('Monthly'));
+        await waitFor(() => {
+            expect(screen.getByText('Monthly')).toBeInTheDocument();
+        });
+    });
+
+    // --- Line 1073: Help/setup guide button when Instagram not connected ---
+
+    it('should show setup guide when help button is clicked (Instagram not connected)', () => {
+        render(<ProfileSheet {...defaultProps} />);
+
+        // Instagram is not connected, so help button should be visible
+        const helpButton = screen.getByTitle('View setup guide');
+        expect(helpButton).toBeInTheDocument();
+
+        fireEvent.click(helpButton);
+
+        // Setup guide should now be shown (shows "Connect Instagram" header)
+        expect(screen.getByText('Connect Instagram')).toBeInTheDocument();
+    });
+
+    // --- Annual billing cycle price display ---
+
+    it('should display annual price label when Annual is selected', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // Initially Monthly
+        expect(screen.getAllByText(/\/mo/i).length).toBeGreaterThan(0);
+
+        // Switch to Annual
+        fireEvent.click(screen.getByText('Annual'));
+
+        await waitFor(() => {
+            expect(screen.getAllByText(/\/yr/i).length).toBeGreaterThan(0);
+        });
+    });
+
+    // --- Edit Profile: Google Maps API key set (covers lines 696-711) ---
+
+    it('should render Google Maps input in Edit Profile when VITE_GOOGLE_MAPS_API_KEY is set', async () => {
+        vi.mocked(getGoogleMapsApiKey).mockImplementation(() => 'test-google-key');
+
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+
+        // With googleMapsApiKey set, the PlacesAutocompleteInput mock should be rendered
+        // (mockRestaurantData has non-zero lat/lng so map is also shown)
+        await waitFor(() => {
+            expect(screen.getByTestId('api-provider')).toBeInTheDocument();
+            expect(screen.getByTestId('places-autocomplete')).toBeInTheDocument();
+            // Non-zero coordinates trigger the map display (line 704)
+            expect(screen.getByTestId('google-map')).toBeInTheDocument();
+        });
+
+        vi.mocked(getGoogleMapsApiKey).mockImplementation(() => undefined);
+    });
+
+    it('should render plain text input when no Google Maps API key is set', async () => {
+        // getGoogleMapsApiKey returns undefined by default (mock at top of file)
+        render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Edit Restaurant Profile'));
+
+        await waitFor(() => {
+            // Without API key, plain <input id="edit-location"> renders (not APIProvider)
+            expect(screen.queryByTestId('api-provider')).not.toBeInTheDocument();
+            expect(screen.getByLabelText('Location')).toBeInTheDocument();
+        });
+    });
+
+    // --- Subscription modal touch drag (covers lines 735-739) ---
+
+    it('should handle touch drag down on subscription modal (positive offset)', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        // Open subscription modal
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        const modal = document.querySelector('[data-subscription-modal]') as HTMLElement;
+        expect(modal).not.toBeNull();
+
+        // Touch start — flush state so dragStartY is set before touchMove
+        await act(async () => {
+            fireEvent.touchStart(modal, { touches: [{ clientY: 200 }] });
+        });
+        // Touch move downward (positive offset, scrollTop=0) — covers line 738
+        await act(async () => {
+            fireEvent.touchMove(modal, { touches: [{ clientY: 250 }] });
+        });
+        // Touch end
+        await act(async () => {
+            fireEvent.touchEnd(modal);
+        });
+
+        // Modal should still be open (drag < 100px threshold)
+        expect(screen.getByText('Change Plan')).toBeInTheDocument();
+    });
+
+    it('should handle touch drag up on subscription modal (negative offset)', async () => {
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        // Open subscription modal
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        const modal = document.querySelector('[data-subscription-modal]') as HTMLElement;
+        expect(modal).not.toBeNull();
+
+        // Touch start — flush state
+        await act(async () => {
+            fireEvent.touchStart(modal, { touches: [{ clientY: 200 }] });
+        });
+        // Touch move upward (negative offset) — covers line 739 (else if offset < 0)
+        await act(async () => {
+            fireEvent.touchMove(modal, { touches: [{ clientY: 150 }] });
+        });
+        await act(async () => {
+            fireEvent.touchEnd(modal);
+        });
+
+        expect(screen.getByText('Change Plan')).toBeInTheDocument();
     });
 });

@@ -43,7 +43,7 @@ describe('Credit Pack Routes', () => {
         vi.clearAllMocks();
         mockFindActiveSubscription.mockResolvedValue({
             id: 'sub-r1', restaurantId: 'r1', status: 'ACTIVE', credits: 100,
-            planSnapshot: { limits: { reelsPerWeek: 100, instagramPostsPerWeek: 100, carouselPostsPerWeek: 100 } },
+            planSnapshot: { limits: { weekly: { INSTAGRAM: { IMAGE: 100, STORY: 100, CAROUSEL: 100, REEL: 100, VIDEO: 100 }, FACEBOOK: { IMAGE: 100, CAROUSEL: 100, VIDEO: 100, STORY: 100 } } } },
         });
     });
 

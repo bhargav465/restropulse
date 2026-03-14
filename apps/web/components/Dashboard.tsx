@@ -172,7 +172,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData, userName
                             </div>
                             <p className="text-sm text-slate-700 line-clamp-1 font-medium">{nextScheduled.caption}</p>
                             <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
-                                Scheduled for {nextScheduled.platform === 'BOTH' ? 'Instagram & Facebook' : nextScheduled.platform.charAt(0) + nextScheduled.platform.slice(1).toLowerCase()}
+                                Scheduled for {nextScheduled.platforms.length > 1 ? 'Instagram & Facebook' : nextScheduled.platforms[0].charAt(0) + nextScheduled.platforms[0].slice(1).toLowerCase()}
                             </p>
                         </div>
                     </div>

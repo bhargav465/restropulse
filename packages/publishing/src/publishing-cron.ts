@@ -147,7 +147,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
             restaurantId,
             timestamp: new Date(),
             success: false,
-            platform: postDoc.platform || 'INSTAGRAM',
+            platform: (postDoc.platforms || ['INSTAGRAM']).join(','),
             error: 'No Instagram credentials'
         });
 
@@ -162,7 +162,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
         thumbnail: postDoc.thumbnail || '',
         mediaUrls: postDoc.mediaUrls,
         videoUrl: postDoc.videoUrl,
-        platform: postDoc.platform || 'INSTAGRAM'
+        platforms: postDoc.platforms || ['INSTAGRAM']
     };
 
     const credentials = {
@@ -189,8 +189,8 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
 
     if (overallSuccess) {
         // Success - update post status
-        log.info({ postId, platform: publishablePost.platform }, 'Post published successfully');
-        trackEvent('post.published', { postId, postType: publishablePost.type, platform: publishablePost.platform });
+        log.info({ postId, platforms: publishablePost.platforms }, 'Post published successfully');
+        trackEvent('post.published', { postId, postType: publishablePost.type, platforms: publishablePost.platforms.join(',') });
 
         // Ensure database update completes before returning
         const updateResult = await postsCol.updateOne(
@@ -217,7 +217,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
             restaurantId,
             timestamp: new Date(),
             success: true,
-            platform: publishablePost.platform,
+            platform: publishablePost.platforms.join(','),
             instagramMediaId: results.instagram?.instagramMediaId,
             facebookPostId: results.facebook?.facebookPostId
         });
@@ -268,7 +268,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
             restaurantId,
             timestamp: new Date(),
             success: false,
-            platform: publishablePost.platform,
+            platform: publishablePost.platforms.join(','),
             error: combinedError
         });
 

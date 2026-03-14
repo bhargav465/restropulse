@@ -15,7 +15,7 @@
  *   - STORY: POST /{page-id}/photo_stories or /{page-id}/video_stories
  *   - VIDEO: POST /{page-id}/videos
  *
- * Platform routing is controlled by the post's `platform` field (INSTAGRAM, FACEBOOK, or BOTH).
+ * Platform routing is controlled by the post's `platforms` array (e.g. ['INSTAGRAM'], ['INSTAGRAM', 'FACEBOOK']).
  *
  * See: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/content-publishing
  * See: https://developers.facebook.com/docs/pages-api/posts
@@ -164,7 +164,7 @@ export interface PublishablePost {
     thumbnail: string;
     mediaUrls?: string[];
     videoUrl?: string;
-    platform: 'INSTAGRAM' | 'FACEBOOK' | 'BOTH';
+    platforms: ('INSTAGRAM' | 'FACEBOOK')[];
 }
 
 export interface InstagramCredentialsForPublishing {
@@ -900,11 +900,11 @@ export async function publishPost(
 ): Promise<{ instagram?: PublishResult; facebook?: PublishResult }> {
     const results: { instagram?: PublishResult; facebook?: PublishResult } = {};
 
-    if (post.platform === 'INSTAGRAM' || post.platform === 'BOTH') {
+    if (post.platforms.includes('INSTAGRAM')) {
         results.instagram = await publishToInstagram(post, credentials);
     }
 
-    if (post.platform === 'FACEBOOK' || post.platform === 'BOTH') {
+    if (post.platforms.includes('FACEBOOK')) {
         results.facebook = await publishToFacebook(post, credentials);
     }
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, User } from 'lucide-react';
+import { getGoogleMapsApiKey } from '../utils/env';
 
 interface CustomSelectProps {
     value: string;
@@ -109,7 +110,7 @@ const STEP_LABELS = ['About You', 'Your Restaurant', 'Account Manager'];
 
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
-    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+    const googleMapsApiKey = getGoogleMapsApiKey() || '';
     const isMountedRef = useRef(true);
     const [step, setStep] = useState<OnboardingStep>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);

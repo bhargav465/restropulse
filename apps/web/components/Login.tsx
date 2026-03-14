@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Smartphone, ShieldCheck, ArrowRight, KeyRound } from 'lucide-react';
 import { initRecaptcha, sendOTP, verifyOTP, auth } from '../firebase';
 import { RecaptchaVerifier } from 'firebase/auth';
+import { getFirebaseApiKey } from '../utils/env';
 
 interface LoginProps {
     onLogin: (firebaseIdToken: string) => Promise<void>;
@@ -13,7 +14,7 @@ type Step = 'phone' | 'otp';
 
 // Check if Firebase is configured
 const isFirebaseConfigured = () => {
-    const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+    const apiKey = getFirebaseApiKey();
     return apiKey && apiKey !== 'your-api-key' && !apiKey.includes('your-');
 };
 

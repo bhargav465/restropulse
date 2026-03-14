@@ -149,7 +149,7 @@ export async function seedTestData() {
                 slug: 'growth',
                 tier: 'GROWTH',
                 name: 'Growth',
-                limits: { reelsPerWeek: 100, instagramPostsPerWeek: 100, carouselPostsPerWeek: 100 },
+                limits: { weekly: { INSTAGRAM: { IMAGE: 100, STORY: 100, CAROUSEL: 100, REEL: 100, VIDEO: 100 }, FACEBOOK: { IMAGE: 100, CAROUSEL: 100, VIDEO: 100, STORY: 100 } } },
                 pricing: { monthly: 999900, annual: 9999000, currency: 'INR' },
                 features: ['INSTAGRAM', 'FACEBOOK'],
             },

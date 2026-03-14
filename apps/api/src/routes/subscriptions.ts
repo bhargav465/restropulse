@@ -24,6 +24,8 @@ import {
     Subscription,
     PlanUsage,
     POST_TYPE_CREDIT_COSTS,
+    PLATFORM_POST_TYPES,
+    Platform,
 } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -59,15 +61,18 @@ router.get('/current', requireAuth, handle(async (req: Request, res: Response<Ap
     let usage: PlanUsage | null = null;
     if (subscription.planSnapshot?.limits) {
         const counts = await getWeeklyPostCounts(restaurantId);
-        const limits = subscription.planSnapshot.limits;
-        usage = {
-            reels: { used: counts.REEL, limit: limits.reelsPerWeek },
-            instagramPosts: {
-                used: counts.IMAGE + counts.VIDEO + counts.STORY,
-                limit: limits.instagramPostsPerWeek,
-            },
-            carousels: { used: counts.CAROUSEL, limit: limits.carouselPostsPerWeek },
-        };
+        const weeklyLimits = subscription.planSnapshot.limits.weekly;
+        usage = {};
+        for (const [platform, typeLimits] of Object.entries(weeklyLimits)) {
+            const p = platform as Platform;
+            const validTypes = PLATFORM_POST_TYPES[p] || [];
+            usage[p] = {};
+            for (const postType of validTypes) {
+                const limit = typeLimits[postType] ?? 0;
+                const used = counts[p]?.[postType] ?? 0;
+                usage[p]![postType] = { used, limit };
+            }
+        }
     }
 
     res.json({ success: true, data: { subscription, usage } });

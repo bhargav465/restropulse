@@ -147,6 +147,18 @@ describe('Auth Routes - Combined Tests', () => {
             expect(response.status).toBe(401);
         });
 
+        it('should return 401 when a refresh token is used as an access token', async () => {
+            // verifyToken returns a valid payload but with type='refresh' instead of 'access'
+            mockVerifyToken.mockReturnValue({ userId: 'u1', type: 'refresh', phone: '+91 98765 43210' });
+
+            const response = await request(app)
+                .get('/api/auth/session')
+                .set('Authorization', 'Bearer some-refresh-token');
+
+            expect(response.status).toBe(401);
+            expect(response.body).toMatchObject({ success: false });
+        });
+
         it('should handle user not found (token valid but user gone)', async () => {
             mockVerifyToken.mockReturnValue({ userId: 'u1', type: 'access' });
             mockFindUserById.mockResolvedValue(null);
@@ -273,6 +285,75 @@ describe('Auth Routes - Combined Tests', () => {
 
             const verifyRes = await request(app).post('/api/auth/verify-otp').send({ phone, otp });
             expect(verifyRes.status).toBe(500);
+        });
+
+        it('should return 400 when OTP not found (expired or not sent)', async () => {
+            // Attempt verify-otp for a phone that never called send-otp
+            const response = await request(app)
+                .post('/api/auth/verify-otp')
+                .send({ phone: '+919111111111', otp: '123456' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toMatch(/expired or not found/i);
+        });
+
+        it('should return 400 when OTP has expired (expiresAt in the past)', async () => {
+            const { getOtpChallengesCollection } = await vi.importActual('@restropulse/db') as any;
+            const col = getOtpChallengesCollection();
+
+            const phone = '+919222222222';
+            // Insert an already-expired OTP record directly into the DB
+            await col.deleteMany({ phone });
+            await col.insertOne({
+                phone,
+                otp: '999999',
+                expiresAt: new Date(Date.now() - 60_000), // expired 1 minute ago
+                attempts: 0
+            });
+
+            const response = await request(app)
+                .post('/api/auth/verify-otp')
+                .send({ phone, otp: '999999' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toMatch(/expired/i);
+        });
+
+        it('should return 400 when OTP attempts are exhausted (>= 3)', async () => {
+            const { getOtpChallengesCollection } = await vi.importActual('@restropulse/db') as any;
+            const col = getOtpChallengesCollection();
+
+            const phone = '+919333333333';
+            // Insert an OTP with 3 failed attempts
+            await col.deleteMany({ phone });
+            await col.insertOne({
+                phone,
+                otp: '888888',
+                expiresAt: new Date(Date.now() + 5 * 60_000), // not yet expired
+                attempts: 3
+            });
+
+            const response = await request(app)
+                .post('/api/auth/verify-otp')
+                .send({ phone, otp: '888888' });
+
+            expect(response.status).toBe(400);
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toMatch(/too many attempts/i);
+        });
+
+        it('should return 400 when phone or otp is missing in verify-otp', async () => {
+            const res1 = await request(app)
+                .post('/api/auth/verify-otp')
+                .send({ phone: '+919000000000' });
+            expect(res1.status).toBe(400);
+
+            const res2 = await request(app)
+                .post('/api/auth/verify-otp')
+                .send({ otp: '123456' });
+            expect(res2.status).toBe(400);
         });
     });
 });

@@ -8,7 +8,7 @@ import {
   toApiFormat,
   toObjectId,
 } from './connection.js';
-import type { Subscription, PostType } from '@restropulse/shared';
+import type { Subscription, PostType, Platform } from '@restropulse/shared';
 
 export async function findActiveSubscription(restaurantId: string): Promise<Subscription | null> {
   const col = getSubscriptionsCollection();
@@ -49,12 +49,13 @@ export async function findSubscriptionByRazorpayId(
 }
 
 /**
- * Get weekly post counts for a restaurant, grouped by post type.
+ * Get weekly post counts for a restaurant, grouped by platform and post type.
  * Counts posts created in the current ISO week (Mon-Sun).
+ * Unwinds the platforms array so each platform gets its own count.
  */
 export async function getWeeklyPostCounts(
   restaurantId: string,
-): Promise<Record<PostType, number>> {
+): Promise<Record<Platform, Record<PostType, number>>> {
   const postsCol = getPostsCollection();
 
   // Calculate start of current ISO week (Monday 00:00:00)
@@ -74,25 +75,29 @@ export async function getWeeklyPostCounts(
           status: { $nin: ['MISSED_DEADLINE'] },
         },
       },
-      { $group: { _id: '$type', count: { $sum: 1 } } },
+      { $unwind: '$platforms' },
+      { $group: { _id: { type: '$type', platform: '$platforms' }, count: { $sum: 1 } } },
     ])
     .toArray();
 
-  const result: Record<string, number> = {
-    IMAGE: 0,
-    VIDEO: 0,
-    STORY: 0,
-    CAROUSEL: 0,
-    REEL: 0,
+  const emptyPostTypeCounts = (): Record<PostType, number> => ({
+    IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0,
+  });
+
+  const result: Record<Platform, Record<PostType, number>> = {
+    INSTAGRAM: emptyPostTypeCounts(),
+    FACEBOOK: emptyPostTypeCounts(),
   };
 
   for (const item of counts) {
-    if (item._id in result) {
-      result[item._id] = item.count;
+    const platform = item._id.platform as Platform;
+    const postType = item._id.type as PostType;
+    if (platform in result && postType in result[platform]) {
+      result[platform][postType] = item.count;
     }
   }
 
-  return result as Record<PostType, number>;
+  return result;
 }
 
 export async function deductCredits(subscriptionId: string, amount: number): Promise<boolean> {
