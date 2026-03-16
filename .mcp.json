@@ -60,6 +60,15 @@
     },
     "project-memory": {
       "command": "mcp-server-memory"
+    },
+    "azure": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@azure/mcp@latest",
+        "server",
+        "start"
+      ]
     }
   }
 }

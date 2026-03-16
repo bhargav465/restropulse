@@ -1,8 +1,8 @@
 # MCP Server Configuration
 
-RestroPulse uses three Model Context Protocol (MCP) servers arranged as a
-non-redundant **3-layer context stack**. Each layer has a distinct role and
-strict scope so the AI assistant never receives conflicting or duplicate data.
+RestroPulse uses four Model Context Protocol (MCP) servers arranged as a
+non-redundant **context stack**. Each layer has a distinct role and strict
+scope so the AI assistant never receives conflicting or duplicate data.
 
 ## Layer Overview
 
@@ -11,6 +11,7 @@ strict scope so the AI assistant never receives conflicting or duplicate data.
 | Semantic Search | `codebase-rag` | Find files by *intent*, not just name | `apps/*/src`, `packages/*/src`, `docs/`, READMEs |
 | Logic / Navigation | `mcp-language-server` | Type-aware jump-to-definition, references, diagnostics | One instance per app/package boundary |
 | Knowledge / Memory | `@modelcontextprotocol/server-memory` | Persist architecture decisions, conventions, preferences | Decision-only -- never code snippets |
+| Azure | `@azure/mcp` | Inspect and manage live Azure resources | Subscriptions, resource groups, App Service, Key Vault, Application Insights |
 
 ## Prerequisites (one-time)
 
@@ -124,6 +125,23 @@ watchers, and AI indexing aligned on the same noise-free subset.
 
 Excluded paths: `node_modules`, `dist`, `.turbo`, `coverage`, `html`,
 `public/mockdata`, `assets/videos`, `assets/images`, `package-lock.json`.
+
+### Azure (`azure`)
+
+- Runs `@azure/mcp` via `npx -y @azure/mcp@latest server start`.
+- No additional install required; npx fetches the package on first use.
+- Authenticates using the current Azure CLI session (`az login`).
+- Use for post-provisioning inspection, secret name listing, App Service log
+  queries, and Application Insights queries -- without leaving the editor.
+- Tool-routing rule: use `azure` only for live Azure resource operations.
+  Never use it to read source files or look up TypeScript types.
+
+Verify it is active:
+
+```bash
+claude mcp list
+# Should show: azure   npx -y @azure/mcp@latest server start
+```
 
 ## Claude Code Setup
 
