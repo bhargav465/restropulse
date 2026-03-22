@@ -10,6 +10,8 @@
 #   --location    Azure region          (default: centralindia)
 #   --prefix      Resource name prefix  (default: restropulse)
 #   --subscription  Azure subscription ID (optional, uses current if omitted)
+#   --github-repo   GitHub repo in org/name format (default: baxeltech/restropulse)
+#   --skip-oidc   Skip App Registration / federated credential setup
 #   --reset       DANGER: delete the resource group and all its resources,
 #                 then re-provision from scratch. Requires confirmation prompt.
 #   --help        Show this help text
@@ -41,6 +43,14 @@
 # =============================================================================
 
 set -euo pipefail
+
+# Prevent Git Bash (MSYS2) from converting Unix-style paths such as Azure ARM
+# resource IDs (/subscriptions/...) into Windows paths when passing them as
+# CLI arguments. Without this, paths like /subscriptions/<id>/resourceGroups/...
+# get silently rewritten to C:/Program Files/Git/subscriptions/... which causes
+# Azure API calls to fail with opaque BadRequest errors.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL="*"
 
 # ---------------------------------------------------------------------------
 # Color helpers (fall back to no color when not in a terminal)
@@ -131,6 +141,8 @@ ENV="staging"
 LOCATION="southindia"
 PREFIX="restropulse"
 SUBSCRIPTION=""
+GITHUB_REPO="baxeltech/restropulse"
+SKIP_OIDC=false
 RESET=false
 
 # ---------------------------------------------------------------------------
@@ -149,6 +161,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --subscription)
       SUBSCRIPTION="$2"; shift 2
+      ;;
+    --github-repo)
+      GITHUB_REPO="$2"; shift 2
+      ;;
+    --skip-oidc)
+      SKIP_OIDC=true; shift
       ;;
     --reset)
       RESET=true; shift
@@ -232,7 +250,7 @@ resolve_swa_location() {
     --output tsv 2>/dev/null || true)
 
   if [[ -z "$supported_raw" ]]; then
-    log_skip "Could not fetch supported Static Web App regions; using requested location '$1'"
+    log_skip "Could not fetch supported Static Web App regions; using requested location '$1'" >&2
     echo "$1"
     return
   fi
@@ -249,10 +267,10 @@ resolve_swa_location() {
 
   first_supported=$(echo "$supported_normalized" | head -n 1)
   if [[ -n "$first_supported" ]]; then
-    log_skip "No nearby Static Web App region match found; using supported region '$first_supported'"
+    log_skip "No nearby Static Web App region match found; using supported region '$first_supported'" >&2
     echo "$first_supported"
   else
-    log_skip "Supported Static Web App region list was empty; using requested location '$1'"
+    log_skip "Supported Static Web App region list was empty; using requested location '$1'" >&2
     echo "$1"
   fi
 }
@@ -267,10 +285,18 @@ if ! command -v az &>/dev/null; then
 fi
 log_ok "Azure CLI found: $(az version --query '"azure-cli"' -o tsv 2>/dev/null || echo 'unknown version')"
 
-# Verify login
-CURRENT_ACCOUNT=$(az account show --query "name" --output tsv 2>/dev/null || true)
+# Verify login and ensure token is fresh (az account show can succeed with
+# stale cached metadata even when the MSAL token has expired; get-access-token
+# forces an actual token fetch and fails fast if re-auth is needed).
+log_info "Verifying Azure credentials..."
+if ! az account get-access-token --output none 2>/dev/null; then
+  log_info "Token missing or expired. Launching az login..."
+  az login --output none
+fi
+
+CURRENT_ACCOUNT=$(az account show --query "name" --output tsv)
 if [[ -z "$CURRENT_ACCOUNT" ]]; then
-  die "Not logged in to Azure. Run: az login"
+  die "Could not determine current Azure account after login."
 fi
 log_ok "Logged in. Current account: $CURRENT_ACCOUNT"
 
@@ -322,6 +348,9 @@ echo "    Key Vault          : $KV_NAME"
 echo "    App Service Plan   : $PLAN_NAME"
 echo "    App Service (API)  : $API_APP_NAME"
 echo "    Static Web App     : $SWA_NAME ($SWA_LOCATION)"
+if [[ "$SKIP_OIDC" == "false" ]]; then
+echo "    App Registration   : ${PREFIX}-github-actions (OIDC for GitHub Actions)"
+fi
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -355,8 +384,8 @@ run_az_with_retry() {
       return 0
     fi
 
-    if echo "$output" | grep -q "ResourceNotFound" && [[ $attempt -lt $max_attempts ]]; then
-      log_info "Transient ResourceNotFound from Azure control plane. Retrying (${attempt}/${max_attempts}) in ${delay_seconds}s..."
+    if echo "$output" | grep -qE "ResourceNotFound|PrincipalNotFound|does not exist in the directory|ConnectionResetError|Connection aborted|ConnectionError|HTTPSConnectionPool" && [[ $attempt -lt $max_attempts ]]; then
+      log_info "Transient Azure error (control plane or network). Retrying (${attempt}/${max_attempts}) in ${delay_seconds}s..."
       sleep "$delay_seconds"
       attempt=$((attempt + 1))
       continue
@@ -364,6 +393,46 @@ run_az_with_retry() {
 
     echo "$output" >&2
     return "$exit_code"
+  done
+}
+
+# Like run_az_with_retry, but treats resource-not-found responses as an empty
+# result (exit 0) instead of an error. Use for existence checks that previously
+# used the  az ... 2>/dev/null || true  pattern, to add network-error retry
+# without changing the semantics of "not found = empty string".
+az_or_empty() {
+  local max_attempts=6
+  local delay_seconds=10
+  local attempt=1
+  local output
+  local exit_code
+
+  while true; do
+    set +e
+    output=$("$@" 2>&1)
+    exit_code=$?
+    set -e
+
+    if [[ $exit_code -eq 0 ]]; then
+      echo "$output"
+      return 0
+    fi
+
+    # Resource genuinely does not exist: return empty, exit 0 (mirrors || true)
+    if echo "$output" | grep -qiE "ResourceNotFound|was not found|could not be found|does not exist|Code: 404|NotFound|ResourceGroupNotFound"; then
+      return 0
+    fi
+
+    # Transient network or control-plane error: retry
+    if echo "$output" | grep -qE "ConnectionResetError|Connection aborted|ConnectionError|HTTPSConnectionPool" && [[ $attempt -lt $max_attempts ]]; then
+      log_info "Transient network error on existence check. Retrying (${attempt}/${max_attempts}) in ${delay_seconds}s..."
+      sleep "$delay_seconds"
+      attempt=$((attempt + 1))
+      continue
+    fi
+
+    # Any other error: return empty (preserve original || true behaviour)
+    return 0
   done
 }
 
@@ -388,14 +457,14 @@ fi
 # ---------------------------------------------------------------------------
 log_head "Log Analytics Workspace"
 
-EXISTING_LAW=$(az monitor log-analytics workspace show \
+EXISTING_LAW=$(az_or_empty az monitor log-analytics workspace show \
   --resource-group "$RG_NAME" \
   --workspace-name "$LAW_NAME" \
-  --query "customerId" --output tsv 2>/dev/null || true)
+  --query "customerId" --output tsv)
 
 if [[ -n "$EXISTING_LAW" ]]; then
   log_skip "Log Analytics Workspace '$LAW_NAME' already exists"
-  LAW_ID=$(az monitor log-analytics workspace show \
+  LAW_ID=$(run_az_with_retry az monitor log-analytics workspace show \
     --resource-group "$RG_NAME" \
     --workspace-name "$LAW_NAME" \
     --query "id" --output tsv)
@@ -414,14 +483,14 @@ fi
 # ---------------------------------------------------------------------------
 log_head "Application Insights"
 
-EXISTING_AI=$(az monitor app-insights component show \
+EXISTING_AI=$(az_or_empty az monitor app-insights component show \
   --resource-group "$RG_NAME" \
   --app "$APPINSIGHTS_NAME" \
-  --query "instrumentationKey" --output tsv 2>/dev/null || true)
+  --query "instrumentationKey" --output tsv)
 
 if [[ -n "$EXISTING_AI" ]]; then
   log_skip "Application Insights '$APPINSIGHTS_NAME' already exists"
-  AI_CONNECTION_STRING=$(az monitor app-insights component show \
+  AI_CONNECTION_STRING=$(run_az_with_retry az monitor app-insights component show \
     --resource-group "$RG_NAME" \
     --app "$APPINSIGHTS_NAME" \
     --query "connectionString" --output tsv)
@@ -442,10 +511,10 @@ fi
 # ---------------------------------------------------------------------------
 log_head "Key Vault"
 
-EXISTING_KV=$(az keyvault show \
+EXISTING_KV=$(az_or_empty az keyvault show \
   --resource-group "$RG_NAME" \
   --name "$KV_NAME" \
-  --query "name" --output tsv 2>/dev/null || true)
+  --query "name" --output tsv)
 
 if [[ -n "$EXISTING_KV" ]]; then
   log_skip "Key Vault '$KV_NAME' already exists"
@@ -519,10 +588,10 @@ log_head "App Service Plan"
 
 PLAN_SKU="S1"
 
-EXISTING_PLAN=$(az appservice plan show \
+EXISTING_PLAN=$(az_or_empty az appservice plan show \
   --resource-group "$RG_NAME" \
   --name "$PLAN_NAME" \
-  --query "name" --output tsv 2>/dev/null || true)
+  --query "name" --output tsv)
 
 if [[ -n "$EXISTING_PLAN" ]]; then
   log_skip "App Service Plan '$PLAN_NAME' already exists"
@@ -548,10 +617,10 @@ fi
 # ---------------------------------------------------------------------------
 log_head "App Service Web App (API + WebJobs)"
 
-EXISTING_APP=$(az webapp show \
+EXISTING_APP=$(az_or_empty az webapp show \
   --resource-group "$RG_NAME" \
   --name "$API_APP_NAME" \
-  --query "name" --output tsv 2>/dev/null || true)
+  --query "name" --output tsv)
 
 if [[ -n "$EXISTING_APP" ]]; then
   log_skip "App Service '$API_APP_NAME' already exists"
@@ -566,11 +635,11 @@ else
 fi
 
 # Create or verify staging slot once; staging env targets this slot.
-EXISTING_STAGING_SLOT=$(az webapp deployment slot list \
+EXISTING_STAGING_SLOT=$(az_or_empty az webapp deployment slot list \
   --resource-group "$RG_NAME" \
   --name "$API_APP_NAME" \
   --query "[?name=='$APP_SLOT_NAME'].name | [0]" \
-  --output tsv 2>/dev/null || true)
+  --output tsv)
 
 if [[ -n "$EXISTING_STAGING_SLOT" ]]; then
   log_skip "App Service slot '$APP_SLOT_NAME' already exists"
@@ -675,18 +744,18 @@ log_ok "Managed identity configured and Key Vault access granted"
 # ---------------------------------------------------------------------------
 log_head "Static Web App (Frontend)"
 
-EXISTING_SWA=$(az staticwebapp show \
+EXISTING_SWA=$(az_or_empty az staticwebapp show \
   --resource-group "$RG_NAME" \
   --name "$SWA_NAME" \
-  --query "name" --output tsv 2>/dev/null || true)
+  --query "name" --output tsv)
 
 if [[ -n "$EXISTING_SWA" ]]; then
   log_skip "Static Web App '$SWA_NAME' already exists"
-  SWA_URL=$(az staticwebapp show \
+  SWA_URL=$(run_az_with_retry az staticwebapp show \
     --resource-group "$RG_NAME" \
     --name "$SWA_NAME" \
     --query "defaultHostname" --output tsv)
-  SWA_TOKEN=$(az staticwebapp secrets list \
+  SWA_TOKEN=$(run_az_with_retry az staticwebapp secrets list \
     --resource-group "$RG_NAME" \
     --name "$SWA_NAME" \
     --query "properties.apiKey" --output tsv)
@@ -730,7 +799,135 @@ fi
 log_ok "CORS_ORIGIN configured"
 
 # ---------------------------------------------------------------------------
-# Retrieve App Service publish profile URL for GitHub Actions
+# 8. OIDC: App Registration + Federated Credentials + Role Assignments
+# ---------------------------------------------------------------------------
+APP_CLIENT_ID=""
+TENANT_ID=$(az account show --query "tenantId" --output tsv)
+
+if [[ "$SKIP_OIDC" == "true" ]]; then
+  log_head "OIDC setup (skipped)"
+  log_skip "Skipping App Registration and federated credential setup (--skip-oidc)"
+else
+  log_head "OIDC: App Registration + Federated Credentials"
+
+  APP_DISPLAY_NAME="${PREFIX}-github-actions"
+
+  # Find or create the App Registration
+  EXISTING_APP_ID=$(az ad app list \
+    --display-name "$APP_DISPLAY_NAME" \
+    --query "[0].appId" --output tsv 2>/dev/null || true)
+
+  if [[ -n "$EXISTING_APP_ID" ]]; then
+    log_skip "App Registration '$APP_DISPLAY_NAME' already exists (appId: $EXISTING_APP_ID)"
+    APP_CLIENT_ID="$EXISTING_APP_ID"
+  else
+    APP_CLIENT_ID=$(az ad app create \
+      --display-name "$APP_DISPLAY_NAME" \
+      --query "appId" --output tsv)
+    log_ok "Created App Registration: $APP_DISPLAY_NAME (appId: $APP_CLIENT_ID)"
+  fi
+
+  # Create Service Principal if it doesn't exist
+  EXISTING_SP=$(az ad sp show --id "$APP_CLIENT_ID" --query "appId" --output tsv 2>/dev/null || true)
+  if [[ -n "$EXISTING_SP" ]]; then
+    log_skip "Service Principal for '$APP_DISPLAY_NAME' already exists"
+  else
+    az ad sp create --id "$APP_CLIENT_ID" --output none
+    log_ok "Created Service Principal for: $APP_DISPLAY_NAME"
+  fi
+
+  SP_OBJECT_ID=$(az ad sp show --id "$APP_CLIENT_ID" --query "id" --output tsv)
+
+  # Brief wait for Azure AD replication when the SP was just created.
+  # Role assignments fail with PrincipalNotFound if the SP hasn't propagated yet.
+  if [[ -z "$EXISTING_SP" ]]; then
+    log_info "Waiting 15s for Service Principal to propagate across Azure AD..."
+    sleep 15
+  fi
+
+  # Add federated credentials for each GitHub environment
+  for GH_ENV in staging production; do
+    CRED_NAME="github-${GH_ENV}"
+    SUBJECT="repo:${GITHUB_REPO}:environment:${GH_ENV}"
+
+    EXISTING_CRED=$(az ad app federated-credential list \
+      --id "$APP_CLIENT_ID" \
+      --query "[?name=='$CRED_NAME'].name | [0]" --output tsv 2>/dev/null || true)
+
+    if [[ -n "$EXISTING_CRED" ]]; then
+      log_skip "Federated credential '$CRED_NAME' already exists"
+    else
+      az ad app federated-credential create \
+        --id "$APP_CLIENT_ID" \
+        --parameters "{
+          \"name\": \"$CRED_NAME\",
+          \"issuer\": \"https://token.actions.githubusercontent.com\",
+          \"subject\": \"$SUBJECT\",
+          \"description\": \"GitHub Actions $GH_ENV environment\",
+          \"audiences\": [\"api://AzureADTokenExchange\"]
+        }" \
+        --output none
+      log_ok "Created federated credential: $CRED_NAME (subject: $SUBJECT)"
+    fi
+  done
+
+  # Use the well-known Contributor role definition ID to avoid a role name
+  # resolution REST call that fails with MissingSubscription in some CLI versions.
+  CONTRIBUTOR_ROLE_ID="b24988ac-6180-42a0-ab88-20f7382dd24c"
+
+  # Grant Contributor on the resource group (covers App Service + WebJobs)
+  RG_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}"
+  EXISTING_RG_ROLE=$(az role assignment list \
+    --scope "$RG_SCOPE" \
+    --assignee-object-id "$SP_OBJECT_ID" \
+    --query "[?roleDefinitionId=='$CONTRIBUTOR_ROLE_ID'].id | [0]" \
+    --output tsv 2>/dev/null || true)
+
+  if [[ -n "$EXISTING_RG_ROLE" ]]; then
+    log_skip "Contributor role on resource group already assigned"
+  else
+    run_az_with_retry az role assignment create \
+      --scope "$RG_SCOPE" \
+      --role "$CONTRIBUTOR_ROLE_ID" \
+      --assignee-object-id "$SP_OBJECT_ID" \
+      --assignee-principal-type ServicePrincipal \
+      --output none
+    log_ok "Granted Contributor on resource group: $RG_NAME"
+  fi
+
+  # Grant Contributor on the Static Web App resource specifically
+  SWA_RESOURCE_ID=$(az staticwebapp show \
+    --resource-group "$RG_NAME" \
+    --name "$SWA_NAME" \
+    --query "id" --output tsv 2>/dev/null || true)
+
+  if [[ -n "$SWA_RESOURCE_ID" ]]; then
+    EXISTING_SWA_ROLE=$(az role assignment list \
+      --scope "$SWA_RESOURCE_ID" \
+      --assignee-object-id "$SP_OBJECT_ID" \
+      --query "[?roleDefinitionId=='$CONTRIBUTOR_ROLE_ID'].id | [0]" \
+      --output tsv 2>/dev/null || true)
+
+    if [[ -n "$EXISTING_SWA_ROLE" ]]; then
+      log_skip "Contributor role on Static Web App already assigned"
+    else
+      run_az_with_retry az role assignment create \
+        --scope "$SWA_RESOURCE_ID" \
+        --role "$CONTRIBUTOR_ROLE_ID" \
+        --assignee-object-id "$SP_OBJECT_ID" \
+        --assignee-principal-type ServicePrincipal \
+        --output none
+      log_ok "Granted Contributor on Static Web App: $SWA_NAME"
+    fi
+  else
+    log_skip "Static Web App not found -- skipping SWA role assignment"
+  fi
+
+  log_ok "OIDC setup complete (appId: $APP_CLIENT_ID)"
+fi
+
+# ---------------------------------------------------------------------------
+# Retrieve App Service URL for GitHub Actions
 # ---------------------------------------------------------------------------
 log_head "Retrieving deployment outputs"
 
@@ -781,14 +978,39 @@ printf "  %-30s %s\n" "Frontend URL:"         "https://$SWA_URL"
 printf "  %-30s %s\n" "Key Vault URI:"        "$KV_URI"
 echo ""
 
-echo "${C_BOLD}GitHub Actions Secrets (add to repo Settings > Secrets)${C_RESET}"
-echo "--------------------------------------------------------------"
-printf "  %-45s %s\n" "AZURE_WEBAPP_NAME:"                    "$API_APP_NAME"
-printf "  %-45s %s\n" "AZURE_RESOURCE_GROUP:"                 "$RG_NAME"
-printf "  %-45s %s\n" "AZURE_STATIC_WEB_APPS_API_TOKEN:"      "$SWA_TOKEN"
-printf "  %-45s %s\n" "AZURE_SUBSCRIPTION_ID:"                "$SUBSCRIPTION_ID"
-printf "  %-45s %s\n" "APPLICATIONINSIGHTS_CONNECTION_STRING:" "$AI_CONNECTION_STRING"
-echo ""
+if [[ "$SKIP_OIDC" == "false" && -n "$APP_CLIENT_ID" ]]; then
+  echo "${C_BOLD}GitHub Actions Variables (add to each environment in repo Settings > Environments)${C_RESET}"
+  echo "--------------------------------------------------------------"
+  printf "  %-45s %s\n" "AZURE_CLIENT_ID:"                      "$APP_CLIENT_ID"
+  printf "  %-45s %s\n" "AZURE_TENANT_ID:"                      "$TENANT_ID"
+  printf "  %-45s %s\n" "AZURE_SUBSCRIPTION_ID:"                "$SUBSCRIPTION_ID"
+  printf "  %-45s %s\n" "AZURE_WEBAPP_NAME_STAGING:"            "${API_APP_NAME}/slots/staging"
+  printf "  %-45s %s\n" "AZURE_WEBAPP_NAME_PROD:"               "$API_APP_NAME"
+  printf "  %-45s %s\n" "STAGING_API_URL:"                      "https://$STAGING_API_APP_URL"
+  printf "  %-45s %s\n" "STAGING_WEB_URL:"                      "https://$SWA_URL"
+  printf "  %-45s %s\n" "PRODUCTION_API_URL:"                   "https://$PROD_API_APP_URL"
+  printf "  %-45s %s\n" "PRODUCTION_WEB_URL:"                   "https://$SWA_URL"
+  printf "  %-45s %s\n" "APPLICATIONINSIGHTS_CONNECTION_STRING:" "$AI_CONNECTION_STRING"
+  echo ""
+  echo "  These are environment variables (not secrets). Set them under:"
+  echo "  GitHub repo > Settings > Environments > staging (and production)"
+  echo ""
+else
+  echo "${C_BOLD}GitHub Actions Variables${C_RESET}"
+  echo "--------------------------------------------------------------"
+  printf "  %-45s %s\n" "AZURE_SUBSCRIPTION_ID:"                "$SUBSCRIPTION_ID"
+  printf "  %-45s %s\n" "AZURE_WEBAPP_NAME_STAGING:"            "${API_APP_NAME}/slots/staging"
+  printf "  %-45s %s\n" "AZURE_WEBAPP_NAME_PROD:"               "$API_APP_NAME"
+  printf "  %-45s %s\n" "STAGING_API_URL:"                      "https://$STAGING_API_APP_URL"
+  printf "  %-45s %s\n" "STAGING_WEB_URL:"                      "https://$SWA_URL"
+  printf "  %-45s %s\n" "PRODUCTION_API_URL:"                   "https://$PROD_API_APP_URL"
+  printf "  %-45s %s\n" "PRODUCTION_WEB_URL:"                   "https://$SWA_URL"
+  printf "  %-45s %s\n" "APPLICATIONINSIGHTS_CONNECTION_STRING:" "$AI_CONNECTION_STRING"
+  echo ""
+  echo "  OIDC was skipped. Run without --skip-oidc to create the App Registration"
+  echo "  and get AZURE_CLIENT_ID / AZURE_TENANT_ID values."
+  echo ""
+fi
 
 echo "${C_BOLD}Next steps${C_RESET}"
 echo "--------------------------------------------------------------"
@@ -805,12 +1027,8 @@ echo "  2. Add INSTAGRAM_REDIRECT_URI and INSTAGRAM_REDIRECT_FRONTEND_URL"
 echo "     using the provisioned URLs above."
 echo "     For staging, use the App Service slot URL and SWA preview URL."
 echo ""
-echo "  3. Configure the AZURE_WEBAPP_PUBLISH_PROFILE secret in GitHub Actions"
-echo "     by downloading the publish profile:"
-echo "     az webapp deployment list-publishing-profiles \\"
-echo "       --resource-group $RG_NAME \\"
-echo "       --name $API_APP_NAME \\"
-echo "       --xml"
+echo "  3. Copy the GitHub Actions variables printed above into:"
+echo "     GitHub repo > Settings > Environments > staging and production"
 echo ""
 echo "  4. Deploy WebJobs (publisher + content-engine) as continuous WebJobs"
 echo "     under the API App Service (see scripts/README-azure.md for details)."

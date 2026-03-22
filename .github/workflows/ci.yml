@@ -1,62 +1,242 @@
 name: CI
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [main, staging]
+  push:
+    branches: [staging]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
-  ci:
-    name: Build, Lint, Test
+  detect-changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [20]
-
+    outputs:
+      packages: ${{ steps.changes.outputs.packages }}
+      web: ${{ steps.changes.outputs.web }}
+      api: ${{ steps.changes.outputs.api }}
+      publisher: ${{ steps.changes.outputs.publisher }}
+      content-engine: ${{ steps.changes.outputs.content-engine }}
+      docs-only: ${{ steps.changes.outputs.docs-only }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js ${{ matrix.node-version }}
+      - name: Detect changes
+        id: changes
+        uses: ./.github/actions/detect-changes
+
+  type-check:
+    name: Type Check
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs-only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 20
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@v1.8
+
       - name: Type check
         run: npx turbo type-check
+
+  lint:
+    name: Lint
+    needs: detect-changes
+    if: needs.detect-changes.outputs.docs-only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@v1.8
 
       - name: Lint
         run: npx turbo lint
 
-      - name: Build packages
-        run: npx turbo build --filter='./packages/*'
+  test-web:
+    name: Test Web
+    needs: detect-changes
+    if: needs.detect-changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Test
-        run: npx turbo test
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@v1.8
+
+      - name: Run tests
+        run: npx turbo test:coverage --filter=@restropulse/web
         env:
           NODE_ENV: test
-          MONGODB_URI: mongodb://localhost:27017
-          MONGODB_DB_NAME: restropulse-test
+
+      - name: Check coverage
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-coverage.mjs @restropulse/web apps/web/coverage/lcov.info
+
+  test-api:
+    name: Test API
+    needs: detect-changes
+    if: needs.detect-changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@v1.8
+
+      - name: Run tests
+        run: npx turbo test:coverage --filter=@restropulse/api
+        env:
+          NODE_ENV: test
           JWT_SECRET: ci-test-secret
           ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
-    services:
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
-        options: >-
-          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+      - name: Check coverage
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-coverage.mjs @restropulse/api apps/api/coverage/lcov.info
+
+  test-publisher:
+    name: Test Publisher
+    needs: detect-changes
+    if: needs.detect-changes.outputs.publisher == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@v1.8
+
+      - name: Run tests
+        run: npx turbo test:coverage --filter=@restropulse/publisher
+        env:
+          NODE_ENV: test
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+      - name: Check coverage
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-coverage.mjs @restropulse/publisher apps/publisher/coverage/lcov.info
+
+  test-content-engine:
+    name: Test Content Engine
+    needs: detect-changes
+    if: needs.detect-changes.outputs.content-engine == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@v1.8
+
+      - name: Run tests
+        run: npx turbo test:coverage --filter=@restropulse/content-engine
+        env:
+          NODE_ENV: test
+
+      - name: Check coverage
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-coverage.mjs @restropulse/content-engine apps/content-engine/coverage/lcov.info
+
+  ci-complete:
+    name: CI Complete
+    if: always()
+    needs:
+      - detect-changes
+      - type-check
+      - lint
+      - test-web
+      - test-api
+      - test-publisher
+      - test-content-engine
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check upstream job results
+        run: |
+          echo "detect-changes: ${{ needs.detect-changes.result }}"
+          echo "type-check: ${{ needs.type-check.result }}"
+          echo "lint: ${{ needs.lint.result }}"
+          echo "test-web: ${{ needs.test-web.result }}"
+          echo "test-api: ${{ needs.test-api.result }}"
+          echo "test-publisher: ${{ needs.test-publisher.result }}"
+          echo "test-content-engine: ${{ needs.test-content-engine.result }}"
+
+          # Fail if any upstream job failed (skipped is OK)
+          if [[ "${{ needs.detect-changes.result }}" == "failure" ]] || \
+             [[ "${{ needs.type-check.result }}" == "failure" ]] || \
+             [[ "${{ needs.lint.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-web.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-api.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-publisher.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-content-engine.result }}" == "failure" ]]; then
+            echo "One or more upstream jobs failed."
+            exit 1
+          fi
+
+          echo "All upstream jobs passed or were skipped."

@@ -1,0 +1,147 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to promote (staging tag or commit SHA)
+        required: true
+        type: string
+      services:
+        description: Services to deploy (comma-separated or "all")
+        required: false
+        default: all
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  build-web:
+    name: Build Web
+    if: contains(inputs.services, 'web') || inputs.services == 'all'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@v1.8
+
+      - name: Build web
+        run: npx turbo build --filter=@restropulse/web
+        env:
+          NODE_ENV: production
+
+      - name: Upload web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist/
+          retention-days: 3
+
+  swap-api-production:
+    name: Swap API + Workers to Production
+    if: >-
+      contains(inputs.services, 'api') ||
+      contains(inputs.services, 'publisher') ||
+      contains(inputs.services, 'content-engine') ||
+      inputs.services == 'all'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Swap staging slot to production
+        run: |
+          az webapp deployment slot swap \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --slot staging \
+            --target-slot production
+
+  deploy-web-production:
+    name: Deploy Web (Production)
+    needs: build-web
+    if: contains(inputs.services, 'web') || inputs.services == 'all'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download web artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web-dist/
+
+      - name: Deploy to Azure Static Web Apps (production)
+        uses: azure/static-web-apps-deploy@v1
+        with:
+          azure_client_id: ${{ vars.AZURE_CLIENT_ID }}
+          azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
+          azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          skip_app_build: true
+          app_location: web-dist/
+
+  smoke-tests:
+    name: Smoke Tests
+    needs: [swap-api-production, deploy-web-production]
+    if: always() && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: scripts/smoke-test.sh
+
+      - name: Smoke test API
+        if: needs.swap-api-production.result == 'success'
+        run: bash scripts/smoke-test.sh api "${{ vars.PRODUCTION_API_URL }}"
+
+      - name: Smoke test Web
+        if: needs.deploy-web-production.result == 'success'
+        run: bash scripts/smoke-test.sh web "${{ vars.PRODUCTION_WEB_URL }}"
+
+  tag-production:
+    name: Tag Production
+    needs: smoke-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Create production tag
+        run: |
+          TAG="production/$(date -u +'%Y-%m-%d-%H%M%S')"
+          git tag "$TAG"
+          git push origin "$TAG"

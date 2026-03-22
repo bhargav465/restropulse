@@ -202,3 +202,90 @@ npm run test           # Run all test suites
 ```
 
 Individual app builds produce output in their respective `dist/` directories.
+
+## CI/CD Pipeline
+
+### GitHub Actions Workflows
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `ci.yml` | PRs to `main`/`staging`, push to `staging` | Parallel type-check, lint, per-service tests with path filtering |
+| `deploy-staging.yml` | Push to `staging` | Build, deploy API to staging slot + SWA to staging environment, smoke tests, tag |
+| `deploy-production.yml` | Manual (`workflow_dispatch`) | Promote a staging tag to production via slot swap (API) and SWA upload (web) |
+
+### CI Gate (`ci.yml`)
+
+Uses path-based change detection to skip unnecessary jobs. A `ci-complete` aggregator job is the single required status check for branch protection.
+
+| PR changes | Jobs that run |
+|---|---|
+| Only `docs/**`, `*.md` | detect-changes, ci-complete |
+| Only `apps/web/**` | detect-changes, type-check, lint, test-web, ci-complete |
+| `packages/**` | ALL jobs (package changes cascade to all services) |
+
+Coverage is enforced on PRs via `config/coverage-baseline.json` (85% minimum for lines/branches/functions). The baseline auto-ratchets upward on merge to `staging`.
+
+### Azure Deployment Targets
+
+| Service | Azure Resource | Staging deploy | Production deploy | Cost |
+|---------|---------------|----------------|-------------------|------|
+| `apps/web` | Static Web Apps (`restropulse-prod-web`) | Upload to `staging` SWA environment | Upload artifact to production SWA environment | Free tier |
+| `apps/api` | App Service (`restropulse-prod-api`) | Deploy bundle to `staging` slot | Slot swap: staging -> production | ~$13/month |
+| `apps/publisher` | Continuous WebJob on same App Service | Bundled with API deploy | Promoted via slot swap | $0 extra |
+| `apps/content-engine` | Continuous WebJob on same App Service | Bundled with API deploy | Promoted via slot swap | $0 extra |
+
+Publisher and content-engine run as continuous WebJobs under `App_Data/jobs/continuous/<name>/` on the same App Service as the API.
+
+There is no separate staging Azure resource group. All resources share `restropulse-prod-rg`. Staging isolation is achieved via:
+- App Service: the `staging` deployment slot (`restropulse-prod-api-staging.azurewebsites.net`)
+- SWA: the `staging` preview environment (`victorious-plant-04bc9e400-staging.6.azurestaticapps.net`)
+
+### Promotion Flow
+
+```
+merge to staging branch
+    -> deploy-staging.yml
+        -> API bundle deployed to App Service staging slot
+        -> SWA build uploaded to SWA staging environment
+        -> smoke tests against staging URLs
+        -> git tag: staging/YYYY-MM-DD-HHmmss
+
+manual: trigger deploy-production.yml with staging tag
+    -> requires production environment approval
+    -> API: az webapp deployment slot swap (staging -> production, zero-downtime)
+    -> SWA: rebuild from same tag, upload to SWA production environment
+    -> smoke tests against production URLs
+    -> git tag: production/YYYY-MM-DD-HHmmss
+```
+
+The slot swap for the API is atomic and zero-downtime. The old production slot becomes the new staging slot, enabling instant rollback by swapping back.
+
+SWA does not support slot swaps. Production SWA is a rebuild from the pinned staging tag -- identical code, deterministic output via locked dependencies.
+
+### Branching Model
+
+- Feature branches -> PR to `staging` -> auto-deploy to staging slot/environment
+- `staging` -> PR to `main` -> manual promote to production via `workflow_dispatch`
+
+### GitHub Environments
+
+Authentication uses OIDC (Workload Identity Federation) -- no long-lived credentials stored as secrets.
+
+| Environment | Protection | Variables (not secrets) |
+|-------------|-----------|-------------------------|
+| `staging` | None (auto-deploy) | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME_PROD`, `AZURE_RESOURCE_GROUP`, `STAGING_API_URL`, `STAGING_WEB_URL` |
+| `production` | Required reviewer(s) | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME_PROD`, `AZURE_RESOURCE_GROUP`, `PRODUCTION_API_URL`, `PRODUCTION_WEB_URL` |
+
+Both environments share the same `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, and `AZURE_WEBAPP_NAME_PROD` values -- there is one App Registration and one App Service. The workflows use `slot-name: staging` to target the staging slot; the production deploy uses `az webapp deployment slot swap` rather than a separate app name.
+
+To set up OIDC:
+1. Create an App Registration in Entra ID (Azure AD) -- `restropulse-github-actions` (appId: `6dc51c23-5945-4610-b75d-ec027c0cb296`)
+2. Add a federated credential for each environment: entity type "Environment", repo `baxeltech/restropulse`, environment `staging` / `production`
+3. Grant the service principal `Contributor` on `restropulse-prod-rg` and `Static Web Apps Contributor` on `restropulse-prod-web`
+4. Set environment variables in each GitHub environment (already configured -- see table above)
+
+### Rollback
+
+**API**: re-trigger `deploy-production.yml` with the previous `production/*` tag. The previous production build is still in the staging slot (it was swapped there), so the slot swap completes instantly with no rebuild.
+
+**SWA**: re-trigger `deploy-production.yml` with a previous `staging/*` or `production/*` tag. Turbo cache ensures a near-instant rebuild.
