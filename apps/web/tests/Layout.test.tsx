@@ -152,4 +152,19 @@ describe('Layout Component', () => {
         expect(nav).toBeInTheDocument();
         expect(nav).toHaveClass('fixed', 'bottom-0');
     });
+
+    it('should show disabled create post button in STUDIO view when onCreatePost is not provided', () => {
+        const propsWithoutCreatePost = {
+            ...defaultProps,
+            currentView: 'STUDIO' as ViewState,
+            title: 'Content Studio',
+            onCreatePost: undefined,
+        };
+        render(<Layout {...propsWithoutCreatePost}>{mockChildren}</Layout>);
+
+        const createButton = screen.getByLabelText('Create post');
+        expect(createButton).toBeInTheDocument();
+        expect(createButton).toBeDisabled();
+        expect(createButton).toHaveClass('bg-slate-200');
+    });
 });

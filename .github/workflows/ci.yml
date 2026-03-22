@@ -165,14 +165,13 @@ jobs:
         uses: rharkor/caching-for-turbo@v1.8
 
       - name: Run tests
-        run: npx turbo test:coverage --filter=@restropulse/publisher
+        run: npx turbo test --filter=@restropulse/publisher
         env:
           NODE_ENV: test
           ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-
-      - name: Check coverage
-        if: github.event_name == 'pull_request'
-        run: node scripts/check-coverage.mjs @restropulse/publisher apps/publisher/coverage/lcov.info
+      # Coverage is excluded for publisher: its src/ is a thin process entry
+      # point (worker.ts + instrument.ts) with no business logic to measure.
+      # All meaningful logic lives in @restropulse/publishing and is covered there.
 
   test-content-engine:
     name: Test Content Engine

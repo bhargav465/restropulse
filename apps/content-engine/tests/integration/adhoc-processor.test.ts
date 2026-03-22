@@ -1,0 +1,184 @@
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoClient, ObjectId } from 'mongodb';
+import { setDB } from '@restropulse/db';
+
+// Mock telemetry before any app code loads
+vi.mock('@restropulse/telemetry/server', () => {
+  const noopLogger = {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn().mockReturnThis(),
+    fatal: vi.fn(),
+    trace: vi.fn(),
+  };
+  return {
+    createLogger: vi.fn(() => noopLogger),
+    initServerTelemetry: vi.fn(),
+    shutdownServerTelemetry: vi.fn(),
+  };
+});
+
+// Set ASSET_SERVER_BASE_URL before content-generator loads asset-manager
+process.env['ASSET_SERVER_BASE_URL'] = 'http://localhost:3002';
+
+const { processAdhocRequests } = await import('../../src/services/adhoc-processor.js');
+
+let mongod: MongoMemoryServer;
+let client: MongoClient;
+
+beforeAll(async () => {
+  mongod = await MongoMemoryServer.create();
+  client = await MongoClient.connect(mongod.getUri());
+  setDB(client.db('content-engine-test'));
+}, 60000);
+
+afterAll(async () => {
+  await client.close();
+  await mongod.stop();
+}, 20000);
+
+beforeEach(async () => {
+  vi.clearAllMocks();
+  // Clear the posts collection before each test
+  const db = client.db('content-engine-test');
+  await db.collection('posts').deleteMany({});
+});
+
+describe('adhoc-processor integration', () => {
+  describe('processAdhocRequests()', () => {
+    it('returns { processed: 0, failed: 0 } when no PENDING_CONTENT posts exist', async () => {
+      const result = await processAdhocRequests();
+      expect(result).toEqual({ processed: 0, failed: 0 });
+    });
+
+    it('does not process posts that are not PENDING_CONTENT', async () => {
+      const db = client.db('content-engine-test');
+      await db.collection('posts').insertOne({
+        _id: new ObjectId(),
+        type: 'IMAGE',
+        status: 'SCHEDULED',
+        platforms: ['INSTAGRAM'],
+        caption: 'A scheduled post',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await processAdhocRequests();
+      expect(result).toEqual({ processed: 0, failed: 0 });
+    });
+
+    it('processes a PENDING_CONTENT IMAGE post and advances status to PENDING_APPROVAL', async () => {
+      const db = client.db('content-engine-test');
+      const postId = new ObjectId();
+      await db.collection('posts').insertOne({
+        _id: postId,
+        type: 'IMAGE',
+        status: 'PENDING_CONTENT',
+        platforms: ['INSTAGRAM'],
+        concept: 'Weekend special',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await processAdhocRequests();
+      expect(result).toEqual({ processed: 1, failed: 0 });
+
+      const updatedPost = await db.collection('posts').findOne({ _id: postId });
+      expect(updatedPost?.status).toBe('PENDING_APPROVAL');
+      expect(typeof updatedPost?.caption).toBe('string');
+      expect(typeof updatedPost?.thumbnail).toBe('string');
+    });
+
+    it('processes a PENDING_CONTENT CAROUSEL post and stores mediaUrls', async () => {
+      const db = client.db('content-engine-test');
+      const postId = new ObjectId();
+      await db.collection('posts').insertOne({
+        _id: postId,
+        type: 'CAROUSEL',
+        status: 'PENDING_CONTENT',
+        platforms: ['INSTAGRAM'],
+        concept: 'Menu highlights',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await processAdhocRequests();
+      expect(result.processed).toBe(1);
+
+      const updatedPost = await db.collection('posts').findOne({ _id: postId });
+      expect(updatedPost?.status).toBe('PENDING_APPROVAL');
+      expect(Array.isArray(updatedPost?.mediaUrls)).toBe(true);
+    });
+
+    it('processes a PENDING_CONTENT REEL post and stores videoUrl', async () => {
+      const db = client.db('content-engine-test');
+      const postId = new ObjectId();
+      await db.collection('posts').insertOne({
+        _id: postId,
+        type: 'REEL',
+        status: 'PENDING_CONTENT',
+        platforms: ['INSTAGRAM'],
+        concept: 'Chef highlight reel',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await processAdhocRequests();
+      expect(result.processed).toBe(1);
+
+      const updatedPost = await db.collection('posts').findOne({ _id: postId });
+      expect(updatedPost?.status).toBe('PENDING_APPROVAL');
+      expect(typeof updatedPost?.videoUrl).toBe('string');
+    });
+
+    it('processes multiple PENDING_CONTENT posts in a single call', async () => {
+      const db = client.db('content-engine-test');
+      await db.collection('posts').insertMany([
+        {
+          _id: new ObjectId(),
+          type: 'IMAGE',
+          status: 'PENDING_CONTENT',
+          platforms: ['INSTAGRAM'],
+          concept: 'Post 1',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          _id: new ObjectId(),
+          type: 'IMAGE',
+          status: 'PENDING_CONTENT',
+          platforms: ['FACEBOOK'],
+          concept: 'Post 2',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]);
+
+      const result = await processAdhocRequests();
+      expect(result).toEqual({ processed: 2, failed: 0 });
+    });
+
+    it('uses caption field as concept when concept is absent', async () => {
+      const db = client.db('content-engine-test');
+      const postId = new ObjectId();
+      await db.collection('posts').insertOne({
+        _id: postId,
+        type: 'IMAGE',
+        status: 'PENDING_CONTENT',
+        platforms: ['INSTAGRAM'],
+        caption: 'Caption used as concept',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await processAdhocRequests();
+      expect(result.processed).toBe(1);
+
+      const updatedPost = await db.collection('posts').findOne({ _id: postId });
+      expect(updatedPost?.status).toBe('PENDING_APPROVAL');
+    });
+  });
+});

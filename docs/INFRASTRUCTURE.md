@@ -224,7 +224,7 @@ Uses path-based change detection to skip unnecessary jobs. A `ci-complete` aggre
 | Only `apps/web/**` | detect-changes, type-check, lint, test-web, ci-complete |
 | `packages/**` | ALL jobs (package changes cascade to all services) |
 
-Coverage is enforced on PRs via `config/coverage-baseline.json` (85% minimum for lines/branches/functions). The baseline auto-ratchets upward on merge to `staging`.
+Coverage is enforced on PRs via `config/coverage-baseline.json` (85% minimum for lines/branches/functions for web, api, and content-engine). Publisher is excluded — its src/ is a thin process entry point with no testable business logic.
 
 ### Azure Deployment Targets
 
