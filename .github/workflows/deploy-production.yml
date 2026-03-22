@@ -96,12 +96,27 @@ jobs:
           name: web-dist
           path: web-dist/
 
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get SWA deployment token
+        id: swa-token
+        run: |
+          TOKEN=$(az staticwebapp secrets list \
+            --name restropulse-prod-web \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --query "properties.apiKey" -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> $GITHUB_OUTPUT
+
       - name: Deploy to Azure Static Web Apps (production)
         uses: azure/static-web-apps-deploy@v1
         with:
-          azure_client_id: ${{ vars.AZURE_CLIENT_ID }}
-          azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
-          azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          azure_static_web_apps_api_token: ${{ steps.swa-token.outputs.token }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           skip_app_build: true
