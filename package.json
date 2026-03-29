@@ -8,6 +8,7 @@
     "apps/*"
   ],
   "scripts": {
+    "// --- App ---": "",
     "ports:check": "node scripts/free-ports.mjs --check",
     "ports:free": "node scripts/free-ports.mjs --force",
     "ports:check:dev": "node scripts/free-ports.mjs --check",
@@ -23,7 +24,9 @@
     "type-check": "turbo type-check",
     "clean": "turbo clean && rimraf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "// --- AI Tooling ---": "",
     "setup:mcp": "node scripts/setup-mcp.mjs",
+    "setup:rtk": "node scripts/setup-rtk.mjs",
     "reindex": "node scripts/reindex-rag.mjs"
   },
   "devDependencies": {
