@@ -550,14 +550,16 @@ log_info "Seeding Key Vault placeholder secrets for PROD and STAGING groups..."
 
 declare -a KV_SECRET_BASENAMES=(
   "MONGODB-URI"
+  "MONGODB-DB-NAME"
   "JWT-SECRET"
   "ENCRYPTION-KEY"
-  "META-APP-ID"
-  "META-APP-SECRET"
+  "INSTAGRAM-APP-ID"
+  "INSTAGRAM-APP-SECRET"
+  "INSTAGRAM-REDIRECT-URI"
   "RAZORPAY-KEY-ID"
   "RAZORPAY-KEY-SECRET"
   "RAZORPAY-WEBHOOK-SECRET"
-  "FIREBASE-SERVICE-ACCOUNT"
+  "FIREBASE-SERVICE-ACCOUNT-KEY"
 )
 
 for GROUP_PREFIX in PROD STAGING; do
@@ -681,14 +683,16 @@ configure_app_target() {
     "${target_args[@]}" \
     --settings \
       MONGODB_URI="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-MONGODB-URI)" \
+      MONGODB_DB_NAME="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-MONGODB-DB-NAME)" \
       JWT_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-JWT-SECRET)" \
       ENCRYPTION_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-ENCRYPTION-KEY)" \
-      META_APP_ID="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-META-APP-ID)" \
-      META_APP_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-META-APP-SECRET)" \
+      INSTAGRAM_APP_ID="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-INSTAGRAM-APP-ID)" \
+      INSTAGRAM_APP_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-INSTAGRAM-APP-SECRET)" \
+      INSTAGRAM_REDIRECT_URI="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-INSTAGRAM-REDIRECT-URI)" \
       RAZORPAY_KEY_ID="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-RAZORPAY-KEY-ID)" \
       RAZORPAY_KEY_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-RAZORPAY-KEY-SECRET)" \
       RAZORPAY_WEBHOOK_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-RAZORPAY-WEBHOOK-SECRET)" \
-      FIREBASE_SERVICE_ACCOUNT="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-FIREBASE-SERVICE-ACCOUNT)" \
+      FIREBASE_SERVICE_ACCOUNT_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-FIREBASE-SERVICE-ACCOUNT-KEY)" \
     --output none
 
   log_ok "App Service settings configured for $target_env"
@@ -1014,18 +1018,24 @@ fi
 
 echo "${C_BOLD}Next steps${C_RESET}"
 echo "--------------------------------------------------------------"
-echo "  1. Fill in real values for Key Vault secrets (both groups):"
-echo "     az keyvault secret set --vault-name $KV_NAME --name PROD-MONGODB-URI --value '<value>'"
-echo "     az keyvault secret set --vault-name $KV_NAME --name STAGING-MONGODB-URI --value '<value>'"
-echo "     (repeat for JWT-SECRET, ENCRYPTION-KEY, META-APP-ID, META-APP-SECRET,"
-echo "      RAZORPAY-KEY-ID, RAZORPAY-KEY-SECRET, RAZORPAY-WEBHOOK-SECRET,"
-echo "      FIREBASE-SERVICE-ACCOUNT with PROD- and STAGING- prefixes)"
+echo "  1. Fill in real values for Key Vault secrets using the reusable script:"
+echo "     bash scripts/set-keyvault-secrets.sh --env staging \\"
+echo "       --mongodb-uri '<value>' --mongodb-db-name '<value>' \\"
+echo "       --jwt-secret '<value>' --encryption-key '<value>' \\"
+echo "       --instagram-app-id '<value>' --instagram-app-secret '<value>' \\"
+echo "       --instagram-redirect-uri 'https://$STAGING_API_APP_URL/api/integrations/instagram/callback' \\"
+echo "       --firebase-service-account-key '<json>' \\"
+echo "       --razorpay-key-id '<value>' --razorpay-key-secret '<value>' \\"
+echo "       --razorpay-webhook-secret '<value>' \\"
+echo "       --frontend-url 'https://$SWA_URL' \\"
+echo "       --backend-url 'https://$STAGING_API_APP_URL' \\"
+echo "       --asset-server-base-url 'https://$STAGING_API_APP_URL/content/mockdata'"
 echo ""
+echo "     Run with --env production for the production slot."
 echo "     Key Vault references and CORS settings are already automated by this script."
 echo ""
-echo "  2. Add INSTAGRAM_REDIRECT_URI and INSTAGRAM_REDIRECT_FRONTEND_URL"
-echo "     using the provisioned URLs above."
-echo "     For staging, use the App Service slot URL and SWA preview URL."
+echo "  2. CORS_ORIGIN has been set automatically from the SWA URL above."
+echo "     FRONTEND_URL and BACKEND_URL must be set via set-keyvault-secrets.sh (step 1)."
 echo ""
 echo "  3. Copy the GitHub Actions variables printed above into:"
 echo "     GitHub repo > Settings > Environments > staging and production"
