@@ -51,11 +51,11 @@ jobs:
       - name: Turbo cache
         uses: rharkor/caching-for-turbo@v1.8
 
-      # Build the web SPA from the full monorepo (no workspace resolution needed
-      # at runtime -- it compiles to static files).
-      - name: Build web
-        if: inputs.force || needs.detect-changes.outputs.web == 'true'
-        run: npx turbo build --filter=@restropulse/web
+      # Build everything in the full monorepo so turbo's cache works correctly
+      # across all packages. Splitting the build (e.g. web-only then pruned) causes
+      # cache misses inside the pruned dir because the cache keys differ.
+      - name: Build all
+        run: npx turbo build
         env:
           NODE_ENV: production
 
@@ -67,11 +67,13 @@ jobs:
           path: apps/web/dist/
           retention-days: 3
 
-      # For the API + workers we use `turbo prune` to produce a minimal monorepo
-      # subtree. `npm ci` inside that subtree creates workspace symlinks that
-      # correctly resolve @restropulse/* packages because the package source dirs
-      # are present in the pruned tree. No manual copying of workspace packages
-      # is needed -- adding a new @restropulse/* dep just works.
+      # `turbo prune` produces a minimal monorepo subtree whose package.json +
+      # package-lock.json correctly list only the needed workspaces. Running
+      # `npm ci` inside it creates workspace symlinks that resolve @restropulse/*
+      # packages at runtime. We then copy the already-built dist/ outputs from
+      # the full repo into the pruned tree so the symlinks resolve immediately
+      # without re-building. The loop is keyed on what turbo prune included, so
+      # adding a new @restropulse/* dep just works.
       - name: Prune for API deployment
         if: >-
           inputs.force ||
@@ -94,16 +96,22 @@ jobs:
         working-directory: pruned
         run: npm ci --omit=dev --ignore-scripts
 
-      - name: Build API and workers
+      - name: Copy dist outputs into pruned tree
         if: >-
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
-        working-directory: pruned
-        run: npx turbo build
-        env:
-          NODE_ENV: production
+        run: |
+          for pkg_dir in pruned/packages/*/; do
+            pkg_name=$(basename "$pkg_dir")
+            if [ -d "packages/$pkg_name/dist" ]; then
+              cp -r "packages/$pkg_name/dist/." "$pkg_dir/dist/"
+            fi
+          done
+          for app in api publisher content-engine; do
+            cp -r "apps/$app/dist/." "pruned/apps/$app/dist/"
+          done
 
       - name: Add WebJob run scripts
         if: >-
