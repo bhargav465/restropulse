@@ -111,24 +111,23 @@ jobs:
             cp -r "apps/$app/dist/." "pruned/apps/$app/dist/"
           done
 
-      # npm workspace packages are symlinks (e.g. node_modules/@restropulse/shared ->
-      # ../../packages/shared). Azure's Oryx optimizer moves node_modules to /node_modules
-      # at container root, which breaks relative symlinks. Replace them with real copies
-      # so the paths are stable regardless of where node_modules is extracted.
-      - name: Dereference workspace symlinks in node_modules
+      # npm workspace packages may be symlinks or real directories depending on npm version.
+      # Azure's Oryx optimizer can relocate node_modules, breaking relative symlinks.
+      # Unconditionally copy each pruned/packages/* into node_modules/@restropulse/ so
+      # the packages resolve correctly regardless of Oryx's behavior.
+      - name: Materialize workspace packages into node_modules
         if: >-
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
         run: |
-          for link in pruned/node_modules/@restropulse/*/; do
-            link="${link%/}"
-            if [ -L "$link" ]; then
-              target=$(readlink -f "$link")
-              rm "$link"
-              cp -r "$target" "$link"
-            fi
+          mkdir -p pruned/node_modules/@restropulse
+          for pkg_dir in pruned/packages/*/; do
+            pkg_name=$(basename "$pkg_dir")
+            target="pruned/node_modules/@restropulse/$pkg_name"
+            rm -rf "$target"
+            cp -r "$pkg_dir" "$target"
           done
 
       - name: Add WebJob run scripts
