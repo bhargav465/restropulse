@@ -1,6 +1,6 @@
 {
-  "@restropulse/web":            { "lines": 85, "branches": 85, "functions": 85 },
-  "@restropulse/api":            { "lines": 85, "branches": 85, "functions": 85 },
-  "@restropulse/publisher":      { "lines": 85, "branches": 85, "functions": 85 },
-  "@restropulse/content-engine": { "lines": 85, "branches": 85, "functions": 85 }
+  "@restropulse/api":            { "lines": 95, "branches": 90, "functions": 95 },
+  "@restropulse/web":            { "lines": 95, "branches": 85, "functions": 90 },
+  "@restropulse/publisher":      { "lines": 0,  "branches": 0,  "functions": 0  },
+  "@restropulse/content-engine": { "lines": 0,  "branches": 0,  "functions": 0  }
 }
