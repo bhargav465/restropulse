@@ -253,19 +253,31 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      # azure/webapps-deploy strips node_modules from its zip before upload,
+      # which causes ERR_MODULE_NOT_FOUND at startup. Manually zip the bundle
+      # (preserving node_modules) and deploy via az webapp deploy instead.
       - name: Deploy to Azure App Service (staging slot)
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME_PROD }}
-          slot-name: staging
-          package: api-bundle/
-          startup-command: node apps/api/dist/server.js
+        run: |
+          cd api-bundle && zip -r ../api-deploy.zip . && cd ..
+          az webapp deploy \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --slot staging \
+            --src-path api-deploy.zip \
+            --type zip \
+            --async false
+          az webapp config set \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --slot staging \
+            --startup-file "node apps/api/dist/server.js"
 
   smoke-tests:
     name: Smoke Tests
     needs: [deploy-web-staging, deploy-api-staging]
     if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
+    environment: staging
     steps:
       - name: Checkout
         uses: actions/checkout@v4
