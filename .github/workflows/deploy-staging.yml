@@ -55,7 +55,7 @@ jobs:
       # across all packages. Splitting the build (e.g. web-only then pruned) causes
       # cache misses inside the pruned dir because the cache keys differ.
       - name: Build all
-        run: npx turbo build
+        run: npx turbo build --filter=!@restropulse/db-cli
         env:
           NODE_ENV: production
 

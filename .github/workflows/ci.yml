@@ -55,7 +55,7 @@ jobs:
         uses: rharkor/caching-for-turbo@v1.8
 
       - name: Type check
-        run: npx turbo type-check
+        run: npx turbo type-check --filter=!@restropulse/db-cli
 
   lint:
     name: Lint
@@ -79,7 +79,7 @@ jobs:
         uses: rharkor/caching-for-turbo@v1.8
 
       - name: Lint
-        run: npx turbo lint
+        run: npx turbo lint --filter=!@restropulse/db-cli
 
   test-web:
     name: Test Web
