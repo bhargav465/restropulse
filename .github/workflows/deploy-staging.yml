@@ -151,6 +151,19 @@ jobs:
           SCRIPT
           chmod +x pruned/App_Data/jobs/continuous/content-engine/run.sh
 
+      # Oryx (Azure's build system) reads oryx-manifest.toml at container startup.
+      # If compressedNodeModulesFile is set there, Oryx replaces node_modules/ with
+      # the referenced tar — overwriting our correctly materialized @restropulse/*
+      # packages. Deploying our own manifest (without that key) prevents this.
+      - name: Override Oryx manifest to prevent stale node_modules extraction
+        if: >-
+          inputs.force ||
+          needs.detect-changes.outputs.api == 'true' ||
+          needs.detect-changes.outputs.publisher == 'true' ||
+          needs.detect-changes.outputs.content-engine == 'true'
+        run: |
+          printf 'nodeVersion = "18"\n' > pruned/oryx-manifest.toml
+
       - name: Upload API bundle artifact
         if: >-
           inputs.force ||
