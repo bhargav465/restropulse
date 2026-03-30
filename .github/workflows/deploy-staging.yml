@@ -3,6 +3,12 @@ name: Deploy Staging
 on:
   push:
     branches: [staging]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Deploy all services regardless of changed files
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-staging
@@ -48,13 +54,13 @@ jobs:
       # Build the web SPA from the full monorepo (no workspace resolution needed
       # at runtime -- it compiles to static files).
       - name: Build web
-        if: needs.detect-changes.outputs.web == 'true'
+        if: inputs.force || needs.detect-changes.outputs.web == 'true'
         run: npx turbo build --filter=@restropulse/web
         env:
           NODE_ENV: production
 
       - name: Upload web artifact
-        if: needs.detect-changes.outputs.web == 'true'
+        if: inputs.force || needs.detect-changes.outputs.web == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: web-dist
@@ -68,6 +74,7 @@ jobs:
       # is needed -- adding a new @restropulse/* dep just works.
       - name: Prune for API deployment
         if: >-
+          inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
@@ -80,6 +87,7 @@ jobs:
 
       - name: Install pruned dependencies
         if: >-
+          inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
@@ -88,6 +96,7 @@ jobs:
 
       - name: Build API and workers
         if: >-
+          inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
@@ -98,6 +107,7 @@ jobs:
 
       - name: Add WebJob run scripts
         if: >-
+          inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
@@ -118,6 +128,7 @@ jobs:
 
       - name: Upload API bundle artifact
         if: >-
+          inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
@@ -130,7 +141,7 @@ jobs:
   deploy-web-staging:
     name: Deploy Web (Staging)
     needs: [detect-changes, build]
-    if: needs.detect-changes.outputs.web == 'true'
+    if: inputs.force || needs.detect-changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     environment: staging
     permissions:
@@ -159,6 +170,7 @@ jobs:
     name: Deploy API + Workers (Staging)
     needs: [detect-changes, build]
     if: >-
+      inputs.force ||
       needs.detect-changes.outputs.api == 'true' ||
       needs.detect-changes.outputs.publisher == 'true' ||
       needs.detect-changes.outputs.content-engine == 'true'
