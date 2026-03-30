@@ -45,8 +45,11 @@ jobs:
       - name: Turbo cache
         uses: rharkor/caching-for-turbo@v1.8
 
-      - name: Build all
-        run: npx turbo build
+      # Build the web SPA from the full monorepo (no workspace resolution needed
+      # at runtime -- it compiles to static files).
+      - name: Build web
+        if: needs.detect-changes.outputs.web == 'true'
+        run: npx turbo build --filter=@restropulse/web
         env:
           NODE_ENV: production
 
@@ -58,37 +61,60 @@ jobs:
           path: apps/web/dist/
           retention-days: 3
 
-      - name: Prepare API + WebJobs bundle
+      # For the API + workers we use `turbo prune` to produce a minimal monorepo
+      # subtree. `npm ci` inside that subtree creates workspace symlinks that
+      # correctly resolve @restropulse/* packages because the package source dirs
+      # are present in the pruned tree. No manual copying of workspace packages
+      # is needed -- adding a new @restropulse/* dep just works.
+      - name: Prune for API deployment
+        if: >-
+          needs.detect-changes.outputs.api == 'true' ||
+          needs.detect-changes.outputs.publisher == 'true' ||
+          needs.detect-changes.outputs.content-engine == 'true'
+        run: >-
+          npx turbo prune
+          @restropulse/api
+          @restropulse/publisher
+          @restropulse/content-engine
+          --out-dir=pruned
+
+      - name: Install pruned dependencies
+        if: >-
+          needs.detect-changes.outputs.api == 'true' ||
+          needs.detect-changes.outputs.publisher == 'true' ||
+          needs.detect-changes.outputs.content-engine == 'true'
+        working-directory: pruned
+        run: npm ci --omit=dev --ignore-scripts
+
+      - name: Build API and workers
+        if: >-
+          needs.detect-changes.outputs.api == 'true' ||
+          needs.detect-changes.outputs.publisher == 'true' ||
+          needs.detect-changes.outputs.content-engine == 'true'
+        working-directory: pruned
+        run: npx turbo build
+        env:
+          NODE_ENV: production
+
+      - name: Add WebJob run scripts
         if: >-
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
         run: |
-          mkdir -p deploy-bundle/api
-          cp -r apps/api/dist/* deploy-bundle/api/
-
-          mkdir -p deploy-bundle/App_Data/jobs/continuous/publisher
-          cp -r apps/publisher/dist/* deploy-bundle/App_Data/jobs/continuous/publisher/
-          cat > deploy-bundle/App_Data/jobs/continuous/publisher/run.sh << 'SCRIPT'
+          mkdir -p pruned/App_Data/jobs/continuous/publisher
+          cat > pruned/App_Data/jobs/continuous/publisher/run.sh << 'SCRIPT'
           #!/bin/bash
-          cd "$(dirname "$0")"
-          node worker.js
+          node "$(dirname "$0")/../../../apps/publisher/dist/worker.js"
           SCRIPT
-          chmod +x deploy-bundle/App_Data/jobs/continuous/publisher/run.sh
+          chmod +x pruned/App_Data/jobs/continuous/publisher/run.sh
 
-          mkdir -p deploy-bundle/App_Data/jobs/continuous/content-engine
-          cp -r apps/content-engine/dist/* deploy-bundle/App_Data/jobs/continuous/content-engine/
-          cat > deploy-bundle/App_Data/jobs/continuous/content-engine/run.sh << 'SCRIPT'
+          mkdir -p pruned/App_Data/jobs/continuous/content-engine
+          cat > pruned/App_Data/jobs/continuous/content-engine/run.sh << 'SCRIPT'
           #!/bin/bash
-          cd "$(dirname "$0")"
-          node worker.js
+          node "$(dirname "$0")/../../../apps/content-engine/dist/worker.js"
           SCRIPT
-          chmod +x deploy-bundle/App_Data/jobs/continuous/content-engine/run.sh
-
-          # Copy root package.json for production deps
-          cp package.json deploy-bundle/
-          cp package-lock.json deploy-bundle/
-          cd deploy-bundle && npm ci --omit=dev --ignore-scripts
+          chmod +x pruned/App_Data/jobs/continuous/content-engine/run.sh
 
       - name: Upload API bundle artifact
         if: >-
@@ -98,7 +124,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: api-bundle
-          path: deploy-bundle/
+          path: pruned/
           retention-days: 3
 
   deploy-web-staging:
@@ -161,7 +187,7 @@ jobs:
           app-name: ${{ vars.AZURE_WEBAPP_NAME_PROD }}
           slot-name: staging
           package: api-bundle/
-          startup-command: node api/server.js
+          startup-command: node apps/api/dist/server.js
 
   smoke-tests:
     name: Smoke Tests
