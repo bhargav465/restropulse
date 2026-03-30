@@ -85,14 +85,18 @@ jobs:
           @restropulse/content-engine
           --out-dir=pruned
 
+      # Run from repo root with --prefix so npm uses pruned/ as the install
+      # target rather than detecting the parent monorepo as the workspace root
+      # (which would hoist packages to the top-level node_modules instead).
       - name: Install pruned dependencies
         if: >-
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
-        working-directory: pruned
-        run: npm ci --omit=dev --ignore-scripts
+        run: |
+          npm ci --prefix pruned --omit=dev --ignore-scripts
+          echo "pruned/node_modules package count: $(ls pruned/node_modules | wc -l)"
 
       - name: Copy dist outputs into pruned tree
         if: >-
