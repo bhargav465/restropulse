@@ -799,4 +799,102 @@ describe('AdhocPostModal Component', () => {
             });
         });
     });
+
+    describe('Branch coverage additions', () => {
+        it('should not update dragOffset when touchMove fires without a prior touchStart', () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            const modal = screen.getByTestId('adhoc-post-modal');
+
+            // touchMove without touchStart -- touchStart state is null, should early return
+            fireEvent.touchMove(modal, { touches: [{ clientY: 200 }] });
+
+            // Modal should remain open (no close triggered)
+            expect(mockOnClose).not.toHaveBeenCalled();
+        });
+
+        it('should not update dragOffset when swiping upward', () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            const modal = screen.getByTestId('adhoc-post-modal');
+
+            // Swipe up (negative diff) -- dragOffset should not be set
+            fireEvent.touchStart(modal, { touches: [{ clientY: 200 }] });
+            fireEvent.touchMove(modal, { touches: [{ clientY: 100 }] }); // diff = -100, upward swipe
+            fireEvent.touchEnd(modal);
+
+            expect(mockOnClose).not.toHaveBeenCalled();
+        });
+
+        it('should allow deselecting a platform when two platforms are selected', () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            // Add Facebook so we have two platforms
+            fireEvent.click(screen.getByTestId('platform-facebook'));
+            expect(screen.getByTestId('platform-facebook')).toHaveClass('border-orange-500');
+            expect(screen.getByTestId('platform-instagram')).toHaveClass('border-orange-500');
+
+            // Now deselect Facebook -- next.length === 1 (not 0) so the guard is NOT triggered
+            fireEvent.click(screen.getByTestId('platform-facebook'));
+
+            // Facebook should be deselected, Instagram still selected
+            expect(screen.getByTestId('platform-facebook')).not.toHaveClass('border-orange-500');
+            expect(screen.getByTestId('platform-instagram')).toHaveClass('border-orange-500');
+        });
+
+        it('should reset post type to first valid type when selected type becomes invalid after adding a platform', () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            // Select REEL (valid for INSTAGRAM but not in FACEBOOK-only intersection)
+            fireEvent.click(screen.getByTestId('type-reel'));
+            expect(screen.getByTestId('type-reel')).toHaveClass('border-orange-500');
+
+            // Add FACEBOOK -- intersection of INSTAGRAM and FACEBOOK does not include REEL,
+            // so postType should reset to the first valid type (IMAGE)
+            fireEvent.click(screen.getByTestId('platform-facebook'));
+
+            // REEL button should no longer be selected
+            expect(screen.getByTestId('type-reel')).not.toHaveClass('border-orange-500');
+            // IMAGE should be selected as the reset fallback
+            expect(screen.getByTestId('type-image')).toHaveClass('border-orange-500');
+        });
+
+        it('should show STORY media hint when STORY post type is selected', () => {
+            render(
+                <AdhocPostModal
+                    isOpen={true}
+                    onClose={mockOnClose}
+                    onSuccess={mockOnSuccess}
+                />
+            );
+
+            fireEvent.click(screen.getByTestId('type-story'));
+
+            expect(screen.getByText(/Stories can include a video file if available/i)).toBeInTheDocument();
+        });
+    });
 });
