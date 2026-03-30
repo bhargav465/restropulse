@@ -162,12 +162,30 @@ jobs:
           name: web-dist
           path: web-dist/
 
+      # azure/static-web-apps-deploy does not support OIDC inputs directly.
+      # Login with OIDC first, then fetch the SWA deployment token via CLI
+      # so no long-lived secret needs to be stored in GitHub.
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get SWA deployment token
+        id: swa_token
+        run: |
+          token=$(az staticwebapp secrets list \
+            --name ${{ vars.AZURE_SWA_NAME }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --query "properties.apiKey" -o tsv)
+          echo "::add-mask::$token"
+          echo "token=$token" >> $GITHUB_OUTPUT
+
       - name: Deploy to Azure Static Web Apps (staging environment)
         uses: azure/static-web-apps-deploy@v1
         with:
-          azure_client_id: ${{ vars.AZURE_CLIENT_ID }}
-          azure_tenant_id: ${{ vars.AZURE_TENANT_ID }}
-          azure_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          azure_static_web_apps_api_token: ${{ steps.swa_token.outputs.token }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           skip_app_build: true
