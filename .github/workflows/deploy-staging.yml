@@ -279,7 +279,3 @@ jobs:
           TAG="staging/$(date -u +'%Y-%m-%d-%H%M%S')"
           git tag "$TAG"
           git push origin "$TAG"
-<<<<<<< HEAD
-=======
-
->>>>>>> a710c2a132863e09042445e8ccc949eca42bd080
