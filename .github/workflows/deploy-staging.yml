@@ -39,17 +39,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Turbo cache
-        uses: rharkor/caching-for-turbo@v1.8
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
 
       # Build everything in the full monorepo so turbo's cache works correctly
       # across all packages. Splitting the build (e.g. web-only then pruned) causes
@@ -111,6 +102,26 @@ jobs:
           done
           for app in api publisher content-engine; do
             cp -r "apps/$app/dist/." "pruned/apps/$app/dist/"
+          done
+
+      # npm workspace packages are symlinks (e.g. node_modules/@restropulse/shared ->
+      # ../../packages/shared). Azure's Oryx optimizer moves node_modules to /node_modules
+      # at container root, which breaks relative symlinks. Replace them with real copies
+      # so the paths are stable regardless of where node_modules is extracted.
+      - name: Dereference workspace symlinks in node_modules
+        if: >-
+          inputs.force ||
+          needs.detect-changes.outputs.api == 'true' ||
+          needs.detect-changes.outputs.publisher == 'true' ||
+          needs.detect-changes.outputs.content-engine == 'true'
+        run: |
+          for link in pruned/node_modules/@restropulse/*/; do
+            link="${link%/}"
+            if [ -L "$link" ]; then
+              target=$(readlink -f "$link")
+              rm "$link"
+              cp -r "$target" "$link"
+            fi
           done
 
       - name: Add WebJob run scripts
@@ -229,7 +240,7 @@ jobs:
 
   smoke-tests:
     name: Smoke Tests
-    needs: [detect-changes, deploy-web-staging, deploy-api-staging]
+    needs: [deploy-web-staging, deploy-api-staging]
     if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
     steps:

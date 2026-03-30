@@ -273,8 +273,8 @@ Authentication uses OIDC (Workload Identity Federation) -- no long-lived credent
 
 | Environment | Protection | Variables (not secrets) |
 |-------------|-----------|-------------------------|
-| `staging` | None (auto-deploy) | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME_PROD`, `AZURE_RESOURCE_GROUP`, `STAGING_API_URL`, `STAGING_WEB_URL` |
-| `production` | Required reviewer(s) | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME_PROD`, `AZURE_RESOURCE_GROUP`, `PRODUCTION_API_URL`, `PRODUCTION_WEB_URL` |
+| `staging` | None (auto-deploy) | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME_PROD`, `AZURE_RESOURCE_GROUP`, `STAGING_API_URL`, `STAGING_WEB_URL`, `AZURE_SWA_NAME` |
+| `production` | Required reviewer(s) | `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME_PROD`, `AZURE_RESOURCE_GROUP`, `PRODUCTION_API_URL`, `PRODUCTION_WEB_URL`, `AZURE_SWA_NAME` |
 
 Both environments share the same `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, and `AZURE_WEBAPP_NAME_PROD` values -- there is one App Registration and one App Service. The workflows use `slot-name: staging` to target the staging slot; the production deploy uses `az webapp deployment slot swap` rather than a separate app name.
 

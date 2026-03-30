@@ -17,7 +17,7 @@ RETRY_DELAY=5
 case "$SERVICE" in
   api)
     echo "Smoke testing API at ${BASE_URL}/health ..."
-    RESPONSE=$(curl --fail --silent --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" "${BASE_URL}/health")
+    RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" "${BASE_URL}/health")
     if echo "$RESPONSE" | grep -q '"status"'; then
       echo "API health check passed."
     else
@@ -27,7 +27,7 @@ case "$SERVICE" in
     ;;
   web)
     echo "Smoke testing Web at ${BASE_URL} ..."
-    RESPONSE=$(curl --fail --silent --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" "${BASE_URL}")
+    RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" "${BASE_URL}")
     if echo "$RESPONSE" | grep -q '<div id="root"'; then
       echo "Web smoke test passed."
     else
