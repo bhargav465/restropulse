@@ -262,6 +262,18 @@ jobs:
       # symlinks, which doubles the zip size by re-zipping apps/*/node_modules.
       # Remove the app symlinks first -- apps don't import each other, and the
       # shared package symlinks have already been materialized as real dirs.
+      #
+      # SCM_DO_BUILD_DURING_DEPLOYMENT=false prevents Oryx from running npm ci
+      # after the zip is extracted and overwriting our correct node_modules with
+      # a broken rebuild that lacks @restropulse/* workspace packages.
+      - name: Disable Oryx build for staging slot
+        run: |
+          az webapp config appsettings set \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --slot staging \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false
+
       - name: Deploy to Azure App Service (staging slot)
         run: |
           rm -rf api-bundle/node_modules/@restropulse/api \
