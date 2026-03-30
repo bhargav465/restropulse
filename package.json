@@ -27,9 +27,11 @@
     "// --- AI Tooling ---": "",
     "setup:mcp": "node scripts/setup-mcp.mjs",
     "setup:rtk": "node scripts/setup-rtk.mjs",
-    "reindex": "node scripts/reindex-rag.mjs"
+    "reindex": "node scripts/reindex-rag.mjs",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
     "prettier": "^3.2.0",
     "turbo": "^2.3.0"
   },
