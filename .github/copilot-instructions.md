@@ -118,7 +118,7 @@ packages/
 - Each app has its own `.env` file
 - Service entrypoints must load and validate env via `loadAndValidateEnv` with a local per-service schema
 - See `docs/INFRASTRUCTURE.md` for the full list of environment variables per app
-- Critical shared vars: MONGODB_URI, ENCRYPTION_KEY, META_APP_ID, META_APP_SECRET
+- Critical shared vars: MONGODB_URI, ENCRYPTION_KEY, INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET
 - Payment vars (optional in dev): RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
 
 ## Common Commands

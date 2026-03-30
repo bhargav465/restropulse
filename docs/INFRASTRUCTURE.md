@@ -41,8 +41,8 @@ Rules:
 | MONGODB_DB_NAME                  | No       | restropulse                                      | Database name                              |
 | JWT_SECRET                       | Yes*     | restropulse-dev-secret-change-in-production      | JWT signing secret                         |
 | ENCRYPTION_KEY                   | Yes      | --                                               | 32-byte hex key for AES-256-CBC            |
-| META_APP_ID                      | Yes      | --                                               | Facebook/Meta App ID                       |
-| META_APP_SECRET                  | Yes      | --                                               | Facebook/Meta App Secret                   |
+| INSTAGRAM_APP_ID                 | Yes      | --                                               | Facebook/Meta App ID                       |
+| INSTAGRAM_APP_SECRET             | Yes      | --                                               | Facebook/Meta App Secret                   |
 | INSTAGRAM_REDIRECT_URI           | No       | http://localhost:3001/api/.../callback            | OAuth redirect URI                         |
 | INSTAGRAM_REDIRECT_FRONTEND_URL  | No       | http://localhost:3000                             | Frontend URL for OAuth redirects           |
 | BACKEND_URL                      | No       | http://localhost:3001                             | Backend URL for GDPR status links          |
@@ -92,8 +92,8 @@ Rules:
 | MONGODB_URI      | Yes      | --            | MongoDB connection string        |
 | MONGODB_DB_NAME  | No       | restropulse   | Database name                    |
 | ENCRYPTION_KEY   | Yes      | --            | Must match API's key             |
-| META_APP_ID      | Yes      | --            | For token refresh                |
-| META_APP_SECRET  | Yes      | --            | For token refresh                |
+| INSTAGRAM_APP_ID | Yes      | --            | For token refresh                |
+| INSTAGRAM_APP_SECRET | Yes  | --            | For token refresh                |
 
 ### apps/content-engine (.env)
 
