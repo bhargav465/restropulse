@@ -4,3 +4,4 @@
 @docs/INFRASTRUCTURE.md
 @docs/ARCHITECTURE.md
 @docs/MCP-SETUP.md
+@docs/RTK.md
