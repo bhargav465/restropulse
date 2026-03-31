@@ -133,10 +133,10 @@ jobs:
             --slot staging \
             --target-slot production
 
-  smoke-tests:
-    name: Smoke Tests
-    needs: [swap-api-production, deploy-web-production]
-    if: always() && !failure() && !cancelled()
+  smoke-test-api:
+    name: Smoke Test API
+    needs: swap-api-production
+    if: needs.swap-api-production.result == 'success'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -147,16 +147,28 @@ jobs:
           sparse-checkout: scripts/smoke-test.sh
 
       - name: Smoke test API
-        if: needs.swap-api-production.result == 'success'
         run: bash scripts/smoke-test.sh api "${{ vars.PRODUCTION_API_URL }}"
 
+  smoke-test-web:
+    name: Smoke Test Web
+    needs: deploy-web-production
+    if: needs.deploy-web-production.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          sparse-checkout: scripts/smoke-test.sh
+
       - name: Smoke test Web
-        if: needs.deploy-web-production.result == 'success'
         run: bash scripts/smoke-test.sh web "${{ vars.PRODUCTION_WEB_URL }}"
 
   tag-production:
     name: Tag Production
-    needs: smoke-tests
+    needs: [smoke-test-api, smoke-test-web]
+    if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -272,10 +272,10 @@ jobs:
             --slot staging \
             --startup-file "node apps/api/dist/server.js"
 
-  smoke-tests:
-    name: Smoke Tests
-    needs: [deploy-web-staging, deploy-api-staging]
-    if: always() && !failure() && !cancelled()
+  smoke-test-api:
+    name: Smoke Test API
+    needs: deploy-api-staging
+    if: needs.deploy-api-staging.result == 'success'
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -285,16 +285,27 @@ jobs:
           sparse-checkout: scripts/smoke-test.sh
 
       - name: Smoke test API
-        if: needs.deploy-api-staging.result == 'success'
         run: bash scripts/smoke-test.sh api "${{ vars.STAGING_API_URL }}"
 
+  smoke-test-web:
+    name: Smoke Test Web
+    needs: deploy-web-staging
+    if: needs.deploy-web-staging.result == 'success'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: scripts/smoke-test.sh
+
       - name: Smoke test Web
-        if: needs.deploy-web-staging.result == 'success'
         run: bash scripts/smoke-test.sh web "${{ vars.STAGING_WEB_URL }}"
 
   tag-staging:
     name: Tag Staging
-    needs: smoke-tests
+    needs: [smoke-test-api, smoke-test-web]
+    if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
     permissions:
       contents: write
