@@ -52,5 +52,9 @@
     "terminal.integrated.env.windows": {
         "PYTHONPATH": "${workspaceFolder}/whatsappbusinessapi-bot"
     },
-    "postman.settings.dotenv-detection-notification-visibility": false
+    "postman.settings.dotenv-detection-notification-visibility": false,
+    // Copilot agent hook -- rust token optimization via rtk
+    "chat.agent.preToolUseHook": {
+        "command": "rtk hook copilot"
+    }
 }
