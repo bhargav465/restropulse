@@ -14,9 +14,6 @@ concurrency:
   group: deploy-staging
   cancel-in-progress: false
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   detect-changes:
     name: Detect Changes
@@ -28,7 +25,7 @@ jobs:
       content-engine: ${{ steps.changes.outputs.content-engine }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 2
 
@@ -42,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -59,7 +56,7 @@ jobs:
 
       - name: Upload web artifact
         if: inputs.force || needs.detect-changes.outputs.web == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: apps/web/dist/
@@ -161,7 +158,7 @@ jobs:
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
           needs.detect-changes.outputs.content-engine == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: api-bundle
           path: pruned/
@@ -178,7 +175,7 @@ jobs:
       contents: read
     steps:
       - name: Download web artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: web-dist
           path: web-dist/
@@ -187,7 +184,7 @@ jobs:
       # Login with OIDC first, then fetch the SWA deployment token via CLI
       # so no long-lived secret needs to be stored in GitHub.
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -228,13 +225,13 @@ jobs:
       contents: read
     steps:
       - name: Download API bundle artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: api-bundle
           path: api-bundle/
 
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -284,7 +281,7 @@ jobs:
     environment: staging
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           sparse-checkout: scripts/smoke-test.sh
 
@@ -304,7 +301,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Create staging tag
         run: |

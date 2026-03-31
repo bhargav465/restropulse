@@ -10,7 +10,7 @@ runs:
   using: composite
   steps:
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '22'
         cache: npm
@@ -20,4 +20,4 @@ runs:
       run: npm ci ${{ inputs.npm-flags }}
 
     - name: Turbo cache
-      uses: rharkor/caching-for-turbo@v1.8
+      uses: rharkor/caching-for-turbo@v2
