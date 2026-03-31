@@ -20,4 +20,4 @@ runs:
       run: npm ci ${{ inputs.npm-flags }}
 
     - name: Turbo cache
-      uses: rharkor/caching-for-turbo@v2
+      uses: rharkor/caching-for-turbo@v2.3.11
