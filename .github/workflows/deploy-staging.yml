@@ -112,10 +112,9 @@ jobs:
             cp -r "apps/$app/dist/." "pruned/apps/$app/dist/"
           done
 
-      # npm workspace packages may be symlinks or real directories depending on npm version.
-      # Azure's Oryx optimizer can relocate node_modules, breaking relative symlinks.
-      # Unconditionally copy each pruned/packages/* into node_modules/@restropulse/ so
-      # the packages resolve correctly regardless of Oryx's behavior.
+      # npm workspace packages are symlinks in node_modules/@restropulse/.
+      # The zip-mount deploy (WEBSITE_RUN_FROM_PACKAGE=1) needs real directories,
+      # not symlinks, so we materialize each workspace package into node_modules.
       - name: Materialize workspace packages into node_modules
         if: >-
           inputs.force ||
@@ -237,20 +236,19 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # WEBSITE_RUN_FROM_PACKAGE=1 mounts the deployed zip as a read-only
-      # filesystem, completely bypassing Oryx (both build-time and startup-time).
-      # Without this, Oryx runs npm ci during deploy (creating a broken
-      # node_modules.tar.gz that lacks @restropulse/* workspace packages) and
-      # extracts that tarball on every container restart, wiping our correct
-      # node_modules.
-      # SCM_DO_BUILD_DURING_DEPLOYMENT=false is belt-and-suspenders.
+      # All settings are slot-sticky so staging and production maintain
+      # separate configs (different DBs, secrets, URLs) across slot swaps.
+      # WEBSITE_RUN_FROM_PACKAGE=1 mounts the zip as a read-only filesystem,
+      # bypassing Oryx entirely. SCM_DO_BUILD_DURING_DEPLOYMENT=false is
+      # belt-and-suspenders.
       - name: Configure staging slot for zip-mount deploy
         run: |
           az webapp config appsettings set \
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
             --slot staging \
-            --settings \
+            --slot-settings \
+              NODE_ENV=staging \
               WEBSITE_RUN_FROM_PACKAGE=1 \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false
 
@@ -266,6 +264,7 @@ jobs:
             --slot staging \
             --src-path api-deploy.zip \
             --type zip \
+            --clean true \
             --async false
           az webapp config set \
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \

@@ -112,15 +112,16 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # Ensure both slots run from the deployed zip (bypasses Oryx entirely).
-      # Non-slot-sticky, so this only needs to cover the production slot --
-      # staging already has it set by deploy-staging.yml.
+      # All settings are slot-sticky so production keeps its own config
+      # (NODE_ENV, DB, secrets) across slot swaps. WEBSITE_RUN_FROM_PACKAGE=1
+      # mounts the zip as a read-only filesystem, bypassing Oryx entirely.
       - name: Configure production for zip-mount deploy
         run: |
           az webapp config appsettings set \
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --settings \
+            --slot-settings \
+              NODE_ENV=production \
               WEBSITE_RUN_FROM_PACKAGE=1 \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false
 

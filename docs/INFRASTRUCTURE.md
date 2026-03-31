@@ -155,6 +155,46 @@ Rules:
 - **Fallback**: Manual address text input when API key is not configured
 - **Required APIs**: Maps JavaScript API, Places API
 
+## Azure App Service Settings
+
+The API, publisher, and content-engine run on a single Azure App Service
+(`restropulse-prod-api`) with staging and production deployment slots.
+
+### Deployment Settings
+
+| Setting | Value | Purpose |
+|---------|-------|---------|
+| `WEBSITE_RUN_FROM_PACKAGE` | `1` | Mounts the deployed zip as a read-only filesystem, bypassing Oryx build/startup entirely |
+| `SCM_DO_BUILD_DURING_DEPLOYMENT` | `false` | Belt-and-suspenders: prevents Oryx from running `npm ci` during deployment |
+
+These settings are required because the monorepo uses `@restropulse/*` workspace
+packages that Oryx cannot resolve (it runs `npm ci` without workspace context,
+producing a broken `node_modules`).
+
+### Slot-Sticky Settings
+
+All app settings are **slot-sticky** (marked as "Deployment slot setting" in Azure Portal).
+This means settings stay with their respective slot across slot swaps. Staging and
+production are completely separate environments with different databases, encryption
+keys, secrets, and URLs.
+
+Settings managed by the deploy workflows:
+
+| Setting | Staging Slot | Production Slot |
+|---------|-------------|-----------------|
+| `NODE_ENV` | `staging` | `production` |
+| `WEBSITE_RUN_FROM_PACKAGE` | `1` | `1` |
+| `SCM_DO_BUILD_DURING_DEPLOYMENT` | `false` | `false` |
+
+All other settings (MONGODB_URI, ENCRYPTION_KEY, JWT_SECRET, INSTAGRAM_APP_*,
+CORS_ORIGIN, APPLICATIONINSIGHTS_CONNECTION_STRING, etc.) are configured directly
+on Azure and must also be marked slot-sticky.
+
+### Clean Deployments
+
+The staging deploy uses `az webapp deploy --clean true` to remove stale files
+from previous deployments before extracting the new zip.
+
 ## Token and Timeout Configuration
 
 | Parameter                  | Value         |
@@ -238,7 +278,7 @@ Coverage is enforced on PRs via `config/coverage-baseline.json` (85% minimum for
 Publisher and content-engine run as continuous WebJobs under `App_Data/jobs/continuous/<name>/` on the same App Service as the API.
 
 There is no separate staging Azure resource group. All resources share `restropulse-prod-rg`. Staging isolation is achieved via:
-- App Service: the `staging` deployment slot (`restropulse-prod-api-staging.azurewebsites.net`)
+- App Service: the `staging` deployment slot (`restropulse-prod-api-staging.azurewebsites.net`) with slot-sticky settings (separate DB, secrets, NODE_ENV)
 - SWA: the `staging` preview environment (`victorious-plant-04bc9e400-staging.6.azurestaticapps.net`)
 
 ### Promotion Flow
