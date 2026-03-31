@@ -27,6 +27,8 @@ case "$SERVICE" in
     ;;
   web)
     echo "Smoke testing Web at ${BASE_URL} ..."
+    echo "Waiting 30s for SWA environment to propagate..."
+    sleep 30
     RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}")
     if echo "$RESPONSE" | grep -q '<div id="root"'; then
       echo "Web smoke test passed."
