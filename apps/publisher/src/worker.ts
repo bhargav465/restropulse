@@ -27,7 +27,7 @@ loadAndValidateEnv({
   serviceName: 'publisher',
   envPath: path.resolve(process.cwd(), '.env'),
   schema: z.object({
-    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
     MONGODB_URI: z.string().min(1),
     MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
     INSTAGRAM_APP_ID: z.string().min(1),

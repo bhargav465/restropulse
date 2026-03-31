@@ -38,7 +38,7 @@ const env = loadAndValidateEnv({
   serviceName: 'content-engine',
   envPath: path.resolve(process.cwd(), '.env'),
   schema: z.object({
-    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
     MONGODB_URI: z.string().min(1),
     MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
     ASSET_SERVER_PORT: z.coerce.number().int().positive().default(3002),

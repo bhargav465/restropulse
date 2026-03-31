@@ -61,7 +61,7 @@ const env = loadAndValidateEnv({
     serviceName: 'api',
     envPath: path.resolve(process.cwd(), '.env'),
     schema: z.object({
-        NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+        NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
         PORT: z.coerce.number().int().positive().default(portConfig.api),
         CORS_ORIGIN: z.string().min(1).default(`http://localhost:${portConfig.web}`),
         MONGODB_URI: z.string().min(1),
