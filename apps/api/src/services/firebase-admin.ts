@@ -41,18 +41,13 @@ export function initializeFirebaseAdmin(): void {
             });
             log.info('Firebase Admin initialized with application default credentials');
         }
-        // Option 3: Development mode - use project ID only (limited functionality)
         else {
-            const projectId = process.env.FIREBASE_PROJECT_ID;
-            if (projectId) {
-                admin.initializeApp({
-                    projectId
-                });
-                log.info('Firebase Admin initialized in limited mode (project ID only)');
-            } else {
-                log.warn('Firebase Admin not configured. Set FIREBASE_SERVICE_ACCOUNT_KEY or FIREBASE_PROJECT_ID');
-                return;
-            }
+            log.warn(
+                'Firebase Admin not configured. ' +
+                'Set FIREBASE_SERVICE_ACCOUNT_KEY (JSON string) or ' +
+                'GOOGLE_APPLICATION_CREDENTIALS (file path).'
+            );
+            return;
         }
 
         initialized = true;

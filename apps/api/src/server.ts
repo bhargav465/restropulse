@@ -66,6 +66,8 @@ const env = loadAndValidateEnv({
         CORS_ORIGIN: z.string().min(1).default(`http://localhost:${portConfig.web}`),
         MONGODB_URI: z.string().min(1),
         MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
+        FRONTEND_URL: z.string().url(),
+        BACKEND_URL: z.string().url(),
         RAZORPAY_KEY_ID: z.string().min(1).optional(),
         RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
         RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),

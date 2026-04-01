@@ -120,7 +120,7 @@ router.get('/instagram/oauth-url', async (req: Request, res: Response) => {
 router.get('/instagram/callback', async (req: Request, res: Response) => {
     const { code, state, error: oauthError, error_description } = req.query;
 
-    const frontendCallbackUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendCallbackUrl = process.env.FRONTEND_URL!;
 
     // Handle OAuth errors
     if (oauthError) {
@@ -766,7 +766,7 @@ router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
         );
 
         // Build the status URL
-        const baseUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+        const baseUrl = process.env.BACKEND_URL!;
         const statusUrl = `${baseUrl}/api/integrations/instagram/data-deletion-status?code=${confirmationCode}`;
 
         // Facebook expects this specific response format

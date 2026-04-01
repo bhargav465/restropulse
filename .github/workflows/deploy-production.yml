@@ -22,6 +22,10 @@ jobs:
     name: Build Web
     if: contains(inputs.services, 'web') || inputs.services == 'all'
     runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -31,10 +35,44 @@ jobs:
       - name: Setup Node
         uses: ./.github/actions/setup-node
 
+      - name: Login to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch sensitive web vars from Key Vault
+        run: |
+          MAPS_KEY=$(az keyvault secret show \
+            --vault-name restropulse-prod-kv \
+            --name PROD-WEB-GOOGLE-MAPS-API-KEY \
+            --query "value" -o tsv)
+          echo "::add-mask::$MAPS_KEY"
+          echo "VITE_GOOGLE_MAPS_API_KEY=$MAPS_KEY" >> $GITHUB_ENV
+
+          APPINSIGHTS=$(az keyvault secret show \
+            --vault-name restropulse-prod-kv \
+            --name PROD-WEB-APPINSIGHTS-CONNECTION-STRING \
+            --query "value" -o tsv)
+          echo "::add-mask::$APPINSIGHTS"
+          echo "VITE_APPINSIGHTS_CONNECTION_STRING=$APPINSIGHTS" >> $GITHUB_ENV
+
       - name: Build web
         run: npx turbo build --filter=@restropulse/web
         env:
           NODE_ENV: production
+          VITE_API_URL: ${{ vars.PRODUCTION_API_URL }}/api
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_RAZORPAY_KEY_ID: ${{ vars.VITE_RAZORPAY_KEY_ID }}
+          VITE_TELEMETRY_SAMPLE_RATE: ${{ vars.VITE_TELEMETRY_SAMPLE_RATE }}
+          # VITE_GOOGLE_MAPS_API_KEY and VITE_APPINSIGHTS_CONNECTION_STRING
+          # are injected via $GITHUB_ENV by the KV fetch step above
 
       - name: Upload web artifact
         uses: actions/upload-artifact@v7
@@ -122,7 +160,9 @@ jobs:
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
             --slot-settings \
               NODE_ENV=production \
+              CORS_ORIGIN="${{ vars.PRODUCTION_WEB_URL }}" \
               WEBSITE_RUN_FROM_PACKAGE=1 \
+              WEBSITE_NODE_DEFAULT_VERSION="~22" \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false
 
       - name: Swap staging slot to production
