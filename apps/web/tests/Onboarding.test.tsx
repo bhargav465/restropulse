@@ -621,12 +621,13 @@ describe('Onboarding Component', () => {
         });
     });
 
-    it('should show Resend button after verification email is sent', async () => {
+    it('should show countdown instead of Resend button immediately after sending', async () => {
         render(<Onboarding onComplete={mockOnComplete} />);
         fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'test@email.com' } });
         fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
         await waitFor(() => {
-            expect(screen.getByText(/Resend verification email/i)).toBeInTheDocument();
+            expect(screen.getByText(/Resend in/i)).toBeInTheDocument();
+            expect(screen.queryByText(/Resend verification email/i)).not.toBeInTheDocument();
         });
     });
 

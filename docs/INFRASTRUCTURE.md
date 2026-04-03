@@ -69,8 +69,8 @@ Rules:
 
 | Variable                         | Required | Default                    | Purpose                     |
 |----------------------------------|----------|----------------------------|-----------------------------|
-| VITE_API_URL                     | No       | http://localhost:3001/api  | Backend API base URL        |
-| VITE_APP_URL                     | No       | window.location.origin     | Frontend public URL (used as Firebase email verification continueUrl) |
+| VITE_API_URL                     | Yes*     | (none)                     | Backend API base URL        |
+| VITE_APP_URL                     | Yes*     | (none)                     | Frontend public URL; baked into Firebase email verification continueUrl at build time |
 | VITE_FIREBASE_API_KEY            | Yes*     | dev placeholder            | Firebase Web API key        |
 | VITE_FIREBASE_AUTH_DOMAIN        | Yes*     | dev placeholder            | Firebase auth domain        |
 | VITE_FIREBASE_PROJECT_ID         | Yes*     | dev placeholder            | Firebase project ID         |
@@ -82,7 +82,8 @@ Rules:
 | VITE_APPINSIGHTS_CONNECTION_STRING | No     | (none)                     | App Insights browser SDK    |
 | VITE_TELEMETRY_SAMPLE_RATE      | No       | 100                        | Trace sampling % (1-100)    |
 
-*Required for production; dev uses fallback values.
+*Required for all environments; dev value supplied via .env file, CI value supplied via workflow env block.
+**VITE_FIREBASE_* vars are required for production; dev uses fallback values.
 **VITE_GOOGLE_MAPS_API_KEY is optional; when absent, the onboarding location step falls back to manual address entry.
 **VITE_RAZORPAY_KEY_ID is fetched from the API at checkout time if not set.
 
