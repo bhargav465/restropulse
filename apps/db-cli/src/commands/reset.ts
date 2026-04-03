@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import ora from 'ora';
-import { connect, getConfig, disconnect } from '../config/database.js';
+import { connect, getConfig, promptForConnection, disconnect } from '../config/database.js';
 import { COLLECTIONS } from '../schemas/collections.js';
 import {
     DEFAULT_CITIES,
@@ -10,13 +10,18 @@ import {
 } from '../data/default-data.js';
 
 export async function resetCommand(): Promise<void> {
-    const config = getConfig();
+    const config = await promptForConnection();
     const spinner = ora();
 
     console.log(chalk.red.bold('\nWARNING: You are about to DROP and RECREATE the database!'));
     console.log(chalk.red(`All data in ${chalk.bold(config.database)} will be permanently deleted.`));
-    console.log(chalk.gray('Press Ctrl+C within 10 seconds to cancel...\n'));
-    await new Promise(resolve => setTimeout(resolve, 10000));
+    console.log(chalk.gray('Press Ctrl+C to cancel.\n'));
+
+    for (let i = 10; i > 0; i--) {
+        process.stdout.write(chalk.yellow(`  Starting in ${i}...\r`));
+        await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    process.stdout.write('\n');
 
     try {
         spinner.start('Connecting to MongoDB...');

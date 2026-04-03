@@ -47,11 +47,8 @@ npm run seed
 # Seed with clean (wipe existing data first)
 npm run seed:clean
 
-# Reset test database (drop all, recreate empty)
+# Reset database (prompts for URI + DB name, then 10s safety delay)
 npm run reset
-
-# Reset main database (60s safety delay)
-npm run reset:main
 ```
 
 ### Using the CLI directly

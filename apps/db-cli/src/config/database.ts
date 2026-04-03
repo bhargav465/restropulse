@@ -1,4 +1,6 @@
 import { MongoClient, Db } from 'mongodb';
+import { createInterface } from 'readline/promises';
+import { stdin as input, stdout as output } from 'process';
 import chalk from 'chalk';
 
 export interface DatabaseConfig {
@@ -24,6 +26,59 @@ export function getConfig(): DatabaseConfig {
         uri,
         database,
     };
+}
+
+/**
+ * Interactively prompt for MongoDB connection details.
+ * Shows current env values as defaults; press Enter to keep them.
+ * Updates process.env so subsequent getConfig() and connect() calls
+ * use the values entered here.
+ */
+export async function promptForConnection(): Promise<DatabaseConfig> {
+    const rl = createInterface({ input, output });
+
+    const currentUri = process.env.MONGODB_URI;
+    const currentDb = process.env.MONGODB_DB_NAME || 'restropulse';
+
+    console.log(chalk.cyan('\nDatabase connection'));
+    console.log(chalk.gray('Press Enter to keep the current value shown in brackets.\n'));
+
+    // URI — show redacted hint so credentials are not echoed back in full
+    const uriHint = currentUri
+        ? chalk.gray(`[currently set — ${redactUri(currentUri)}]`)
+        : chalk.yellow('[not set]');
+    const uriInput = await rl.question(`  MongoDB URI ${uriHint}: `);
+    const resolvedUri = uriInput.trim() || currentUri || '';
+
+    if (!resolvedUri) {
+        console.error(chalk.red('\nError: MongoDB URI is required'));
+        rl.close();
+        process.exit(1);
+    }
+
+    // DB name — show full current value as default
+    const dbInput = await rl.question(`  Database name [${currentDb}]: `);
+    const resolvedDb = dbInput.trim() || currentDb;
+
+    rl.close();
+
+    // Apply to env so connect() and getConfig() pick them up
+    process.env.MONGODB_URI = resolvedUri;
+    process.env.MONGODB_DB_NAME = resolvedDb;
+
+    console.log(chalk.gray(`\n  Target: ${redactUri(resolvedUri)} / ${chalk.bold(resolvedDb)}\n`));
+
+    return { uri: resolvedUri, database: resolvedDb };
+}
+
+/** Show only the cluster/host portion of a MongoDB URI, hiding credentials. */
+function redactUri(uri: string): string {
+    try {
+        const parsed = new URL(uri);
+        return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+    } catch {
+        return '***';
+    }
 }
 
 let client: MongoClient | null = null;

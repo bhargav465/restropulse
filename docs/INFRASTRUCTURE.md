@@ -70,6 +70,7 @@ Rules:
 | Variable                         | Required | Default                    | Purpose                     |
 |----------------------------------|----------|----------------------------|-----------------------------|
 | VITE_API_URL                     | No       | http://localhost:3001/api  | Backend API base URL        |
+| VITE_APP_URL                     | No       | window.location.origin     | Frontend public URL (used as Firebase email verification continueUrl) |
 | VITE_FIREBASE_API_KEY            | Yes*     | dev placeholder            | Firebase Web API key        |
 | VITE_FIREBASE_AUTH_DOMAIN        | Yes*     | dev placeholder            | Firebase auth domain        |
 | VITE_FIREBASE_PROJECT_ID         | Yes*     | dev placeholder            | Firebase project ID         |
@@ -231,7 +232,7 @@ from previous deployments before extracting the new zip.
    npm run dev --filter=@restropulse/web   # Frontend only
    ```
 5. For database seeding: `npm run seed --filter=@restropulse/db-cli`
-6. For a fresh empty database: `npm run reset --filter=@restropulse/db-cli` (test) or `npm run reset:main --filter=@restropulse/db-cli` (main, 60s safety delay)
+6. For a fresh empty database: `npm run reset --workspace=@restropulse/db-cli` (prompts for URI + DB name, 10s safety delay)
 
 ## Build and Deploy
 
