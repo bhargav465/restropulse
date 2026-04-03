@@ -97,6 +97,39 @@ restropulse/
 3. Backend creates restaurant, links to user, issues fresh JWT tokens with new restaurantId
 4. Frontend stores new tokens and navigates to DASHBOARD
 
+**React Effect Patterns** (follow these for all new async `useEffect` code):
+
+*Pattern A — One-shot non-idempotent effect (single-use token consumption):*
+Email verification and Instagram OAuth processing consume single-use tokens. These must
+not be triggered on page load — email security scanners auto-follow links and would
+consume the token before the human clicks. Use a confirmation button; only consume
+on user interaction. Guard with a module-level variable (not `useRef`) so the guard
+survives React StrictMode's unmount/remount cycle in development.
+```ts
+let operationAttempted = false;  // module-level, outside component
+
+const handleConfirm = () => {
+    if (operationAttempted) return;
+    operationAttempted = true;
+    // call API that consumes a single-use token
+};
+```
+
+*Pattern B — Async data fetch with stale-request guard:*
+```ts
+useEffect(() => {
+    let isActive = true;
+    fetchData().then(result => {
+        if (!isActive) return;
+        setState(result);
+    });
+    return () => { isActive = false; };
+}, [dep]);
+```
+
+*Pattern C — Event listeners and timers:* Always return a cleanup function. This is
+already done correctly throughout the codebase.
+
 ### apps/api -- REST API
 
 - **Framework**: Express 4 + TypeScript

@@ -58,6 +58,11 @@ const ERROR_MESSAGES: Record<InstagramConnectionError, { title: string; descript
     }
 };
 
+// Module-level flag — Meta OAuth authorization codes are single-use. Without this guard,
+// React StrictMode's unmount/remount cycle would call instagramAPI.handleCallback twice
+// with the same code; the second call would fail because the code was already consumed.
+let callbackProcessed = false;
+
 const InstagramCallback: React.FC<InstagramCallbackProps> = ({ onComplete, onError }) => {
     const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'selecting'>('loading');
     const [message, setMessage] = useState('Processing authorization...');
@@ -67,6 +72,8 @@ const InstagramCallback: React.FC<InstagramCallbackProps> = ({ onComplete, onErr
     const [username, setUsername] = useState<string | null>(null);
 
     useEffect(() => {
+        if (callbackProcessed) return;
+        callbackProcessed = true;
         handleCallback();
     }, []);
 

@@ -105,9 +105,10 @@ interface OnboardingProps {
 }
 
 // Module-level flag: persists across React StrictMode unmount/remount cycles.
-// A component-scoped ref would reset to false on remount, allowing signInWithEmailLink
-// to be called twice — the second call fails with auth/invalid-action-code because the
-// oobCode was already consumed by the first call.
+// Must live here (not in a useRef) because React StrictMode re-initializes refs
+// on remount. Without this guard, a rapid double-click or dev-mode StrictMode
+// remount would call signInWithEmailLink twice — second call fails with
+// auth/invalid-action-code because the oobCode was already consumed.
 let emailVerificationAttempted = false;
 
 /** Reset the email verification guard. Exposed for testing only. */
@@ -163,39 +164,49 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     }, []);
 
     useEffect(() => {
+        // Detect returning from email verification link.
+        // Do NOT consume the oobCode here — set link_ready instead so the user
+        // must click a button. Email security scanners follow links automatically
+        // but don't click buttons; consuming the oobCode on page load would cause
+        // auth/invalid-action-code when the human clicks the link moments later.
         if (isEmailSignInLink()) {
-            if (emailVerificationAttempted) return;
-            emailVerificationAttempted = true;
-            setEmailStatus('verifying');
-            completeEmailVerification()
-                .then((verifiedEmail) => {
-                    if (!isMountedRef.current) return;
-                    if (verifiedEmail) {
-                        setEmail(verifiedEmail);
-                        setEmailStatus('verified');
-                        setEmailError(null);
-                        const savedName = localStorage.getItem('rp_onboarding_name');
-                        if (savedName) {
-                            setUserName(savedName);
-                            localStorage.removeItem('rp_onboarding_name');
-                        }
-                        authAPI.verifyEmail(verifiedEmail).catch(() => {
-                            // Non-fatal: email locally verified; persisted on restaurantAPI.create
-                        });
-                    } else {
-                        setEmailStatus('error');
-                        setEmailError('Could not verify email. Please try again.');
-                    }
-                })
-                .catch((err: unknown) => {
-                    if (!isMountedRef.current) return;
-                    const code = (err as { code?: string })?.code;
-                    console.error('[email-verification] signInWithEmailLink failed', { code, err });
-                    setEmailStatus('error');
-                    setEmailError('Email verification failed. The link may have expired.');
-                });
+            setEmailStatus('link_ready');
         }
     }, []);
+
+    const handleConfirmVerification = () => {
+        if (emailVerificationAttempted) return;
+        emailVerificationAttempted = true;
+        setEmailStatus('verifying');
+        completeEmailVerification()
+            .then((verifiedEmail) => {
+                if (!isMountedRef.current) return;
+                if (verifiedEmail) {
+                    setEmail(verifiedEmail);
+                    setEmailStatus('verified');
+                    setEmailError(null);
+                    const savedName = localStorage.getItem('rp_onboarding_name');
+                    if (savedName) {
+                        setUserName(savedName);
+                        localStorage.removeItem('rp_onboarding_name');
+                    }
+                    authAPI.verifyEmail(verifiedEmail).catch(() => {
+                        // Non-fatal: email locally verified; persisted on restaurantAPI.create
+                    });
+                } else {
+                    setEmailStatus('error');
+                    setEmailError('Could not verify email. Please try again.');
+                }
+            })
+            .catch((err: unknown) => {
+                if (!isMountedRef.current) return;
+                emailVerificationAttempted = false;
+                const code = (err as { code?: string })?.code;
+                console.error('[email-verification] signInWithEmailLink failed', { code, err });
+                setEmailStatus('error');
+                setEmailError('Email verification failed. The link may have expired.');
+            });
+    };
 
     useEffect(() => {
         if (resendCountdown > 0) {
@@ -469,10 +480,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             setEmailError(null);
                         }}
                         placeholder="e.g. arjun@example.com"
-                        disabled={emailStatus === 'verified' || emailStatus === 'sending' || emailStatus === 'verifying'}
+                        disabled={emailStatus === 'verified' || emailStatus === 'sending' || emailStatus === 'verifying' || emailStatus === 'link_ready'}
                         className="flex-1 bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
-                    {emailStatus !== 'verified' && emailStatus !== 'sent' && (
+                    {emailStatus !== 'verified' && emailStatus !== 'sent' && emailStatus !== 'link_ready' && (
                         <button
                             type="button"
                             onClick={handleSendVerification}
@@ -511,6 +522,23 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                                 Resend verification email
                             </button>
                         )}
+                    </div>
+                )}
+
+                {emailStatus === 'link_ready' && (
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                        <p className="text-blue-700 text-sm font-medium">Verification link detected</p>
+                        <p className="text-slate-500 text-xs mt-1">
+                            Click the button below to complete email verification.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={handleConfirmVerification}
+                            className="mt-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+                        >
+                            <CheckCircle2 size={12} />
+                            Confirm verification
+                        </button>
                     </div>
                 )}
 

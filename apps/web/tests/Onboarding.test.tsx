@@ -78,9 +78,12 @@ const mockCreateResponse = {
 /**
  * Fill step 1 (About You) with valid data and click Next.
  * Requires mockEmailVerified() to have been called before render().
+ * Clicks the "Confirm verification" button that appears when returning from a magic link.
  */
 const completeStep1 = async () => {
     fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
     await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
     await waitFor(() => expect(screen.getByRole('heading', { name: /Your Restaurant/i })).toBeInTheDocument());
@@ -160,6 +163,8 @@ describe('Onboarding Component', () => {
         render(<Onboarding onComplete={mockOnComplete} />);
 
         fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John Doe' } });
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled();
     });
@@ -328,6 +333,8 @@ describe('Onboarding Component', () => {
 
         // Step 1 - About You
         fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John' } });
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: /Next/i }));
         await waitFor(() => expect(screen.getByRole('heading', { name: /Your Restaurant/i })).toBeInTheDocument());
@@ -632,25 +639,40 @@ describe('Onboarding Component', () => {
         });
     });
 
-    it('should show verified state when returning from magic link', async () => {
+    it('should show link_ready state when returning from magic link (before confirm)', async () => {
         mockEmailVerified('verified@email.com');
         render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => {
+            expect(screen.getByText(/Verification link detected/i)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument();
+        });
+    });
+
+    it('should show verified state after clicking confirm on magic link return', async () => {
+        mockEmailVerified('verified@email.com');
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
         await waitFor(() => {
             expect(screen.getByText(/Email verified/i)).toBeInTheDocument();
         });
     });
 
-    it('should call authAPI.verifyEmail after successful magic link return', async () => {
+    it('should call authAPI.verifyEmail after clicking confirm on magic link return', async () => {
         mockEmailVerified('verified@email.com');
         render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         expect(authAPI.verifyEmail).toHaveBeenCalledWith('verified@email.com');
     });
 
-    it('should show error when verification fails after magic link click', async () => {
+    it('should show error when verification fails after clicking confirm', async () => {
         (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(true);
         (completeEmailVerification as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Link expired'));
         render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
         await waitFor(() => {
             expect(screen.getByText(/Email verification failed/i)).toBeInTheDocument();
         });
@@ -680,9 +702,19 @@ describe('Onboarding Component', () => {
         });
     });
 
+    it('should disable email input while in link_ready state', async () => {
+        mockEmailVerified();
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+        const emailInput = screen.getByPlaceholderText(/arjun@example\.com/i);
+        expect(emailInput).toBeDisabled();
+    });
+
     it('should disable email input while verified', async () => {
         mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         const emailInput = screen.getByPlaceholderText(/arjun@example\.com/i);
         expect(emailInput).toBeDisabled();
