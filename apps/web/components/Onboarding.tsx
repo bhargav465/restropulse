@@ -98,7 +98,7 @@ import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
 import type { Restaurant, AccountManager, City, EmailVerificationStatus } from '@restropulse/shared';
 import { restaurantAPI, accountManagerAPI, citiesAPI, authAPI } from '../api';
-import { sendEmailVerificationLink, completeEmailVerification, isEmailSignInLink } from '../firebase';
+import { sendEmailVerificationLink, completeEmailVerification, isEmailSignInLink, getStoredVerificationEmail } from '../firebase';
 
 interface OnboardingProps {
     onComplete: (restaurant: Restaurant) => void;
@@ -171,6 +171,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         // auth/invalid-action-code when the human clicks the link moments later.
         if (isEmailSignInLink()) {
             setEmailStatus('link_ready');
+            const storedEmail = getStoredVerificationEmail();
+            if (storedEmail) setEmail(storedEmail);
+            const storedName = localStorage.getItem('rp_onboarding_name');
+            if (storedName) setUserName(storedName);
         }
     }, []);
 
@@ -461,7 +465,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     value={userName}
                     onChange={(e) => setUserName(e.target.value)}
                     placeholder="e.g. Arjun Mehta"
-                    className="w-full bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
+                    disabled={emailStatus === 'link_ready' || emailStatus === 'verifying'}
+                    className="w-full bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
                     autoFocus
                 />
             </div>
@@ -526,18 +531,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 )}
 
                 {emailStatus === 'link_ready' && (
-                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                        <p className="text-blue-700 text-sm font-medium">Verification link detected</p>
-                        <p className="text-slate-500 text-xs mt-1">
-                            Click the button below to complete email verification.
-                        </p>
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+                        <div>
+                            <p className="text-blue-700 text-sm font-medium">Verification link ready</p>
+                            {email && (
+                                <p className="text-slate-500 text-xs mt-0.5">Confirming: {email}</p>
+                            )}
+                        </div>
                         <button
                             type="button"
                             onClick={handleConfirmVerification}
-                            className="mt-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5 transition-colors"
+                            className="w-full px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-slate-900 font-medium rounded-xl text-sm flex items-center justify-center gap-2 transition-all"
                         >
-                            <CheckCircle2 size={12} />
-                            Confirm verification
+                            <CheckCircle2 size={15} />
+                            Confirm email verification
                         </button>
                     </div>
                 )}

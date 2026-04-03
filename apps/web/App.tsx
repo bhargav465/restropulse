@@ -253,8 +253,10 @@ const App: React.FC = () => {
         return (
             <ErrorBoundary>
                 <Onboarding
-                    onComplete={(restaurant) => {
+                    onComplete={async (restaurant) => {
                         setRestaurantData(restaurant);
+                        const sessionData = await authAPI.checkSession().catch(() => null);
+                        if (sessionData) setUserData(sessionData.user ?? null);
                         window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
                         setCurrentView('DASHBOARD');
                     }}

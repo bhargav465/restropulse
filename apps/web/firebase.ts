@@ -162,4 +162,8 @@ export function isEmailSignInLink(): boolean {
     return isSignInWithEmailLink(auth, window.location.href);
 }
 
+export function getStoredVerificationEmail(): string | null {
+    return localStorage.getItem(EMAIL_STORAGE_KEY);
+}
+
 export { auth };

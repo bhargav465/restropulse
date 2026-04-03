@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from './utils/test-utils';
 import Onboarding, { resetEmailVerificationState } from '../components/Onboarding';
 import { restaurantAPI, accountManagerAPI, citiesAPI, authAPI } from '../api';
-import { sendEmailVerificationLink, completeEmailVerification, isEmailSignInLink } from '../firebase';
+import { sendEmailVerificationLink, completeEmailVerification, isEmailSignInLink, getStoredVerificationEmail } from '../firebase';
 
 // Mock API modules
 vi.mock('../api', () => ({
@@ -25,6 +25,7 @@ vi.mock('../firebase', () => ({
     sendEmailVerificationLink: vi.fn(),
     completeEmailVerification: vi.fn(),
     isEmailSignInLink: vi.fn(() => false),
+    getStoredVerificationEmail: vi.fn(() => null),
 }));
 
 // Mock @vis.gl/react-google-maps -- render children directly without real Maps
@@ -82,8 +83,8 @@ const mockCreateResponse = {
  */
 const completeStep1 = async () => {
     fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John' } });
-    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Confirm email verification/i }));
     await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
     await waitFor(() => expect(screen.getByRole('heading', { name: /Your Restaurant/i })).toBeInTheDocument());
@@ -163,8 +164,8 @@ describe('Onboarding Component', () => {
         render(<Onboarding onComplete={mockOnComplete} />);
 
         fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John Doe' } });
-        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
-        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm email verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled();
     });
@@ -333,8 +334,8 @@ describe('Onboarding Component', () => {
 
         // Step 1 - About You
         fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John' } });
-        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
-        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm email verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: /Next/i }));
         await waitFor(() => expect(screen.getByRole('heading', { name: /Your Restaurant/i })).toBeInTheDocument());
@@ -643,16 +644,16 @@ describe('Onboarding Component', () => {
         mockEmailVerified('verified@email.com');
         render(<Onboarding onComplete={mockOnComplete} />);
         await waitFor(() => {
-            expect(screen.getByText(/Verification link detected/i)).toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument();
+            expect(screen.getByText(/Verification link ready/i)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument();
         });
     });
 
     it('should show verified state after clicking confirm on magic link return', async () => {
         mockEmailVerified('verified@email.com');
         render(<Onboarding onComplete={mockOnComplete} />);
-        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
-        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm email verification/i }));
         await waitFor(() => {
             expect(screen.getByText(/Email verified/i)).toBeInTheDocument();
         });
@@ -661,8 +662,8 @@ describe('Onboarding Component', () => {
     it('should call authAPI.verifyEmail after clicking confirm on magic link return', async () => {
         mockEmailVerified('verified@email.com');
         render(<Onboarding onComplete={mockOnComplete} />);
-        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
-        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm email verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         expect(authAPI.verifyEmail).toHaveBeenCalledWith('verified@email.com');
     });
@@ -671,10 +672,44 @@ describe('Onboarding Component', () => {
         (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(true);
         (completeEmailVerification as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Link expired'));
         render(<Onboarding onComplete={mockOnComplete} />);
-        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
-        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm email verification/i }));
         await waitFor(() => {
             expect(screen.getByText(/Email verification failed/i)).toBeInTheDocument();
+        });
+    });
+
+    it('should prepopulate email from localStorage when returning from magic link', async () => {
+        (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        (getStoredVerificationEmail as ReturnType<typeof vi.fn>).mockReturnValue('stored@email.com');
+        (completeEmailVerification as ReturnType<typeof vi.fn>).mockResolvedValue('stored@email.com');
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => {
+            const emailInput = screen.getByPlaceholderText(/arjun@example\.com/i) as HTMLInputElement;
+            expect(emailInput.value).toBe('stored@email.com');
+        });
+    });
+
+    it('should prepopulate name from localStorage when returning from magic link', async () => {
+        (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        (localStorage.getItem as any).mockImplementation((key: string) =>
+            key === 'rp_onboarding_name' ? 'Stored Name' : null
+        );
+        (completeEmailVerification as ReturnType<typeof vi.fn>).mockResolvedValue('test@email.com');
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => {
+            const nameInput = screen.getByPlaceholderText(/Arjun Mehta/i) as HTMLInputElement;
+            expect(nameInput.value).toBe('Stored Name');
+        });
+    });
+
+    it('should show confirming email in link_ready card when email is prepopulated', async () => {
+        (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        (getStoredVerificationEmail as ReturnType<typeof vi.fn>).mockReturnValue('user@example.com');
+        (completeEmailVerification as ReturnType<typeof vi.fn>).mockResolvedValue('user@example.com');
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => {
+            expect(screen.getByText(/Confirming: user@example\.com/i)).toBeInTheDocument();
         });
     });
 
@@ -702,10 +737,18 @@ describe('Onboarding Component', () => {
         });
     });
 
+    it('should disable name input while in link_ready state', async () => {
+        mockEmailVerified();
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
+        const nameInput = screen.getByPlaceholderText(/Arjun Mehta/i);
+        expect(nameInput).toBeDisabled();
+    });
+
     it('should disable email input while in link_ready state', async () => {
         mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
-        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
         const emailInput = screen.getByPlaceholderText(/arjun@example\.com/i);
         expect(emailInput).toBeDisabled();
     });
@@ -713,8 +756,8 @@ describe('Onboarding Component', () => {
     it('should disable email input while verified', async () => {
         mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
-        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm verification/i })).toBeInTheDocument());
-        fireEvent.click(screen.getByRole('button', { name: /Confirm verification/i }));
+        await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
+        fireEvent.click(screen.getByRole('button', { name: /Confirm email verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         const emailInput = screen.getByPlaceholderText(/arjun@example\.com/i);
         expect(emailInput).toBeDisabled();
