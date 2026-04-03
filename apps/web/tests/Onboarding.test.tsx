@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from './utils/test-utils';
-import Onboarding from '../components/Onboarding';
+import Onboarding, { resetEmailVerificationState } from '../components/Onboarding';
 import { restaurantAPI, accountManagerAPI, citiesAPI, authAPI } from '../api';
 import { sendEmailVerificationLink, completeEmailVerification, isEmailSignInLink } from '../firebase';
 
@@ -114,6 +114,7 @@ const completeStep2 = async () => {
 describe('Onboarding Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        resetEmailVerificationState();
         (localStorage.getItem as any).mockReturnValue(null);
         (citiesAPI.getAll as any).mockResolvedValue(mockCitiesResponse);
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue([]);

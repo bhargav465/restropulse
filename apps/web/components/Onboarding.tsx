@@ -104,6 +104,17 @@ interface OnboardingProps {
     onComplete: (restaurant: Restaurant) => void;
 }
 
+// Module-level flag: persists across React StrictMode unmount/remount cycles.
+// A component-scoped ref would reset to false on remount, allowing signInWithEmailLink
+// to be called twice — the second call fails with auth/invalid-action-code because the
+// oobCode was already consumed by the first call.
+let emailVerificationAttempted = false;
+
+/** Reset the email verification guard. Exposed for testing only. */
+export function resetEmailVerificationState(): void {
+    emailVerificationAttempted = false;
+}
+
 type OnboardingStep = 1 | 2 | 3;
 
 const STEP_LABELS = ['About You', 'Your Restaurant', 'Account Manager'];
@@ -113,7 +124,6 @@ const STEP_LABELS = ['About You', 'Your Restaurant', 'Account Manager'];
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const googleMapsApiKey = getGoogleMapsApiKey() || '';
     const isMountedRef = useRef(true);
-    const emailVerificationAttemptedRef = useRef(false);
     const [step, setStep] = useState<OnboardingStep>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -154,8 +164,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     useEffect(() => {
         if (isEmailSignInLink()) {
-            if (emailVerificationAttemptedRef.current) return;
-            emailVerificationAttemptedRef.current = true;
+            if (emailVerificationAttempted) return;
+            emailVerificationAttempted = true;
             setEmailStatus('verifying');
             completeEmailVerification()
                 .then((verifiedEmail) => {
