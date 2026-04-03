@@ -1,5 +1,5 @@
 import { Db } from 'mongodb';
-import { getArchivedAccountsCollection } from './connection.js';
+import { getArchivedAccountsCollection, toObjectId } from './connection.js';
 import type { ArchivedAccount, AccountDeletionInitiator } from '@restropulse/shared';
 
 export async function archiveAccount(
@@ -17,8 +17,8 @@ export async function archiveAccount(
     initiator,
     database,
     data: {
-      users:             userId        ? await db.collection('users').find({ _id: userId as any }).toArray()             : [],
-      restaurants:       restaurantId  ? await db.collection('restaurants').find({ _id: restaurantId as any }).toArray() : [],
+      users:             userId        ? await db.collection('users').find({ _id: toObjectId(userId) as any }).toArray()             : [],
+      restaurants:       restaurantId  ? await db.collection('restaurants').find({ _id: toObjectId(restaurantId) as any }).toArray() : [],
       posts:             restaurantId  ? await db.collection('posts').find({ restaurantId }).toArray()                   : [],
       contentStrategies: restaurantId  ? await db.collection('contentStrategies').find({ restaurantId }).toArray()       : [],
       strategyCycles:    restaurantId  ? await db.collection('strategyCycles').find({ restaurantId }).toArray()          : [],
@@ -31,6 +31,30 @@ export async function archiveAccount(
 
   const result = await db.collection('archivedAccounts').insertOne(archive as any);
   return result.insertedId.toString();
+}
+
+export async function deleteAccountData(
+  db: Db,
+  userId: string | null,
+  restaurantId: string | null,
+): Promise<void> {
+  if (restaurantId) {
+    for (const col of [
+      'posts',
+      'contentStrategies',
+      'strategyCycles',
+      'subscriptions',
+      'couponRedemptions',
+      'creditPurchases',
+      'invoices',
+    ]) {
+      await db.collection(col).deleteMany({ restaurantId });
+    }
+    await db.collection('restaurants').deleteOne({ _id: toObjectId(restaurantId) as any });
+  }
+  if (userId) {
+    await db.collection('users').deleteOne({ _id: toObjectId(userId) as any });
+  }
 }
 
 export async function findArchivedAccountsByRestaurant(restaurantId: string) {

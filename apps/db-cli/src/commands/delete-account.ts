@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { connect, getConfig, disconnect } from '../config/database.js';
-import { archiveAccount } from '@restropulse/db';
+import { archiveAccount, toObjectId } from '@restropulse/db';
 
 interface DeleteAccountOptions {
     phone?: string;
@@ -71,11 +71,11 @@ export async function deleteAccountCommand(options: DeleteAccountOptions): Promi
         const counts: Record<string, number> = {};
 
         if (userId) {
-            counts['users'] = await db.collection('users').countDocuments({ _id: userId as any });
+            counts['users'] = await db.collection('users').countDocuments({ _id: toObjectId(userId) as any });
         }
 
         if (restaurantId) {
-            counts['restaurants'] = await db.collection('restaurants').countDocuments({ _id: restaurantId as any });
+            counts['restaurants'] = await db.collection('restaurants').countDocuments({ _id: toObjectId(restaurantId) as any });
             counts['posts'] = await db.collection('posts').countDocuments({ restaurantId });
             counts['contentStrategies'] = await db.collection('contentStrategies').countDocuments({ restaurantId });
             counts['strategyCycles'] = await db.collection('strategyCycles').countDocuments({ restaurantId });
@@ -131,14 +131,14 @@ export async function deleteAccountCommand(options: DeleteAccountOptions): Promi
             }
 
             spinner.start('Deleting restaurant...');
-            const r = await db.collection('restaurants').deleteOne({ _id: restaurantId as any });
+            const r = await db.collection('restaurants').deleteOne({ _id: toObjectId(restaurantId) as any });
             results['restaurants'] = r.deletedCount;
             spinner.succeed(`Deleted ${r.deletedCount} restaurant`);
         }
 
         if (userId) {
             spinner.start('Deleting user...');
-            const r = await db.collection('users').deleteOne({ _id: userId as any });
+            const r = await db.collection('users').deleteOne({ _id: toObjectId(userId) as any });
             results['users'] = r.deletedCount;
             spinner.succeed(`Deleted ${r.deletedCount} user`);
         }

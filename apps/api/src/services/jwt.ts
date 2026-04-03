@@ -13,7 +13,7 @@ export interface TokenPayload {
     userId: string;
     phone: string;
     restaurantId: string;
-    role?: string;
+    role: string;
     type: 'access' | 'refresh';
 }
 
@@ -25,9 +25,8 @@ export interface TokenPair {
 /**
  * Generate access and refresh tokens for a user
  */
-export function generateTokens(userId: string, phone: string, restaurantId: string, role?: string): TokenPair {
-    const payload: TokenPayload = { userId, phone, restaurantId, type: 'access' };
-    if (role) payload.role = role;
+export function generateTokens(userId: string, phone: string, restaurantId: string, role: string): TokenPair {
+    const payload: TokenPayload = { userId, phone, restaurantId, role, type: 'access' };
 
     const accessToken = jwt.sign(
         { ...payload } as TokenPayload,
@@ -70,9 +69,9 @@ export function refreshAccessToken(refreshToken: string): string | null {
         userId: payload.userId,
         phone: payload.phone,
         restaurantId: payload.restaurantId,
+        role: payload.role,
         type: 'access',
     };
-    if (payload.role) refreshPayload.role = payload.role;
 
     const accessToken = jwt.sign(
         refreshPayload,

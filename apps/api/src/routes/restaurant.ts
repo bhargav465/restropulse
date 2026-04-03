@@ -68,7 +68,7 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
     });
 
     // Issue fresh tokens with the new restaurantId
-    const tokens = generateTokens(userId, req.user!.phone, restaurant.id);
+    const tokens = generateTokens(userId, req.user!.phone, restaurant.id, 'OWNER');
 
     res.status(201).json({
         success: true,

@@ -107,7 +107,7 @@ export const mockStrategyCycle = {
 };
 
 export function generateAuthToken(): string {
-    const tokens = generateTokens(mockUser.id, mockUser.phone, mockUser.restaurantId);
+    const tokens = generateTokens(mockUser.id, mockUser.phone, mockUser.restaurantId, mockUser.role);
     return tokens.accessToken;
 }
 

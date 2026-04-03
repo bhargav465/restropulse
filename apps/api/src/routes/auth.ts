@@ -84,7 +84,7 @@ router.post('/firebase', handle(async (req: Request, res: Response) => {
     }
 
     // Generate our own JWT tokens for API authorization
-    const tokens = generateTokens(user.id, phone, user.restaurantId);
+    const tokens = generateTokens(user.id, phone, user.restaurantId, user.role);
 
     res.json({
         success: true,
@@ -199,7 +199,7 @@ router.post('/verify-otp', handle(async (req: Request<{}, {}, OtpVerifyRequest>,
     }
 
     // Generate JWT tokens
-    const tokens = generateTokens(user.id, phone, user.restaurantId);
+    const tokens = generateTokens(user.id, phone, user.restaurantId, user.role);
 
     res.json({
         success: true,
@@ -251,7 +251,7 @@ router.post('/login', handle(async (req: Request<{}, {}, LoginRequest>, res: Res
     const user = await findUserByEmail(email);
 
     if (user && password) {
-        const tokens = generateTokens(user.id, user.phone, user.restaurantId);
+        const tokens = generateTokens(user.id, user.phone, user.restaurantId, user.role);
         res.json({
             success: true,
             user,

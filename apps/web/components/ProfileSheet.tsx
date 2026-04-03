@@ -3,7 +3,8 @@ import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
 import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft } from 'lucide-react';
 import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Restaurant, InstagramConnectionError, InstagramAccount, Invoice } from '@restropulse/shared';
-import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI } from '../api';
+import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, configAPI, accountAPI } from '../api';
+import ConfirmDialog from './ConfirmDialog';
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { FacebookIcon, InstagramIcon, WhatsAppIcon } from './BrandIcons';
 import { ActionNotice } from './ActionNotice';
@@ -151,6 +152,9 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionErrorKey, setActionErrorKey] = useState(0);
+    const [deleteAccountEnabled, setDeleteAccountEnabled] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
     const loadSubscriptionData = async () => {
         setSubscriptionLoading(true);
@@ -178,6 +182,9 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     useEffect(() => {
         if (!isOpen) return;
         loadSubscriptionData();
+        configAPI.getFeatures()
+            .then(flags => setDeleteAccountEnabled(flags.deleteAccount))
+            .catch(() => setDeleteAccountEnabled(false));
     }, [isOpen]);
 
     // Sync Instagram state when restaurantData changes
@@ -395,6 +402,21 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         if (modal) {
             modal.scrollTo?.({ top: 0, behavior: 'smooth' });
             modal.scrollTop = 0;
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (isDeletingAccount) return;
+        setIsDeletingAccount(true);
+        try {
+            await accountAPI.delete();
+            onLogout();
+        } catch (err: any) {
+            setShowDeleteConfirm(false);
+            setActionError(err.message || 'Failed to delete account. Please try again.');
+            setActionErrorKey((k) => k + 1);
+        } finally {
+            setIsDeletingAccount(false);
         }
     };
 
@@ -1139,12 +1161,21 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                             </div>
                             <span className="text-sm font-medium text-slate-700">Log Out</span>
                         </button>
-                        <button onClick={() => setActionError('To delete your account, please contact your account manager. They will guide you through the process.')} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-red-50 group">
-                            <div className="w-9 h-9 bg-red-50 text-red-400 group-hover:text-red-500 rounded-lg flex items-center justify-center">
-                                <Trash2 size={18} />
-                            </div>
-                            <span className="text-sm font-medium text-red-500 group-hover:text-red-600">Delete Account</span>
-                        </button>
+                        {deleteAccountEnabled ? (
+                            <button onClick={() => setShowDeleteConfirm(true)} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-red-50 group">
+                                <div className="w-9 h-9 bg-red-50 text-red-400 group-hover:text-red-500 rounded-lg flex items-center justify-center">
+                                    <Trash2 size={18} />
+                                </div>
+                                <span className="text-sm font-medium text-red-500 group-hover:text-red-600">Delete Account</span>
+                            </button>
+                        ) : (
+                            <button onClick={() => setActionError('To delete your account, please contact your account manager. They will guide you through the process.')} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-red-50 group">
+                                <div className="w-9 h-9 bg-red-50 text-red-400 group-hover:text-red-500 rounded-lg flex items-center justify-center">
+                                    <Trash2 size={18} />
+                                </div>
+                                <span className="text-sm font-medium text-red-500 group-hover:text-red-600">Delete Account</span>
+                            </button>
+                        )}
                     </div>
 
                     <div className="h-24"></div>
@@ -1157,6 +1188,21 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             {showInstagramErrorModal && <InstagramErrorModal />}
             {showAccountPicker && <AccountPickerModal />}
             {showSetupGuide && <InstagramSetupGuide />}
+            {showDeleteConfirm && (
+                <ConfirmDialog
+                    title="Delete Account"
+                    message="This action is permanent and cannot be undone."
+                    details={[
+                        'Your restaurant profile and all account data will be permanently deleted.',
+                        'All posts, content strategies, and scheduling history will be removed.',
+                        'Your active subscription will be cancelled immediately -- no refund for remaining days already paid.',
+                        'All billing records and invoices will be removed.',
+                    ]}
+                    confirmLabel={isDeletingAccount ? 'Deleting...' : 'Delete My Account'}
+                    onConfirm={handleDeleteAccount}
+                    onCancel={() => !isDeletingAccount && setShowDeleteConfirm(false)}
+                />
+            )}
         </>
     );
 };

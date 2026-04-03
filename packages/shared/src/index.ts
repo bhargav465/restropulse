@@ -353,6 +353,12 @@ export interface SubscribeRequest {
   couponCode?: string;
 }
 
+// ----- Feature Flags -----
+
+export interface FeatureFlags {
+  deleteAccount: boolean;
+}
+
 // ----- Account Deletion / Archive -----
 
 export type AccountDeletionInitiator = 'CLI' | 'API' | 'ADMIN';

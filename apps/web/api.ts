@@ -1,4 +1,4 @@
-import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice } from '@restropulse/shared';
+import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags } from '@restropulse/shared';
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { getApiUrl } from './utils/env';
 
@@ -482,6 +482,21 @@ export const invoiceAPI = {
     getById: async (id: string): Promise<Invoice> => {
         const response = await fetchAPI<ApiResponse<Invoice>>(`/invoices/${id}`);
         return response.data!;
+    },
+};
+
+// Config API
+export const configAPI = {
+    getFeatures: async (): Promise<FeatureFlags> => {
+        const res = await fetchAPI<ApiResponse<FeatureFlags>>('/config/features');
+        return res.data ?? { deleteAccount: false };
+    },
+};
+
+// Account API
+export const accountAPI = {
+    delete: async (): Promise<void> => {
+        await fetchAPI<ApiResponse<void>>('/account', { method: 'DELETE' });
     },
 };
 

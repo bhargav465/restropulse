@@ -18,6 +18,8 @@ import subscriptionRoutes from './routes/subscriptions.js';
 import couponRoutes from './routes/coupons.js';
 import creditPackRoutes from './routes/credit-packs.js';
 import invoiceRoutes from './routes/invoices.js';
+import configRoutes from './routes/config.js';
+import accountRoutes from './routes/account.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -57,6 +59,8 @@ function getPortConfig(): PortConfig {
 
 const portConfig = getPortConfig();
 
+const booleanFlag = z.preprocess((v) => v === 'true', z.boolean()).default(false);
+
 const env = loadAndValidateEnv({
     serviceName: 'api',
     envPath: path.resolve(process.cwd(), '.env'),
@@ -71,6 +75,7 @@ const env = loadAndValidateEnv({
         RAZORPAY_KEY_ID: z.string().min(1).optional(),
         RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
         RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
+        FEATURE_DELETE_ACCOUNT: booleanFlag,
     }).passthrough(),
 });
 
@@ -117,6 +122,8 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/credit-packs', creditPackRoutes);
 app.use('/api/invoices', invoiceRoutes);
+app.use('/api/config', configRoutes);
+app.use('/api/account', accountRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

@@ -692,7 +692,7 @@ describe('Restaurant Routes - Unit Tests', () => {
 
     describe('POST /api/restaurant (Onboarding)', () => {
         const newUserToken = (() => {
-            const tokens = generateTokens('u-new', '+919000000000', '');
+            const tokens = generateTokens('u-new', '+919000000000', '', 'OWNER');
             return tokens.accessToken;
         })();
 
