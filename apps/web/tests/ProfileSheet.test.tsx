@@ -75,6 +75,12 @@ vi.mock('../api', () => ({
             { id: 'inv2', restaurantId: 'r1', type: 'CREDIT_PURCHASE', amountPaise: 9900, currency: 'INR', status: 'paid', description: '10 Credits', paidAt: '2026-02-15' },
         ]),
     },
+    configAPI: {
+        getFeatures: vi.fn().mockResolvedValue({ deleteAccount: false }),
+    },
+    accountAPI: {
+        delete: vi.fn(),
+    },
 }));
 
 import { subscriptionAPI, instagramAPI, couponAPI, creditPacksAPI, invoiceAPI, restaurantAPI } from '../api';

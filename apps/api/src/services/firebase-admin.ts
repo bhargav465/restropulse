@@ -41,6 +41,11 @@ export function initializeFirebaseAdmin(): void {
             });
             log.info('Firebase Admin initialized with application default credentials');
         }
+        // Option 3: Development mode with project ID only (limited functionality)
+        else if (process.env.FIREBASE_PROJECT_ID) {
+            admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
+            log.info('Firebase Admin initialized in development mode with project ID only');
+        }
         else {
             log.warn(
                 'Firebase Admin not configured. ' +

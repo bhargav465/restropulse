@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
-import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft } from 'lucide-react';
+import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft, Phone, Mail } from 'lucide-react';
 import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Restaurant, InstagramConnectionError, InstagramAccount, Invoice } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, configAPI, accountAPI } from '../api';
 import ConfirmDialog from './ConfirmDialog';
@@ -16,6 +16,8 @@ interface ProfileSheetProps {
     onLogout: () => void;
     restaurantData: Restaurant;
     userName: string;
+    userPhone?: string;
+    userEmail?: string;
     onRestaurantUpdate: (restaurant: Restaurant) => void;
     autoOpenInstagramSetup?: boolean;
     onAutoOpenHandled?: () => void;
@@ -115,7 +117,7 @@ function getCityFromAddress(address: string): string {
 }
 
 
-const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled }) => {
+const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled }) => {
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
 
@@ -998,7 +1000,20 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                         <div className="flex-1 min-w-0">
                             <h2 className="text-xl font-bold text-slate-800 truncate">{userName}</h2>
                             <p className="text-sm text-slate-500 truncate">{restaurantData.name}</p>
-                            {city && <p className="text-xs text-slate-400 mt-0.5">{city}</p>}
+                            <div className="flex flex-col gap-1 mt-2">
+                                {userPhone && (
+                                    <span className="flex items-center gap-1.5 text-sm text-slate-400">
+                                        <Phone size={13} className="shrink-0" />
+                                        {userPhone.replace(/^\+91(\d)/, '+91 $1')}
+                                    </span>
+                                )}
+                                {userEmail && !userEmail.endsWith('@phone.restropulse.local') && (
+                                    <span className="flex items-center gap-1.5 text-sm text-slate-400">
+                                        <Mail size={13} className="shrink-0" />
+                                        <span className="truncate">{userEmail}</span>
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
 

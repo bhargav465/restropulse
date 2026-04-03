@@ -113,6 +113,7 @@ const STEP_LABELS = ['About You', 'Your Restaurant', 'Account Manager'];
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const googleMapsApiKey = getGoogleMapsApiKey() || '';
     const isMountedRef = useRef(true);
+    const emailVerificationAttemptedRef = useRef(false);
     const [step, setStep] = useState<OnboardingStep>(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -152,12 +153,21 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
     useEffect(() => {
         if (isEmailSignInLink()) {
+            if (emailVerificationAttemptedRef.current) return;
+            emailVerificationAttemptedRef.current = true;
             setEmailStatus('verifying');
             completeEmailVerification()
                 .then((verifiedEmail) => {
+                    if (!isMountedRef.current) return;
                     if (verifiedEmail) {
                         setEmail(verifiedEmail);
                         setEmailStatus('verified');
+                        setEmailError(null);
+                        const savedName = localStorage.getItem('rp_onboarding_name');
+                        if (savedName) {
+                            setUserName(savedName);
+                            localStorage.removeItem('rp_onboarding_name');
+                        }
                         window.history.replaceState({}, '', window.location.pathname);
                         authAPI.verifyEmail(verifiedEmail).catch(() => {
                             // Non-fatal: email locally verified; persisted on restaurantAPI.create
@@ -168,6 +178,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     }
                 })
                 .catch(() => {
+                    if (!isMountedRef.current) return;
                     setEmailStatus('error');
                     setEmailError('Email verification failed. The link may have expired.');
                 });
@@ -182,6 +193,9 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         setEmailStatus('sending');
         setEmailError(null);
         try {
+            if (userName.trim()) {
+                localStorage.setItem('rp_onboarding_name', userName.trim());
+            }
             await sendEmailVerificationLink(email);
             setEmailStatus('sent');
         } catch (err: any) {

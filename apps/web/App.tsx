@@ -286,6 +286,8 @@ const App: React.FC = () => {
                     onLogout={handleLogout}
                     restaurantData={restaurantData}
                     userName={userData?.name || ''}
+                    userPhone={userData?.phone}
+                    userEmail={userData?.email}
                     onRestaurantUpdate={(updated) => setRestaurantData(updated)}
                     autoOpenInstagramSetup={autoOpenInstagramSetup}
                     onAutoOpenHandled={() => setAutoOpenInstagramSetup(false)}
