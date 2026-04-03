@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from './utils/test-utils';
 import Onboarding from '../components/Onboarding';
-import { restaurantAPI, accountManagerAPI, citiesAPI } from '../api';
+import { restaurantAPI, accountManagerAPI, citiesAPI, authAPI } from '../api';
+import { sendEmailVerificationLink, completeEmailVerification, isEmailSignInLink } from '../firebase';
 
 // Mock API modules
 vi.mock('../api', () => ({
@@ -14,6 +15,16 @@ vi.mock('../api', () => ({
     citiesAPI: {
         getAll: vi.fn(),
     },
+    authAPI: {
+        verifyEmail: vi.fn(),
+    },
+}));
+
+// Mock Firebase email verification helpers
+vi.mock('../firebase', () => ({
+    sendEmailVerificationLink: vi.fn(),
+    completeEmailVerification: vi.fn(),
+    isEmailSignInLink: vi.fn(() => false),
 }));
 
 // Mock @vis.gl/react-google-maps -- render children directly without real Maps
@@ -28,6 +39,16 @@ vi.mock('@vis.gl/react-google-maps', () => ({
 vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', '');
 
 const mockOnComplete = vi.fn();
+
+/**
+ * Set up firebase mocks so the component treats the current URL as a returning
+ * magic-link verification and immediately enters 'verified' state.
+ * Must be called BEFORE render().
+ */
+const mockEmailVerified = (email = 'john@test.com') => {
+    (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    (completeEmailVerification as ReturnType<typeof vi.fn>).mockResolvedValue(email);
+};
 
 const mockCitiesResponse = [
     { id: 'city-bangalore', name: 'Bangalore', defaultZone: 'HQ' },
@@ -54,10 +75,13 @@ const mockCreateResponse = {
     refreshToken: 'new-refresh-token',
 };
 
-/** Fill step 1 (About You) with valid data and click Next */
+/**
+ * Fill step 1 (About You) with valid data and click Next.
+ * Requires mockEmailVerified() to have been called before render().
+ */
 const completeStep1 = async () => {
     fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John' } });
-    fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'john@test.com' } });
+    await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /Next/i }));
     await waitFor(() => expect(screen.getByRole('heading', { name: /Your Restaurant/i })).toBeInTheDocument());
 };
@@ -93,6 +117,11 @@ describe('Onboarding Component', () => {
         (localStorage.getItem as any).mockReturnValue(null);
         (citiesAPI.getAll as any).mockResolvedValue(mockCitiesResponse);
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue([]);
+        (authAPI.verifyEmail as any).mockResolvedValue(undefined);
+        // Default: not returning from a magic link
+        (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(false);
+        (completeEmailVerification as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+        (sendEmailVerificationLink as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     });
 
     afterEach(() => {
@@ -107,6 +136,7 @@ describe('Onboarding Component', () => {
         expect(screen.getByText(/Welcome to RestroPulse/i)).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/Arjun Mehta/i)).toBeInTheDocument();
         expect(screen.getByPlaceholderText(/arjun@example\.com/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Verify/i })).toBeInTheDocument();
     });
 
     it('should disable Next button when fields are incomplete', () => {
@@ -119,22 +149,24 @@ describe('Onboarding Component', () => {
         fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John' } });
         expect(nextBtn).toBeDisabled();
 
-        // Name filled but invalid email
-        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'notanemail' } });
+        // Name + valid email format, but email NOT verified — still disabled
+        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'john@test.com' } });
         expect(nextBtn).toBeDisabled();
     });
 
-    it('should enable Next button with valid name and email', () => {
+    it('should enable Next button with valid name and verified email', async () => {
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
 
         fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John Doe' } });
-        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'john@test.com' } });
+        await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         expect(screen.getByRole('button', { name: /Next/i })).not.toBeDisabled();
     });
 
     // --- Step Navigation ---
 
     it('should navigate from step 1 to step 2 (Your Restaurant)', async () => {
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
 
@@ -142,6 +174,7 @@ describe('Onboarding Component', () => {
     });
 
     it('should navigate back from step 2 to step 1', async () => {
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
 
@@ -160,6 +193,7 @@ describe('Onboarding Component', () => {
     // --- Step 2: Your Restaurant (city + name + cuisine + address) ---
 
     it('should show city dropdown, restaurant fields, and manual address input on step 2', async () => {
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
 
@@ -181,12 +215,9 @@ describe('Onboarding Component', () => {
     });
 
     it('should disable Next on step 2 until all fields are filled', async () => {
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
-
-        fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John' } });
-        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'john@test.com' } });
-        fireEvent.click(screen.getByRole('button', { name: /Next/i }));
-        await waitFor(() => expect(screen.getByRole('heading', { name: /Your Restaurant/i })).toBeInTheDocument());
+        await completeStep1();
 
         expect(screen.getByText('Select city')).toBeInTheDocument();
 
@@ -215,6 +246,7 @@ describe('Onboarding Component', () => {
     it('should show city label and fetch managers on step 3', async () => {
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -231,6 +263,7 @@ describe('Onboarding Component', () => {
     it('should show manager cards on step 3', async () => {
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -244,6 +277,7 @@ describe('Onboarding Component', () => {
     it('should show "no managers" message when none found', async () => {
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue([]);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -256,6 +290,7 @@ describe('Onboarding Component', () => {
     it('should disable Get Started when no manager is selected', async () => {
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -270,6 +305,7 @@ describe('Onboarding Component', () => {
         const singleManager = [mockManagersResponse[0]];
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(singleManager);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -286,11 +322,12 @@ describe('Onboarding Component', () => {
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
         (restaurantAPI.create as any).mockResolvedValue(mockCreateResponse);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
 
         // Step 1 - About You
         fireEvent.change(screen.getByPlaceholderText(/Arjun Mehta/i), { target: { value: 'John' } });
-        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'john@test.com' } });
+        await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: /Next/i }));
         await waitFor(() => expect(screen.getByRole('heading', { name: /Your Restaurant/i })).toBeInTheDocument());
 
@@ -339,6 +376,7 @@ describe('Onboarding Component', () => {
         (restaurantAPI.create as any).mockRejectedValue(new Error('Server error'));
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -361,6 +399,7 @@ describe('Onboarding Component', () => {
         (restaurantAPI.create as any).mockImplementation(() => new Promise(() => { }));
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -392,6 +431,7 @@ describe('Onboarding Component', () => {
         // Return managers with two different zones
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -431,6 +471,7 @@ describe('Onboarding Component', () => {
         ];
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(singleZoneManagers);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -450,6 +491,7 @@ describe('Onboarding Component', () => {
     it('should render Google Maps address input when API key is set', async () => {
         vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', 'test-api-key');
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
 
@@ -478,6 +520,7 @@ describe('Onboarding Component', () => {
 
         vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', 'test-api-key');
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
 
@@ -504,6 +547,7 @@ describe('Onboarding Component', () => {
     it('should deselect manager when clicking the selected manager again', async () => {
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(mockManagersResponse);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -547,6 +591,7 @@ describe('Onboarding Component', () => {
         ];
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue(managersNoAvatar);
 
+        mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
         await completeStep1();
         await completeStep2();
@@ -556,6 +601,89 @@ describe('Onboarding Component', () => {
         });
         // Avatar img should not be rendered; instead the icon div
         expect(screen.queryByAltText('No Avatar Manager')).not.toBeInTheDocument();
+    });
+
+    // --- Email Verification ---
+
+    it('should render email input and Verify button on step 1', () => {
+        render(<Onboarding onComplete={mockOnComplete} />);
+        expect(screen.getByPlaceholderText(/arjun@example\.com/i)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Verify/i })).toBeInTheDocument();
+    });
+
+    it('should send verification email on Verify click', async () => {
+        render(<Onboarding onComplete={mockOnComplete} />);
+        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'test@email.com' } });
+        fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
+        await waitFor(() => {
+            expect(sendEmailVerificationLink).toHaveBeenCalledWith('test@email.com');
+            expect(screen.getByText(/Verification email sent/i)).toBeInTheDocument();
+        });
+    });
+
+    it('should show Resend button after verification email is sent', async () => {
+        render(<Onboarding onComplete={mockOnComplete} />);
+        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'test@email.com' } });
+        fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
+        await waitFor(() => {
+            expect(screen.getByText(/Resend verification email/i)).toBeInTheDocument();
+        });
+    });
+
+    it('should show verified state when returning from magic link', async () => {
+        mockEmailVerified('verified@email.com');
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => {
+            expect(screen.getByText(/Email verified/i)).toBeInTheDocument();
+        });
+    });
+
+    it('should call authAPI.verifyEmail after successful magic link return', async () => {
+        mockEmailVerified('verified@email.com');
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
+        expect(authAPI.verifyEmail).toHaveBeenCalledWith('verified@email.com');
+    });
+
+    it('should show error when verification fails after magic link click', async () => {
+        (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(true);
+        (completeEmailVerification as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Link expired'));
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => {
+            expect(screen.getByText(/Email verification failed/i)).toBeInTheDocument();
+        });
+    });
+
+    it('should reset emailStatus to idle when user edits email after sending', async () => {
+        render(<Onboarding onComplete={mockOnComplete} />);
+        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'first@email.com' } });
+        fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
+        await waitFor(() => expect(screen.getByText(/Verification email sent/i)).toBeInTheDocument());
+
+        // User changes the email — status resets, Verify button reappears
+        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'second@email.com' } });
+        await waitFor(() => {
+            expect(screen.getByRole('button', { name: /Verify/i })).toBeInTheDocument();
+            expect(screen.queryByText(/Verification email sent/i)).not.toBeInTheDocument();
+        });
+    });
+
+    it('should show error for invalid email format on Verify click', async () => {
+        render(<Onboarding onComplete={mockOnComplete} />);
+        fireEvent.change(screen.getByPlaceholderText(/arjun@example\.com/i), { target: { value: 'notanemail' } });
+        fireEvent.click(screen.getByRole('button', { name: /Verify/i }));
+        await waitFor(() => {
+            expect(screen.getByText(/Please enter a valid email address/i)).toBeInTheDocument();
+            expect(sendEmailVerificationLink).not.toHaveBeenCalled();
+        });
+    });
+
+    it('should disable email input while verified', async () => {
+        mockEmailVerified();
+        render(<Onboarding onComplete={mockOnComplete} />);
+        await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
+        const emailInput = screen.getByPlaceholderText(/arjun@example\.com/i);
+        expect(emailInput).toBeDisabled();
     });
 
 });

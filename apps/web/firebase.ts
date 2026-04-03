@@ -11,9 +11,13 @@
 import { initializeApp } from 'firebase/app';
 import {
     getAuth,
+    Auth,
     RecaptchaVerifier,
     signInWithPhoneNumber,
-    ConfirmationResult
+    ConfirmationResult,
+    sendSignInLinkToEmail,
+    isSignInWithEmailLink,
+    signInWithEmailLink,
 } from 'firebase/auth';
 
 // Firebase configuration - replace with your actual config
@@ -122,6 +126,35 @@ export async function signOut(): Promise<void> {
  */
 export function getFirebaseAuth(): Auth {
     return auth;
+}
+
+const EMAIL_STORAGE_KEY = 'rp_email_for_verification';
+
+export async function sendEmailVerificationLink(email: string): Promise<void> {
+    const actionCodeSettings = {
+        url: `${window.location.origin}?emailVerified=true`,
+        handleCodeInApp: true,
+    };
+    await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+    localStorage.setItem(EMAIL_STORAGE_KEY, email);
+}
+
+export async function completeEmailVerification(): Promise<string | null> {
+    if (!isSignInWithEmailLink(auth, window.location.href)) {
+        return null;
+    }
+    let email = localStorage.getItem(EMAIL_STORAGE_KEY);
+    if (!email) {
+        email = window.prompt('Please enter your email to confirm verification');
+    }
+    if (!email) return null;
+    await signInWithEmailLink(auth, email, window.location.href);
+    localStorage.removeItem(EMAIL_STORAGE_KEY);
+    return email;
+}
+
+export function isEmailSignInLink(): boolean {
+    return isSignInWithEmailLink(auth, window.location.href);
 }
 
 export { auth };

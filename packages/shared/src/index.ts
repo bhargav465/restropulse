@@ -45,6 +45,8 @@ export type StrategyCycleStatus =
 
 export type TokenStatus = 'valid' | 'expiring_soon' | 'expired';
 
+export type EmailVerificationStatus = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified' | 'error';
+
 export type ViewState = 'LOGIN' | 'ONBOARDING' | 'DASHBOARD' | 'STUDIO' | 'INPUTS' | 'STRATEGY';
 
 export type InstagramConnectionError =
@@ -117,6 +119,7 @@ export interface User {
   phone: string;
   role: UserRole;
   firebaseUid?: string;
+  emailVerified?: boolean;
   restaurantId: string;
 }
 

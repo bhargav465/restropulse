@@ -4,6 +4,7 @@ import { AuthResponse, LoginRequest, OtpRequest, OtpVerifyRequest } from '@restr
 import { generateTokens, verifyToken, refreshAccessToken } from '../services/jwt.js';
 import { verifyFirebaseToken, isFirebaseInitialized } from '../services/firebase-admin.js';
 import { handle } from '../middleware/async-handler.js';
+import { requireAuth } from '../middleware/auth.js';
 import { createLogger } from '@restropulse/telemetry/server';
 import { hashForCorrelation } from '@restropulse/telemetry';
 
@@ -309,6 +310,18 @@ router.get('/session', handle(async (req: Request, res: Response) => {
         success: true,
         user
     });
+}));
+
+router.post('/verify-email', requireAuth, handle(async (req: Request, res: Response) => {
+    const { email } = req.body;
+    const userId = req.user!.userId;
+
+    if (!email) {
+        return res.status(400).json({ success: false, error: 'Email is required' });
+    }
+
+    await updateUser(userId, { email, emailVerified: true });
+    res.json({ success: true, message: 'Email verified successfully' });
 }));
 
 export default router;

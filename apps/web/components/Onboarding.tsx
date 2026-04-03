@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, User } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, User, Mail, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { getGoogleMapsApiKey } from '../utils/env';
 
 interface CustomSelectProps {
@@ -96,8 +96,9 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 };
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
-import type { Restaurant, AccountManager, City } from '@restropulse/shared';
-import { restaurantAPI, accountManagerAPI, citiesAPI } from '../api';
+import type { Restaurant, AccountManager, City, EmailVerificationStatus } from '@restropulse/shared';
+import { restaurantAPI, accountManagerAPI, citiesAPI, authAPI } from '../api';
+import { sendEmailVerificationLink, completeEmailVerification, isEmailSignInLink } from '../firebase';
 
 interface OnboardingProps {
     onComplete: (restaurant: Restaurant) => void;
@@ -122,6 +123,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     // Step 1 - About You
     const [userName, setUserName] = useState('');
     const [email, setEmail] = useState('');
+    const [emailStatus, setEmailStatus] = useState<EmailVerificationStatus>('idle');
+    const [emailError, setEmailError] = useState<string | null>(null);
 
     // Step 2 - Your Restaurant
     const [city, setCity] = useState('');
@@ -146,6 +149,58 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             isMountedRef.current = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (isEmailSignInLink()) {
+            setEmailStatus('verifying');
+            completeEmailVerification()
+                .then((verifiedEmail) => {
+                    if (verifiedEmail) {
+                        setEmail(verifiedEmail);
+                        setEmailStatus('verified');
+                        window.history.replaceState({}, '', window.location.pathname);
+                        authAPI.verifyEmail(verifiedEmail).catch(() => {
+                            // Non-fatal: email locally verified; persisted on restaurantAPI.create
+                        });
+                    } else {
+                        setEmailStatus('error');
+                        setEmailError('Could not verify email. Please try again.');
+                    }
+                })
+                .catch(() => {
+                    setEmailStatus('error');
+                    setEmailError('Email verification failed. The link may have expired.');
+                });
+        }
+    }, []);
+
+    const handleSendVerification = async () => {
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            setEmailError('Please enter a valid email address');
+            return;
+        }
+        setEmailStatus('sending');
+        setEmailError(null);
+        try {
+            await sendEmailVerificationLink(email);
+            setEmailStatus('sent');
+        } catch (err: any) {
+            setEmailStatus('error');
+            setEmailError(err.message || 'Failed to send verification email. Please try again.');
+        }
+    };
+
+    const handleResendVerification = async () => {
+        setEmailStatus('sending');
+        setEmailError(null);
+        try {
+            await sendEmailVerificationLink(email);
+            setEmailStatus('sent');
+        } catch (err: any) {
+            setEmailStatus('error');
+            setEmailError(err.message || 'Failed to resend verification email.');
+        }
+    };
 
     const fetchManagers = useCallback(async (selectedCity: string, selectedZone?: string) => {
         if (!selectedCity) return;
@@ -235,7 +290,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const canProceed = (): boolean => {
         switch (step) {
             case 1:
-                return userName.trim().length >= 2 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+                return userName.trim().length >= 2 && emailStatus === 'verified';
             case 2:
                 return city.length > 0 && restaurantName.trim().length >= 2 && cuisine.trim().length >= 2 && address.trim().length > 0;
             case 3:
@@ -366,13 +421,70 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
             <div>
                 <label className="block text-slate-500 text-sm mb-2">Email address</label>
-                <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. arjun@example.com"
-                    className="w-full bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400"
-                />
+                <div className="flex gap-2">
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                            setEmail(e.target.value);
+                            if (emailStatus === 'verified' || emailStatus === 'sent') {
+                                setEmailStatus('idle');
+                            }
+                            setEmailError(null);
+                        }}
+                        placeholder="e.g. arjun@example.com"
+                        disabled={emailStatus === 'verified' || emailStatus === 'sending' || emailStatus === 'verifying'}
+                        className="flex-1 bg-white text-slate-900 px-4 py-3.5 rounded-xl border border-slate-200 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    {emailStatus !== 'verified' && emailStatus !== 'sent' && (
+                        <button
+                            type="button"
+                            onClick={handleSendVerification}
+                            disabled={emailStatus === 'sending' || emailStatus === 'verifying' || !email}
+                            className="px-4 py-3.5 bg-orange-500 hover:bg-orange-600 text-slate-900 font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                        >
+                            {emailStatus === 'sending' || emailStatus === 'verifying'
+                                ? <Loader2 size={16} className="animate-spin" />
+                                : <Mail size={16} />}
+                            Verify
+                        </button>
+                    )}
+                </div>
+
+                {emailError && (
+                    <p className="text-red-500 text-xs mt-2">{emailError}</p>
+                )}
+
+                {emailStatus === 'sent' && (
+                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                        <p className="text-amber-700 text-sm font-medium">Verification email sent</p>
+                        <p className="text-slate-500 text-xs mt-1">
+                            Check your inbox for a verification link. Click the link to verify your email.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={handleResendVerification}
+                            className="mt-2 text-orange-500 hover:text-orange-600 text-xs font-medium flex items-center gap-1 transition-colors"
+                        >
+                            <RefreshCw size={12} />
+                            Resend verification email
+                        </button>
+                    </div>
+                )}
+
+                {emailStatus === 'verifying' && (
+                    <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2">
+                        <Loader2 size={16} className="animate-spin text-orange-500" />
+                        <p className="text-slate-600 text-sm">Verifying your email...</p>
+                    </div>
+                )}
+
+                {emailStatus === 'verified' && (
+                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-2">
+                        <CheckCircle2 size={16} className="text-green-600" />
+                        <p className="text-green-700 text-sm font-medium">Email verified</p>
+                    </div>
+                )}
             </div>
         </div>
     );

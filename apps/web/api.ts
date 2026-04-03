@@ -137,6 +137,13 @@ export const authAPI = {
     checkSession: async (): Promise<AuthResponse> => {
         return fetchAPI<AuthResponse>('/auth/session');
     },
+
+    verifyEmail: async (email: string): Promise<void> => {
+        await fetchAPI('/auth/verify-email', {
+            method: 'POST',
+            body: JSON.stringify({ email }),
+        });
+    },
 };
 
 // Restaurant API
@@ -145,6 +152,7 @@ export const restaurantAPI = {
         name: string;
         cuisine: string;
         userName?: string;
+        email?: string;
         location?: Restaurant['location'];
         accountManager?: Restaurant['accountManager'];
     }): Promise<{ restaurant: Restaurant; token: string; refreshToken: string }> => {
