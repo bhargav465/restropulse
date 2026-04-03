@@ -131,8 +131,9 @@ export function getFirebaseAuth(): Auth {
 const EMAIL_STORAGE_KEY = 'rp_email_for_verification';
 
 export async function sendEmailVerificationLink(email: string): Promise<void> {
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin;
     const actionCodeSettings = {
-        url: `${window.location.origin}?emailVerified=true`,
+        url: `${appUrl}?emailVerified=true`,
         handleCodeInApp: true,
     };
     await sendSignInLinkToEmail(auth, email, actionCodeSettings);

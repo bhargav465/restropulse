@@ -126,6 +126,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     const [email, setEmail] = useState('');
     const [emailStatus, setEmailStatus] = useState<EmailVerificationStatus>('idle');
     const [emailError, setEmailError] = useState<string | null>(null);
+    const [resendCountdown, setResendCountdown] = useState(0);
 
     // Step 2 - Your Restaurant
     const [city, setCity] = useState('');
@@ -185,6 +186,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     }, []);
 
+    useEffect(() => {
+        if (resendCountdown > 0) {
+            const timer = setTimeout(() => setResendCountdown(resendCountdown - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [resendCountdown]);
+
     const handleSendVerification = async () => {
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             setEmailError('Please enter a valid email address');
@@ -198,6 +206,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
             }
             await sendEmailVerificationLink(email);
             setEmailStatus('sent');
+            setResendCountdown(60);
         } catch (err: any) {
             setEmailStatus('error');
             setEmailError(err.message || 'Failed to send verification email. Please try again.');
@@ -205,11 +214,13 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     };
 
     const handleResendVerification = async () => {
+        if (resendCountdown > 0) return;
         setEmailStatus('sending');
         setEmailError(null);
         try {
             await sendEmailVerificationLink(email);
             setEmailStatus('sent');
+            setResendCountdown(60);
         } catch (err: any) {
             setEmailStatus('error');
             setEmailError(err.message || 'Failed to resend verification email.');
@@ -475,14 +486,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         <p className="text-slate-500 text-xs mt-1">
                             Check your inbox for a verification link. Click the link to verify your email.
                         </p>
-                        <button
-                            type="button"
-                            onClick={handleResendVerification}
-                            className="mt-2 text-orange-500 hover:text-orange-600 text-xs font-medium flex items-center gap-1 transition-colors"
-                        >
-                            <RefreshCw size={12} />
-                            Resend verification email
-                        </button>
+                        {resendCountdown > 0 ? (
+                            <p className="mt-2 text-slate-400 text-xs">
+                                Resend in {resendCountdown}s
+                            </p>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleResendVerification}
+                                className="mt-2 text-orange-500 hover:text-orange-600 text-xs font-medium flex items-center gap-1 transition-colors"
+                            >
+                                <RefreshCw size={12} />
+                                Resend verification email
+                            </button>
+                        )}
                     </div>
                 )}
 
