@@ -169,7 +169,6 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                             setUserName(savedName);
                             localStorage.removeItem('rp_onboarding_name');
                         }
-                        window.history.replaceState({}, '', window.location.pathname);
                         authAPI.verifyEmail(verifiedEmail).catch(() => {
                             // Non-fatal: email locally verified; persisted on restaurantAPI.create
                         });

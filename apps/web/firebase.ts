@@ -141,15 +141,19 @@ export async function sendEmailVerificationLink(email: string): Promise<void> {
 }
 
 export async function completeEmailVerification(): Promise<string | null> {
-    if (!isSignInWithEmailLink(auth, window.location.href)) {
+    const currentUrl = window.location.href;
+    if (!isSignInWithEmailLink(auth, currentUrl)) {
         return null;
     }
+    // Strip the oobCode from the URL immediately so back-navigation or remounts
+    // cannot attempt to reuse the now-spent action code.
+    window.history.replaceState({}, '', window.location.pathname);
     let email = localStorage.getItem(EMAIL_STORAGE_KEY);
     if (!email) {
         email = window.prompt('Please enter your email to confirm verification');
     }
     if (!email) return null;
-    await signInWithEmailLink(auth, email, window.location.href);
+    await signInWithEmailLink(auth, email, currentUrl);
     localStorage.removeItem(EMAIL_STORAGE_KEY);
     return email;
 }
