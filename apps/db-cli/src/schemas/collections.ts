@@ -436,4 +436,13 @@ export const COLLECTIONS: CollectionSchema[] = [
             },
         },
     },
+    {
+        name: 'archivedAccounts',
+        indexes: [
+            { spec: { restaurantId: 1 } },
+            { spec: { userPhone: 1 } },
+            { spec: { archivedAt: -1 } },
+            { spec: { restaurantId: 1, archivedAt: -1 } },
+        ],
+    },
 ];

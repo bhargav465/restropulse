@@ -27,6 +27,7 @@ export {
   getCreditPurchasesCollection,
   getCreditPacksCollection,
   getInvoicesCollection,
+  getArchivedAccountsCollection,
   toApiFormat,
   toApiFormatArray,
   toObjectId,
@@ -46,3 +47,4 @@ export * from './subscriptions.js';
 export * from './coupons.js';
 export * from './credit-packs.js';
 export * from './invoices.js';
+export * from './archived-accounts.js';

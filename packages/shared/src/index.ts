@@ -353,6 +353,29 @@ export interface SubscribeRequest {
   couponCode?: string;
 }
 
+// ----- Account Deletion / Archive -----
+
+export type AccountDeletionInitiator = 'CLI' | 'API' | 'ADMIN';
+
+export interface ArchivedAccount {
+  restaurantId: string;
+  userPhone?: string;
+  archivedAt: Date;
+  initiator: AccountDeletionInitiator;
+  database: string;
+  data: {
+    users:             Record<string, unknown>[];
+    restaurants:       Record<string, unknown>[];
+    posts:             Record<string, unknown>[];
+    contentStrategies: Record<string, unknown>[];
+    strategyCycles:    Record<string, unknown>[];
+    subscriptions:     Record<string, unknown>[];
+    couponRedemptions: Record<string, unknown>[];
+    creditPurchases:   Record<string, unknown>[];
+    invoices:          Record<string, unknown>[];
+  };
+}
+
 // ----- API Types (request/response) -----
 
 export interface LoginRequest {

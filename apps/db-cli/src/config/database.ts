@@ -3,26 +3,26 @@ import chalk from 'chalk';
 
 export interface DatabaseConfig {
     uri: string;
-    mainDatabase: string;
-    testDatabase: string;
+    database: string;
 }
 
 export function getConfig(): DatabaseConfig {
     const uri = process.env.MONGODB_URI;
-    // Use backend's env var name (MONGODB_DB_NAME), derive test database name
-    const mainDatabase = process.env.MONGODB_DB_NAME || 'restropulsev1';
-    const testDatabase = `${mainDatabase}-test`;
+    const database = process.env.MONGODB_DB_NAME;
 
     if (!uri) {
         console.error(chalk.red('Error: MONGODB_URI environment variable is not set'));
-        console.log(chalk.yellow('Ensure restropulse-pwa-backend/.env exists with MongoDB configuration'));
+        process.exit(1);
+    }
+
+    if (!database) {
+        console.error(chalk.red('Error: MONGODB_DB_NAME environment variable is not set'));
         process.exit(1);
     }
 
     return {
         uri,
-        mainDatabase,
-        testDatabase,
+        database,
     };
 }
 
@@ -37,11 +37,10 @@ export async function connect(): Promise<MongoClient> {
     return client;
 }
 
-export async function getDatabase(useTestDb = false): Promise<Db> {
+export async function getDatabase(): Promise<Db> {
     const mongoClient = await connect();
     const config = getConfig();
-    const dbName = useTestDb ? config.testDatabase : config.mainDatabase;
-    return mongoClient.db(dbName);
+    return mongoClient.db(config.database);
 }
 
 export async function disconnect(): Promise<void> {

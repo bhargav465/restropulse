@@ -9,6 +9,7 @@ import { validateCommand } from './commands/validate.js';
 import { seedCommand } from './commands/seed.js';
 import { resetCommand } from './commands/reset.js';
 import { razorpaySetupCommand } from './commands/razorpay-setup.js';
+import { deleteAccountCommand } from './commands/delete-account.js';
 
 // Load .env from api app (single source of truth for MongoDB config)
 const envCandidates = [
@@ -34,9 +35,7 @@ program
 
 program
     .command('setup')
-    .description('Set up main and test databases with collections and indexes')
-    .option('--main-only', 'Set up main database only')
-    .option('--test-only', 'Set up test database only')
+    .description('Set up database collections and indexes')
     .action(setupCommand);
 
 program
@@ -47,15 +46,13 @@ program
 
 program
     .command('seed')
-    .description('Seed test database with sample data')
+    .description('Seed database with sample data')
     .option('--clean', 'Clear existing data before seeding')
-    .option('--main', 'Seed main database instead of test (use with caution)')
     .action(seedCommand);
 
 program
     .command('reset')
-    .description('Drop all collections and recreate empty database with indexes')
-    .option('--main', 'Reset main database instead of test (60s safety delay)')
+    .description('Drop all collections and recreate database with indexes and defaults (10s safety delay)')
     .action(resetCommand);
 
 program
@@ -63,7 +60,15 @@ program
     .description('Create Razorpay subscription plans and write plan IDs back to MongoDB')
     .option('--dry-run', 'Preview what would be created without making API calls or DB writes')
     .option('--force', 'Overwrite existing Razorpay plan IDs in MongoDB')
-    .option('--main', 'Target main database instead of test')
     .action(razorpaySetupCommand);
+
+program
+    .command('delete-account')
+    .description('Delete a user account and all associated data (posts, strategies, subscriptions, etc.)')
+    .option('--phone <phone>', 'Phone number of the user to delete')
+    .option('--restaurant-id <id>', 'Restaurant ID to delete (skips user lookup)')
+    .option('--dry-run', 'Preview what would be deleted without making any changes')
+    .option('--no-archive', 'Skip JSON archive (archive is written by default)')
+    .action(deleteAccountCommand);
 
 program.parse();

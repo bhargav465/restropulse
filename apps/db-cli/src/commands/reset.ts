@@ -9,29 +9,22 @@ import {
     DEFAULT_CREDIT_PACKS,
 } from '../data/default-data.js';
 
-interface ResetOptions {
-    main?: boolean;
-}
-
-export async function resetCommand(options: ResetOptions): Promise<void> {
+export async function resetCommand(): Promise<void> {
     const config = getConfig();
     const spinner = ora();
-    const dbName = options.main ? config.mainDatabase : config.testDatabase;
 
-    if (options.main) {
-        console.log(chalk.red.bold('\nWARNING: You are about to DROP and RECREATE the MAIN database!'));
-        console.log(chalk.red('All data in the main database will be permanently deleted.'));
-        console.log(chalk.gray('Press Ctrl+C within 60 seconds to cancel...\n'));
-        await new Promise(resolve => setTimeout(resolve, 60000));
-    }
+    console.log(chalk.red.bold('\nWARNING: You are about to DROP and RECREATE the database!'));
+    console.log(chalk.red(`All data in ${chalk.bold(config.database)} will be permanently deleted.`));
+    console.log(chalk.gray('Press Ctrl+C within 10 seconds to cancel...\n'));
+    await new Promise(resolve => setTimeout(resolve, 10000));
 
     try {
         spinner.start('Connecting to MongoDB...');
         const client = await connect();
         spinner.succeed('Connected to MongoDB');
 
-        const db = client.db(dbName);
-        console.log(chalk.cyan(`\nResetting database: ${chalk.bold(dbName)}`));
+        const db = client.db(config.database);
+        console.log(chalk.cyan(`\nResetting database: ${chalk.bold(config.database)}`));
 
         // Drop all known collections
         spinner.start('Dropping existing collections...');

@@ -6,28 +6,19 @@ import { COLLECTIONS } from '../schemas/collections.js';
 
 interface SeedOptions {
     clean?: boolean;
-    main?: boolean;
 }
 
 export async function seedCommand(options: SeedOptions): Promise<void> {
     const config = getConfig();
     const spinner = ora();
-    const dbName = options.main ? config.mainDatabase : config.testDatabase;
-
-    if (options.main) {
-        console.log(chalk.yellow.bold('\nWARNING: You are about to seed the MAIN database!'));
-        console.log(chalk.yellow('This will add/modify production data.'));
-        console.log(chalk.gray('Press Ctrl+C to cancel...\n'));
-        await new Promise(resolve => setTimeout(resolve, 3000));
-    }
 
     try {
         spinner.start('Connecting to MongoDB...');
         const client = await connect();
         spinner.succeed('Connected to MongoDB');
 
-        const db = client.db(dbName);
-        console.log(chalk.cyan(`\nSeeding database: ${chalk.bold(dbName)}`));
+        const db = client.db(config.database);
+        console.log(chalk.cyan(`\nSeeding database: ${chalk.bold(config.database)}`));
 
         // Ensure indexes exist before seeding
         spinner.start('Ensuring indexes exist...');
@@ -66,7 +57,7 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
 
             try {
                 const col = db.collection(collectionName);
-                
+
                 // Add timestamps
                 const docsWithTimestamps = documents.map(doc => ({
                     ...doc,

@@ -17,10 +17,9 @@
     "seed": "tsx src/index.ts seed",
     "seed:clean": "tsx src/index.ts seed --clean",
     "reset": "tsx src/index.ts reset",
-    "reset:main": "tsx src/index.ts reset --main",
     "razorpay:setup": "tsx src/index.ts razorpay-setup",
-    "razorpay:setup:main": "tsx src/index.ts razorpay-setup --main",
-    "razorpay:setup:dry-run": "tsx src/index.ts razorpay-setup --dry-run"
+    "razorpay:setup:dry-run": "tsx src/index.ts razorpay-setup --dry-run",
+    "delete-account": "tsx src/index.ts delete-account"
   },
   "pkg": {
     "scripts": "dist/**/*.js",
@@ -41,6 +40,7 @@
   "author": "RestroPulse Team",
   "license": "MIT",
   "dependencies": {
+    "@restropulse/db": "*",
     "@restropulse/shared": "*",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",

@@ -61,6 +61,8 @@ export const authAPI = {
             }
             if (response.user?.restaurantId) {
                 localStorage.setItem('rp_restaurant_id', response.user.restaurantId);
+            } else {
+                localStorage.removeItem('rp_restaurant_id');
             }
         }
 
@@ -95,6 +97,8 @@ export const authAPI = {
             }
             if (response.user?.restaurantId) {
                 localStorage.setItem('rp_restaurant_id', response.user.restaurantId);
+            } else {
+                localStorage.removeItem('rp_restaurant_id');
             }
         }
 

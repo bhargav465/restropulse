@@ -29,7 +29,6 @@ const DEFAULT_DATA_PATH = resolve(__dirname, '../data/default-data.ts');
 interface RazorpaySetupOptions {
     dryRun?: boolean;
     force?: boolean;
-    main?: boolean;
 }
 
 interface PlanDefinition {
@@ -187,7 +186,7 @@ export async function razorpaySetupCommand(options: RazorpaySetupOptions): Promi
     }
 
     const dbConfig = getConfig();
-    const dbName = options.main ? dbConfig.mainDatabase : dbConfig.testDatabase;
+    const dbName = dbConfig.database;
     const spinner = ora();
 
     console.log(chalk.cyan(`\nTarget database: ${chalk.bold(dbName)}`));
