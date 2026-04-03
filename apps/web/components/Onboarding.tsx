@@ -178,8 +178,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         setEmailError('Could not verify email. Please try again.');
                     }
                 })
-                .catch(() => {
+                .catch((err: unknown) => {
                     if (!isMountedRef.current) return;
+                    const code = (err as { code?: string })?.code;
+                    console.error('[email-verification] signInWithEmailLink failed', { code, err });
                     setEmailStatus('error');
                     setEmailError('Email verification failed. The link may have expired.');
                 });
