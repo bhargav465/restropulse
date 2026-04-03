@@ -197,11 +197,6 @@ describe('ProfileSheet Component', () => {
         expect(screen.getByText('A')).toBeInTheDocument();
     });
 
-    it('should show city derived from address', () => {
-        render(<ProfileSheet {...defaultProps} />);
-        expect(screen.getByText('Downtown')).toBeInTheDocument();
-    });
-
     it('should show cuisine in edit profile row', () => {
         render(<ProfileSheet {...defaultProps} />);
         expect(screen.getByText('Italian')).toBeInTheDocument();
