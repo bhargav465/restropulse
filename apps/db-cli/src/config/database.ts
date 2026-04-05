@@ -2,6 +2,9 @@ import { MongoClient, Db } from 'mongodb';
 import { createInterface } from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import chalk from 'chalk';
+import { redactUri, getResolvedEnv } from '../lib/env.js';
+
+export { getResolvedEnv } from '../lib/env.js';
 
 export interface DatabaseConfig {
     uri: string;
@@ -66,19 +69,10 @@ export async function promptForConnection(): Promise<DatabaseConfig> {
     process.env.MONGODB_URI = resolvedUri;
     process.env.MONGODB_DB_NAME = resolvedDb;
 
-    console.log(chalk.gray(`\n  Target: ${redactUri(resolvedUri)} / ${chalk.bold(resolvedDb)}\n`));
+    console.log(chalk.gray(`\n  Target: ${redactUri(resolvedUri)} / ${chalk.bold(resolvedDb)}`));
+    console.log(chalk.gray(`  Environment: ${getResolvedEnv()}\n`));
 
     return { uri: resolvedUri, database: resolvedDb };
-}
-
-/** Show only the cluster/host portion of a MongoDB URI, hiding credentials. */
-function redactUri(uri: string): string {
-    try {
-        const parsed = new URL(uri);
-        return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
-    } catch {
-        return '***';
-    }
 }
 
 let client: MongoClient | null = null;

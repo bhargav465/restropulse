@@ -1,6 +1,10 @@
 import chalk from 'chalk';
 import ora from 'ora';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { connect, getConfig, promptForConnection, disconnect } from '../config/database.js';
+import { getResolvedEnv, requireNonDevConfirmation } from '../lib/env.js';
 import { COLLECTIONS } from '../schemas/collections.js';
 import {
     DEFAULT_CITIES,
@@ -10,6 +14,14 @@ import {
 } from '../data/default-data.js';
 
 export async function resetCommand(): Promise<void> {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const PLAN_IDS_PATH = resolve(__dirname, '../data/razorpay-plan-ids.json');
+
+    const env = getResolvedEnv();
+    if (env !== 'development') {
+        await requireNonDevConfirmation('reset');
+    }
+
     const config = await promptForConnection();
     const spinner = ora();
 
@@ -75,17 +87,32 @@ export async function resetCommand(): Promise<void> {
         }
         spinner.succeed(`Seeded ${DEFAULT_CITIES.length} cities and ${DEFAULT_ACCOUNT_MANAGERS.length} account managers`);
 
+        // Load environment-specific Razorpay plan IDs
+        let razorpayPlanIds: Record<string, { monthly: string; annual: string }> = {};
+        try {
+            const raw = readFileSync(PLAN_IDS_PATH, 'utf-8');
+            const allEnvIds = JSON.parse(raw);
+            razorpayPlanIds = allEnvIds[env] || allEnvIds['development'] || {};
+        } catch {
+            // File missing or unreadable — proceed with empty IDs from default-data
+        }
+
         // Seed default subscription plans and credit packs
         spinner.start('Seeding default subscription plans and credit packs...');
         const plansCol = db.collection('subscriptionPlans');
         for (const plan of DEFAULT_SUBSCRIPTION_PLANS) {
-            await plansCol.insertOne({ ...plan, createdAt: now, updatedAt: now } as any);
+            const envIds = razorpayPlanIds[plan._id];
+            const razorpayPlanIdsResolved = envIds && (envIds.monthly || envIds.annual)
+                ? envIds
+                : plan.razorpayPlanIds;
+            await plansCol.insertOne({ ...plan, razorpayPlanIds: razorpayPlanIdsResolved, createdAt: now, updatedAt: now } as any);
         }
         const packsCol = db.collection('creditPacks');
         for (const pack of DEFAULT_CREDIT_PACKS) {
             await packsCol.insertOne({ ...pack, createdAt: now, updatedAt: now } as any);
         }
-        spinner.succeed(`Seeded ${DEFAULT_SUBSCRIPTION_PLANS.length} subscription plans and ${DEFAULT_CREDIT_PACKS.length} credit packs`);
+        const hasIds = Object.values(razorpayPlanIds).some((ids: any) => ids.monthly || ids.annual);
+        spinner.succeed(`Seeded ${DEFAULT_SUBSCRIPTION_PLANS.length} subscription plans and ${DEFAULT_CREDIT_PACKS.length} credit packs (env: ${env}${hasIds ? ', Razorpay IDs applied' : ', no Razorpay IDs set -- run razorpay:setup'})`);
 
         console.log(chalk.green('\nDatabase reset complete -- defaults seeded and ready to use.'));
 

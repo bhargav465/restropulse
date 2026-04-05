@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { connect, getConfig, disconnect } from '../config/database.js';
+import { getResolvedEnv, requireNonDevConfirmation } from '../lib/env.js';
 import { SEED_DATA } from '../data/seedData.js';
 import { COLLECTIONS } from '../schemas/collections.js';
 
@@ -9,6 +10,21 @@ interface SeedOptions {
 }
 
 export async function seedCommand(options: SeedOptions): Promise<void> {
+    if (options.clean) {
+        const env = getResolvedEnv();
+        if (env === 'development') {
+            // 5-second countdown
+            console.log(chalk.yellow('\n  WARNING: --clean will delete all existing data.\n'));
+            for (let i = 5; i > 0; i--) {
+                process.stdout.write(chalk.yellow(`  Proceeding in ${i}s... (Ctrl+C to cancel)\r`));
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+            console.log();
+        } else {
+            await requireNonDevConfirmation('seed --clean');
+        }
+    }
+
     const config = getConfig();
     const spinner = ora();
 

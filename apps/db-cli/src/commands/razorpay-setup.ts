@@ -22,9 +22,10 @@ import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { connect, getConfig, disconnect } from '../config/database.js';
+import { getResolvedEnv } from '../lib/env.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DATA_PATH = resolve(__dirname, '../data/default-data.ts');
+const PLAN_IDS_PATH = resolve(__dirname, '../data/razorpay-plan-ids.json');
 
 interface RazorpaySetupOptions {
     dryRun?: boolean;
@@ -36,7 +37,6 @@ interface PlanDefinition {
     cycle: 'monthly' | 'annual';
     dbId: string;
     razorpayName: string;
-    razorpayDescription: string;
     period: 'monthly' | 'yearly';
     interval: number;
     amountPaise: number;
@@ -48,7 +48,6 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
         cycle: 'monthly',
         dbId: 'plan-starter-v1',
         razorpayName: 'RestroPulse Starter - Monthly',
-        razorpayDescription: 'Starter plan: 2 Instagram posts, 1 carousel, 1 reel per week',
         period: 'monthly',
         interval: 1,
         amountPaise: 299900,
@@ -58,7 +57,6 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
         cycle: 'annual',
         dbId: 'plan-starter-v1',
         razorpayName: 'RestroPulse Starter - Annual',
-        razorpayDescription: 'Starter plan: 2 Instagram posts, 1 carousel, 1 reel per week (annual)',
         period: 'yearly',
         interval: 1,
         amountPaise: 2999000,
@@ -68,7 +66,6 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
         cycle: 'monthly',
         dbId: 'plan-growth-v1',
         razorpayName: 'RestroPulse Growth - Monthly',
-        razorpayDescription: 'Growth plan: 5 Instagram posts, 3 carousels, 2 reels per week',
         period: 'monthly',
         interval: 1,
         amountPaise: 999900,
@@ -78,7 +75,6 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
         cycle: 'annual',
         dbId: 'plan-growth-v1',
         razorpayName: 'RestroPulse Growth - Annual',
-        razorpayDescription: 'Growth plan: 5 Instagram posts, 3 carousels, 2 reels per week (annual)',
         period: 'yearly',
         interval: 1,
         amountPaise: 9999000,
@@ -88,7 +84,6 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
         cycle: 'monthly',
         dbId: 'plan-premium-v1',
         razorpayName: 'RestroPulse Premium - Monthly',
-        razorpayDescription: 'Premium plan: 20 Instagram posts, 10 carousels, 5 reels per week',
         period: 'monthly',
         interval: 1,
         amountPaise: 1699900,
@@ -98,12 +93,25 @@ const PLAN_DEFINITIONS: PlanDefinition[] = [
         cycle: 'annual',
         dbId: 'plan-premium-v1',
         razorpayName: 'RestroPulse Premium - Annual',
-        razorpayDescription: 'Premium plan: 20 Instagram posts, 10 carousels, 5 reels per week (annual)',
         period: 'yearly',
         interval: 1,
         amountPaise: 16999000,
     },
 ];
+
+function buildPlanDescription(limits: Record<string, Record<string, number>>, cycle: 'monthly' | 'annual'): string {
+    const parts: string[] = [];
+    for (const [platform, typeLimits] of Object.entries(limits)) {
+        const items = Object.entries(typeLimits)
+            .filter(([, v]) => v > 0)
+            .map(([type, limit]) => `${limit} ${type}`);
+        if (items.length > 0) {
+            parts.push(`${platform}: ${items.join(', ')} per week`);
+        }
+    }
+    const base = parts.join('; ');
+    return cycle === 'annual' ? `${base} (annual billing)` : base;
+}
 
 function getAuthHeader(keyId: string, keySecret: string): string {
     return 'Basic ' + Buffer.from(`${keyId}:${keySecret}`).toString('base64');
@@ -113,6 +121,7 @@ async function createRazorpayPlan(
     plan: PlanDefinition,
     keyId: string,
     keySecret: string,
+    description: string,
 ): Promise<string> {
     const response = await fetch('https://api.razorpay.com/v1/plans', {
         method: 'POST',
@@ -127,7 +136,7 @@ async function createRazorpayPlan(
                 name: plan.razorpayName,
                 amount: plan.amountPaise,
                 currency: 'INR',
-                description: plan.razorpayDescription,
+                description: description,
             },
             notes: {
                 slug: plan.slug,
@@ -148,40 +157,31 @@ async function createRazorpayPlan(
 }
 
 /**
- * Patches default-data.ts in-place, replacing the razorpayPlanIds for a given
- * plan slug with the provided monthly and annual IDs.
- *
- * Targets the block identified by `_id: 'plan-{slug}-v1'` and replaces the
- * razorpayPlanIds line within it. Safe to call multiple times (idempotent).
+ * Updates razorpay-plan-ids.json for the given environment and plan.
+ * Idempotent — safe to call multiple times.
  */
-function patchDefaultData(
-    slug: string,
+function patchRazorpayPlanIds(
+    env: string,
     dbId: string,
-    monthlyId: string,
-    annualId: string,
+    cycle: 'monthly' | 'annual',
+    razorpayId: string,
 ): void {
-    let content = readFileSync(DEFAULT_DATA_PATH, 'utf-8');
-
-    // Match the plan block by its _id, then replace its razorpayPlanIds line.
-    // The regex captures up to the razorpayPlanIds key within the same block.
-    const regex = new RegExp(
-        `(_id: '${dbId}'[\\s\\S]*?razorpayPlanIds: \\{ monthly: ')[^']*(',\\s*annual: ')[^']*('\\s*\\})`,
-    );
-
-    if (!regex.test(content)) {
-        throw new Error(`Could not locate razorpayPlanIds for slug '${slug}' (dbId: ${dbId}) in default-data.ts`);
-    }
-
-    content = content.replace(regex, `$1${monthlyId}$2${annualId}$3`);
-    writeFileSync(DEFAULT_DATA_PATH, content, 'utf-8');
+    const raw = readFileSync(PLAN_IDS_PATH, 'utf-8');
+    const data = JSON.parse(raw);
+    if (!data[env]) data[env] = {};
+    if (!data[env][dbId]) data[env][dbId] = { monthly: '', annual: '' };
+    data[env][dbId][cycle] = razorpayId;
+    writeFileSync(PLAN_IDS_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
 export async function razorpaySetupCommand(options: RazorpaySetupOptions): Promise<void> {
     const keyId = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
+    const env = getResolvedEnv();
+
     if (!keyId || !keySecret) {
-        console.error(chalk.red('Error: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set in apps/api/.env'));
+        console.error(chalk.red(`Error: RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set in apps/db-cli/.env.${env}`));
         process.exit(1);
     }
 
@@ -190,6 +190,7 @@ export async function razorpaySetupCommand(options: RazorpaySetupOptions): Promi
     const spinner = ora();
 
     console.log(chalk.cyan(`\nTarget database: ${chalk.bold(dbName)}`));
+    console.log(chalk.cyan(`Target environment: ${chalk.bold(env)}`));
     if (options.dryRun) {
         console.log(chalk.yellow('Dry-run mode -- no API calls, DB writes, or file changes\n'));
     }
@@ -248,7 +249,9 @@ export async function razorpaySetupCommand(options: RazorpaySetupOptions): Promi
             // Create plan in Razorpay
             let razorpayId: string;
             try {
-                razorpayId = await createRazorpayPlan(plan, keyId, keySecret);
+                const weeklyLimits = (dbDoc.limits?.weekly || {}) as Record<string, Record<string, number>>;
+                const description = buildPlanDescription(weeklyLimits, plan.cycle);
+                razorpayId = await createRazorpayPlan(plan, keyId, keySecret, description);
             } catch (err: any) {
                 spinner.fail(`${label}: ${err.message}`);
                 continue;
@@ -268,40 +271,21 @@ export async function razorpaySetupCommand(options: RazorpaySetupOptions): Promi
             results.push({ plan, razorpayId, action: 'created' });
         }
 
-        // Patch default-data.ts for every slug that had at least one ID created/updated.
-        // Collect the final IDs per slug (prefer newly created, fall back to existing skipped).
+        // Patch razorpay-plan-ids.json for each newly created ID.
         const created = results.filter(r => r.action === 'created');
 
         if (created.length > 0) {
-            spinner.start('Patching default-data.ts with new plan IDs...');
-
-            // Gather all IDs per slug (merge skipped + created to get a full picture)
-            const allResults = results.filter(r => r.action === 'created' || r.action === 'skipped');
-            const idsBySlug: Record<string, { monthly: string; annual: string; dbId: string }> = {};
-
-            for (const r of allResults) {
-                if (!idsBySlug[r.plan.slug]) {
-                    idsBySlug[r.plan.slug] = { monthly: '', annual: '', dbId: r.plan.dbId };
-                }
-                if (r.plan.cycle === 'monthly') {
-                    idsBySlug[r.plan.slug].monthly = r.razorpayId;
-                } else {
-                    idsBySlug[r.plan.slug].annual = r.razorpayId;
-                }
-            }
-
+            spinner.start('Updating razorpay-plan-ids.json...');
             let patchCount = 0;
-            for (const [slug, ids] of Object.entries(idsBySlug)) {
-                if (!ids.monthly || !ids.annual) continue;
+            for (const r of created) {
                 try {
-                    patchDefaultData(slug, ids.dbId, ids.monthly, ids.annual);
+                    patchRazorpayPlanIds(env, r.plan.dbId, r.plan.cycle, r.razorpayId);
                     patchCount++;
                 } catch (err: any) {
-                    spinner.warn(`Could not patch default-data.ts for ${slug}: ${err.message}`);
+                    spinner.warn(`Could not update razorpay-plan-ids.json for ${r.plan.slug} ${r.plan.cycle}: ${err.message}`);
                 }
             }
-
-            spinner.succeed(`Patched default-data.ts (${patchCount} plan(s) updated)`);
+            spinner.succeed(`Updated razorpay-plan-ids.json (${patchCount} ID(s) written for env: ${env})`);
         }
 
         // Summary
@@ -324,8 +308,8 @@ export async function razorpaySetupCommand(options: RazorpaySetupOptions): Promi
             }
             console.log(chalk.green('\nRazorpay setup complete.'));
             console.log(chalk.gray('  - Plan IDs saved to MongoDB'));
-            console.log(chalk.gray('  - default-data.ts updated -- future resets will include these IDs'));
-            console.log(chalk.gray('  - Commit default-data.ts to lock in the IDs for the team'));
+            console.log(chalk.gray(`  - razorpay-plan-ids.json updated for env: ${env}`));
+            console.log(chalk.gray('  - Commit razorpay-plan-ids.json to share IDs with the team'));
         } else if (!options.dryRun) {
             console.log(chalk.gray('\nNo new plans created. All IDs already set.'));
         }

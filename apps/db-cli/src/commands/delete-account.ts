@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { connect, getConfig, disconnect } from '../config/database.js';
+import { getResolvedEnv, requireNonDevConfirmation } from '../lib/env.js';
 import { archiveAccount, toObjectId } from '@restropulse/db';
 
 interface DeleteAccountOptions {
@@ -20,8 +21,12 @@ export async function deleteAccountCommand(options: DeleteAccountOptions): Promi
     const spinner = ora();
 
     if (!options.dryRun) {
+        if (getResolvedEnv() !== 'development') {
+            await requireNonDevConfirmation('delete-account');
+        }
         console.log(chalk.red.bold('\nWARNING: You are about to permanently delete an account!'));
         console.log(chalk.red('This will permanently delete all associated data.'));
+        console.log(chalk.gray(`  Environment: ${getResolvedEnv()}`));
         console.log(chalk.gray('Press Ctrl+C within 10 seconds to cancel...\n'));
         await new Promise(resolve => setTimeout(resolve, 10000));
     }
