@@ -360,6 +360,8 @@ export interface SubscribeRequest {
 
 export interface FeatureFlags {
   deleteAccount: boolean;
+  topupCredits: boolean;
+  updatesSection: boolean;
 }
 
 // ----- Account Deletion / Archive -----

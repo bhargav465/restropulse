@@ -53,6 +53,8 @@ Rules:
 | RAZORPAY_KEY_ID                  | No*      | --                                               | Razorpay API key ID                        |
 | RAZORPAY_KEY_SECRET              | No*      | --                                               | Razorpay API key secret                    |
 | RAZORPAY_WEBHOOK_SECRET          | No*      | --                                               | Razorpay webhook signature secret          |
+| FEATURE_TOPUP_CREDITS            | No       | false                                            | Feature flag: enable credit pack topup purchase UI         |
+| FEATURE_UPDATES_SECTION          | No       | false                                            | Feature flag: enable Updates (Inputs) section in nav       |
 
 *JWT_SECRET has a dev default but must be changed in production.
 *RAZORPAY_* vars are optional in dev; service throws if called without config.

@@ -7,8 +7,13 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import { createLogger } from './logger.js';
+import type pino from 'pino';
 
-const log = createLogger('http');
+let log: pino.Logger | null = null;
+function getLog(): pino.Logger {
+    if (!log) log = createLogger('http');
+    return log;
+}
 
 /**
  * Request logging middleware.
@@ -30,7 +35,7 @@ export function requestLoggingMiddleware() {
                 : res.statusCode >= 400 ? 'warn'
                     : 'info';
 
-            log[level]({
+            getLog()[level]({
                 method: req.method,
                 path: req.path,
                 statusCode: res.statusCode,
@@ -53,7 +58,7 @@ export function errorHandlerMiddleware() {
     // Express requires all 4 params to identify this as an error handler
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     return (err: Error, req: Request, res: Response, _next: NextFunction) => {
-        log.error({
+        getLog().error({
             err,
             method: req.method,
             path: req.path,
