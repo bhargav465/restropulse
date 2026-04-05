@@ -10,8 +10,8 @@ import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
-import { ViewState, Restaurant, User, Post } from '@restropulse/shared';
-import { authAPI, restaurantAPI, postsAPI } from './api';
+import { ViewState, Restaurant, User, Post, FeatureFlags } from '@restropulse/shared';
+import { authAPI, restaurantAPI, postsAPI, configAPI } from './api';
 import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
 
 function getUserInitials(name: string): string {
@@ -34,6 +34,7 @@ const App: React.FC = () => {
 
     // Pending count for bell badge
     const [pendingCount, setPendingCount] = useState(0);
+    const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(null);
 
     // Check if this is an Instagram OAuth callback
     useEffect(() => {
@@ -82,6 +83,7 @@ const App: React.FC = () => {
                         } catch { /* ignore */ }
 
                         setIsLoggedIn(true);
+                        configAPI.getFeatures().then(setFeatureFlags).catch(() => {});
                         if (!window.history.state) {
                             window.history.replaceState({ view: 'DASHBOARD' }, '');
                         }
@@ -205,6 +207,9 @@ const App: React.FC = () => {
             case 'STUDIO':
                 return <ContentStudio onCreatePost={instagramConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} />;
             case 'INPUTS':
+                if (featureFlags?.updatesSection === false) {
+                    return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
+                }
                 return <Inputs restaurantData={restaurantData} onRefresh={refreshRestaurantData} />;
             case 'STRATEGY':
                 return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} />;
@@ -276,6 +281,7 @@ const App: React.FC = () => {
                 pendingCount={pendingCount}
                 onCreatePost={restaurantData?.integrations?.instagram ? () => setIsAdhocModalOpen(true) : undefined}
                 onProfileOpen={() => setIsProfileOpen(true)}
+                featureFlags={featureFlags}
             >
                 {renderView()}
             </Layout>
@@ -293,6 +299,7 @@ const App: React.FC = () => {
                     onRestaurantUpdate={(updated) => setRestaurantData(updated)}
                     autoOpenInstagramSetup={autoOpenInstagramSetup}
                     onAutoOpenHandled={() => setAutoOpenInstagramSetup(false)}
+                    featureFlags={featureFlags}
                 />
             )}
 

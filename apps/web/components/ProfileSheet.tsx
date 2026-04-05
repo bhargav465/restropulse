@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
 import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft, Phone, Mail } from 'lucide-react';
-import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Restaurant, InstagramConnectionError, InstagramAccount, Invoice } from '@restropulse/shared';
+import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Restaurant, InstagramConnectionError, InstagramAccount, Invoice, FeatureFlags } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, configAPI, accountAPI } from '../api';
 import ConfirmDialog from './ConfirmDialog';
 import { browserEvents } from '@restropulse/telemetry/browser';
@@ -21,6 +21,7 @@ interface ProfileSheetProps {
     onRestaurantUpdate: (restaurant: Restaurant) => void;
     autoOpenInstagramSetup?: boolean;
     onAutoOpenHandled?: () => void;
+    featureFlags?: FeatureFlags | null;
 }
 
 const INSTAGRAM_ERROR_MESSAGES: Record<InstagramConnectionError, {
@@ -117,7 +118,9 @@ function getCityFromAddress(address: string): string {
 }
 
 
-const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled }) => {
+const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled, featureFlags }) => {
+    const topupCreditsEnabled = featureFlags?.topupCredits === true;
+
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [isSubscriptionOpen, setIsSubscriptionOpen] = useState(false);
 
@@ -150,11 +153,11 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const [couponCode, setCouponCode] = useState('');
     const [couponValid, setCouponValid] = useState<boolean | null>(null);
     const [isSwitchPlanLoading, setIsSwitchPlanLoading] = useState(false);
+    const [activationPending, setActivationPending] = useState(false);
     const [subscriptionLoading, setSubscriptionLoading] = useState(true);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionErrorKey, setActionErrorKey] = useState(0);
-    const [deleteAccountEnabled, setDeleteAccountEnabled] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
@@ -173,6 +176,9 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             setCreditPacks(packsData);
             setInvoices(invoicesData);
             setActionError(null);
+            if (currentData.subscription && currentData.subscription.status !== 'CREATED' && currentData.subscription.status !== 'AUTHENTICATED') {
+                setActivationPending(false);
+            }
         } catch (error) {
             console.error('Failed to load subscription data:', error);
         } finally {
@@ -184,9 +190,6 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     useEffect(() => {
         if (!isOpen) return;
         loadSubscriptionData();
-        configAPI.getFeatures()
-            .then(flags => setDeleteAccountEnabled(flags.deleteAccount))
-            .catch(() => setDeleteAccountEnabled(false));
     }, [isOpen]);
 
     // Sync Instagram state when restaurantData changes
@@ -381,6 +384,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         setActionError(null);
         setIsSubscriptionOpen(true);
         window.history.pushState({ modal: 'subscription' }, '', '#subscription');
+        loadSubscriptionData();
     };
 
     const closeSubscription = () => {
@@ -394,6 +398,13 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         const timer = setTimeout(() => setActionError(null), 6000);
         return () => clearTimeout(timer);
     }, [actionError, actionErrorKey]);
+
+    // Auto-dismiss activation-pending notice
+    useEffect(() => {
+        if (!activationPending) return;
+        const timer = setTimeout(() => setActivationPending(false), 8000);
+        return () => clearTimeout(timer);
+    }, [activationPending]);
 
     const showActionError = (message: string) => {
         setActionError(message);
@@ -454,22 +465,19 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                 subscription_id: data.subscriptionId,
                 name: 'RestroPulse',
                 description: `${planSlug} plan - ${billingCycle.toLowerCase()}`,
-                handler: async () => {
-                    try {
-                        const currentData = await subscriptionAPI.getCurrent();
-                        setSubscription(currentData.subscription);
-                        setUsage(currentData.usage);
-                        closeSubscription();
-                    } catch (handlerError) {
-                        console.error('Subscription refresh failed:', handlerError);
-                        showActionError('Something went wrong. Please try again in a moment.');
-                    }
+                handler: () => {
+                    // Razorpay calls this immediately after the user completes payment.
+                    // Subscription status is updated asynchronously via webhooks — don't poll here.
+                    // Just close the panel and show a pending notice on the profile page.
+                    setActivationPending(true);
+                    closeSubscription();
                 },
             };
             const rzp = new (window as any).Razorpay(options);
             if (typeof rzp.on === 'function') {
-                rzp.on('payment.failed', () => {
-                    showActionError('Something went wrong. Please try again in a moment.');
+                rzp.on('payment.failed', (response: { error?: { description?: string; reason?: string } }) => {
+                    const detail = response?.error?.description || response?.error?.reason;
+                    showActionError(detail ? `Payment failed: ${detail}` : 'Payment failed. Please try again.');
                 });
             }
             rzp.open();
@@ -808,6 +816,10 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                     {subscription?.planSnapshot?.name || 'No Plan'}
                                     {subscription?.status === 'ACTIVE' && <span className="px-2 py-0.5 bg-white/20 text-xs rounded-md font-medium">Active</span>}
                                     {subscription?.status === 'NONE' && <span className="px-2 py-0.5 bg-yellow-500/30 text-xs rounded-md font-medium">Free Credits</span>}
+                                    {subscription?.status === 'PAST_DUE' && <span className="px-2 py-0.5 bg-amber-500/30 text-xs rounded-md font-medium">Past Due</span>}
+                                    {subscription?.status === 'HALTED' && <span className="px-2 py-0.5 bg-red-500/30 text-xs rounded-md font-medium">Suspended</span>}
+                                    {subscription?.status === 'CANCELLED' && <span className="px-2 py-0.5 bg-slate-400/30 text-xs rounded-md font-medium">Cancelled</span>}
+                                    {(subscription?.status === 'CREATED' || subscription?.status === 'AUTHENTICATED') && <span className="px-2 py-0.5 bg-blue-400/30 text-xs rounded-md font-medium">Processing</span>}
                                 </h4>
                             </div>
                             <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/10">
@@ -821,10 +833,47 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                 <span className="text-slate-400 text-xs">credits</span>
                             </div>
                             {subscription?.currentPeriodEnd && (
-                                <span className="text-slate-400 text-xs">Renews {new Date(subscription.currentPeriodEnd).toLocaleDateString()}</span>
+                                <span className="text-slate-400 text-xs">
+                                    {subscription.status === 'CANCELLED' ? 'Expires' : 'Renews'}{' '}
+                                    {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
+                                </span>
                             )}
                         </div>
                     </div>
+
+                    {/* Payment status banners */}
+                    {subscription?.status === 'PAST_DUE' && (
+                        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                            <AlertCircle size={18} className="text-amber-500 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="text-sm font-bold text-amber-800">Payment Overdue</p>
+                                <p className="text-xs text-amber-700 mt-0.5">Your last payment failed. Razorpay will retry automatically. You may also retry by switching plans or re-subscribing below.</p>
+                            </div>
+                        </div>
+                    )}
+                    {subscription?.status === 'HALTED' && (
+                        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3">
+                            <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="text-sm font-bold text-red-800">Subscription Suspended</p>
+                                <p className="text-xs text-red-700 mt-0.5">All payment retries were exhausted. Please re-subscribe below to restore access.</p>
+                            </div>
+                        </div>
+                    )}
+                    {subscription?.status === 'CANCELLED' && (
+                        <div className="mb-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-3">
+                            <AlertCircle size={18} className="text-slate-400 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="text-sm font-bold text-slate-700">Subscription Cancelled</p>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    {subscription.currentPeriodEnd
+                                        ? `Access continues until ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}.`
+                                        : 'Your subscription has been cancelled.'}
+                                    {' '}Subscribe below to continue.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Weekly Usage */}
                     {usage && (
@@ -860,21 +909,31 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     )}
 
                     {/* Top Up Credits */}
-                    {creditPacks.length > 0 && (
+                    {topupCreditsEnabled ? (
+                        creditPacks.length > 0 && (
+                            <div className="mb-6">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="font-bold text-slate-800 text-sm">Top Up Credits</h4>
+                                    <span className="text-[10px] text-slate-400">Used when over weekly limits</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {creditPacks.map((pack) => (
+                                        <button key={pack.id} onClick={() => handlePurchaseCredits(pack.id)} className="border border-slate-200 rounded-xl p-3 text-center hover:border-orange-300 hover:bg-orange-50 transition-all hover:shadow-sm">
+                                            <p className="text-lg font-bold text-slate-800">{pack.credits}</p>
+                                            <p className="text-[10px] text-slate-500 mb-1">credits</p>
+                                            <p className="text-xs font-bold text-orange-600">{formatPaise(pack.priceInPaise)}</p>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )
+                    ) : (
                         <div className="mb-6">
-                            <div className="flex items-center justify-between mb-3">
-                                <h4 className="font-bold text-slate-800 text-sm">Top Up Credits</h4>
-                                <span className="text-[10px] text-slate-400">Used when over weekly limits</span>
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-bold text-slate-400 text-sm">Top Up Credits</h4>
+                                <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wide">Coming Soon</span>
                             </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                {creditPacks.map((pack) => (
-                                    <button key={pack.id} onClick={() => handlePurchaseCredits(pack.id)} className="border border-slate-200 rounded-xl p-3 text-center hover:border-orange-300 hover:bg-orange-50 transition-all hover:shadow-sm">
-                                        <p className="text-lg font-bold text-slate-800">{pack.credits}</p>
-                                        <p className="text-[10px] text-slate-500 mb-1">credits</p>
-                                        <p className="text-xs font-bold text-orange-600">{formatPaise(pack.priceInPaise)}</p>
-                                    </button>
-                                ))}
-                            </div>
+                            <p className="text-[11px] text-slate-400">Purchase additional credits when over your weekly plan limit.</p>
                         </div>
                     )}
 
@@ -887,8 +946,8 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
 
                         {/* Billing Cycle Toggle */}
                         <div className="flex items-center justify-center gap-1 mb-4 bg-slate-100 rounded-xl p-1">
-                            <button onClick={() => setBillingCycle('MONTHLY')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors ${billingCycle === 'MONTHLY' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Monthly</button>
-                            <button onClick={() => setBillingCycle('ANNUAL')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors ${billingCycle === 'ANNUAL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Annual <span className="text-green-600">(save 17%)</span></button>
+                            <button onClick={() => setBillingCycle('MONTHLY')} disabled={isSwitchPlanLoading} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors ${billingCycle === 'MONTHLY' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Monthly</button>
+                            <button onClick={() => setBillingCycle('ANNUAL')} disabled={isSwitchPlanLoading} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors ${billingCycle === 'ANNUAL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Annual <span className="text-green-600">(save 17%)</span></button>
                         </div>
 
                         <div className="space-y-3">
@@ -897,7 +956,10 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                 const PlanIcon = meta.icon;
                                 const price = billingCycle === 'MONTHLY' ? plan.pricing.monthly : plan.pricing.annual;
                                 const priceLabel = billingCycle === 'MONTHLY' ? `${formatPaise(price)}/mo` : `${formatPaise(price)}/yr`;
-                                const isCurrentPlan = subscription?.planSnapshot?.slug === plan.slug && (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE');
+                                const isCurrentPlan =
+                                    subscription?.planSnapshot?.slug === plan.slug &&
+                                    (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE') &&
+                                    subscription?.billingCycle === billingCycle;
 
                                 return (
                                     <div key={plan.id} className={`border rounded-2xl p-4 transition-all ${isCurrentPlan ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-slate-200'}`}>
@@ -919,7 +981,11 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                                     disabled={isSwitchPlanLoading}
                                                     className={`px-4 py-2 text-white text-xs font-bold rounded-xl ${isSwitchPlanLoading ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800'}`}
                                                 >
-                                                    {isSwitchPlanLoading ? 'Processing...' : (subscription?.status === 'ACTIVE' ? 'Switch' : 'Subscribe')}
+                                                    {isSwitchPlanLoading ? 'Processing...' : (
+                                                        subscription?.status === 'ACTIVE' ? 'Switch' :
+                                                        subscription?.status === 'PAST_DUE' ? 'Retry' :
+                                                        'Subscribe'
+                                                    )}
                                                 </button>
                                             )}
                                         </div>
@@ -990,6 +1056,13 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     </button>
                     <h1 className="text-base font-bold text-slate-800">Profile</h1>
                 </div>
+
+                {activationPending && (
+                    <div className="mx-4 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3">
+                        <Loader2 size={16} className="text-blue-500 shrink-0 animate-spin" />
+                        <p className="text-xs text-blue-700 font-medium">Your subscription is being activated. Check back shortly.</p>
+                    </div>
+                )}
 
                 <div className="p-6 space-y-6">
                     {/* Header: avatar + name */}
@@ -1176,7 +1249,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                             </div>
                             <span className="text-sm font-medium text-slate-700">Log Out</span>
                         </button>
-                        {deleteAccountEnabled ? (
+                        {featureFlags?.deleteAccount === true ? (
                             <button onClick={() => setShowDeleteConfirm(true)} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-red-50 group">
                                 <div className="w-9 h-9 bg-red-50 text-red-400 group-hover:text-red-500 rounded-lg flex items-center justify-center">
                                     <Trash2 size={18} />
