@@ -50,7 +50,7 @@ function parseArgs() {
 
 function getPidsForPortWindows(port) {
   try {
-    const output = execSync(`netstat -ano -p tcp | findstr :${port}`, {
+    const output = execSync(`netstat -ano -p tcp | findstr ":${port} " | findstr LISTENING`, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
@@ -60,7 +60,7 @@ function getPidsForPortWindows(port) {
       .map((line) => line.trim())
       .filter(Boolean)
       .map((line) => line.split(/\s+/))
-      .filter((parts) => parts.length >= 5 && parts[3] === 'LISTENING')
+      .filter((parts) => parts.length >= 5)
       .map((parts) => Number.parseInt(parts[4], 10))
       .filter((pid) => Number.isInteger(pid) && pid > 0);
 
@@ -72,8 +72,11 @@ function getPidsForPortWindows(port) {
 
 function killPidWindows(pid, port) {
   try {
-    execSync(`taskkill /PID ${pid} /F`, { stdio: 'ignore' });
-    console.log(`[ports] Stopped PID ${pid} on port ${port}`);
+    // /T kills the entire process tree (cmd.exe -> npm -> tsx -> node),
+    // not just the top-level process. Without /T, node/tsx survive as
+    // orphans and keep the port bound on the next dev:free run.
+    execSync(`taskkill /PID ${pid} /F /T`, { stdio: 'ignore' });
+    console.log(`[ports] Stopped PID ${pid} (and children) on port ${port}`);
   } catch {
     console.log(`[ports] Failed to stop PID ${pid} on port ${port}`);
   }
