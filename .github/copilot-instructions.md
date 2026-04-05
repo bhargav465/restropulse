@@ -127,7 +127,9 @@ packages/
 ```bash
 npm install              # Install all workspaces
 npm run dev              # Start runtime apps (excludes @restropulse/db-cli)
+npm run dev:free         # Kill occupied ports, build packages, then launch mprocs TUI (all services)
 npm run build            # Build all
+npm run build:packages   # Build only shared packages (shared, db, publishing, telemetry)
 npm run test             # Test all
 npm run test:unit        # Run unit tests across workspaces
 npm run test:coverage    # Run coverage across workspaces
@@ -135,6 +137,8 @@ npm run lint             # Lint all
 npm run type-check       # Type-check all
 npm run dev --filter=@restropulse/api   # Single app
 npm run reset --workspace=@restropulse/db-cli        # Reset DB (prompts for URI + DB name, 10s delay)
+npm run setup:dev        # Install dev tools: mprocs (TUI runner) + ngrok (webhook tunnel)
+npm run ngrok            # Start ngrok tunnel for local Razorpay webhook testing
 ```
 
 ## MCP Tool-Routing Rules

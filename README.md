@@ -24,7 +24,13 @@ packages/
 # Install all workspace dependencies
 npm install
 
-# Start all apps in development mode
+# Install dev tools (mprocs TUI runner + ngrok tunnel) -- one-time setup
+npm run setup:dev
+
+# Start all services in a split-pane TUI (web, api, publisher, content-engine, ngrok)
+npm run dev:free
+
+# Start all apps without the TUI (Turborepo output)
 npm run dev
 
 # Start a single app
@@ -34,15 +40,19 @@ npm run dev --filter=@restropulse/web
 
 ## Commands
 
-| Command                | Description                  |
-|------------------------|------------------------------|
-| npm install            | Install all workspaces       |
-| npm run dev            | Start all apps (Turborepo)   |
-| npm run build          | Build all packages and apps  |
-| npm run test           | Run all test suites          |
-| npm run lint           | Lint all workspaces          |
-| npm run type-check     | TypeScript type checking     |
-| npm run clean          | Remove build artifacts       |
+| Command                  | Description                                          |
+|--------------------------|------------------------------------------------------|
+| npm install              | Install all workspaces                               |
+| npm run setup:dev        | Install dev tools: mprocs + ngrok (one-time)         |
+| npm run dev:free         | Kill ports, build packages, launch mprocs TUI        |
+| npm run dev              | Start all apps via Turborepo (no TUI)                |
+| npm run build            | Build all packages and apps                          |
+| npm run build:packages   | Build shared packages only                           |
+| npm run test             | Run all test suites                                  |
+| npm run lint             | Lint all workspaces                                  |
+| npm run type-check       | TypeScript type checking                             |
+| npm run ngrok            | Start ngrok tunnel for webhook testing               |
+| npm run clean            | Remove build artifacts                               |
 
 ## Tech Stack
 

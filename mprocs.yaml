@@ -1,0 +1,35 @@
+procs:
+  web:
+    cmd:
+      - cmd
+      - /c
+      - npm run dev
+    cwd: apps/web
+
+  api:
+    cmd:
+      - cmd
+      - /c
+      - npm run dev
+    cwd: apps/api
+
+  publisher:
+    cmd:
+      - cmd
+      - /c
+      - npm run dev
+    cwd: apps/publisher
+
+  content-engine:
+    cmd:
+      - cmd
+      - /c
+      - npm run dev
+    cwd: apps/content-engine
+
+  ngrok:
+    cmd:
+      - cmd
+      - /c
+      - node scripts/start-ngrok.mjs
+    cwd: .
