@@ -1,20 +1,20 @@
 procs:
   web:
-    shell: "npm run dev"
+    cmd: ["cmd", "/c", "npm run dev"]
     cwd: apps/web
 
   api:
-    shell: "npm run dev"
+    cmd: ["cmd", "/c", "npm run dev"]
     cwd: apps/api
 
   publisher:
-    shell: "npm run dev"
+    cmd: ["cmd", "/c", "npm run dev"]
     cwd: apps/publisher
 
   content-engine:
-    shell: "npm run dev"
+    cmd: ["cmd", "/c", "npm run dev"]
     cwd: apps/content-engine
 
   ngrok:
-    shell: "node scripts/start-ngrok.mjs"
+    cmd: ["cmd", "/c", "node scripts/start-ngrok.mjs"]
     cwd: .
