@@ -19,6 +19,8 @@ const mockIncrementCouponRedemptions = vi.fn();
 const mockCreateCouponRedemption = vi.fn();
 const mockHasRestaurantRedeemedCoupon = vi.fn();
 const mockCreateInvoice = vi.fn();
+const mockFindInvoiceByPaymentId = vi.fn();
+const mockFindUserById = vi.fn();
 
 vi.mock('@restropulse/db', async (importOriginal) => {
     const actual = await importOriginal() as any;
@@ -41,6 +43,8 @@ vi.mock('@restropulse/db', async (importOriginal) => {
         createCouponRedemption: mockCreateCouponRedemption,
         hasRestaurantRedeemedCoupon: mockHasRestaurantRedeemedCoupon,
         createInvoice: mockCreateInvoice,
+        findInvoiceByPaymentId: mockFindInvoiceByPaymentId,
+        findUserById: mockFindUserById,
     };
 });
 
@@ -50,6 +54,8 @@ const mockCreateRazorpayOrder = vi.fn();
 const mockVerifyWebhookSignature = vi.fn();
 const mockVerifyPaymentSignature = vi.fn();
 const mockGetRazorpayKeyId = vi.fn().mockReturnValue('rzp_test_key');
+const mockCreateRazorpayCustomer = vi.fn();
+const mockNotifyRazorpayInvoice = vi.fn();
 
 vi.mock('../../src/services/razorpay.js', () => ({
     createRazorpaySubscription: mockCreateRazorpaySubscription,
@@ -61,9 +67,12 @@ vi.mock('../../src/services/razorpay.js', () => ({
     createRazorpayOffer: vi.fn(),
     fetchRazorpayInvoice: vi.fn(),
     listRazorpayInvoices: vi.fn(),
+    notifyRazorpayInvoice: mockNotifyRazorpayInvoice,
+    createRazorpayCustomer: mockCreateRazorpayCustomer,
+    isRazorpayConfigured: vi.fn().mockReturnValue(true),
 }));
 
-const { createTestApp, generateAuthToken } = await import('../helpers/testHelper.js');
+const { createTestApp, generateAuthToken, mockUser } = await import('../helpers/testHelper.js');
 
 const authToken = generateAuthToken();
 const app = createTestApp();
@@ -97,6 +106,9 @@ const mockSubscription = {
 describe('Subscription Routes', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // Default: user lookup succeeds with email, customer creation succeeds
+        mockFindUserById.mockResolvedValue(mockUser);
+        mockCreateRazorpayCustomer.mockResolvedValue({ id: 'cust_rzp_u1' });
     });
 
     describe('GET /api/subscriptions/plans', () => {
@@ -230,7 +242,7 @@ describe('Subscription Routes', () => {
 
             expect(res.status).toBe(200);
             expect(mockCreateRazorpaySubscription).toHaveBeenCalledWith(
-                'plan_monthly_growth', 120, 'offer_rzp_1',
+                'plan_monthly_growth', 120, 'offer_rzp_1', 'cust_rzp_u1',
             );
         });
 
@@ -278,6 +290,79 @@ describe('Subscription Routes', () => {
             expect(res.status).toBe(200);
             expect(mockUpdateSubscription).toHaveBeenCalled();
             expect(mockCreateSubscription).not.toHaveBeenCalled();
+        });
+
+        test('should create Razorpay customer with user name, email, and phone', async () => {
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(null);
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(mockCreateRazorpayCustomer).toHaveBeenCalledWith(
+                mockUser.name,
+                mockUser.email,
+                mockUser.phone,
+            );
+        });
+
+        test('should pass customer_id to createRazorpaySubscription', async () => {
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(null);
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(mockCreateRazorpaySubscription).toHaveBeenCalledWith(
+                'plan_monthly_growth', 120, undefined, 'cust_rzp_u1',
+            );
+        });
+
+        test('should proceed with subscription even if customer creation fails', async () => {
+            mockCreateRazorpayCustomer.mockRejectedValue(new Error('Razorpay customer API error'));
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(null);
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_no_cust' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.subscriptionId).toBe('sub_rzp_no_cust');
+            // customer_id should be undefined when creation fails
+            expect(mockCreateRazorpaySubscription).toHaveBeenCalledWith(
+                'plan_monthly_growth', 120, undefined, undefined,
+            );
+        });
+
+        test('should proceed with subscription when user has no email', async () => {
+            mockFindUserById.mockResolvedValue({ ...mockUser, email: undefined });
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(null);
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_no_email' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(mockCreateRazorpayCustomer).not.toHaveBeenCalled();
+            expect(mockCreateRazorpaySubscription).toHaveBeenCalledWith(
+                'plan_monthly_growth', 120, undefined, undefined,
+            );
         });
     });
 
@@ -537,6 +622,100 @@ describe('Subscription Routes', () => {
             }));
         });
 
+        test('should call notifyRazorpayInvoice after creating subscription invoice', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1' });
+            mockFindInvoiceByPaymentId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_signature')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: {
+                            entity: {
+                                id: 'sub_rzp_123',
+                                current_start: Math.floor(Date.now() / 1000),
+                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+                            },
+                        },
+                        payment: {
+                            entity: {
+                                id: 'pay_notify_1',
+                                invoice_id: 'inv_rzp_notify',
+                                amount: 999900,
+                                currency: 'INR',
+                            },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockNotifyRazorpayInvoice).toHaveBeenCalledWith('inv_rzp_notify', 'email');
+        });
+
+        test('should not block webhook response when notifyRazorpayInvoice fails', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1' });
+            mockFindInvoiceByPaymentId.mockResolvedValue(null);
+            mockNotifyRazorpayInvoice.mockRejectedValue(new Error('Razorpay notify failed'));
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_signature')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: {
+                            entity: {
+                                id: 'sub_rzp_123',
+                                current_start: Math.floor(Date.now() / 1000),
+                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+                            },
+                        },
+                        payment: {
+                            entity: {
+                                id: 'pay_notify_fail',
+                                invoice_id: 'inv_rzp_fail',
+                                amount: 999900,
+                                currency: 'INR',
+                            },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockCreateInvoice).toHaveBeenCalledOnce();
+        });
+
+        test('should skip notifyRazorpayInvoice when payment has no invoice_id', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1' });
+            mockFindInvoiceByPaymentId.mockResolvedValue(null);
+
+            await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_signature')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: {
+                            entity: { id: 'sub_rzp_123' },
+                        },
+                        payment: {
+                            entity: {
+                                id: 'pay_no_inv',
+                                amount: 999900,
+                                currency: 'INR',
+                            },
+                        },
+                    },
+                });
+
+            expect(mockNotifyRazorpayInvoice).not.toHaveBeenCalled();
+        });
+
         test('should handle subscription.cancelled', async () => {
             mockVerifyWebhookSignature.mockReturnValue(true);
             mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription });
@@ -687,6 +866,80 @@ describe('Subscription Routes', () => {
                 .send({ event: 'payment.captured', payload: {} });
 
             expect(res.status).toBe(200);
+        });
+
+        test('should skip invoice creation when subscription.charged is a duplicate (idempotency)', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1' });
+            // Simulate existing invoice for this payment
+            mockFindInvoiceByPaymentId.mockResolvedValue({ id: 'inv-existing', razorpayPaymentId: 'pay_dup_1' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_signature')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: {
+                            entity: {
+                                id: 'sub_rzp_123',
+                                current_start: Math.floor(Date.now() / 1000),
+                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+                            },
+                        },
+                        payment: {
+                            entity: {
+                                id: 'pay_dup_1',
+                                invoice_id: 'inv_rzp_dup',
+                                amount: 999900,
+                                currency: 'INR',
+                            },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub-r1', expect.objectContaining({ status: 'ACTIVE' }));
+            // Invoice must NOT be created again
+            expect(mockCreateInvoice).not.toHaveBeenCalled();
+        });
+
+        test('should create invoice on first subscription.charged (non-duplicate)', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1' });
+            // No existing invoice
+            mockFindInvoiceByPaymentId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_signature')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: {
+                            entity: {
+                                id: 'sub_rzp_123',
+                                current_start: Math.floor(Date.now() / 1000),
+                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+                            },
+                        },
+                        payment: {
+                            entity: {
+                                id: 'pay_new_1',
+                                invoice_id: 'inv_rzp_new',
+                                amount: 999900,
+                                currency: 'INR',
+                            },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockCreateInvoice).toHaveBeenCalledOnce();
+            expect(mockCreateInvoice).toHaveBeenCalledWith(expect.objectContaining({
+                razorpayPaymentId: 'pay_new_1',
+                type: 'SUBSCRIPTION',
+            }));
         });
     });
 

@@ -17,6 +17,8 @@ import {
     createCouponRedemption,
     hasRestaurantRedeemedCoupon,
     createInvoice,
+    findInvoiceByPaymentId,
+    findUserById,
 } from '@restropulse/db';
 import {
     ApiResponse,
@@ -36,6 +38,9 @@ import {
     verifyWebhookSignature,
     verifyPaymentSignature,
     getRazorpayKeyId,
+    isRazorpayConfigured,
+    notifyRazorpayInvoice,
+    createRazorpayCustomer,
 } from '../services/razorpay.js';
 import { createLogger, trackEvent } from '@restropulse/telemetry/server';
 
@@ -80,6 +85,10 @@ router.get('/current', requireAuth, handle(async (req: Request, res: Response<Ap
 
 // POST /subscribe -- requireAuth, create Razorpay subscription
 router.post('/subscribe', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
+    if (!isRazorpayConfigured()) {
+        return res.status(503).json({ success: false, error: 'Payment service is not configured' });
+    }
+
     const restaurantId = req.user!.restaurantId;
     const { planSlug, billingCycle, couponCode } = req.body;
 
@@ -147,7 +156,23 @@ router.post('/subscribe', requireAuth, handle(async (req: Request, res: Response
     // Total cycles: 120 for monthly (10 years), 10 for annual
     const totalCount = billingCycle === 'MONTHLY' ? 120 : 10;
 
-    const razorpaySub = await createRazorpaySubscription(razorpayPlanId, totalCount, offerId);
+    // Create a Razorpay customer so invoice emails reach the user
+    let customerId: string | undefined;
+    const user = await findUserById(req.user!.userId);
+    if (user?.email) {
+        try {
+            const customer = await createRazorpayCustomer(
+                user.name,
+                user.email,
+                user.phone,
+            );
+            customerId = customer.id;
+        } catch (customerErr) {
+            log.warn({ err: customerErr, userId: req.user!.userId }, 'Failed to create Razorpay customer; proceeding without customer_id');
+        }
+    }
+
+    const razorpaySub = await createRazorpaySubscription(razorpayPlanId, totalCount, offerId, customerId);
 
     // Upsert subscription doc
     const existing = await findActiveSubscription(restaurantId);
@@ -289,25 +314,40 @@ router.post('/webhook', async (req: Request, res: Response) => {
                             amountPaise: String(payload?.payment?.entity?.amount || 0),
                         });
 
-                        // Create invoice record from payment
+                        // Create invoice record from payment (idempotent: skip if already exists for this payment)
                         const payment = payload?.payment?.entity;
                         if (payment) {
-                            const planName = sub.planSnapshot?.name || 'Subscription';
-                            const cycle = sub.billingCycle || 'MONTHLY';
-                            await createInvoice({
-                                restaurantId: sub.restaurantId,
-                                type: 'SUBSCRIPTION',
-                                razorpayInvoiceId: payment.invoice_id || undefined,
-                                razorpayPaymentId: payment.id,
-                                razorpaySubscriptionId: subId,
-                                amountPaise: payment.amount || 0,
-                                currency: payment.currency || 'INR',
-                                status: 'paid',
-                                description: `${planName} Plan - ${cycle.charAt(0) + cycle.slice(1).toLowerCase()}`,
-                                billingPeriodStart: periodStart,
-                                billingPeriodEnd: periodEnd,
-                                paidAt: new Date(),
-                            });
+                            const existingInvoice = await findInvoiceByPaymentId(payment.id);
+                            if (!existingInvoice) {
+                                const planName = sub.planSnapshot?.name || 'Subscription';
+                                const cycle = sub.billingCycle || 'MONTHLY';
+                                await createInvoice({
+                                    restaurantId: sub.restaurantId,
+                                    type: 'SUBSCRIPTION',
+                                    razorpayInvoiceId: payment.invoice_id || undefined,
+                                    razorpayPaymentId: payment.id,
+                                    razorpaySubscriptionId: subId,
+                                    amountPaise: payment.amount || 0,
+                                    currency: payment.currency || 'INR',
+                                    status: 'paid',
+                                    description: `${planName} Plan - ${cycle.charAt(0) + cycle.slice(1).toLowerCase()}`,
+                                    billingPeriodStart: periodStart,
+                                    billingPeriodEnd: periodEnd,
+                                    paidAt: new Date(),
+                                });
+
+                                // Send invoice email via Razorpay
+                                if (payment.invoice_id) {
+                                    try {
+                                        await notifyRazorpayInvoice(payment.invoice_id, 'email');
+                                        log.info({ razorpayInvoiceId: payment.invoice_id }, 'Razorpay invoice notification sent');
+                                    } catch (notifyErr) {
+                                        log.warn({ err: notifyErr, razorpayInvoiceId: payment.invoice_id }, 'Failed to send Razorpay invoice notification');
+                                    }
+                                }
+                            } else {
+                                log.info({ razorpayPaymentId: payment.id }, 'Skipping duplicate subscription.charged invoice');
+                            }
                         }
                     }
                 }
@@ -401,6 +441,10 @@ router.post('/cancel', requireAuth, handle(async (req: Request, res: Response<Ap
 
 // POST /credits/purchase -- requireAuth, create Razorpay Order for credit pack
 router.post('/credits/purchase', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
+    if (!isRazorpayConfigured()) {
+        return res.status(503).json({ success: false, error: 'Payment service is not configured' });
+    }
+
     const { creditPackId } = req.body;
 
     if (!creditPackId) {
@@ -412,7 +456,7 @@ router.post('/credits/purchase', requireAuth, handle(async (req: Request, res: R
         return res.status(404).json({ success: false, error: 'Credit pack not found' });
     }
 
-    const receipt = `cr_${req.user!.restaurantId}_${Date.now()}`;
+    const receipt = `cr_${req.user!.restaurantId.slice(-8)}_${Date.now()}`;
     const order = await createRazorpayOrder(pack.priceInPaise, receipt);
 
     await createCreditPurchase({

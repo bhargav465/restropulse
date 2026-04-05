@@ -43,12 +43,25 @@ async function razorpayRequest(path: string, method: string, body?: object): Pro
 }
 
 /**
+ * Create a Razorpay Customer for linking to subscriptions.
+ * Returns the customer ID to be passed to createRazorpaySubscription.
+ */
+export async function createRazorpayCustomer(
+    name: string,
+    email: string,
+    contact: string,
+): Promise<{ id: string }> {
+    return razorpayRequest('/customers', 'POST', { name, email, contact });
+}
+
+/**
  * Create a Razorpay Subscription for recurring billing.
  */
 export async function createRazorpaySubscription(
     planId: string,
     totalCount: number,
     offerId?: string,
+    customerId?: string,
 ): Promise<{ id: string; shortUrl: string; status: string }> {
     const body: any = {
         plan_id: planId,
@@ -58,6 +71,10 @@ export async function createRazorpaySubscription(
 
     if (offerId) {
         body.offer_id = offerId;
+    }
+
+    if (customerId) {
+        body.customer_id = customerId;
     }
 
     return razorpayRequest('/subscriptions', 'POST', body);
@@ -178,8 +195,26 @@ export async function listRazorpayInvoices(
 }
 
 /**
+ * Notify a Razorpay Invoice via email or SMS.
+ * Triggers Razorpay to send the invoice to the customer's registered contact.
+ */
+export async function notifyRazorpayInvoice(
+    invoiceId: string,
+    medium: 'email' | 'sms',
+): Promise<void> {
+    await razorpayRequest(`/invoices/${invoiceId}/notify/${medium}`, 'POST');
+}
+
+/**
  * Get the Razorpay key ID for frontend checkout.
  */
 export function getRazorpayKeyId(): string {
     return getConfig().keyId;
+}
+
+/**
+ * Returns true if Razorpay credentials are present in the environment.
+ */
+export function isRazorpayConfigured(): boolean {
+    return !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET);
 }
