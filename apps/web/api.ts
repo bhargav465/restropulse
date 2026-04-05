@@ -39,7 +39,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit, retry = true
     if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
         browserEvents.networkError(endpoint, String(response.status));
-        throw new Error(errorBody.error || errorBody.message || `HTTP ${response.status}`);
+        throw new Error(errorBody.message || errorBody.error || `HTTP ${response.status}`);
     }
 
     return response.json();
