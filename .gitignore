@@ -48,3 +48,6 @@ restropulse-pwa/
 restropulse-pwa-backend/
 restropulse-pwa-database/
 /.vs
+
+# Git worktrees
+.claude/worktrees/
