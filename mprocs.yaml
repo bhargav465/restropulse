@@ -1,4 +1,8 @@
 procs:
+  env-editor:
+    cmd: ["cmd", "/c", "node scripts/env-editor.mjs"]
+    cwd: .
+
   web:
     cmd: ["cmd", "/c", "npm run dev"]
     cwd: apps/web
@@ -15,6 +19,6 @@ procs:
     cmd: ["cmd", "/c", "npm run dev"]
     cwd: apps/content-engine
 
-  ngrok:
+  webhook-tunnel:
     cmd: ["cmd", "/c", "node scripts/start-ngrok.mjs"]
     cwd: .

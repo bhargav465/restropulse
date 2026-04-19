@@ -28,9 +28,6 @@ npm install
 npm run setup:dev
 
 # Start all services in a split-pane TUI (web, api, publisher, content-engine, ngrok)
-npm run dev:free
-
-# Start all apps without the TUI (Turborepo output)
 npm run dev
 
 # Start a single app
@@ -44,8 +41,7 @@ npm run dev --filter=@restropulse/web
 |--------------------------|------------------------------------------------------|
 | npm install              | Install all workspaces                               |
 | npm run setup:dev        | Install dev tools: mprocs + ngrok (one-time)         |
-| npm run dev:free         | Kill ports, build packages, launch mprocs TUI        |
-| npm run dev              | Start all apps via Turborepo (no TUI)                |
+| npm run dev              | Kill ports, build packages, launch mprocs TUI        |
 | npm run build            | Build all packages and apps                          |
 | npm run build:packages   | Build shared packages only                           |
 | npm run test             | Run all test suites                                  |

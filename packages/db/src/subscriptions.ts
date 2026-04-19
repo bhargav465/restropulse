@@ -12,7 +12,7 @@ import type { Subscription, PostType, Platform } from '@restropulse/shared';
 
 export async function findActiveSubscription(restaurantId: string): Promise<Subscription | null> {
   const col = getSubscriptionsCollection();
-  const doc = await col.findOne({ restaurantId });
+  const doc = await col.findOne({ restaurantId, endedAt: null });
   return toApiFormat(doc) as Subscription | null;
 }
 
@@ -20,6 +20,7 @@ export async function createSubscription(sub: Omit<Subscription, 'id'>): Promise
   const col = getSubscriptionsCollection();
   const now = new Date();
   const result = await col.insertOne({
+    endedAt: null,
     ...sub,
     createdAt: now,
     updatedAt: now,

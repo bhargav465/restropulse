@@ -142,18 +142,38 @@ const startServer = async () => {
         // Connect to MongoDB
         await connectDB();
 
-        app.listen(PORT, () => {
-            log.info({
-                port: PORT,
-                corsOrigin: CORS_ORIGIN,
-                nodeEnv: process.env.NODE_ENV || 'development',
-            }, `Server running at http://localhost:${PORT}`);
+        // Wrap listen() in a Promise so EADDRINUSE and other server errors are
+        // caught by the try/catch below instead of escaping to uncaughtException.
+        await new Promise<void>((resolve, reject) => {
+            const server = app.listen(PORT, () => {
+                log.info({
+                    port: PORT,
+                    corsOrigin: CORS_ORIGIN,
+                    nodeEnv: process.env.NODE_ENV || 'development',
+                }, `Server running at http://localhost:${PORT}`);
+                resolve();
+            });
+            server.on('error', reject);
         });
     } catch (error) {
         log.error({ err: error }, 'Failed to start server');
         process.exit(1);
     }
 };
+
+// Process-level error safety net
+// unhandledRejection: log and continue — rejection is isolated to one async chain,
+// does not indicate heap corruption.
+process.on('unhandledRejection', (reason) => {
+    log.error({ err: reason }, 'Unhandled promise rejection');
+});
+
+// uncaughtException: log and exit — synchronous throw outside try/catch means the
+// heap state is unknown; safest to restart cleanly.
+process.on('uncaughtException', (error) => {
+    log.error({ err: error }, 'Uncaught exception — shutting down');
+    process.exit(1);
+});
 
 // Graceful shutdown
 process.on('SIGINT', async () => {

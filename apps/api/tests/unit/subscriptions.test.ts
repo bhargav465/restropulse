@@ -50,25 +50,28 @@ vi.mock('@restropulse/db', async (importOriginal) => {
 
 const mockCreateRazorpaySubscription = vi.fn();
 const mockCancelRazorpaySubscription = vi.fn();
+const mockUpdateRazorpaySubscription = vi.fn();
 const mockCreateRazorpayOrder = vi.fn();
 const mockVerifyWebhookSignature = vi.fn();
 const mockVerifyPaymentSignature = vi.fn();
 const mockGetRazorpayKeyId = vi.fn().mockReturnValue('rzp_test_key');
 const mockCreateRazorpayCustomer = vi.fn();
-const mockNotifyRazorpayInvoice = vi.fn();
+const mockFetchRazorpayCustomersByContact = vi.fn();
+const mockFetchRazorpayInvoice = vi.fn();
 
 vi.mock('../../src/services/razorpay.js', () => ({
     createRazorpaySubscription: mockCreateRazorpaySubscription,
     cancelRazorpaySubscription: mockCancelRazorpaySubscription,
+    updateRazorpaySubscription: mockUpdateRazorpaySubscription,
     createRazorpayOrder: mockCreateRazorpayOrder,
     verifyWebhookSignature: mockVerifyWebhookSignature,
     verifyPaymentSignature: mockVerifyPaymentSignature,
     getRazorpayKeyId: mockGetRazorpayKeyId,
     createRazorpayOffer: vi.fn(),
-    fetchRazorpayInvoice: vi.fn(),
+    fetchRazorpayInvoice: mockFetchRazorpayInvoice,
     listRazorpayInvoices: vi.fn(),
-    notifyRazorpayInvoice: mockNotifyRazorpayInvoice,
     createRazorpayCustomer: mockCreateRazorpayCustomer,
+    fetchRazorpayCustomersByContact: mockFetchRazorpayCustomersByContact,
     isRazorpayConfigured: vi.fn().mockReturnValue(true),
 }));
 
@@ -109,6 +112,8 @@ describe('Subscription Routes', () => {
         // Default: user lookup succeeds with email, customer creation succeeds
         mockFindUserById.mockResolvedValue(mockUser);
         mockCreateRazorpayCustomer.mockResolvedValue({ id: 'cust_rzp_u1' });
+        mockFetchRazorpayInvoice.mockResolvedValue({ id: 'inv_rzp_123', short_url: 'https://rzp.io/i/test', status: 'paid', amount: 49900, currency: 'INR' });
+        mockUpdateRazorpaySubscription.mockResolvedValue({ id: 'sub_test', status: 'active', plan_id: 'plan_test' });
     });
 
     describe('GET /api/subscriptions/plans', () => {
@@ -277,18 +282,17 @@ describe('Subscription Routes', () => {
             expect(res.body.error).toBe('Coupon has expired');
         });
 
-        test('should update existing subscription when one exists', async () => {
+        test('should return 409 when an active subscription already exists', async () => {
             mockFindPlanBySlug.mockResolvedValue(mockPlan);
             mockFindActiveSubscription.mockResolvedValue(mockSubscription);
-            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
 
             const res = await request(app)
                 .post('/api/subscriptions/subscribe')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({ planSlug: 'growth', billingCycle: 'ANNUAL' });
 
-            expect(res.status).toBe(200);
-            expect(mockUpdateSubscription).toHaveBeenCalled();
+            expect(res.status).toBe(409);
+            expect(res.body.error).toMatch(/active subscription already exists/i);
             expect(mockCreateSubscription).not.toHaveBeenCalled();
         });
 
@@ -364,6 +368,236 @@ describe('Subscription Routes', () => {
                 'plan_monthly_growth', 120, undefined, undefined,
             );
         });
+
+        // Re-subscribe scenarios: existing subscription archived (endedAt stamped), new doc inserted.
+
+        test('should archive existing NONE subscription and create new CREATED doc on first subscribe', async () => {
+            const noneSubscription = { id: 'sub-none', restaurantId: 'r1', status: 'NONE', credits: 100 };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(noneSubscription);
+            mockUpdateSubscription.mockResolvedValue({ ...noneSubscription, endedAt: expect.any(String) });
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub-none', expect.objectContaining({ endedAt: expect.any(String) }));
+            expect(mockCreateSubscription).toHaveBeenCalledWith(expect.objectContaining({ status: 'CREATED', razorpaySubscriptionId: 'sub_rzp_new' }));
+        });
+
+        test('should archive existing CANCELLED subscription and create new doc on re-subscribe', async () => {
+            const cancelledSubscription = { id: 'sub-cancelled', restaurantId: 'r1', status: 'CANCELLED', credits: 0 };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(cancelledSubscription);
+            mockUpdateSubscription.mockResolvedValue({ ...cancelledSubscription, endedAt: expect.any(String) });
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_renew' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub-cancelled', expect.objectContaining({ endedAt: expect.any(String) }));
+            expect(mockCreateSubscription).toHaveBeenCalledWith(expect.objectContaining({ status: 'CREATED', razorpaySubscriptionId: 'sub_rzp_renew' }));
+        });
+
+        test('should archive existing HALTED subscription and create new doc on re-subscribe', async () => {
+            const haltedSubscription = { id: 'sub-halted', restaurantId: 'r1', status: 'HALTED', credits: 0 };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(haltedSubscription);
+            mockUpdateSubscription.mockResolvedValue({ ...haltedSubscription, endedAt: expect.any(String) });
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_resume' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub-halted', expect.objectContaining({ endedAt: expect.any(String) }));
+            expect(mockCreateSubscription).toHaveBeenCalledWith(expect.objectContaining({ status: 'CREATED', razorpaySubscriptionId: 'sub_rzp_resume' }));
+        });
+
+        test('should insert a clean new doc (no stale fields) when re-subscribing from CANCELLED', async () => {
+            const cancelledSub = {
+                id: 'sub-cancelled',
+                restaurantId: 'r1',
+                status: 'CANCELLED',
+                credits: 50,
+                cancelAtPeriodEnd: true,
+                cancelledAt: '2026-03-01T00:00:00.000Z',
+                currentPeriodEnd: '2026-03-01T00:00:00.000Z',
+                pendingPlanId: 'old-plan-id',
+                pendingPlanSnapshot: { slug: 'starter' },
+                pendingBillingCycle: 'MONTHLY',
+            };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(cancelledSub);
+            mockUpdateSubscription.mockResolvedValue({ ...cancelledSub, endedAt: '2026-04-01T00:00:00.000Z' });
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            const newDoc = (mockCreateSubscription.mock.calls[0] as any[])[0];
+            expect(newDoc).not.toHaveProperty('cancelAtPeriodEnd');
+            expect(newDoc).not.toHaveProperty('cancelledAt');
+            expect(newDoc).not.toHaveProperty('pendingPlanId');
+        });
+
+        test('should preserve purchased credits when re-subscribing from CANCELLED', async () => {
+            const cancelledSub = { id: 'sub-cancelled', restaurantId: 'r1', status: 'CANCELLED', credits: 50 };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(cancelledSub);
+            mockUpdateSubscription.mockResolvedValue({ ...cancelledSub, endedAt: expect.any(String) });
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(mockCreateSubscription).toHaveBeenCalledWith(expect.objectContaining({ credits: 50 }));
+        });
+
+        test('should preserve purchased credits when re-subscribing from HALTED', async () => {
+            const haltedSub = { id: 'sub-halted', restaurantId: 'r1', status: 'HALTED', credits: 25 };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(haltedSub);
+            mockUpdateSubscription.mockResolvedValue({ ...haltedSub, endedAt: expect.any(String) });
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(mockCreateSubscription).toHaveBeenCalledWith(expect.objectContaining({ credits: 25 }));
+        });
+
+        test('should zero credits when transitioning from NONE free tier to paid plan', async () => {
+            const noneSub = { id: 'sub-none', restaurantId: 'r1', status: 'NONE', credits: 10 };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(noneSub);
+            mockUpdateSubscription.mockResolvedValue({ ...noneSub, endedAt: expect.any(String) });
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(mockCreateSubscription).toHaveBeenCalledWith(expect.objectContaining({ credits: 0 }));
+        });
+
+        // Razorpay customer recovery scenarios
+
+        test('should recover existing Razorpay customer ID when creation fails with already-exists error', async () => {
+            mockCreateRazorpayCustomer.mockRejectedValue(new Error('Customer already exists for the merchant'));
+            mockFetchRazorpayCustomersByContact.mockResolvedValue({ items: [{ id: 'cust_recovered_123' }] });
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(null);
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(mockFetchRazorpayCustomersByContact).toHaveBeenCalledWith(mockUser.phone);
+            expect(mockCreateRazorpaySubscription).toHaveBeenCalledWith(
+                'plan_monthly_growth', 120, undefined, 'cust_recovered_123',
+            );
+        });
+
+        test('should proceed without customer ID when creation fails with already-exists and recovery also fails', async () => {
+            mockCreateRazorpayCustomer.mockRejectedValue(new Error('Customer already exists for the merchant'));
+            mockFetchRazorpayCustomersByContact.mockRejectedValue(new Error('Razorpay API unavailable'));
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(null);
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(mockCreateRazorpaySubscription).toHaveBeenCalledWith(
+                'plan_monthly_growth', 120, undefined, undefined,
+            );
+        });
+
+        // cancelAtPeriodEnd re-subscribe: immediate Razorpay cancel before creating new subscription
+
+        test('should return 500 when Razorpay immediate-cancel fails with a genuine error on cancelAtPeriodEnd re-subscribe', async () => {
+            const activePendingCancel = {
+                id: 'sub-active-cancel',
+                restaurantId: 'r1',
+                status: 'ACTIVE',
+                razorpaySubscriptionId: 'sub_rzp_cancel',
+                cancelAtPeriodEnd: true,
+                credits: 20,
+            };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(activePendingCancel);
+            mockCancelRazorpaySubscription.mockRejectedValue(new Error('Network timeout'));
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(500);
+            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+            expect(mockCreateRazorpaySubscription).not.toHaveBeenCalled();
+        });
+
+        test('should proceed when Razorpay cancel returns already-in-terminal-state error on cancelAtPeriodEnd re-subscribe', async () => {
+            const activePendingCancel = {
+                id: 'sub-active-cancel',
+                restaurantId: 'r1',
+                status: 'ACTIVE',
+                razorpaySubscriptionId: 'sub_rzp_already_done',
+                cancelAtPeriodEnd: true,
+                credits: 20,
+            };
+            mockFindPlanBySlug.mockResolvedValue(mockPlan);
+            mockFindActiveSubscription.mockResolvedValue(activePendingCancel);
+            mockCancelRazorpaySubscription.mockRejectedValue(new Error('Subscription not in an active state'));
+            mockUpdateSubscription.mockResolvedValue({ ...activePendingCancel, endedAt: expect.any(String) });
+            mockCreateSubscription.mockResolvedValue({ id: 'sub-new' });
+            mockCreateRazorpaySubscription.mockResolvedValue({ id: 'sub_rzp_new' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/subscribe')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith(
+                'sub-active-cancel',
+                expect.objectContaining({ status: 'CANCELLED', endedAt: expect.any(String) }),
+            );
+            expect(mockCreateSubscription).toHaveBeenCalledWith(expect.objectContaining({ status: 'CREATED' }));
+        });
     });
 
     describe('POST /api/subscriptions/cancel', () => {
@@ -377,7 +611,10 @@ describe('Subscription Routes', () => {
 
             expect(res.status).toBe(200);
             expect(mockCancelRazorpaySubscription).toHaveBeenCalledWith('sub_rzp_123', true);
-            expect(mockUpdateSubscription).toHaveBeenCalled();
+            expect(mockUpdateSubscription).toHaveBeenCalledWith(
+                expect.any(String),
+                expect.objectContaining({ cancelAtPeriodEnd: true }),
+            );
         });
 
         test('should return 400 when no active subscription', async () => {
@@ -403,27 +640,256 @@ describe('Subscription Routes', () => {
         });
     });
 
-    describe('POST /api/subscriptions/upgrade', () => {
-        test('should cancel current subscription for upgrade', async () => {
-            mockFindActiveSubscription.mockResolvedValue(mockSubscription);
-            mockCancelRazorpaySubscription.mockResolvedValue({});
+    describe('POST /api/subscriptions/change-plan', () => {
+        const mockActiveSub = {
+            id: 'sub1',
+            restaurantId: 'r1',
+            status: 'ACTIVE',
+            razorpaySubscriptionId: 'rzp_sub_123',
+            billingCycle: 'MONTHLY',
+            cancelAtPeriodEnd: false,
+            planSnapshot: {
+                slug: 'starter',
+                pricing: { monthly: 49900, annual: 499000 },
+                razorpayPlanIds: { monthly: 'plan_starter_m', annual: 'plan_starter_a' },
+            },
+            currentPeriodEnd: '2026-05-01T00:00:00.000Z',
+        };
 
-            const res = await request(app)
-                .post('/api/subscriptions/upgrade')
-                .set('Authorization', `Bearer ${authToken}`);
+        const mockGrowthPlan = {
+            id: 'plan_growth_id',
+            slug: 'growth',
+            name: 'Growth',
+            pricing: { monthly: 99900, annual: 999000 },
+            razorpayPlanIds: { monthly: 'plan_growth_m', annual: 'plan_growth_a' },
+        };
 
-            expect(res.status).toBe(200);
-            expect(mockCancelRazorpaySubscription).toHaveBeenCalledWith('sub_rzp_123', false);
+        const mockStarterPlan = {
+            id: 'plan_starter_id',
+            slug: 'starter',
+            name: 'Starter',
+            pricing: { monthly: 49900, annual: 499000 },
+            razorpayPlanIds: { monthly: 'plan_starter_m', annual: 'plan_starter_a' },
+        };
+
+        beforeEach(() => {
+            mockFindActiveSubscription.mockResolvedValue(mockActiveSub);
+            mockFindPlanBySlug.mockResolvedValue(mockGrowthPlan);
+            mockUpdateRazorpaySubscription.mockResolvedValue({ id: 'rzp_sub_123', status: 'active', plan_id: 'plan_growth_m' });
+            mockUpdateSubscription.mockResolvedValue(undefined);
         });
 
-        test('should succeed when no existing subscription', async () => {
+        test('should upgrade plan immediately when target is more expensive', async () => {
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.effective).toBe('immediate');
+            expect(mockUpdateRazorpaySubscription).toHaveBeenCalledWith('rzp_sub_123', {
+                planId: 'plan_growth_m',
+                scheduleChangeAt: 'now',
+            });
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub1', expect.objectContaining({
+                planId: 'plan_growth_id',
+                planSnapshot: mockGrowthPlan,
+                billingCycle: 'MONTHLY',
+            }));
+        });
+
+        test('should schedule downgrade for cycle end when target is cheaper', async () => {
+            mockFindActiveSubscription.mockResolvedValue({
+                ...mockActiveSub,
+                planSnapshot: { slug: 'growth', pricing: { monthly: 99900, annual: 999000 }, razorpayPlanIds: { monthly: 'plan_growth_m', annual: 'plan_growth_a' } },
+            });
+            mockFindPlanBySlug.mockResolvedValue(mockStarterPlan);
+
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'starter', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.effective).toBe('cycle_end');
+            expect(mockUpdateRazorpaySubscription).toHaveBeenCalledWith('rzp_sub_123', {
+                planId: 'plan_starter_m',
+                scheduleChangeAt: 'cycle_end',
+            });
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub1', expect.objectContaining({
+                pendingPlanId: 'plan_starter_id',
+                pendingPlanSnapshot: mockStarterPlan,
+                pendingBillingCycle: 'MONTHLY',
+            }));
+        });
+
+        test('should apply same-plan Monthly to Annual switch immediately (not a downgrade)', async () => {
+            // Annual effective monthly = 999000/12 = 83250, which is less than monthly 99900.
+            // Old logic classified this as a downgrade. Correct logic: billing cycle upgrade
+            // on the same plan is immediate.
+            mockFindActiveSubscription.mockResolvedValue({
+                ...mockActiveSub,
+                billingCycle: 'MONTHLY',
+                planSnapshot: { slug: 'growth', pricing: { monthly: 99900, annual: 999000 }, razorpayPlanIds: { monthly: 'plan_growth_m', annual: 'plan_growth_a' } },
+            });
+            mockFindPlanBySlug.mockResolvedValue(mockGrowthPlan);
+
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'ANNUAL' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.effective).toBe('immediate');
+            expect(mockUpdateRazorpaySubscription).toHaveBeenCalledWith('rzp_sub_123', {
+                planId: 'plan_growth_a',
+                scheduleChangeAt: 'now',
+            });
+        });
+
+        test('should schedule same-plan Annual to Monthly switch for cycle end', async () => {
+            mockFindActiveSubscription.mockResolvedValue({
+                ...mockActiveSub,
+                billingCycle: 'ANNUAL',
+                planSnapshot: { slug: 'growth', pricing: { monthly: 99900, annual: 999000 }, razorpayPlanIds: { monthly: 'plan_growth_m', annual: 'plan_growth_a' } },
+            });
+            mockFindPlanBySlug.mockResolvedValue(mockGrowthPlan);
+
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(200);
+            expect(res.body.data.effective).toBe('cycle_end');
+            expect(mockUpdateRazorpaySubscription).toHaveBeenCalledWith('rzp_sub_123', {
+                planId: 'plan_growth_m',
+                scheduleChangeAt: 'cycle_end',
+            });
+        });
+
+        test('should return 400 when no active subscription exists', async () => {
             mockFindActiveSubscription.mockResolvedValue(null);
 
             const res = await request(app)
-                .post('/api/subscriptions/upgrade')
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(400);
+            expect(res.body.error).toMatch(/no active subscription/i);
+        });
+
+        test('should return 400 when subscription status is CREATED', async () => {
+            mockFindActiveSubscription.mockResolvedValue({ ...mockActiveSub, status: 'CREATED' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(400);
+            expect(res.body.error).toMatch(/must be active/i);
+        });
+
+        test('should return 404 when plan not found', async () => {
+            mockFindPlanBySlug.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'nonexistent', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(404);
+        });
+
+        test('should return 400 when already on same plan and billing cycle', async () => {
+            mockFindPlanBySlug.mockResolvedValue(mockStarterPlan);
+
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'starter', billingCycle: 'MONTHLY' });
+
+            expect(res.status).toBe(400);
+            expect(res.body.error).toMatch(/already on this plan/i);
+        });
+
+        test('should return 400 when planSlug or billingCycle missing', async () => {
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ planSlug: 'growth' });
+
+            expect(res.status).toBe(400);
+        });
+
+        test('should return 401 without auth', async () => {
+            const res = await request(app)
+                .post('/api/subscriptions/change-plan')
+                .send({ planSlug: 'growth', billingCycle: 'MONTHLY' });
+            expect(res.status).toBe(401);
+        });
+    });
+
+    describe('POST /api/subscriptions/reactivate', () => {
+        const mockCancelledEndSub = {
+            id: 'sub1',
+            restaurantId: 'r1',
+            status: 'ACTIVE',
+            razorpaySubscriptionId: 'rzp_sub_123',
+            cancelAtPeriodEnd: true,
+        };
+
+        beforeEach(() => {
+            mockFindActiveSubscription.mockResolvedValue(mockCancelledEndSub);
+            mockCancelRazorpaySubscription.mockResolvedValue({});
+            mockUpdateSubscription.mockResolvedValue(undefined);
+        });
+
+        test('should reactivate subscription pending cancellation', async () => {
+            const res = await request(app)
+                .post('/api/subscriptions/reactivate')
                 .set('Authorization', `Bearer ${authToken}`);
 
             expect(res.status).toBe(200);
+            expect(mockCancelRazorpaySubscription).toHaveBeenCalledWith('rzp_sub_123', false);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub1', {
+                cancelAtPeriodEnd: false,
+                cancelledAt: undefined,
+            });
+        });
+
+        test('should return 400 when no subscription exists', async () => {
+            mockFindActiveSubscription.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/reactivate')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(res.status).toBe(400);
+            expect(res.body.error).toMatch(/no subscription/i);
+        });
+
+        test('should return 400 when cancelAtPeriodEnd is false', async () => {
+            mockFindActiveSubscription.mockResolvedValue({ ...mockCancelledEndSub, cancelAtPeriodEnd: false });
+
+            const res = await request(app)
+                .post('/api/subscriptions/reactivate')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(res.status).toBe(400);
+            expect(res.body.error).toMatch(/not pending cancellation/i);
+        });
+
+        test('should return 400 when subscription is fully CANCELLED', async () => {
+            mockFindActiveSubscription.mockResolvedValue({ ...mockCancelledEndSub, status: 'CANCELLED', cancelAtPeriodEnd: true });
+
+            const res = await request(app)
+                .post('/api/subscriptions/reactivate')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(res.status).toBe(400);
         });
     });
 
@@ -576,56 +1042,60 @@ describe('Subscription Routes', () => {
     });
 
     describe('POST /api/subscriptions/webhook', () => {
-        test('should handle subscription.charged and create invoice', async () => {
+        test('should handle subscription.charged and create invoice with Razorpay auto-generated invoice', async () => {
             mockVerifyWebhookSignature.mockReturnValue(true);
             mockFindSubscriptionByRazorpayId.mockResolvedValue({
                 ...mockSubscription,
                 id: 'sub-r1',
+                razorpayCustomerId: 'cust_db_123',
             });
-
-            const webhookPayload = {
-                event: 'subscription.charged',
-                payload: {
-                    subscription: {
-                        entity: {
-                            id: 'sub_rzp_123',
-                            current_start: Math.floor(Date.now() / 1000),
-                            current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
-                        },
-                    },
-                    payment: {
-                        entity: {
-                            id: 'pay_webhook_1',
-                            invoice_id: 'inv_rzp_webhook',
-                            amount: 999900,
-                            currency: 'INR',
-                        },
-                    },
-                },
-            };
+            mockFindInvoiceByPaymentId.mockResolvedValue(null);
 
             const res = await request(app)
                 .post('/api/subscriptions/webhook')
                 .set('x-razorpay-signature', 'valid_signature')
-                .send(webhookPayload);
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: {
+                            entity: {
+                                id: 'sub_rzp_123',
+                                customer_id: 'cust_payload_123',
+                                current_start: Math.floor(Date.now() / 1000),
+                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+                            },
+                        },
+                        payment: {
+                            entity: {
+                                id: 'pay_webhook_1',
+                                invoice_id: 'inv_rzp_webhook',
+                                amount: 999900,
+                                currency: 'INR',
+                            },
+                        },
+                    },
+                });
 
             expect(res.status).toBe(200);
-            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub-r1', expect.objectContaining({
-                status: 'ACTIVE',
-            }));
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub-r1', expect.objectContaining({ status: 'ACTIVE' }));
+            // Fetches the auto-generated Razorpay invoice to get its PDF URL
+            expect(mockFetchRazorpayInvoice).toHaveBeenCalledWith('inv_rzp_webhook');
+            // Internal invoice stored with Razorpay invoice id + short_url
             expect(mockCreateInvoice).toHaveBeenCalledWith(expect.objectContaining({
                 restaurantId: 'r1',
                 type: 'SUBSCRIPTION',
                 razorpayInvoiceId: 'inv_rzp_webhook',
                 razorpayPaymentId: 'pay_webhook_1',
                 amountPaise: 999900,
+                pdfUrl: 'https://rzp.io/i/test',
             }));
         });
 
-        test('should call notifyRazorpayInvoice after creating subscription invoice', async () => {
+        test('should still create internal invoice if Razorpay invoice fetch fails', async () => {
             mockVerifyWebhookSignature.mockReturnValue(true);
-            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1' });
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1', razorpayCustomerId: 'cust_db_123' });
             mockFindInvoiceByPaymentId.mockResolvedValue(null);
+            mockFetchRazorpayInvoice.mockRejectedValue(new Error('Razorpay API error'));
 
             const res = await request(app)
                 .post('/api/subscriptions/webhook')
@@ -633,65 +1103,48 @@ describe('Subscription Routes', () => {
                 .send({
                     event: 'subscription.charged',
                     payload: {
-                        subscription: {
-                            entity: {
-                                id: 'sub_rzp_123',
-                                current_start: Math.floor(Date.now() / 1000),
-                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
-                            },
-                        },
-                        payment: {
-                            entity: {
-                                id: 'pay_notify_1',
-                                invoice_id: 'inv_rzp_notify',
-                                amount: 999900,
-                                currency: 'INR',
-                            },
-                        },
-                    },
-                });
-
-            expect(res.status).toBe(200);
-            expect(mockNotifyRazorpayInvoice).toHaveBeenCalledWith('inv_rzp_notify', 'email');
-        });
-
-        test('should not block webhook response when notifyRazorpayInvoice fails', async () => {
-            mockVerifyWebhookSignature.mockReturnValue(true);
-            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1' });
-            mockFindInvoiceByPaymentId.mockResolvedValue(null);
-            mockNotifyRazorpayInvoice.mockRejectedValue(new Error('Razorpay notify failed'));
-
-            const res = await request(app)
-                .post('/api/subscriptions/webhook')
-                .set('x-razorpay-signature', 'valid_signature')
-                .send({
-                    event: 'subscription.charged',
-                    payload: {
-                        subscription: {
-                            entity: {
-                                id: 'sub_rzp_123',
-                                current_start: Math.floor(Date.now() / 1000),
-                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
-                            },
-                        },
-                        payment: {
-                            entity: {
-                                id: 'pay_notify_fail',
-                                invoice_id: 'inv_rzp_fail',
-                                amount: 999900,
-                                currency: 'INR',
-                            },
-                        },
+                        subscription: { entity: { id: 'sub_rzp_123', current_start: 0, current_end: 0 } },
+                        payment: { entity: { id: 'pay_err_1', invoice_id: 'inv_err_123', amount: 999900, currency: 'INR' } },
                     },
                 });
 
             expect(res.status).toBe(200);
             expect(mockCreateInvoice).toHaveBeenCalledOnce();
+            // pdfUrl is undefined when invoice fetch fails
+            expect(mockCreateInvoice).toHaveBeenCalledWith(expect.objectContaining({ pdfUrl: undefined }));
         });
 
-        test('should skip notifyRazorpayInvoice when payment has no invoice_id', async () => {
+        test('should skip invoice PDF fetch when payment has no invoice_id', async () => {
             mockVerifyWebhookSignature.mockReturnValue(true);
-            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, id: 'sub-r1' });
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({
+                ...mockSubscription,
+                id: 'sub-r1',
+            });
+            mockFindInvoiceByPaymentId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_signature')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: { entity: { id: 'sub_rzp_123', current_start: 0, current_end: 0 } },
+                        payment: { entity: { id: 'pay_no_inv', amount: 999900, currency: 'INR' } },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockFetchRazorpayInvoice).not.toHaveBeenCalled();
+            expect(mockCreateInvoice).toHaveBeenCalledOnce();
+        });
+
+        test('subscription.charged should clear stale cancelAtPeriodEnd and cancelledAt', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({
+                ...mockSubscription,
+                id: 'sub-r1',
+                razorpayCustomerId: 'cust_db_123',
+            });
             mockFindInvoiceByPaymentId.mockResolvedValue(null);
 
             await request(app)
@@ -701,19 +1154,21 @@ describe('Subscription Routes', () => {
                     event: 'subscription.charged',
                     payload: {
                         subscription: {
-                            entity: { id: 'sub_rzp_123' },
-                        },
-                        payment: {
                             entity: {
-                                id: 'pay_no_inv',
-                                amount: 999900,
-                                currency: 'INR',
+                                id: 'sub_rzp_123',
+                                customer_id: 'cust_db_123',
+                                current_start: Math.floor(Date.now() / 1000),
+                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
                             },
                         },
+                        payment: { entity: { id: 'pay_clear_test', amount: 999900, currency: 'INR' } },
                     },
                 });
 
-            expect(mockNotifyRazorpayInvoice).not.toHaveBeenCalled();
+            expect(mockUpdateSubscription).toHaveBeenCalledWith(
+                'sub-r1',
+                expect.objectContaining({ cancelAtPeriodEnd: false, cancelledAt: undefined }),
+            );
         });
 
         test('should handle subscription.cancelled', async () => {
@@ -732,6 +1187,28 @@ describe('Subscription Routes', () => {
             expect(mockUpdateSubscription).toHaveBeenCalledWith(mockSubscription.id, expect.objectContaining({
                 status: 'CANCELLED',
             }));
+        });
+
+        test('subscription.cancelled should reset cancelAtPeriodEnd to false', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription });
+
+            await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.cancelled',
+                    payload: { subscription: { entity: { id: 'sub_rzp_123' } } },
+                });
+
+            expect(mockUpdateSubscription).toHaveBeenCalledWith(
+                mockSubscription.id,
+                expect.objectContaining({
+                    status: 'CANCELLED',
+                    cancelledAt: expect.any(String),
+                    cancelAtPeriodEnd: false,
+                }),
+            );
         });
 
         test('should handle subscription.halted', async () => {
@@ -939,6 +1416,55 @@ describe('Subscription Routes', () => {
             expect(mockCreateInvoice).toHaveBeenCalledWith(expect.objectContaining({
                 razorpayPaymentId: 'pay_new_1',
                 type: 'SUBSCRIPTION',
+            }));
+        });
+
+        test('should promote pending plan snapshot when subscription.charged fires for a new cycle', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            const pendingPlanSnapshot = { name: 'Starter', slug: 'starter', pricing: { monthly: 49900, annual: 499000 } };
+            const subWithPending = {
+                ...mockSubscription,
+                id: 'sub-r1',
+                razorpayCustomerId: 'cust_db_123',
+                pendingPlanId: 'plan_starter_id',
+                pendingPlanSnapshot,
+                pendingBillingCycle: 'MONTHLY',
+            };
+            mockFindSubscriptionByRazorpayId.mockResolvedValue(subWithPending);
+            mockFindInvoiceByPaymentId.mockResolvedValue(null);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_signature')
+                .send({
+                    event: 'subscription.charged',
+                    payload: {
+                        subscription: {
+                            entity: {
+                                id: 'sub_rzp_123',
+                                customer_id: 'cust_db_123',
+                                current_start: Math.floor(Date.now() / 1000),
+                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+                            },
+                        },
+                        payment: {
+                            entity: {
+                                id: 'pay_pending_promote',
+                                amount: 49900,
+                                currency: 'INR',
+                            },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub-r1', expect.objectContaining({
+                planId: 'plan_starter_id',
+                planSnapshot: pendingPlanSnapshot,
+                billingCycle: 'MONTHLY',
+                pendingPlanId: undefined,
+                pendingPlanSnapshot: null,
+                pendingBillingCycle: undefined,
             }));
         });
     });

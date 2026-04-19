@@ -121,6 +121,7 @@ export interface User {
   firebaseUid?: string;
   emailVerified?: boolean;
   restaurantId: string;
+  razorpayCustomerId?: string;
 }
 
 export interface Restaurant {
@@ -266,6 +267,11 @@ export interface Subscription {
   credits: number;
   couponCode?: string;
   cancelledAt?: string | Date;
+  cancelAtPeriodEnd?: boolean;
+  pendingPlanId?: string;
+  pendingPlanSnapshot?: SubscriptionPlan | null;
+  pendingBillingCycle?: BillingCycle;
+  endedAt?: string | null;
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }

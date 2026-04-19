@@ -55,6 +55,16 @@ export async function createRazorpayCustomer(
 }
 
 /**
+ * Fetch Razorpay customers by contact (phone number).
+ * Used to recover an existing customer ID when creation fails with "already exists".
+ */
+export async function fetchRazorpayCustomersByContact(
+    contact: string,
+): Promise<{ items: Array<{ id: string }> }> {
+    return razorpayRequest(`/customers?contact=${encodeURIComponent(contact)}&count=1`, 'GET');
+}
+
+/**
  * Create a Razorpay Subscription for recurring billing.
  */
 export async function createRazorpaySubscription(
@@ -89,6 +99,25 @@ export async function cancelRazorpaySubscription(
 ): Promise<any> {
     return razorpayRequest(`/subscriptions/${subscriptionId}/cancel`, 'POST', {
         cancel_at_cycle_end: cancelAtCycleEnd ? 1 : 0,
+    });
+}
+
+/**
+ * Update a Razorpay Subscription (change plan).
+ * Use schedule_change_at='now' for upgrades (charges difference immediately).
+ * Use schedule_change_at='cycle_end' for downgrades (switches plan after current period).
+ */
+export async function updateRazorpaySubscription(
+    subscriptionId: string,
+    params: {
+        planId: string;
+        scheduleChangeAt: 'now' | 'cycle_end';
+    },
+): Promise<{ id: string; status: string; plan_id: string }> {
+    return razorpayRequest(`/subscriptions/${subscriptionId}`, 'PATCH', {
+        plan_id: params.planId,
+        quantity: 1,
+        schedule_change_at: params.scheduleChangeAt,
     });
 }
 
@@ -195,14 +224,16 @@ export async function listRazorpayInvoices(
 }
 
 /**
- * Notify a Razorpay Invoice via email or SMS.
- * Triggers Razorpay to send the invoice to the customer's registered contact.
+ * Anonymize a Razorpay customer's PII on account deletion.
+ * Razorpay has no delete API; this clears name/email/contact so no identifiable
+ * data remains while Razorpay retains the customer record for their own compliance.
  */
-export async function notifyRazorpayInvoice(
-    invoiceId: string,
-    medium: 'email' | 'sms',
-): Promise<void> {
-    await razorpayRequest(`/invoices/${invoiceId}/notify/${medium}`, 'POST');
+export async function anonymizeRazorpayCustomer(customerId: string): Promise<void> {
+    await razorpayRequest(`/customers/${customerId}`, 'PATCH', {
+        name: 'Deleted User',
+        email: '',
+        contact: '',
+    });
 }
 
 /**

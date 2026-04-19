@@ -258,12 +258,90 @@ Shared publishing layer used by both `apps/api` and `apps/publisher`. Key export
 
 ### Subscription & Billing Flow
 
+#### Subscription document lifecycle
+
+Every restaurant has exactly **one** subscription document in MongoDB. The collection
+enforces a unique index on `restaurantId`. The document is created during onboarding and
+transitions through the following statuses:
+
 ```
-1. User selects plan (Starter/Growth/Premium) + billing cycle (Monthly/Annual)
-2. POST /api/subscriptions/subscribe -> creates Razorpay Subscription
-3. User completes payment via Razorpay checkout
-4. Razorpay webhook (subscription.charged) -> updates subscription status to ACTIVE
-5. Invoice record auto-created from webhook payment data
+Onboarding (POST /api/restaurant)
+    |
+    v
+ NONE  <-- free tier, holds FREE_SIGNUP_CREDITS, no active plan
+    |
+    | POST /api/subscriptions/subscribe
+    v
+ CREATED  <-- Razorpay subscription created, awaiting payment
+    |
+    | webhook: subscription.authenticated
+    v
+ AUTHENTICATED  <-- payment method confirmed, first charge pending
+    |
+    | webhook: subscription.charged
+    v
+ ACTIVE  <-- recurring billing active
+    |
+    +---> PAST_DUE   <-- payment failed, retrying
+    |
+    +---> HALTED     <-- Razorpay halted after max retries
+    |
+    +---> CANCELLED  <-- user cancelled (at period end or immediately)
+              |
+              | POST /api/subscriptions/subscribe (re-subscribe)
+              v
+           CREATED  <-- same document updated, new Razorpay subscription ID
+```
+
+Because only one document exists per restaurant, the subscribe route **updates** the
+existing document (via `updateSubscription`) rather than inserting a new one whenever
+`findActiveSubscription` returns a record. A fresh `insertOne` is only used if no
+document exists at all (which should not occur in normal operation after onboarding).
+
+#### Razorpay customer lifecycle
+
+A Razorpay customer record is created eagerly during onboarding and its ID stored as
+`user.razorpayCustomerId`. Razorpay has no delete API; on account deletion the customer
+PII is anonymized via `PATCH /v1/customers/:id` (name set to "Deleted User", email and
+contact cleared). The record is retained by Razorpay for their compliance obligations.
+
+If the onboarding customer-create call fails (network blip, Razorpay downtime), the
+customer may exist in Razorpay but the ID is not stored in our DB. The subscribe route
+detects this when creation returns "Customer already exists" and recovers the ID by
+calling `GET /v1/customers?contact=:phone` then backfills `razorpayCustomerId`.
+
+#### First-time subscribe (new user)
+
+```
+1. Onboarding creates subscription document: status=NONE, credits=FREE_SIGNUP_CREDITS
+2. Onboarding creates Razorpay customer; stores ID in user.razorpayCustomerId
+3. User selects plan + billing cycle on the frontend
+4. POST /api/subscriptions/subscribe
+   a. Validates plan slug and billing cycle
+   b. Validates and resolves coupon (if provided)
+   c. Checks for existing active subscription (ACTIVE/PAST_DUE/CREATED/AUTHENTICATED -> 409)
+   d. Resolves or recovers Razorpay customer ID
+   e. Creates Razorpay Subscription via POST /v1/subscriptions
+   f. Updates the NONE document to status=CREATED with new razorpaySubscriptionId
+5. Frontend opens Razorpay checkout with subscriptionId + keyId
+6. User completes payment
+7. Razorpay webhook: subscription.authenticated -> status=AUTHENTICATED
+8. Razorpay webhook: subscription.charged -> status=ACTIVE, credits topped up, invoice created
+```
+
+#### Re-subscribe after cancellation or halt
+
+```
+1. Existing document has status=CANCELLED or HALTED
+2. POST /api/subscriptions/subscribe (same flow as above)
+   -- steps a-e identical --
+   f. Updates the existing document to status=CREATED (no INSERT; unique index preserved)
+3. Frontend/payment flow continues identically
+```
+
+#### Credit system
+
+```
 6. Post creation checks plan limits via enforcePlanLimits middleware
 7. If over weekly limit: deducts from unified credit balance (IMAGE=1, CAROUSEL=3, REEL=5)
 8. Credit packs purchasable via Razorpay Orders (one-time payments)

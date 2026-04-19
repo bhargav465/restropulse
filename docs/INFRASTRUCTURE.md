@@ -17,7 +17,7 @@ Source of truth for local service ports: `config/ports.json`.
 Rules:
 - `apps/web` uses `config/ports.json:web` in `vite.config.ts` with `strictPort: true`.
 - `apps/api` uses `config/ports.json:api` as default and enforces the same port in development when `strictInDevelopment` is `true`.
-- Root port scripts (`ports:check`, `ports:free`, `dev:check`, `dev:free`) read ports from `config/ports.json` unless explicit CLI ports are provided.
+- Root port scripts (`ports:check`, `ports:free`) read ports from `config/ports.json` unless explicit CLI ports are provided.
 
 | Service         | Port   | Protocol | Description              |
 |-----------------|--------|----------|--------------------------|

@@ -614,13 +614,38 @@ describe('API Service', () => {
             await expect(subscriptionAPI.cancel()).resolves.not.toThrow();
         });
 
-        it('should upgrade subscription', async () => {
+        it('should change plan (upgrade)', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: { effective: 'immediate', planName: 'Growth' } }),
+            });
+
+            const result = await subscriptionAPI.changePlan('growth', 'MONTHLY');
+            expect(result.effective).toBe('immediate');
+            expect(result.planName).toBe('Growth');
+        });
+
+        it('should change plan (downgrade)', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: { effective: 'cycle_end', planName: 'Starter', currentPeriodEnd: '2026-05-01T00:00:00.000Z' },
+                }),
+            });
+
+            const result = await subscriptionAPI.changePlan('starter', 'MONTHLY');
+            expect(result.effective).toBe('cycle_end');
+            expect(result.currentPeriodEnd).toBeDefined();
+        });
+
+        it('should reactivate subscription', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
                 json: async () => ({ success: true }),
             });
 
-            await expect(subscriptionAPI.upgrade()).resolves.not.toThrow();
+            await expect(subscriptionAPI.reactivate()).resolves.not.toThrow();
         });
 
         it('should purchase credits', async () => {

@@ -15,6 +15,8 @@ export function createTestApp(): Express {
     const app = express();
 
     app.use(cors({ origin: '*', credentials: true }));
+    // Mirror server.ts: webhook needs raw body for HMAC signature verification
+    app.use('/api/subscriptions/webhook', express.raw({ type: 'application/json' }));
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
 

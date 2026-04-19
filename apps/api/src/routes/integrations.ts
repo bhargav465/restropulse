@@ -21,6 +21,7 @@ import {
 } from '@restropulse/publishing';
 import { getRestaurantsCollection, getOauthSessionsCollection, getDataDeletionAuditsCollection } from '@restropulse/db';
 import { createLogger } from '@restropulse/telemetry/server';
+import { handle } from '../middleware/async-handler.js';
 
 const log = createLogger('integrations');
 
@@ -76,7 +77,7 @@ function verifySignedRequest(signedRequest: string): { userId: string } | null {
  *   - restaurantId: required
  *   - onboarding: optional, set to 'true' for guided IG_API_ONBOARDING flow
  */
-router.get('/instagram/oauth-url', async (req: Request, res: Response) => {
+router.get('/instagram/oauth-url', handle(async (req: Request, res: Response) => {
     try {
         const restaurantId = req.query.restaurantId as string;
         const useOnboarding = req.query.onboarding === 'true';
@@ -111,13 +112,13 @@ router.get('/instagram/oauth-url', async (req: Request, res: Response) => {
             error: 'Failed to generate authorization URL'
         });
     }
-});
+}));
 
 /**
  * GET /api/integrations/instagram/callback
  * OAuth callback handler - processes authorization code (redirect flow)
  */
-router.get('/instagram/callback', async (req: Request, res: Response) => {
+router.get('/instagram/callback', handle(async (req: Request, res: Response) => {
     const { code, state, error: oauthError, error_description } = req.query;
 
     const frontendCallbackUrl = process.env.FRONTEND_URL!;
@@ -208,13 +209,13 @@ router.get('/instagram/callback', async (req: Request, res: Response) => {
         log.error({ err: error }, 'OAuth callback error');
         return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?error=server_error&message=${encodeURIComponent('Server error during authorization')}`);
     }
-});
+}));
 
 /**
  * POST /api/integrations/instagram/callback
  * Alternative callback for popup-based flow
  */
-router.post('/instagram/callback', async (req: Request, res: Response) => {
+router.post('/instagram/callback', handle(async (req: Request, res: Response) => {
     const { code, state } = req.body;
 
     if (!code || !state) {
@@ -293,13 +294,13 @@ router.post('/instagram/callback', async (req: Request, res: Response) => {
             message: 'Server error during authorization'
         });
     }
-});
+}));
 
 /**
  * GET /api/integrations/instagram/pending-accounts/:selectionId
  * Get pending account selections
  */
-router.get('/instagram/pending-accounts/:selectionId', async (req: Request, res: Response) => {
+router.get('/instagram/pending-accounts/:selectionId', handle(async (req: Request, res: Response) => {
     const { selectionId } = req.params;
 
     const col = getOauthSessionsCollection();
@@ -324,13 +325,13 @@ router.get('/instagram/pending-accounts/:selectionId', async (req: Request, res:
             }))
         }
     });
-});
+}));
 
 /**
  * POST /api/integrations/instagram/select-account
  * Select account from multiple accounts
  */
-router.post('/instagram/select-account', async (req: Request, res: Response) => {
+router.post('/instagram/select-account', handle(async (req: Request, res: Response) => {
     const { selectionId, accountId, restaurantId } = req.body;
 
     if (!selectionId || !accountId) {
@@ -412,7 +413,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
             error: 'Failed to save Instagram connection'
         });
     }
-});
+}));
 
 // ============================================
 // Connection Management
@@ -422,7 +423,7 @@ router.post('/instagram/select-account', async (req: Request, res: Response) => 
  * DELETE /api/integrations/instagram/disconnect/:restaurantId
  * Disconnect Instagram account
  */
-router.delete('/instagram/disconnect/:restaurantId', async (req: Request, res: Response) => {
+router.delete('/instagram/disconnect/:restaurantId', handle(async (req: Request, res: Response) => {
     const { restaurantId } = req.params;
 
     try {
@@ -458,13 +459,13 @@ router.delete('/instagram/disconnect/:restaurantId', async (req: Request, res: R
             error: 'Failed to disconnect Instagram'
         });
     }
-});
+}));
 
 /**
  * GET /api/integrations/instagram/status/:restaurantId
  * Get Instagram connection status (without sensitive token data)
  */
-router.get('/instagram/status/:restaurantId', async (req: Request, res: Response) => {
+router.get('/instagram/status/:restaurantId', handle(async (req: Request, res: Response) => {
     const { restaurantId } = req.params;
 
     try {
@@ -515,13 +516,13 @@ router.get('/instagram/status/:restaurantId', async (req: Request, res: Response
             error: 'Failed to check connection status'
         });
     }
-});
+}));
 
 /**
  * POST /api/integrations/instagram/refresh/:restaurantId
  * Manually trigger token refresh
  */
-router.post('/instagram/refresh/:restaurantId', async (req: Request, res: Response) => {
+router.post('/instagram/refresh/:restaurantId', handle(async (req: Request, res: Response) => {
     const { restaurantId } = req.params;
 
     try {
@@ -545,13 +546,13 @@ router.post('/instagram/refresh/:restaurantId', async (req: Request, res: Respon
             error: 'Failed to refresh token'
         });
     }
-});
+}));
 
 /**
  * POST /api/integrations/instagram/validate/:restaurantId
  * Validate Instagram connection is still working
  */
-router.post('/instagram/validate/:restaurantId', async (req: Request, res: Response) => {
+router.post('/instagram/validate/:restaurantId', handle(async (req: Request, res: Response) => {
     const { restaurantId } = req.params;
 
     try {
@@ -603,13 +604,13 @@ router.post('/instagram/validate/:restaurantId', async (req: Request, res: Respo
             error: 'Failed to validate connection'
         });
     }
-});
+}));
 
 /**
  * GET /api/integrations/instagram/profile/:restaurantId
  * Get Instagram profile info for connected account
  */
-router.get('/instagram/profile/:restaurantId', async (req: Request, res: Response) => {
+router.get('/instagram/profile/:restaurantId', handle(async (req: Request, res: Response) => {
     const { restaurantId } = req.params;
 
     try {
@@ -649,7 +650,7 @@ router.get('/instagram/profile/:restaurantId', async (req: Request, res: Respons
             error: 'Failed to fetch profile'
         });
     }
-});
+}));
 
 // ============================================
 // Facebook Callbacks (Deauthorize & Data Deletion)
@@ -659,7 +660,7 @@ router.get('/instagram/profile/:restaurantId', async (req: Request, res: Respons
  * POST /api/integrations/instagram/deauthorize
  * Called by Facebook when a user removes the app
  */
-router.post('/instagram/deauthorize', async (req: Request, res: Response) => {
+router.post('/instagram/deauthorize', handle(async (req: Request, res: Response) => {
     log.info('Instagram deauthorize callback received');
 
     const { signed_request } = req.body;
@@ -702,13 +703,13 @@ router.post('/instagram/deauthorize', async (req: Request, res: Response) => {
         // Still return 200 to acknowledge receipt
         res.status(200).json({ success: true });
     }
-});
+}));
 
 /**
  * POST /api/integrations/instagram/data-deletion
  * GDPR Data Deletion Request Callback
  */
-router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
+router.post('/instagram/data-deletion', handle(async (req: Request, res: Response) => {
     log.info('Instagram data deletion request received');
 
     const { signed_request } = req.body;
@@ -778,13 +779,13 @@ router.post('/instagram/data-deletion', async (req: Request, res: Response) => {
         log.error({ err: error }, 'Instagram data deletion error');
         res.status(500).json({ error: 'Failed to process deletion request' });
     }
-});
+}));
 
 /**
  * GET /api/integrations/instagram/data-deletion-status
  * Check status of a data deletion request
  */
-router.get('/instagram/data-deletion-status', async (req: Request, res: Response) => {
+router.get('/instagram/data-deletion-status', handle(async (req: Request, res: Response) => {
     const { code } = req.query;
 
     if (!code) {
@@ -839,7 +840,7 @@ router.get('/instagram/data-deletion-status', async (req: Request, res: Response
             </body>
         </html>
     `);
-});
+}));
 
 // ============================================
 // Debug (Development Only)
@@ -849,7 +850,7 @@ router.get('/instagram/data-deletion-status', async (req: Request, res: Response
  * GET /api/integrations/instagram/debug-token/:restaurantId
  * Debug the stored token to check scopes and permissions (dev only)
  */
-router.get('/instagram/debug-token/:restaurantId', async (req: Request, res: Response) => {
+router.get('/instagram/debug-token/:restaurantId', handle(async (req: Request, res: Response) => {
     if (process.env.NODE_ENV === 'production') {
         return res.status(404).json({ error: 'Not available' });
     }
@@ -924,14 +925,14 @@ router.get('/instagram/debug-token/:restaurantId', async (req: Request, res: Res
             error: error.response?.data?.error?.message || error.message
         });
     }
-});
+}));
 
 /**
  * POST /api/integrations/instagram/migrate-to-page-token/:restaurantId
  * One-time migration: convert stored User Access Token to Page Access Token.
  * Dev only.
  */
-router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Request, res: Response) => {
+router.post('/instagram/migrate-to-page-token/:restaurantId', handle(async (req: Request, res: Response) => {
     if (process.env.NODE_ENV === 'production') {
         return res.status(404).json({ error: 'Not available' });
     }
@@ -1048,7 +1049,7 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
             error: error.response?.data?.error?.message || error.message
         });
     }
-});
+}));
 
 // ============================================
 // Configuration
@@ -1058,7 +1059,7 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', async (req: Reques
  * GET /api/integrations/config
  * Check if integrations are configured (for UI)
  */
-router.get('/config', async (_req: Request, res: Response) => {
+router.get('/config', handle(async (_req: Request, res: Response) => {
     res.json({
         success: true,
         data: {
@@ -1068,6 +1069,6 @@ router.get('/config', async (_req: Request, res: Response) => {
             }
         }
     });
-});
+}));
 
 export default router;

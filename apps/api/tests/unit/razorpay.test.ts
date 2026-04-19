@@ -141,6 +141,36 @@ describe('Razorpay Service', () => {
         });
     });
 
+    describe('fetchRazorpayCustomersByContact', () => {
+        test('should call customers API with encoded contact and return items', async () => {
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ items: [{ id: 'cust_recovered_123' }] }),
+            });
+            vi.stubGlobal('fetch', mockFetch);
+
+            const result = await razorpay.fetchRazorpayCustomersByContact('+91 98765 43210');
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                expect.stringContaining('/customers?contact='),
+                expect.objectContaining({ method: 'GET' }),
+            );
+            expect(result.items[0].id).toBe('cust_recovered_123');
+        });
+
+        test('should throw on API error', async () => {
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: false,
+                status: 500,
+                json: () => Promise.resolve({ error: { description: 'Internal server error' } }),
+            });
+            vi.stubGlobal('fetch', mockFetch);
+
+            await expect(razorpay.fetchRazorpayCustomersByContact('+91 98765 43210'))
+                .rejects.toThrow('Internal server error');
+        });
+    });
+
     describe('createRazorpayOrder', () => {
         test('should call Razorpay orders API', async () => {
             const mockFetch = vi.fn().mockResolvedValue({

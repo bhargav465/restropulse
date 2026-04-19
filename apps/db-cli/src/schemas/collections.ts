@@ -304,7 +304,7 @@ export const COLLECTIONS: CollectionSchema[] = [
     {
         name: 'subscriptions',
         indexes: [
-            { spec: { restaurantId: 1 }, options: { unique: true } },
+            { spec: { restaurantId: 1 }, options: { unique: true, partialFilterExpression: { endedAt: null } } },
             { spec: { razorpaySubscriptionId: 1 }, options: { unique: true, sparse: true } },
             { spec: { status: 1 } },
         ],
@@ -320,6 +320,7 @@ export const COLLECTIONS: CollectionSchema[] = [
                     razorpaySubscriptionId: { bsonType: 'string' },
                     razorpayCustomerId: { bsonType: 'string' },
                     couponCode: { bsonType: 'string' },
+                    endedAt: { bsonType: ['string', 'null'] },
                     createdAt: { bsonType: 'date' },
                     updatedAt: { bsonType: 'date' },
                 },

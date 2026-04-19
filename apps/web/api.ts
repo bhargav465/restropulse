@@ -441,8 +441,16 @@ export const subscriptionAPI = {
         await fetchAPI('/subscriptions/cancel', { method: 'POST' });
     },
 
-    upgrade: async (): Promise<void> => {
-        await fetchAPI('/subscriptions/upgrade', { method: 'POST' });
+    changePlan: async (planSlug: string, billingCycle: BillingCycle): Promise<{ effective: 'immediate' | 'cycle_end'; planName: string; currentPeriodEnd?: string | Date }> => {
+        const response = await fetchAPI<ApiResponse<{ effective: 'immediate' | 'cycle_end'; planName: string; currentPeriodEnd?: string | Date }>>('/subscriptions/change-plan', {
+            method: 'POST',
+            body: JSON.stringify({ planSlug, billingCycle }),
+        });
+        return response.data!;
+    },
+
+    reactivate: async (): Promise<void> => {
+        await fetchAPI('/subscriptions/reactivate', { method: 'POST' });
     },
 
     purchaseCredits: async (creditPackId: string): Promise<{ orderId: string; amount: number; currency: string; keyId: string; credits: number }> => {

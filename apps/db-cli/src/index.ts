@@ -8,6 +8,7 @@ import { seedCommand } from './commands/seed.js';
 import { resetCommand } from './commands/reset.js';
 import { razorpaySetupCommand } from './commands/razorpay-setup.js';
 import { deleteAccountCommand } from './commands/delete-account.js';
+import { migrateCommand } from './commands/migrate.js';
 
 const program = new Command();
 
@@ -68,6 +69,12 @@ program
     .option('--dry-run', 'Preview what would be created without making API calls or DB writes')
     .option('--force', 'Overwrite existing Razorpay plan IDs in MongoDB')
     .action(razorpaySetupCommand);
+
+program
+    .command('migrate')
+    .description('Run a named database migration')
+    .requiredOption('--migration <name>', 'Migration to run (e.g. subscription-history)')
+    .action(migrateCommand);
 
 program
     .command('delete-account')

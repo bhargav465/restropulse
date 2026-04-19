@@ -13,9 +13,7 @@
     "ports:free": "node scripts/free-ports.mjs --force",
     "ports:check:dev": "node scripts/free-ports.mjs --check",
     "ports:free:dev": "node scripts/free-ports.mjs --force",
-    "dev": "turbo run dev --filter=!@restropulse/db-cli",
-    "dev:check": "npm run ports:check:dev && npm run dev",
-    "dev:free": "npm run ports:free:dev && npm run build:packages && mprocs",
+    "dev": "npm run ports:free:dev && npm run build:packages && mprocs",
     "build:packages": "turbo run build --filter=!@restropulse/web --filter=!@restropulse/api --filter=!@restropulse/publisher --filter=!@restropulse/content-engine --filter=!@restropulse/db-cli",
     "ngrok": "node scripts/start-ngrok.mjs",
     "build": "turbo build",
@@ -31,9 +29,11 @@
     "setup:mcp": "node scripts/setup-mcp.mjs",
     "setup:rtk": "node scripts/setup-rtk.mjs",
     "reindex": "node scripts/reindex-rag.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "env:edit": "node scripts/env-editor.mjs"
   },
   "devDependencies": {
+    "@clack/prompts": "^0.9.1",
     "husky": "^9.1.7",
     "prettier": "^3.2.0",
     "turbo": "^2.3.0"

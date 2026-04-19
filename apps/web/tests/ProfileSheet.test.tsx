@@ -57,7 +57,8 @@ vi.mock('../api', () => ({
             { id: 'p2', slug: 'growth', tier: 'GROWTH', name: 'Growth', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp3', annual: 'rp4' }, features: ['INSTAGRAM', 'FACEBOOK'] },
         ]),
         subscribe: vi.fn(),
-        upgrade: vi.fn(),
+        changePlan: vi.fn(),
+        reactivate: vi.fn(),
         purchaseCredits: vi.fn(),
         verifyCredits: vi.fn(),
     },
@@ -165,7 +166,8 @@ describe('ProfileSheet Component', () => {
 
         // Reset action mocks that individual tests may override with mockRejectedValue
         vi.mocked(subscriptionAPI.subscribe).mockReset();
-        vi.mocked(subscriptionAPI.upgrade).mockReset();
+        vi.mocked(subscriptionAPI.changePlan).mockResolvedValue({ effective: 'immediate', planName: 'Growth' });
+        vi.mocked(subscriptionAPI.reactivate).mockResolvedValue(undefined);
         vi.mocked(subscriptionAPI.purchaseCredits).mockReset();
 
         window.history.pushState = mockHistoryPushState;
@@ -857,15 +859,8 @@ describe('ProfileSheet Component', () => {
 
     // --- SubscriptionModal: Switch Plan with Razorpay ---
 
-    it('should call handleSwitchPlan and open Razorpay when clicking Switch on a non-current plan', async () => {
-        const mockRzpOpen = vi.fn();
-        const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
-        (window as any).Razorpay = MockRazorpay;
-
-        vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
-            keyId: 'rzp_test_key',
-            subscriptionId: 'sub_rzp_123',
-        });
+    it('should call changePlan when clicking Switch on a non-current plan with active subscription', async () => {
+        vi.mocked(subscriptionAPI.changePlan).mockResolvedValue({ effective: 'immediate', planName: 'Starter' });
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -874,27 +869,19 @@ describe('ProfileSheet Component', () => {
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
         // The Starter plan should have a "Switch" button (since current plan is Growth and subscription is ACTIVE)
+        // ACTIVE status shows confirmation dialog before proceeding
         const switchButton = screen.getByText('Switch');
         fireEvent.click(switchButton);
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
 
         await waitFor(() => {
-            expect(subscriptionAPI.upgrade).toHaveBeenCalled();
-            expect(subscriptionAPI.subscribe).toHaveBeenCalledWith('starter', 'MONTHLY', undefined);
+            expect(subscriptionAPI.changePlan).toHaveBeenCalledWith('starter', 'MONTHLY');
+            expect(subscriptionAPI.subscribe).not.toHaveBeenCalled();
         });
-
-        await waitFor(() => {
-            expect(MockRazorpay).toHaveBeenCalledWith(expect.objectContaining({
-                key: 'rzp_test_key',
-                subscription_id: 'sub_rzp_123',
-                name: 'RestroPulse',
-            }));
-            expect(mockRzpOpen).toHaveBeenCalled();
-        });
-
-        delete (window as any).Razorpay;
     });
 
-    it('should call subscribe without upgrade when no active subscription', async () => {
+    it('should call subscribe without changePlan when no active subscription', async () => {
         const mockRzpOpen = vi.fn();
         const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
         (window as any).Razorpay = MockRazorpay;
@@ -926,7 +913,7 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(subscribeButtons[0]);
 
         await waitFor(() => {
-            expect(subscriptionAPI.upgrade).not.toHaveBeenCalled();
+            expect(subscriptionAPI.changePlan).not.toHaveBeenCalled();
             expect(subscriptionAPI.subscribe).toHaveBeenCalledWith('starter', 'MONTHLY', undefined);
             expect(mockRzpOpen).toHaveBeenCalled();
         });
@@ -935,8 +922,7 @@ describe('ProfileSheet Component', () => {
     });
 
     it('should handle switch plan failure gracefully', async () => {
-        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Payment failed'));
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+        vi.mocked(subscriptionAPI.changePlan).mockRejectedValue(new Error('Payment failed'));
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -944,14 +930,14 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
+        // ACTIVE status shows confirmation dialog before proceeding
         fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
 
         await waitFor(() => {
-            expect(consoleSpy).toHaveBeenCalledWith('Subscription failed:', expect.any(Error));
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/Payment failed/i)).toBeInTheDocument();
         });
-
-        consoleSpy.mockRestore();
     });
 
     // --- SubscriptionModal: Purchase Credits with Razorpay ---
@@ -1071,7 +1057,6 @@ describe('ProfileSheet Component', () => {
             usage: null,
         });
         vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('razorpay plan not configured'));
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -1086,10 +1071,8 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(subscribeButtons[0]);
 
         await waitFor(() => {
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/razorpay plan not configured/i)).toBeInTheDocument();
         });
-
-        consoleSpy.mockRestore();
     });
 
     it('should show error for every Subscribe button, not just the first', async () => {
@@ -1105,7 +1088,6 @@ describe('ProfileSheet Component', () => {
             usage: null,
         });
         vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('razorpay plan not configured'));
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -1120,15 +1102,12 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(subscribeButtons[subscribeButtons.length - 1]);
 
         await waitFor(() => {
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/razorpay plan not configured/i)).toBeInTheDocument();
         });
-
-        consoleSpy.mockRestore();
     });
 
     it('should show subscription error even when modal is scrolled down', async () => {
-        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Payment failed'));
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+        vi.mocked(subscriptionAPI.changePlan).mockRejectedValue(new Error('Payment failed'));
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -1142,19 +1121,19 @@ describe('ProfileSheet Component', () => {
             modal.scrollTop = 400;
         }
 
+        // ACTIVE status shows confirmation dialog before proceeding
         const subscribeButtons = screen.getAllByRole('button', { name: 'Switch' });
         fireEvent.click(subscribeButtons[0]);
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
 
         await waitFor(() => {
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/Payment failed/i)).toBeInTheDocument();
         });
-
-        consoleSpy.mockRestore();
     });
 
-    it('should show error again after clicking Subscribe a second time', async () => {
-        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Payment failed'));
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+    it('should show error again after clicking Switch a second time', async () => {
+        vi.mocked(subscriptionAPI.changePlan).mockRejectedValue(new Error('Payment failed'));
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -1162,24 +1141,25 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
-        // First click -- error appears
+        // First click -- ACTIVE status shows confirmation dialog
         fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
         await waitFor(() => {
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/Payment failed/i)).toBeInTheDocument();
         });
 
         // Second click -- error must still be shown
         fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
         await waitFor(() => {
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/Payment failed/i)).toBeInTheDocument();
         });
-
-        consoleSpy.mockRestore();
     });
 
-    it('should show error when upgrade fails before subscribe', async () => {
-        vi.mocked(subscriptionAPI.upgrade).mockRejectedValue(new Error('No active subscription to upgrade'));
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+    it('should show error when changePlan fails', async () => {
+        vi.mocked(subscriptionAPI.changePlan).mockRejectedValue(new Error('No active subscription to change'));
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -1187,29 +1167,38 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
-        // With ACTIVE subscription the button says "Switch"
+        // With ACTIVE subscription the button says "Switch" — confirmation dialog first
         fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
 
         await waitFor(() => {
-            expect(consoleSpy).toHaveBeenCalledWith('Subscription failed:', expect.any(Error));
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/No active subscription to change/i)).toBeInTheDocument();
         });
 
-        // subscribe should NOT have been called since upgrade failed first
+        // subscribe should NOT have been called since we use changePlan for active subs
         expect(subscriptionAPI.subscribe).not.toHaveBeenCalled();
-
-        consoleSpy.mockRestore();
     });
 
-    it('should show error when window.Razorpay is not loaded for subscribe', async () => {
+    it('should show error when window.Razorpay is not loaded for subscribe (new subscription)', async () => {
         // Ensure Razorpay is NOT on window
         delete (window as any).Razorpay;
 
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'NONE',
+                credits: 5,
+                planSnapshot: null,
+                currentPeriodEnd: null,
+            },
+            usage: null,
+        });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
             keyId: 'rzp_test_key',
             subscriptionId: 'sub_rzp_123',
         });
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -1217,13 +1206,13 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
-        fireEvent.click(screen.getByText('Switch'));
+        // NONE status shows Subscribe button directly (no confirmation dialog)
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        fireEvent.click(subscribeButtons[0]);
 
         await waitFor(() => {
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/Payment service not available/i)).toBeInTheDocument();
         });
-
-        consoleSpy.mockRestore();
     });
 
     it('should show error when window.Razorpay is not loaded for credit purchase', async () => {
@@ -1257,8 +1246,7 @@ describe('ProfileSheet Component', () => {
     });
 
     it('should clear previous error when starting a new action', async () => {
-        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Payment failed'));
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
+        vi.mocked(subscriptionAPI.changePlan).mockRejectedValue(new Error('Payment failed'));
 
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
@@ -1266,22 +1254,24 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
-        // First action fails -- error shows
+        // First action fails -- ACTIVE status shows confirmation dialog
         fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
         await waitFor(() => {
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/Payment failed/i)).toBeInTheDocument();
         });
 
         // Start a new action -- error should clear before the new attempt
-        vi.mocked(subscriptionAPI.subscribe).mockRejectedValue(new Error('Another failure'));
+        vi.mocked(subscriptionAPI.changePlan).mockRejectedValue(new Error('Another failure'));
         fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
 
         // Error clears momentarily, then reappears after the new failure
         await waitFor(() => {
-            expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+            expect(screen.getByText(/Another failure/i)).toBeInTheDocument();
         });
-
-        consoleSpy.mockRestore();
     });
 
     // --- SubscriptionModal: Razorpay payment handler callbacks ---
@@ -1303,6 +1293,11 @@ describe('ProfileSheet Component', () => {
         });
         (window as any).Razorpay = MockRazorpay;
 
+        // Use NONE status so the Subscribe path (with Razorpay) is triggered
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            usage: null,
+        });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
             keyId: 'rzp_test_key',
             subscriptionId: 'sub_rzp_123',
@@ -1314,7 +1309,9 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
-        fireEvent.click(screen.getByText('Switch'));
+        // NONE status shows Subscribe button directly
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        fireEvent.click(subscribeButtons[0]);
 
         await waitFor(() => {
             expect(mockRzpOpen).toHaveBeenCalled();
@@ -1338,6 +1335,11 @@ describe('ProfileSheet Component', () => {
         });
         (window as any).Razorpay = MockRazorpay;
 
+        // Use NONE status so the Subscribe path (with Razorpay) is triggered
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            usage: null,
+        });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
             keyId: 'rzp_test_key',
             subscriptionId: 'sub_rzp_123',
@@ -1349,7 +1351,9 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
-        fireEvent.click(screen.getByText('Switch'));
+        // NONE status shows Subscribe button directly
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        fireEvent.click(subscribeButtons[0]);
 
         await waitFor(() => {
             expect(screen.getByText(/Payment failed: Insufficient funds in account/i)).toBeInTheDocument();
@@ -1358,7 +1362,7 @@ describe('ProfileSheet Component', () => {
         delete (window as any).Razorpay;
     });
 
-    it('should close subscription panel and show activation-pending banner after Razorpay payment handler fires', async () => {
+    it('should close subscription panel and trigger data refresh after Razorpay payment handler fires', async () => {
         let razorpayHandler: () => void;
         const mockRzpOpen = vi.fn();
         const MockRazorpay = vi.fn().mockImplementation(function (this: any, options: any) {
@@ -1367,6 +1371,11 @@ describe('ProfileSheet Component', () => {
         });
         (window as any).Razorpay = MockRazorpay;
 
+        // Use NONE status so the Subscribe path (with Razorpay) is triggered
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            usage: null,
+        });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
             keyId: 'rzp_test_key',
             subscriptionId: 'sub_rzp_123',
@@ -1378,11 +1387,13 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
 
-        fireEvent.click(screen.getByText('Switch'));
+        // NONE status shows Subscribe button directly (no confirmation dialog)
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        fireEvent.click(subscribeButtons[0]);
         await waitFor(() => expect(mockRzpOpen).toHaveBeenCalled());
 
         // Simulate Razorpay calling the handler immediately after payment completes.
-        // The handler must NOT poll getCurrent — just close and set activationPending.
+        // The handler closes the subscription panel and calls loadSubscriptionData + schedules polling.
         const callsBefore = vi.mocked(subscriptionAPI.getCurrent).mock.calls.length;
         razorpayHandler!();
         // closeSubscription() calls window.history.back(); jsdom doesn't fire popstate
@@ -1392,12 +1403,9 @@ describe('ProfileSheet Component', () => {
         await waitFor(() => {
             // Subscription sub-panel should be gone
             expect(screen.queryByText('Change Plan')).not.toBeInTheDocument();
-            // Activation-pending banner should appear on the profile main page
-            expect(screen.getByText(/subscription is being activated/i)).toBeInTheDocument();
+            // getCurrent should have been called again to refresh subscription data
+            expect(vi.mocked(subscriptionAPI.getCurrent).mock.calls.length).toBeGreaterThan(callsBefore);
         });
-
-        // getCurrent must not have been called again by the handler (no polling)
-        expect(vi.mocked(subscriptionAPI.getCurrent).mock.calls.length).toBe(callsBefore);
 
         delete (window as any).Razorpay;
     });
@@ -1506,13 +1514,17 @@ describe('ProfileSheet Component', () => {
         await waitFor(() => expect(screen.getByText('Free Credits')).toBeInTheDocument());
     });
 
-    // --- SubscriptionModal: Switch plan with coupon ---
+    // --- SubscriptionModal: Subscribe with coupon (new subscription only) ---
 
-    it('should pass coupon code when switching plan', async () => {
+    it('should pass coupon code when subscribing without active subscription', async () => {
         const mockRzpOpen = vi.fn();
         const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
         (window as any).Razorpay = MockRazorpay;
 
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            usage: null,
+        });
         vi.mocked(couponAPI.validate).mockResolvedValue({ valid: true });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
             keyId: 'rzp_test_key',
@@ -1531,8 +1543,9 @@ describe('ProfileSheet Component', () => {
         fireEvent.click(screen.getByText('Apply'));
         await waitFor(() => expect(screen.getByText('Coupon applied!')).toBeInTheDocument());
 
-        // Switch plan
-        fireEvent.click(screen.getByText('Switch'));
+        // NONE status shows Subscribe button directly
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        fireEvent.click(subscribeButtons[0]);
 
         await waitFor(() => {
             expect(subscriptionAPI.subscribe).toHaveBeenCalledWith('starter', 'MONTHLY', 'SAVE20');
@@ -1541,11 +1554,15 @@ describe('ProfileSheet Component', () => {
         delete (window as any).Razorpay;
     });
 
-    it('should normalize lowercase coupon code on apply and pass normalized value when switching', async () => {
+    it('should normalize lowercase coupon code on apply and pass normalized value when subscribing', async () => {
         const mockRzpOpen = vi.fn();
         const MockRazorpay = vi.fn().mockImplementation(function (this: any) { this.open = mockRzpOpen; });
         (window as any).Razorpay = MockRazorpay;
 
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            usage: null,
+        });
         vi.mocked(couponAPI.validate).mockResolvedValue({ valid: true });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
             keyId: 'rzp_test_key',
@@ -1568,7 +1585,10 @@ describe('ProfileSheet Component', () => {
             expect(couponAPI.validate).toHaveBeenCalledWith('SAVE20');
         });
 
-        fireEvent.click(screen.getByText('Switch'));
+        // NONE status shows Subscribe button directly
+        const subscribeButtons = screen.getAllByText('Subscribe');
+        fireEvent.click(subscribeButtons[0]);
+
         await waitFor(() => {
             expect(subscriptionAPI.subscribe).toHaveBeenCalledWith('starter', 'MONTHLY', 'SAVE20');
         });
@@ -2191,5 +2211,119 @@ describe('ProfileSheet Component', () => {
         });
 
         expect(screen.getByText('Change Plan')).toBeInTheDocument();
+    });
+
+    // --- Reactivate subscription ---
+
+    it('should show Reactivate button when cancelAtPeriodEnd is true', async () => {
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'ACTIVE',
+                billingCycle: 'MONTHLY',
+                credits: 15,
+                cancelAtPeriodEnd: true,
+                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                currentPeriodEnd: '2026-05-01',
+            },
+            usage: null,
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Manage your plan')).toBeInTheDocument());
+
+        expect(screen.getByText('Reactivate')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByText('Reactivate'));
+
+        await waitFor(() => {
+            expect(subscriptionAPI.reactivate).toHaveBeenCalled();
+        });
+    });
+
+    it('should show period-loss warning dialog when cancelAtPeriodEnd user clicks Switch on another plan', async () => {
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1',
+                restaurantId: 'r1',
+                status: 'ACTIVE',
+                billingCycle: 'MONTHLY',
+                credits: 15,
+                cancelAtPeriodEnd: true,
+                currentPeriodEnd: new Date(Date.now() + 10 * 86_400_000).toISOString(), // 10 days from now
+                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+            },
+            usage: null,
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Switch'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Start new plan now?')).toBeInTheDocument();
+            expect(screen.getByText(/unused days are not refunded/i)).toBeInTheDocument();
+            expect(screen.getByText('Start new plan')).toBeInTheDocument();
+            expect(screen.getByText('Wait until period ends')).toBeInTheDocument();
+        });
+
+        // Dismissing should close the dialog without calling subscribe
+        fireEvent.click(screen.getByText('Wait until period ends'));
+        await waitFor(() => {
+            expect(screen.queryByText('Start new plan now?')).not.toBeInTheDocument();
+        });
+        expect(subscriptionAPI.subscribe).not.toHaveBeenCalled();
+    });
+
+    // --- Downgrade confirmation dialog ---
+
+    it('should show downgrade confirmation dialog with cycle_end message', async () => {
+        // Current plan is Growth (expensive), switching to cheaper Starter
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        // Starter is cheaper than Growth so it's a downgrade
+        fireEvent.click(screen.getByText('Switch'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument();
+            expect(screen.getByText(/lower-tier plan/i)).toBeInTheDocument();
+            expect(screen.getByText(/next billing date/i)).toBeInTheDocument();
+        });
+    });
+
+    // --- Downgrade success notice ---
+
+    it('should show downgrade scheduled notice after successful downgrade', async () => {
+        vi.mocked(subscriptionAPI.changePlan).mockResolvedValue({
+            effective: 'cycle_end',
+            planName: 'Starter',
+            currentPeriodEnd: '2026-05-01T00:00:00.000Z',
+        });
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Subscription').closest('button')!);
+        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
+
+        fireEvent.click(screen.getByText('Switch'));
+        await waitFor(() => expect(screen.getByText('Confirm Downgrade')).toBeInTheDocument());
+        fireEvent.click(screen.getByText('Confirm Downgrade'));
+
+        await waitFor(() => {
+            expect(screen.getByText(/Switching to Starter on/i)).toBeInTheDocument();
+        });
     });
 });

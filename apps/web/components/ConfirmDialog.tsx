@@ -4,12 +4,13 @@ interface ConfirmDialogProps {
     title: string;
     message: string;
     confirmLabel: string;
+    cancelLabel?: string;
     onConfirm: () => void;
     onCancel: () => void;
-    details?: string[];
+    details?: React.ReactNode[];
 }
 
-const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ title, message, confirmLabel, onConfirm, onCancel, details }) => {
+const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ title, message, confirmLabel, cancelLabel, onConfirm, onCancel, details }) => {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
         window.addEventListener('keydown', handleKeyDown);
@@ -38,7 +39,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({ title, message, confirmLa
                         onClick={onCancel}
                         className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all"
                     >
-                        Cancel
+                        {cancelLabel ?? 'Cancel'}
                     </button>
                     <button
                         onClick={onConfirm}

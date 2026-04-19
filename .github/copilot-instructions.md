@@ -127,7 +127,7 @@ packages/
 ```bash
 npm install              # Install all workspaces
 npm run dev              # Start runtime apps (excludes @restropulse/db-cli)
-npm run dev:free         # Kill occupied ports, build packages, then launch mprocs TUI (all services)
+npm run dev              # Kill occupied ports, build packages, then launch mprocs TUI (all services)
 npm run build            # Build all
 npm run build:packages   # Build only shared packages (shared, db, publishing, telemetry)
 npm run test             # Test all
