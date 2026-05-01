@@ -138,12 +138,6 @@ const RAZORPAY_DISPLAY_CONFIG = {
     },
 } as const;
 
-// Mandate auth charges are stored as MANDATE_AUTH type going forward, but legacy entries
-// captured via subscription.charged are SUBSCRIPTION type with amountPaise <= 500 (₹5).
-// The cheapest real plan is ₹2,999, so any SUBSCRIPTION invoice ≤ ₹5 is a mandate auth.
-const isMandateAuth = (inv: Invoice) =>
-    inv.type === 'MANDATE_AUTH' || (inv.type === 'SUBSCRIPTION' && inv.amountPaise <= 500);
-
 const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled, featureFlags }) => {
     const topupCreditsEnabled = featureFlags?.topupCredits === true;
 
@@ -1465,7 +1459,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     {/* Account */}
                     <div>
                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">Account</h3>
-                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
                             <button onClick={openSubscription} className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors group">
                                 <div className="flex items-center gap-3">
                                     <div className="w-9 h-9 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center">
@@ -1480,6 +1474,20 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                 </div>
                                 <ChevronRight size={18} className="text-slate-300 group-hover:text-slate-400" />
                             </button>
+                            {invoices.length > 0 && (
+                                <button onClick={() => setShowInvoiceHistory(true)} className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors group">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center">
+                                            <FileText size={18} />
+                                        </div>
+                                        <p className="text-sm font-medium text-slate-700">Billing History</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400">{invoices.length} invoice{invoices.length !== 1 ? 's' : ''}</span>
+                                        <ChevronRight size={18} className="text-slate-300 group-hover:text-slate-400" />
+                                    </div>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -1528,71 +1536,6 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                         )}
                     </div>
 
-                    {/* Billing History — formal billing only; mandate auth (≤₹5) excluded */}
-                    {invoices.filter(inv => !isMandateAuth(inv)).length > 0 && (
-                        <div>
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">Billing History</h3>
-                            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
-                                {invoices.filter(inv => !isMandateAuth(inv)).slice(0, 2).map((invoice) => (
-                                    <div key={invoice.id} className="p-4 flex items-center justify-between">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center ${invoice.type === 'SUBSCRIPTION' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
-                                                <FileText size={18} />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-bold text-slate-700 truncate">{invoice.description}</p>
-                                                <p className="text-xs text-slate-500">
-                                                    {new Date(invoice.paidAt || invoice.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                    {' · '}
-                                                    {formatPaise(invoice.amountPaise)}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        {invoice.pdfUrl && (
-                                            <a href={invoice.pdfUrl} target="_blank" rel="noopener noreferrer" className="w-9 h-9 bg-slate-100 text-slate-500 hover:text-slate-700 rounded-lg flex items-center justify-center shrink-0 ml-3" title="Download Invoice">
-                                                <Download size={16} />
-                                            </a>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                            {invoices.filter(inv => !isMandateAuth(inv)).length > 2 && (
-                                <button
-                                    onClick={() => setShowInvoiceHistory(true)}
-                                    className="mt-2 w-full py-2.5 text-xs font-bold text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1.5 transition-colors"
-                                >
-                                    View all {invoices.filter(inv => !isMandateAuth(inv)).length} invoices
-                                    <ChevronRight size={14} />
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Payment History — mandate auth charges (MANDATE_AUTH type or ₹5 SUBSCRIPTION) */}
-                    {invoices.filter(isMandateAuth).length > 0 && (
-                        <div>
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">Payment History</h3>
-                            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
-                                {invoices.filter(isMandateAuth).map((inv) => (
-                                    <div key={inv.id} className="p-4 flex items-center justify-between">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600">
-                                                <CreditCard size={18} />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-bold text-slate-700 truncate">{inv.description}</p>
-                                                <p className="text-xs text-slate-500">
-                                                    {new Date(inv.paidAt || inv.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <span className="text-sm font-bold text-slate-800 shrink-0 ml-3">{formatPaise(inv.amountPaise)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
                     {/* Footer actions */}
                     <div className="space-y-2 pt-2">
                         <button onClick={onLogout} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-50">
@@ -1625,7 +1568,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             {/* Sub-modals */}
             {isEditingProfile && <EditProfileModal />}
             {isSubscriptionOpen && SubscriptionModal()}
-            {showInvoiceHistory && <InvoiceHistoryPanel invoices={invoices.filter(inv => !isMandateAuth(inv))} onClose={() => setShowInvoiceHistory(false)} />}
+            {showInvoiceHistory && <InvoiceHistoryPanel invoices={invoices} onClose={() => setShowInvoiceHistory(false)} />}
             {showInstagramErrorModal && <InstagramErrorModal />}
             {showAccountPicker && <AccountPickerModal />}
             {showSetupGuide && <InstagramSetupGuide />}

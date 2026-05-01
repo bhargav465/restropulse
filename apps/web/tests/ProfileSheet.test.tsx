@@ -560,77 +560,12 @@ describe('ProfileSheet Component', () => {
 
     // --- Billing History ---
 
-    it('should show billing history when invoices exist', async () => {
+    it('should show Billing History button with invoice count when invoices exist', async () => {
         render(<ProfileSheet {...defaultProps} />);
 
         await waitFor(() => {
             expect(screen.getByText('Billing History')).toBeInTheDocument();
-            expect(screen.getByText('Growth Plan - Monthly')).toBeInTheDocument();
-            expect(screen.getByText('10 Credits')).toBeInTheDocument();
-        });
-    });
-
-    it('should show PDF download link for invoices with pdfUrl', async () => {
-        render(<ProfileSheet {...defaultProps} />);
-
-        await waitFor(() => {
-            const downloadLink = screen.getByTitle('Download Invoice');
-            expect(downloadLink).toBeInTheDocument();
-            expect(downloadLink).toHaveAttribute('href', 'https://example.com/invoice1.pdf');
-        });
-    });
-
-    it('should show Payment History for MANDATE_AUTH invoices', async () => {
-        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
-            { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01' },
-            { id: 'inv2', restaurantId: 'r1', type: 'MANDATE_AUTH', amountPaise: 500, currency: 'INR', status: 'paid', description: 'Mandate Verification - Growth', paidAt: '2026-03-01' },
-        ]);
-
-        render(<ProfileSheet {...defaultProps} />);
-        await waitFor(() => {
-            expect(screen.getByText('Payment History')).toBeInTheDocument();
-            expect(screen.getByText('Mandate Verification - Growth')).toBeInTheDocument();
-        });
-    });
-
-    it('should show Payment History for legacy ₹5 SUBSCRIPTION invoices (pre-MANDATE_AUTH type)', async () => {
-        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
-            { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01' },
-            { id: 'inv2', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 500, currency: 'INR', status: 'paid', description: 'Starter Plan - Monthly', paidAt: '2026-03-01' },
-        ]);
-
-        render(<ProfileSheet {...defaultProps} />);
-        await waitFor(() => {
-            expect(screen.getByText('Payment History')).toBeInTheDocument();
-        });
-        // the ₹5 entry must NOT appear in Billing History
-        const billingSection = screen.getByText('Billing History').closest('div')!;
-        expect(billingSection).not.toHaveTextContent('₹5');
-    });
-
-    it('should not show Payment History when no mandate auth invoices exist', async () => {
-        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
-            { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01' },
-        ]);
-
-        render(<ProfileSheet {...defaultProps} />);
-        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
-
-        fireEvent.click(screen.getByText('Subscription').closest('button')!);
-        await waitFor(() => expect(screen.getByText('Change Plan')).toBeInTheDocument());
-
-        expect(screen.queryByText('Payment History')).not.toBeInTheDocument();
-    });
-
-    it('should show description from MANDATE_AUTH invoice in Payment History', async () => {
-        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
-            { id: 'inv1', restaurantId: 'r1', type: 'MANDATE_AUTH', amountPaise: 500, currency: 'INR', status: 'paid', description: 'Mandate Verification - Premium', paidAt: '2026-04-01' },
-        ]);
-
-        render(<ProfileSheet {...defaultProps} />);
-        await waitFor(() => {
-            expect(screen.getByText('Payment History')).toBeInTheDocument();
-            expect(screen.getByText('Mandate Verification - Premium')).toBeInTheDocument();
+            expect(screen.getByText('2 invoices')).toBeInTheDocument();
         });
     });
 

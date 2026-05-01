@@ -687,30 +687,6 @@ router.post('/webhook', async (req: Request, res: Response) => {
                         if (SUBSCRIPTION_STATUS_RANK['AUTHENTICATED'] >= currentRank) {
                             await updateSubscription(sub.id, { status: 'AUTHENTICATED' });
                         }
-
-                        // Record the ₹5 mandate verification charge as a MANDATE_AUTH invoice.
-                        // Not a formal billing invoice (no PDF), shown separately in Payment History.
-                        const payment = payload?.payment?.entity;
-                        if (payment?.id) {
-                            const existing = await findInvoiceByPaymentId(payment.id);
-                            if (!existing) {
-                                const planName = sub.pendingPlanSnapshot?.name ?? sub.planSnapshot?.name;
-                                await createInvoice({
-                                    restaurantId: sub.restaurantId,
-                                    type: 'MANDATE_AUTH',
-                                    razorpayPaymentId: payment.id,
-                                    razorpaySubscriptionId: subId,
-                                    amountPaise: payment.amount || 0,
-                                    currency: payment.currency || 'INR',
-                                    status: 'paid',
-                                    description: planName ? `Mandate Verification - ${planName}` : 'Mandate Verification',
-                                    paidAt: new Date(),
-                                });
-                                log.info({ razorpayPaymentId: payment.id, amountPaise: payment.amount }, 'Mandate auth invoice created');
-                            } else {
-                                log.info({ razorpayPaymentId: payment.id }, 'Skipping duplicate mandate auth invoice');
-                            }
-                        }
                     }
                     // If sub doesn't exist locally yet, /verify will materialize it
                     // (or subscription.activated/charged will arrive next and do so).
