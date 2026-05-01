@@ -138,6 +138,12 @@ const RAZORPAY_DISPLAY_CONFIG = {
     },
 } as const;
 
+// Mandate auth charges are stored as MANDATE_AUTH type going forward, but legacy entries
+// captured via subscription.charged are SUBSCRIPTION type with amountPaise <= 500 (₹5).
+// The cheapest real plan is ₹2,999, so any SUBSCRIPTION invoice ≤ ₹5 is a mandate auth.
+const isMandateAuth = (inv: Invoice) =>
+    inv.type === 'MANDATE_AUTH' || (inv.type === 'SUBSCRIPTION' && inv.amountPaise <= 500);
+
 const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled, featureFlags }) => {
     const topupCreditsEnabled = featureFlags?.topupCredits === true;
 
@@ -175,7 +181,6 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const [subscriptionLoading, setSubscriptionLoading] = useState(true);
     const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
-    const [razorpayPayments, setRazorpayPayments] = useState<Array<{ id: string; amount: number; currency: string; status: string; method?: string; created_at: number; invoice_id?: string | null }>>([]);
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionErrorKey, setActionErrorKey] = useState(0);
     // B12 fix: track the last attempted plan switch so Tap-to-retry can actually
@@ -195,19 +200,17 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const loadSubscriptionData = async () => {
         setSubscriptionLoading(true);
         try {
-            const [currentData, plansData, packsData, invoicesData, paymentsData] = await Promise.all([
+            const [currentData, plansData, packsData, invoicesData] = await Promise.all([
                 subscriptionAPI.getCurrent(),
                 subscriptionAPI.getPlans(),
                 creditPacksAPI.getAll(),
                 invoiceAPI.getAll().catch(() => [] as Invoice[]),
-                subscriptionAPI.getPayments().catch(() => []),
             ]);
             setSubscription(currentData.subscription);
             setUsage(currentData.usage);
             setPlans(plansData);
             setCreditPacks(packsData);
             setInvoices(invoicesData);
-            setRazorpayPayments(paymentsData);
         } catch (error) {
             console.error('Failed to load subscription data:', error);
         } finally {
@@ -1525,12 +1528,12 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                         )}
                     </div>
 
-                    {/* Billing History */}
-                    {invoices.length > 0 && (
+                    {/* Billing History — formal billing only; mandate auth (≤₹5) excluded */}
+                    {invoices.filter(inv => !isMandateAuth(inv)).length > 0 && (
                         <div>
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">Billing History</h3>
                             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
-                                {invoices.slice(0, 2).map((invoice) => (
+                                {invoices.filter(inv => !isMandateAuth(inv)).slice(0, 2).map((invoice) => (
                                     <div key={invoice.id} className="p-4 flex items-center justify-between">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <div className={`w-9 h-9 shrink-0 rounded-lg flex items-center justify-center ${invoice.type === 'SUBSCRIPTION' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
@@ -1553,38 +1556,37 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                     </div>
                                 ))}
                             </div>
-                            {invoices.length > 2 && (
+                            {invoices.filter(inv => !isMandateAuth(inv)).length > 2 && (
                                 <button
                                     onClick={() => setShowInvoiceHistory(true)}
                                     className="mt-2 w-full py-2.5 text-xs font-bold text-slate-500 hover:text-slate-700 flex items-center justify-center gap-1.5 transition-colors"
                                 >
-                                    View all {invoices.length} invoices
+                                    View all {invoices.filter(inv => !isMandateAuth(inv)).length} invoices
                                     <ChevronRight size={14} />
                                 </button>
                             )}
                         </div>
                     )}
 
-                    {/* Payment History — mandate auth charges (₹5) not captured as invoices */}
-                    {razorpayPayments.filter(p => !p.invoice_id).length > 0 && (
+                    {/* Payment History — mandate auth charges (MANDATE_AUTH type or ₹5 SUBSCRIPTION) */}
+                    {invoices.filter(isMandateAuth).length > 0 && (
                         <div>
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">Payment History</h3>
                             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
-                                {razorpayPayments.filter(p => !p.invoice_id).map((payment) => (
-                                    <div key={payment.id} className="p-4 flex items-center justify-between">
+                                {invoices.filter(isMandateAuth).map((inv) => (
+                                    <div key={inv.id} className="p-4 flex items-center justify-between">
                                         <div className="flex items-center gap-3 min-w-0">
                                             <div className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600">
                                                 <CreditCard size={18} />
                                             </div>
                                             <div className="min-w-0">
-                                                <p className="text-sm font-bold text-slate-700 truncate">Mandate Verification</p>
+                                                <p className="text-sm font-bold text-slate-700 truncate">{inv.description}</p>
                                                 <p className="text-xs text-slate-500">
-                                                    {new Date(payment.created_at * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                    {payment.method && ` · ${payment.method.toUpperCase()}`}
+                                                    {new Date(inv.paidAt || inv.createdAt || '').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                                                 </p>
                                             </div>
                                         </div>
-                                        <span className="text-sm font-bold text-slate-800 shrink-0 ml-3">{formatPaise(payment.amount)}</span>
+                                        <span className="text-sm font-bold text-slate-800 shrink-0 ml-3">{formatPaise(inv.amountPaise)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -1623,7 +1625,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             {/* Sub-modals */}
             {isEditingProfile && <EditProfileModal />}
             {isSubscriptionOpen && SubscriptionModal()}
-            {showInvoiceHistory && <InvoiceHistoryPanel invoices={invoices} onClose={() => setShowInvoiceHistory(false)} />}
+            {showInvoiceHistory && <InvoiceHistoryPanel invoices={invoices.filter(inv => !isMandateAuth(inv))} onClose={() => setShowInvoiceHistory(false)} />}
             {showInstagramErrorModal && <InstagramErrorModal />}
             {showAccountPicker && <AccountPickerModal />}
             {showSetupGuide && <InstagramSetupGuide />}

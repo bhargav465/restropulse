@@ -67,7 +67,6 @@ const mockFetchRazorpaySubscription = vi.fn();
 const mockFetchRazorpayPayment = vi.fn();
 
 const mockListRazorpaySubscriptionsForCustomer = vi.fn().mockResolvedValue({ items: [] });
-const mockListRazorpayPaymentsForSubscription = vi.fn().mockResolvedValue({ items: [] });
 
 vi.mock('../../src/services/razorpay.js', () => ({
     createRazorpaySubscription: mockCreateRazorpaySubscription,
@@ -84,7 +83,6 @@ vi.mock('../../src/services/razorpay.js', () => ({
     fetchRazorpayPayment: mockFetchRazorpayPayment,
     listRazorpayInvoices: vi.fn(),
     listRazorpaySubscriptionsForCustomer: mockListRazorpaySubscriptionsForCustomer,
-    listRazorpayPaymentsForSubscription: mockListRazorpayPaymentsForSubscription,
     createRazorpayCustomer: mockCreateRazorpayCustomer,
     fetchRazorpayCustomersByContact: mockFetchRazorpayCustomersByContact,
     isRazorpayConfigured: vi.fn().mockReturnValue(true),
@@ -445,68 +443,6 @@ describe('Subscription Routes', () => {
                 );
                 expect(res.body.data.subscription.status).toBe('HALTED');
             });
-        });
-    });
-
-    describe('GET /api/subscriptions/payments', () => {
-        test('returns mandate auth payments (invoice_id null) from Razorpay', async () => {
-            mockFindActiveSubscription.mockResolvedValue(mockSubscription);
-            mockListRazorpayPaymentsForSubscription.mockResolvedValue({
-                items: [
-                    { id: 'pay_auth_1', amount: 500, currency: 'INR', status: 'captured', method: 'card', created_at: 1714567890, invoice_id: null },
-                    { id: 'pay_billing_1', amount: 999900, currency: 'INR', status: 'captured', method: 'card', created_at: 1712000000, invoice_id: 'inv_rzp_001' },
-                ],
-            });
-
-            const res = await request(app)
-                .get('/api/subscriptions/payments')
-                .set('Authorization', `Bearer ${authToken}`);
-
-            expect(res.status).toBe(200);
-            expect(res.body.data).toHaveLength(2);
-            expect(res.body.data[0].id).toBe('pay_auth_1');
-            expect(res.body.data[0].amount).toBe(500);
-            expect(mockListRazorpayPaymentsForSubscription).toHaveBeenCalledWith(mockSubscription.razorpaySubscriptionId);
-        });
-
-        test('returns empty array when no active subscription', async () => {
-            mockFindActiveSubscription.mockResolvedValue(null);
-
-            const res = await request(app)
-                .get('/api/subscriptions/payments')
-                .set('Authorization', `Bearer ${authToken}`);
-
-            expect(res.status).toBe(200);
-            expect(res.body.data).toEqual([]);
-            expect(mockListRazorpayPaymentsForSubscription).not.toHaveBeenCalled();
-        });
-
-        test('returns empty array when subscription has no razorpaySubscriptionId', async () => {
-            mockFindActiveSubscription.mockResolvedValue({ ...mockSubscription, razorpaySubscriptionId: undefined });
-
-            const res = await request(app)
-                .get('/api/subscriptions/payments')
-                .set('Authorization', `Bearer ${authToken}`);
-
-            expect(res.status).toBe(200);
-            expect(res.body.data).toEqual([]);
-        });
-
-        test('returns empty array (not 500) when Razorpay API fails', async () => {
-            mockFindActiveSubscription.mockResolvedValue(mockSubscription);
-            mockListRazorpayPaymentsForSubscription.mockRejectedValue(new Error('Razorpay timeout'));
-
-            const res = await request(app)
-                .get('/api/subscriptions/payments')
-                .set('Authorization', `Bearer ${authToken}`);
-
-            expect(res.status).toBe(200);
-            expect(res.body.data).toEqual([]);
-        });
-
-        test('returns 401 without auth', async () => {
-            const res = await request(app).get('/api/subscriptions/payments');
-            expect(res.status).toBe(401);
         });
     });
 
@@ -1124,8 +1060,10 @@ describe('Subscription Routes', () => {
             );
             // No legacy PATCH attempts
             expect(mockUpdateRazorpaySubscription).not.toHaveBeenCalled();
-            // No DB writes — /verify materializes
-            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+            // Early DB store for webhook lookup — pendingRazorpaySubscriptionId written immediately
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub1', expect.objectContaining({
+                pendingRazorpaySubscriptionId: 'rzp_sub_new',
+            }));
             expect(mockCreateSubscription).not.toHaveBeenCalled();
         });
 
@@ -1246,10 +1184,12 @@ describe('Subscription Routes', () => {
                 'plan_starter_m', 120, undefined, undefined, expectedStartAt,
                 expect.objectContaining({ planSlug: 'starter', restaurantId: 'r1' }),
             );
-            // Unified flow defers all DB writes to /verify
             expect(mockUpdateRazorpaySubscription).not.toHaveBeenCalled();
             expect(mockCreateSubscription).not.toHaveBeenCalled();
-            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+            // Early DB store for webhook lookup — pendingRazorpaySubscriptionId written immediately
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub1', expect.objectContaining({
+                pendingRazorpaySubscriptionId: 'rzp_sub_starter_def',
+            }));
         });
 
         test('should return 400 when no active subscription exists', async () => {
@@ -1384,7 +1324,10 @@ describe('Subscription Routes', () => {
                 expect.objectContaining({ planSlug: 'premium', restaurantId: 'r1' }),
             );
             expect(mockCreateSubscription).not.toHaveBeenCalled();
-            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+            // Early DB store: pendingRazorpaySubscriptionId written immediately for webhook lookup
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub1', expect.objectContaining({
+                pendingRazorpaySubscriptionId: 'rzp_sub_premium_new',
+            }));
         });
 
         test('Case B — clicking pending plan is a no-op success', async () => {
@@ -1428,8 +1371,10 @@ describe('Subscription Routes', () => {
                 'plan_starter_m', 120, undefined, undefined, expectedStartAt,
                 expect.objectContaining({ planSlug: 'starter', restaurantId: 'r1' }),
             );
-            // No DB writes — /verify materializes
-            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+            // Early DB store for webhook lookup — pendingRazorpaySubscriptionId written immediately
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub1', expect.objectContaining({
+                pendingRazorpaySubscriptionId: 'rzp_sub_starter_def',
+            }));
             expect(mockCreateSubscription).not.toHaveBeenCalled();
             expect(mockUpdateRazorpaySubscription).not.toHaveBeenCalled();
         });
@@ -1453,7 +1398,10 @@ describe('Subscription Routes', () => {
                 expect.objectContaining({ planSlug: 'enterprise', restaurantId: 'r1' }),
             );
             expect(mockUpdateRazorpaySubscription).not.toHaveBeenCalled();
-            expect(mockUpdateSubscription).not.toHaveBeenCalled();
+            // Early DB store for webhook lookup — pendingRazorpaySubscriptionId written immediately
+            expect(mockUpdateSubscription).toHaveBeenCalledWith('sub1', expect.objectContaining({
+                pendingRazorpaySubscriptionId: 'rzp_sub_enterprise_def',
+            }));
             expect(mockCreateSubscription).not.toHaveBeenCalled();
         });
 
@@ -1980,6 +1928,70 @@ describe('Subscription Routes', () => {
 
             expect(res.status).toBe(200);
             expect(mockUpdateSubscription).not.toHaveBeenCalled();
+        });
+
+        test('subscription.authenticated — creates MANDATE_AUTH invoice for ₹5 payment', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, status: 'CREATED' });
+            mockFindInvoiceByPaymentId.mockResolvedValue(null);
+            mockCreateInvoice.mockResolvedValue({});
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.authenticated',
+                    payload: {
+                        subscription: { entity: { id: 'sub_rzp_123' } },
+                        payment: { entity: { id: 'pay_mandate_1', amount: 500, currency: 'INR' } },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockFindInvoiceByPaymentId).toHaveBeenCalledWith('pay_mandate_1');
+            expect(mockCreateInvoice).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'MANDATE_AUTH',
+                razorpayPaymentId: 'pay_mandate_1',
+                amountPaise: 500,
+                status: 'paid',
+            }));
+        });
+
+        test('subscription.authenticated — skips duplicate mandate auth invoice', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, status: 'CREATED' });
+            mockFindInvoiceByPaymentId.mockResolvedValue({ id: 'inv_existing' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.authenticated',
+                    payload: {
+                        subscription: { entity: { id: 'sub_rzp_123' } },
+                        payment: { entity: { id: 'pay_mandate_1', amount: 500, currency: 'INR' } },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockCreateInvoice).not.toHaveBeenCalled();
+        });
+
+        test('subscription.authenticated — no invoice when payment entity absent', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({ ...mockSubscription, status: 'CREATED' });
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.authenticated',
+                    payload: { subscription: { entity: { id: 'sub_rzp_123' } } },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockCreateInvoice).not.toHaveBeenCalled();
+            expect(mockUpdateSubscription).toHaveBeenCalledWith(mockSubscription.id, { status: 'AUTHENTICATED' });
         });
 
         test('should handle subscription.activated with coupon redemption', async () => {

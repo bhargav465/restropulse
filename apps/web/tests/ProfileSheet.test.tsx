@@ -62,7 +62,6 @@ vi.mock('../api', () => ({
         cancel: vi.fn(),
         purchaseCredits: vi.fn(),
         verifyCredits: vi.fn(),
-        getPayments: vi.fn().mockResolvedValue([]),
     },
     couponAPI: {
         validate: vi.fn(),
@@ -165,8 +164,6 @@ describe('ProfileSheet Component', () => {
             { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01', pdfUrl: 'https://example.com/invoice1.pdf' },
             { id: 'inv2', restaurantId: 'r1', type: 'CREDIT_PURCHASE', amountPaise: 9900, currency: 'INR', status: 'paid', description: '10 Credits', paidAt: '2026-02-15' },
         ]);
-        vi.mocked(subscriptionAPI.getPayments).mockResolvedValue([]);
-
         // Reset action mocks that individual tests may override with mockRejectedValue
         vi.mocked(subscriptionAPI.subscribe).mockReset();
         vi.mocked(subscriptionAPI.changePlan).mockResolvedValue({ effective: 'immediate', planName: 'Growth' });
@@ -583,25 +580,37 @@ describe('ProfileSheet Component', () => {
         });
     });
 
-    it('should show Payment History section when mandate auth payments exist', async () => {
-        vi.mocked(subscriptionAPI.getPayments).mockResolvedValue([
-            { id: 'pay_auth_1', amount: 500, currency: 'INR', status: 'captured', method: 'card', created_at: 1714567890, invoice_id: null },
-            { id: 'pay_auth_2', amount: 500, currency: 'INR', status: 'captured', method: 'upi', created_at: 1712000000, invoice_id: null },
+    it('should show Payment History for MANDATE_AUTH invoices', async () => {
+        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
+            { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01' },
+            { id: 'inv2', restaurantId: 'r1', type: 'MANDATE_AUTH', amountPaise: 500, currency: 'INR', status: 'paid', description: 'Mandate Verification - Growth', paidAt: '2026-03-01' },
         ]);
 
         render(<ProfileSheet {...defaultProps} />);
-        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
-
-        fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => {
             expect(screen.getByText('Payment History')).toBeInTheDocument();
-            expect(screen.getAllByText('Mandate Verification').length).toBeGreaterThanOrEqual(1);
+            expect(screen.getByText('Mandate Verification - Growth')).toBeInTheDocument();
         });
     });
 
-    it('should not show Payment History section when all Razorpay payments have invoice_id', async () => {
-        vi.mocked(subscriptionAPI.getPayments).mockResolvedValue([
-            { id: 'pay_billing_1', amount: 999900, currency: 'INR', status: 'captured', method: 'card', created_at: 1714567890, invoice_id: 'inv_rzp_001' },
+    it('should show Payment History for legacy ₹5 SUBSCRIPTION invoices (pre-MANDATE_AUTH type)', async () => {
+        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
+            { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01' },
+            { id: 'inv2', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 500, currency: 'INR', status: 'paid', description: 'Starter Plan - Monthly', paidAt: '2026-03-01' },
+        ]);
+
+        render(<ProfileSheet {...defaultProps} />);
+        await waitFor(() => {
+            expect(screen.getByText('Payment History')).toBeInTheDocument();
+        });
+        // the ₹5 entry must NOT appear in Billing History
+        const billingSection = screen.getByText('Billing History').closest('div')!;
+        expect(billingSection).not.toHaveTextContent('₹5');
+    });
+
+    it('should not show Payment History when no mandate auth invoices exist', async () => {
+        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
+            { id: 'inv1', restaurantId: 'r1', type: 'SUBSCRIPTION', amountPaise: 99900, currency: 'INR', status: 'paid', description: 'Growth Plan - Monthly', paidAt: '2026-03-01' },
         ]);
 
         render(<ProfileSheet {...defaultProps} />);
@@ -613,17 +622,15 @@ describe('ProfileSheet Component', () => {
         expect(screen.queryByText('Payment History')).not.toBeInTheDocument();
     });
 
-    it('should show payment method label in Payment History', async () => {
-        vi.mocked(subscriptionAPI.getPayments).mockResolvedValue([
-            { id: 'pay_auth_1', amount: 500, currency: 'INR', status: 'captured', method: 'upi', created_at: 1714567890, invoice_id: null },
+    it('should show description from MANDATE_AUTH invoice in Payment History', async () => {
+        vi.mocked(invoiceAPI.getAll).mockResolvedValue([
+            { id: 'inv1', restaurantId: 'r1', type: 'MANDATE_AUTH', amountPaise: 500, currency: 'INR', status: 'paid', description: 'Mandate Verification - Premium', paidAt: '2026-04-01' },
         ]);
 
         render(<ProfileSheet {...defaultProps} />);
-        await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
-
-        fireEvent.click(screen.getByText('Subscription').closest('button')!);
         await waitFor(() => {
-            expect(screen.getByText(/UPI/i)).toBeInTheDocument();
+            expect(screen.getByText('Payment History')).toBeInTheDocument();
+            expect(screen.getByText('Mandate Verification - Premium')).toBeInTheDocument();
         });
     });
 

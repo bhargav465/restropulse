@@ -304,16 +304,6 @@ export async function listRazorpayInvoices(
 }
 
 /**
- * List all payments for a Razorpay subscription.
- * Includes mandate auth charges (₹5, invoice_id=null) alongside regular billing charges.
- */
-export async function listRazorpayPaymentsForSubscription(
-    subscriptionId: string,
-): Promise<{ items: Array<{ id: string; amount: number; currency: string; status: string; method?: string; created_at: number; invoice_id?: string | null }> }> {
-    return razorpayRequest(`/subscriptions/${subscriptionId}/payments`, 'GET');
-}
-
-/**
  * Anonymize a Razorpay customer's PII on account deletion.
  * Razorpay has no delete API; this clears name/email/contact so no identifiable
  * data remains while Razorpay retains the customer record for their own compliance.

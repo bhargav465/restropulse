@@ -50,7 +50,6 @@ import {
     fetchRazorpayInvoice,
     fetchRazorpaySubscription,
     fetchRazorpayPayment,
-    listRazorpayPaymentsForSubscription,
 } from '../services/razorpay.js';
 import { createLogger, trackEvent } from '@restropulse/telemetry/server';
 
@@ -376,27 +375,6 @@ router.get('/current', requireAuth, handle(async (req: Request, res: Response<Ap
     res.json({ success: true, data: { subscription, usage } });
 }));
 
-// GET /payments -- requireAuth, list all Razorpay payments for the active subscription
-// Returns payments straight from Razorpay (no DB storage). Mandate auth charges have
-// invoice_id=null; regular billing charges have invoice_id set.
-router.get('/payments', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
-    if (!isRazorpayConfigured()) {
-        return res.json({ success: true, data: [] });
-    }
-    const restaurantId = req.user!.restaurantId;
-    const sub = await findActiveSubscription(restaurantId);
-    if (!sub?.razorpaySubscriptionId) {
-        return res.json({ success: true, data: [] });
-    }
-    try {
-        const result = await listRazorpayPaymentsForSubscription(sub.razorpaySubscriptionId);
-        res.json({ success: true, data: result.items ?? [] });
-    } catch (err) {
-        log.warn({ err }, 'Failed to fetch Razorpay payment history');
-        res.json({ success: true, data: [] });
-    }
-}));
-
 // POST /subscribe -- requireAuth, create Razorpay subscription
 router.post('/subscribe', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
     if (!isRazorpayConfigured()) {
@@ -528,7 +506,25 @@ router.post('/subscribe', requireAuth, handle(async (req: Request, res: Response
     const notes: Record<string, string> = { planSlug, restaurantId };
     if (couponCode) notes.couponCode = couponCode;
 
+    log.info(
+        {
+            restaurantId,
+            planSlug,
+            billingCycle,
+            razorpayPlanId,
+            existingStatus: existingCheck?.status ?? 'none',
+            pendingPlan: existingCheck?.pendingPlanSnapshot?.slug,
+            couponCode: couponCode ?? null,
+        },
+        'subscribe: creating Razorpay subscription',
+    );
+
     const razorpaySub = await createRazorpaySubscription(razorpayPlanId, totalCount, offerId, customerId, startAt, notes);
+
+    log.info(
+        { restaurantId, planSlug, rzpSubId: razorpaySub.id, startAt },
+        'subscribe: Razorpay subscription created',
+    );
 
     // B4 fix: do NOT touch the DB here. The local subscription record (which holds
     // free credits, plan metadata, period info) is left alone until /verify or the
@@ -672,6 +668,16 @@ router.post('/webhook', async (req: Request, res: Response) => {
                 if (subId) {
                     const sub = await findSubscriptionByRazorpayId(subId)
                         ?? await findSubscriptionByPendingRazorpayId(subId);
+                    log.info(
+                        {
+                            rzpSubId: subId,
+                            paymentId: payload?.payment?.entity?.id ?? null,
+                            paymentAmount: payload?.payment?.entity?.amount ?? null,
+                            subFound: !!sub,
+                            subStatus: sub?.status ?? null,
+                        },
+                        'webhook: subscription.authenticated',
+                    );
                     if (sub) {
                         // Rank guard: subscription.authenticated can arrive AFTER the sub is
                         // already ACTIVE (e.g., /verify ran first and Path B4 created an ACTIVE
@@ -680,6 +686,30 @@ router.post('/webhook', async (req: Request, res: Response) => {
                         const currentRank = SUBSCRIPTION_STATUS_RANK[sub.status] ?? 0;
                         if (SUBSCRIPTION_STATUS_RANK['AUTHENTICATED'] >= currentRank) {
                             await updateSubscription(sub.id, { status: 'AUTHENTICATED' });
+                        }
+
+                        // Record the ₹5 mandate verification charge as a MANDATE_AUTH invoice.
+                        // Not a formal billing invoice (no PDF), shown separately in Payment History.
+                        const payment = payload?.payment?.entity;
+                        if (payment?.id) {
+                            const existing = await findInvoiceByPaymentId(payment.id);
+                            if (!existing) {
+                                const planName = sub.pendingPlanSnapshot?.name ?? sub.planSnapshot?.name;
+                                await createInvoice({
+                                    restaurantId: sub.restaurantId,
+                                    type: 'MANDATE_AUTH',
+                                    razorpayPaymentId: payment.id,
+                                    razorpaySubscriptionId: subId,
+                                    amountPaise: payment.amount || 0,
+                                    currency: payment.currency || 'INR',
+                                    status: 'paid',
+                                    description: planName ? `Mandate Verification - ${planName}` : 'Mandate Verification',
+                                    paidAt: new Date(),
+                                });
+                                log.info({ razorpayPaymentId: payment.id, amountPaise: payment.amount }, 'Mandate auth invoice created');
+                            } else {
+                                log.info({ razorpayPaymentId: payment.id }, 'Skipping duplicate mandate auth invoice');
+                            }
                         }
                     }
                     // If sub doesn't exist locally yet, /verify will materialize it
@@ -752,6 +782,17 @@ router.post('/webhook', async (req: Request, res: Response) => {
                 if (subId) {
                     const entity = payload.subscription.entity;
                     const restaurantIdFromNotes = entity.notes?.restaurantId;
+
+                    log.info(
+                        {
+                            rzpSubId: subId,
+                            paymentId: payload?.payment?.entity?.id ?? null,
+                            paymentAmount: payload?.payment?.entity?.amount ?? null,
+                            rzpStatus: entity.status,
+                            resolvedRestaurantId: restaurantIdFromNotes ?? 'not-in-notes',
+                        },
+                        'webhook: subscription.charged',
+                    );
 
                     // Find or look up the restaurant. If the local sub doesn't exist
                     // yet, materialize from notes.
@@ -869,6 +910,10 @@ router.post('/webhook', async (req: Request, res: Response) => {
                 const subId = payload?.subscription?.entity?.id;
                 if (subId) {
                     const sub = await findSubscriptionByRazorpayId(subId);
+                    log.info(
+                        { rzpSubId: subId, subFound: !!sub, subStatus: sub?.status ?? null },
+                        'webhook: subscription.halted',
+                    );
                     if (sub) {
                         const currentRank = SUBSCRIPTION_STATUS_RANK[sub.status] ?? 0;
                         if (SUBSCRIPTION_STATUS_RANK['HALTED'] >= currentRank) {
@@ -883,6 +928,10 @@ router.post('/webhook', async (req: Request, res: Response) => {
                 const subId = payload?.subscription?.entity?.id;
                 if (subId) {
                     const sub = await findSubscriptionByRazorpayId(subId);
+                    log.info(
+                        { rzpSubId: subId, subFound: !!sub, subStatus: sub?.status ?? null },
+                        'webhook: subscription.cancelled',
+                    );
                     if (sub) {
                         await updateSubscription(sub.id, {
                             status: 'CANCELLED',
@@ -935,6 +984,24 @@ async function prepareCancelAndFutureSubscribe(params: {
     userId: string;
 }): Promise<{ razorpaySubscriptionId: string; keyId: string; effective: 'immediate' | 'cycle_end' }> {
     const { existing, targetPlan, mode, restaurantId, userId } = params;
+
+    log.info(
+        {
+            restaurantId,
+            targetPlan: targetPlan.slug,
+            targetMonthlyPaise: targetPlan.pricing.monthly,
+            mode,
+            currentRzpSubId: existing.razorpaySubscriptionId,
+            currentPlan: existing.planSnapshot?.slug,
+            currentStatus: existing.status,
+            periodEnd: existing.currentPeriodEnd,
+            pendingPlan: existing.pendingPlanSnapshot?.slug,
+            pendingRzpSubId: existing.pendingRazorpaySubscriptionId,
+            cancelAtPeriodEnd: existing.cancelAtPeriodEnd,
+        },
+        'plan-change: prepareCancelAndFutureSubscribe entry',
+    );
+
     const targetRazorpayPlanId = targetPlan.razorpayPlanIds.monthly;
     if (!targetRazorpayPlanId) {
         throw new Error('Target plan has no Razorpay plan ID configured');
@@ -942,6 +1009,10 @@ async function prepareCancelAndFutureSubscribe(params: {
 
     // Step 1: cancel-at-cycle-end the active sub (idempotent)
     if (!existing.cancelAtPeriodEnd) {
+        log.info(
+            { rzpSubId: existing.razorpaySubscriptionId, restaurantId },
+            'plan-change: cancelling active sub at cycle end',
+        );
         try {
             await cancelRazorpaySubscription(existing.razorpaySubscriptionId, true);
         } catch (cancelErr) {
@@ -1009,6 +1080,22 @@ async function prepareCancelAndFutureSubscribe(params: {
         { restaurantId, planSlug: targetPlan.slug, mode, startAt, newRzpId: newSub.id, replacingRzpId: existing.razorpaySubscriptionId },
         'plan-change: deferred resubscribe created, awaiting checkout completion',
     );
+
+    // For cycle_end mode: store the new pending sub ID in the DB immediately so that
+    // the subscription.authenticated webhook (which fires before /verify is called)
+    // can find the subscription and record the rs.5 mandate auth invoice.
+    if (mode === 'cycle_end') {
+        await updateSubscription(existing.id, {
+            pendingRazorpaySubscriptionId: newSub.id,
+            pendingPlanId: targetPlan.id,
+            pendingPlanSnapshot: targetPlan,
+        });
+        log.info(
+            { restaurantId, pendingRzpId: newSub.id, pendingPlan: targetPlan.slug },
+            'plan-change: stored pendingRazorpaySubscriptionId early for webhook lookup',
+        );
+    }
+
     return {
         razorpaySubscriptionId: newSub.id,
         keyId: getRazorpayKeyId(),
@@ -1066,6 +1153,24 @@ router.post('/change-plan', requireAuth, handle(async (req: Request, res: Respon
     const currentMonthlyPrice = existing.planSnapshot?.pricing.monthly ?? 0;
     const isPlanUpgrade = plan.pricing.monthly > currentMonthlyPrice;
 
+    log.info(
+        {
+            restaurantId,
+            requestedPlan: planSlug,
+            requestedMode: rawMode,
+            effectiveMode: requestedMode === 'now' && isPlanUpgrade ? 'now' : 'cycle_end',
+            currentPlan: currentSlug,
+            currentStatus: existing.status,
+            currentMonthlyPaise: currentMonthlyPrice,
+            targetMonthlyPaise: plan.pricing.monthly,
+            pendingPlan: pendingSlug,
+            periodEnd: existing.currentPeriodEnd,
+            cancelAtPeriodEnd: existing.cancelAtPeriodEnd,
+            isPlanUpgrade,
+        },
+        'change-plan: request resolved',
+    );
+
     // No-op echoes ---------------------------------------------------------
     // Same plan as currently active, no pending change, and NOT a reactivation
     // (cancelAtPeriodEnd=true means the user cancelled but is now re-subscribing —
@@ -1122,264 +1227,22 @@ router.post('/change-plan', requireAuth, handle(async (req: Request, res: Respon
     });
 }));
 
-// Legacy /change-plan branches (Cases A/B/C/D, the in-place PATCH attempts,
-// and separate upgrade/downgrade paths) have been removed in favor of the
-// unified prepareCancelAndFutureSubscribe helper above. Razorpay's domestic-
-// card mandate constraint made the PATCH attempts always-fail dead code.
-/* eslint-disable */
-// @ts-nocheck
-const _legacyDeadCode_KeepForBlame = async () => {
-    const isAmendingPending: any = null;
-    const restaurantId: any = null;
-    const planSlug: any = null;
-    const billingCycle: any = null;
-    const plan: any = null;
-    const isPlanUpgrade: any = null;
-    const existing: any = null;
-    const razorpayPlanId: any = null;
-    const req: any = null;
-    const res: any = null;
-    if (isAmendingPending) {
-        if (plan.slug === existing.planSnapshot?.slug) {
-            if (!existing.currentPeriodEnd) {
-                return res.status(400).json({ success: false, error: 'Cannot determine current billing period. Please try again.' });
-            }
-            const startAt = Math.floor(new Date(existing.currentPeriodEnd).getTime() / 1000);
-            const userForKeep = await findUserById(req.user!.userId);
-            const notes: Record<string, string> = { planSlug: plan.slug, restaurantId };
-            const keepRzpSub = await createRazorpaySubscription(
-                razorpayPlanId, 120, undefined, userForKeep?.razorpayCustomerId, startAt, notes
-            );
-            log.info({ restaurantId, planSlug, startAt, razorpaySubscriptionId: keepRzpSub.id }, 'Keep current: deferred resubscribe created, awaiting checkout completion');
-            return res.json({
-                success: true,
-                data: {
-                    effective: 'immediate',
-                    planName: plan.name,
-                    requiresCheckout: true,
-                    subscriptionId: keepRzpSub.id,
-                    keyId: getRazorpayKeyId(),
-                },
-            });
-        }
-
-        // Case B: user clicked the SAME pending plan -> no-op success
-        if (plan.slug === existing.pendingPlanSnapshot?.slug) {
-            return res.json({
-                success: true,
-                data: { effective: 'cycle_end', planName: plan.name, currentPeriodEnd: existing.currentPeriodEnd },
-            });
-        }
-
-        // Case C: new plan is another downgrade at/below current -> amend pending in DB only.
-        // The Razorpay subscription is already scheduled to cancel at cycle end; we just
-        // update our metadata so the UI and the future re-subscribe reflect the new target.
-        if (!isPlanUpgrade) {
-            await updateSubscription(existing.id, {
-                pendingPlanId: plan.id,
-                pendingPlanSnapshot: plan,
-            });
-            log.info({ restaurantId, planSlug }, 'Pending downgrade amended');
-            return res.json({
-                success: true,
-                data: { effective: 'cycle_end', planName: plan.name, currentPeriodEnd: existing.currentPeriodEnd },
-            });
-        }
-
-        // Case D: new plan is an UPGRADE above current, while a pending downgrade is
-        // scheduled. Try the in-place Razorpay update first so the user is only charged
-        // the prorated difference (and the pending cancel is implicitly superseded by
-        // the upgrade). If the update fails — typically because the existing sub is
-        // already in a cancel-scheduled state Razorpay won't update — fall back to a
-        // fresh-checkout path.
-        try {
-            const updated = await updateRazorpaySubscription(existing.razorpaySubscriptionId, {
-                planId: razorpayPlanId,
-                scheduleChangeAt: 'now',
-            });
-            await updateSubscription(existing.id, {
-                planId: plan.id,
-                planSnapshot: plan,
-                cancelAtPeriodEnd: false,
-                cancelledAt: undefined,
-                pendingPlanId: undefined,
-                pendingPlanSnapshot: null,
-            });
-            log.info(
-                { restaurantId, planSlug, razorpaySubscriptionId: existing.razorpaySubscriptionId, razorpayResultStatus: updated.status },
-                'Pending-amend upgrade: Razorpay in-place update succeeded — proration charged on existing mandate',
-            );
-            return res.json({
-                success: true,
-                data: {
-                    effective: 'immediate',
-                    planName: plan.name,
-                    requiresCheckout: false,
-                },
-            });
-        } catch (updateErr) {
-            log.warn(
-                { err: updateErr, razorpaySubscriptionId: existing.razorpaySubscriptionId, planSlug },
-                'Pending-amend upgrade: Razorpay in-place update failed — falling back to fresh-checkout path',
-            );
-        }
-
-        // Fallback: leave the old (cancel-scheduled) sub alone, create a fresh upgraded
-        // sub, require the user to authorize a new mandate. /verify materializes the swap.
-        const userForUpgrade = await findUserById(req.user!.userId);
-        const upgradeCustomerId = userForUpgrade?.razorpayCustomerId;
-        const upgradeNotes: Record<string, string> = { planSlug: plan.slug, restaurantId };
-        const upgradeRazorpaySub = await createRazorpaySubscription(razorpayPlanId, 120, undefined, upgradeCustomerId, undefined, upgradeNotes);
-
-        log.info({ restaurantId, planSlug, billingCycle, razorpaySubscriptionId: upgradeRazorpaySub.id }, 'Pending-amend upgrade: deferred resubscribe created, awaiting checkout completion');
-        return res.json({
-            success: true,
-            data: {
-                effective: 'immediate',
-                planName: plan.name,
-                requiresCheckout: true,
-                subscriptionId: upgradeRazorpaySub.id,
-                keyId: getRazorpayKeyId(),
-            },
-        });
-    }
-
-    // Downgrade: schedule the existing Razorpay subscription to cancel at cycle_end
-    // and store the target plan as DB metadata. At cycle_end the user re-subscribes
-    // (manually or via "Keep current"-style flow) at the lower plan.
-    //
-    // Razorpay constraint that forces this design: domestic-card e-mandate
-    // subscriptions cannot have their plan_id updated via PATCH. Razorpay returns
-    // "Only offers can be updated for subscriptions when payment mode is domestic
-    // card." So we cannot use schedule_change_at=cycle_end on the plan field —
-    // only cancel-at-cycle-end and create-new-deferred-start work for cards.
-    if (!isPlanUpgrade) {
-        try {
-            await cancelRazorpaySubscription(existing.razorpaySubscriptionId, true);
-        } catch (cancelErr) {
-            const cancelMsg = ((cancelErr as Error).message || '').toLowerCase();
-            const alreadyTerminal = cancelMsg.includes('already cancelled') || cancelMsg.includes('not in an active state');
-            if (!alreadyTerminal) throw new Error('Failed to schedule plan change. Please try again.');
-        }
-        await updateSubscription(existing.id, {
-            cancelAtPeriodEnd: true,
-            cancelledAt: new Date().toISOString(),
-            pendingPlanId: plan.id,
-            pendingPlanSnapshot: plan,
-        });
-        log.info({ restaurantId, planSlug, billingCycle }, 'Downgrade: cancel at period end + pending plan stored');
-        return res.json({
-            success: true,
-            data: {
-                effective: 'cycle_end',
-                planName: plan.name,
-                currentPeriodEnd: existing.currentPeriodEnd,
-            },
-        });
-    }
-
-    // Upgrade flow.
-    //
-    // Razorpay constraint: domestic-card e-mandate subscriptions do not support
-    // plan_id updates via PATCH. Razorpay returns "Only offers can be updated for
-    // subscriptions when payment mode is domestic card." This means true mid-cycle
-    // proration is NOT possible on the Indian card mandate path.
-    //
-    // We try the in-place PATCH with schedule_change_at='now' anyway, on the chance
-    // that the mandate is UPI (which DOES support plan changes) or that Razorpay
-    // adds card support in future. On any failure, fall back to creating a fresh
-    // subscription at the new plan and require the user to authorize a new mandate
-    // via checkout. The fallback charges the FULL new-plan amount as a fresh first
-    // cycle — there's no way to charge only the prorated difference for card
-    // mandates without creating a separate one-time order (TODO: implement that as
-    // an opt-in "Upgrade now (extra charge)" alongside a "Schedule for next cycle
-    // (no charge)" option).
-    try {
-        const updated = await updateRazorpaySubscription(existing.razorpaySubscriptionId, {
-            planId: razorpayPlanId,
-            scheduleChangeAt: 'now',
-        });
-        await updateSubscription(existing.id, {
-            planId: plan.id,
-            planSnapshot: plan,
-            pendingPlanId: undefined,
-            pendingPlanSnapshot: null,
-        });
-        log.info(
-            { restaurantId, planSlug, razorpaySubscriptionId: existing.razorpaySubscriptionId, razorpayResultStatus: updated.status },
-            'Upgrade: Razorpay in-place update succeeded (likely UPI mandate) — proration charged on existing mandate',
-        );
-        return res.json({
-            success: true,
-            data: {
-                effective: 'immediate',
-                planName: plan.name,
-                requiresCheckout: false,
-            },
-        });
-    } catch (updateErr) {
-        const rzpErrMsg = (updateErr as Error).message || '';
-        log.info(
-            { rzpErrMsg, razorpaySubscriptionId: existing.razorpaySubscriptionId },
-            'Upgrade: Razorpay PATCH rejected (likely card-mandate constraint) — falling back to fresh-checkout path',
-        );
-    }
-
-    // Fallback: create a fresh subscription on the upgraded plan. The local DB is
-    // untouched until /verify confirms checkout completion (B4/B7 fix). On checkout
-    // success, materialize archives the old sub and inserts the new doc.
-    const user = await findUserById(req.user!.userId);
-    const customerId = user?.razorpayCustomerId;
-
-    // B13 fix: before creating a new fresh sub, sweep any orphan in-flight Razorpay
-    // subs for this customer (created/authenticated state, no local DB record).
-    // These pile up when the user clicks Upgrade multiple times and abandons each
-    // Razorpay checkout — without this sweep, every retry leaves another orphan
-    // sitting in Razorpay's database forever.
-    if (customerId) {
-        try {
-            const customerSubs = await listRazorpaySubscriptionsForCustomer(customerId);
-            const cleanupCandidates = (customerSubs.items || []).filter(s =>
-                (s.status === 'created' || s.status === 'authenticated') &&
-                s.id !== existing.razorpaySubscriptionId,
-            );
-            for (const orphan of cleanupCandidates) {
-                const localDoc = await findSubscriptionByRazorpayId(orphan.id);
-                if (!localDoc) {
-                    try {
-                        await cancelRazorpaySubscription(orphan.id, false);
-                        log.info({ orphanRzpId: orphan.id, restaurantId }, 'Upgrade-sweep: cancelled orphan Razorpay sub');
-                    } catch (cancelErr) {
-                        log.warn({ err: cancelErr, orphanRzpId: orphan.id }, 'Upgrade-sweep: failed to cancel orphan Razorpay sub');
-                    }
-                }
-            }
-        } catch (listErr) {
-            log.warn({ err: listErr, customerId }, 'Upgrade-sweep: failed to list customer subs; proceeding without sweep');
-        }
-    }
-
-    const upgradeNotes: Record<string, string> = { planSlug: plan.slug, restaurantId };
-    const razorpaySub = await createRazorpaySubscription(razorpayPlanId, 120, undefined, customerId, undefined, upgradeNotes);
-
-    log.info({ restaurantId, planSlug, billingCycle, razorpaySubscriptionId: razorpaySub.id }, 'Upgrade: deferred resubscribe created, awaiting checkout completion');
-    return res.json({
-        success: true,
-        data: {
-            effective: 'immediate',
-            planName: plan.name,
-            requiresCheckout: true,
-            subscriptionId: razorpaySub.id,
-            keyId: getRazorpayKeyId(),
-        },
-    });
-};
-/* eslint-enable */
-
 // POST /reactivate -- requireAuth, undo a pending cycle-end cancellation
 router.post('/reactivate', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
     const restaurantId = req.user!.restaurantId;
     const existing = await findActiveSubscription(restaurantId);
+
+    log.info(
+        {
+            restaurantId,
+            currentPlan: existing?.planSnapshot?.slug,
+            currentStatus: existing?.status,
+            cancelAtPeriodEnd: existing?.cancelAtPeriodEnd,
+            periodEnd: existing?.currentPeriodEnd,
+            rzpSubId: existing?.razorpaySubscriptionId,
+        },
+        'reactivate: request received',
+    );
 
     if (!existing || !existing.razorpaySubscriptionId) {
         return res.status(400).json({ success: false, error: 'No subscription to reactivate' });
@@ -1428,6 +1291,18 @@ router.post('/reactivate', requireAuth, handle(async (req: Request, res: Respons
 router.post('/cancel', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
     const restaurantId = req.user!.restaurantId;
     const subscription = await findActiveSubscription(restaurantId);
+
+    log.info(
+        {
+            restaurantId,
+            currentPlan: subscription?.planSnapshot?.slug,
+            currentStatus: subscription?.status,
+            cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd,
+            periodEnd: subscription?.currentPeriodEnd,
+            rzpSubId: subscription?.razorpaySubscriptionId,
+        },
+        'cancel: request received',
+    );
 
     if (!subscription || !subscription.razorpaySubscriptionId) {
         return res.status(400).json({ success: false, error: 'No active subscription to cancel' });

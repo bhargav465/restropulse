@@ -20,7 +20,7 @@ export type CouponStatus = 'ACTIVE' | 'DISABLED' | 'EXPIRED';
 
 export type CreditPurchaseStatus = 'PENDING' | 'PAID' | 'FAILED';
 
-export type InvoiceType = 'SUBSCRIPTION' | 'CREDIT_PURCHASE';
+export type InvoiceType = 'SUBSCRIPTION' | 'CREDIT_PURCHASE' | 'MANDATE_AUTH';
 
 export type PostType = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'STORY' | 'REEL';
 
