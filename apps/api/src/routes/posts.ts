@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
 import { publishPost, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
-import { ApiResponse, Post } from '@restropulse/shared';
+import { ApiResponse, Post, isPostPastApprovalDeadline } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { enforcePlanLimits } from '../middleware/enforce-plan-limits.js';
@@ -83,8 +83,8 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
         platforms: postData.platforms || ['INSTAGRAM'],
         // Ensure restaurantId is always set from auth context
         restaurantId: req.user!.restaurantId,
-        // Mark as adhoc if no strategyId
-        isAdhoc: !postData.strategyId,
+        // Mark as adhoc if no cycleId
+        isAdhoc: !postData.cycleId,
     };
 
     const newPost = await createPost(postWithDefaults);
@@ -200,6 +200,20 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
 // Update post
 router.put('/:id', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
     const { id } = req.params;
+
+    // Block CHANGES_REQUESTED transitions past the approval deadline.
+    // Approval transitions (APPROVED/SCHEDULED) remain allowed so the
+    // content-engine's auto-advance can proceed without racing the UI.
+    if (req.body?.status === 'CHANGES_REQUESTED') {
+        const existing = await findPostById(id);
+        if (existing && isPostPastApprovalDeadline(existing, new Date())) {
+            return res.status(409).json({
+                success: false,
+                error: 'Post is past the approval deadline'
+            });
+        }
+    }
+
     const post = await updatePost(id, req.body);
 
     if (post) {

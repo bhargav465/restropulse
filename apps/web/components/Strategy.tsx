@@ -1,8 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Clock, CalendarCheck, Zap, ChevronRight, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
+import { Target, Clock, CalendarCheck, Zap, ChevronRight, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar, Lock } from 'lucide-react';
 import { strategyAPI } from '../api';
-import { StrategyCycle, Restaurant } from '@restropulse/shared';
+import {
+    StrategyCycle,
+    Restaurant,
+    computeCycleApprovalDeadline,
+    isCyclePastApprovalDeadline,
+} from '@restropulse/shared';
 import { ActionNotice } from './ActionNotice';
+
+function formatCountdown(deadline: Date, now: Date): string {
+    const diffMs = deadline.getTime() - now.getTime();
+    if (diffMs <= 0) return 'Feedback window closed';
+    const totalMinutes = Math.floor(diffMs / (60 * 1000));
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return `Feedback closes in ${days}d ${hours}h`;
+    if (hours > 0) return `Feedback closes in ${hours}h ${minutes}m`;
+    return `Feedback closes in ${minutes}m`;
+}
 
 interface StrategyProps {
     restaurantData: Restaurant;
@@ -14,6 +31,13 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     const [cycles, setCycles] = useState<StrategyCycle[]>([]);
     const [loading, setLoading] = useState(true);
     const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+    const [now, setNow] = useState(() => new Date());
+
+    // Tick every 60s for deadline countdown. No API calls.
+    useEffect(() => {
+        const interval = setInterval(() => setNow(new Date()), 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Auto-dismiss notice
     useEffect(() => {
@@ -128,6 +152,9 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
 
     const StrategyCard = ({ cycle, isActionable }: { cycle: StrategyCycle, isActionable: boolean }) => {
         const isChangesRequested = cycle.status === 'CHANGES_REQUESTED';
+        const isPendingReview = cycle.status === 'PENDING_APPROVAL' || isChangesRequested;
+        const deadline = isPendingReview ? computeCycleApprovalDeadline(cycle) : null;
+        const feedbackLocked = isPendingReview && isCyclePastApprovalDeadline(cycle, now);
 
         return (
             <div className={`rounded-3xl p-6 shadow-sm border relative overflow-hidden ${isActionable ? 'bg-white border-orange-100 shadow-md' : 'bg-slate-50 border-slate-200'}`}>
@@ -194,6 +221,17 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                             <p className="opacity-80 line-clamp-2">{JSON.parse(cycle.feedback).note || "Details sent to account manager."}</p>
                         </div>
                     )}
+
+                    {/* Approval deadline countdown */}
+                    {isPendingReview && deadline && (
+                        <div
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold ${feedbackLocked ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}
+                            aria-label={feedbackLocked ? 'Feedback window closed' : 'Time remaining to request changes'}
+                        >
+                            {feedbackLocked ? <Lock size={12} /> : <Clock size={12} />}
+                            <span>{formatCountdown(deadline, now)}</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Actions */}
@@ -209,13 +247,19 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                             </div>
                         ) : (
                             <>
-                                <button
-                                    onClick={() => openFeedbackModal(cycle.id)}
-                                    aria-label="Request changes to strategy"
-                                    className="py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                                >
-                                    <RefreshCw size={16} /> Request Changes
-                                </button>
+                                {feedbackLocked ? (
+                                    <div className="py-3.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 font-bold text-xs flex items-center justify-center gap-2">
+                                        <Lock size={16} /> Feedback Closed
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => openFeedbackModal(cycle.id)}
+                                        aria-label="Request changes to strategy"
+                                        className="py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <RefreshCw size={16} /> Request Changes
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => handleApprove(cycle.id)}
                                     aria-label="Approve strategy"

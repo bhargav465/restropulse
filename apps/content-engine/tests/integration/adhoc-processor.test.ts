@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll, afterEach } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient, ObjectId } from 'mongodb';
 import { setDB } from '@restropulse/db';
@@ -24,7 +24,12 @@ vi.mock('@restropulse/telemetry/server', () => {
 // Set ASSET_SERVER_BASE_URL before content-generator loads asset-manager
 process.env['ASSET_SERVER_BASE_URL'] = 'http://localhost:3002';
 
-const { processAdhocRequests } = await import('../../src/services/adhoc-processor.js');
+const { processPendingPosts } = await import('../../src/services/adhoc-processor.js');
+const {
+  PlaceholderContentGenerator,
+  setContentGenerator,
+  resetContentGenerator,
+} = await import('../../src/services/content-generator/index.js');
 
 let mongod: MongoMemoryServer;
 let client: MongoClient;
@@ -42,15 +47,20 @@ afterAll(async () => {
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  setContentGenerator(new PlaceholderContentGenerator());
   // Clear the posts collection before each test
   const db = client.db('content-engine-test');
   await db.collection('posts').deleteMany({});
 });
 
+afterEach(() => {
+  resetContentGenerator();
+});
+
 describe('adhoc-processor integration', () => {
-  describe('processAdhocRequests()', () => {
+  describe('processPendingPosts()', () => {
     it('returns { processed: 0, failed: 0 } when no PENDING_CONTENT posts exist', async () => {
-      const result = await processAdhocRequests();
+      const result = await processPendingPosts();
       expect(result).toEqual({ processed: 0, failed: 0 });
     });
 
@@ -66,7 +76,7 @@ describe('adhoc-processor integration', () => {
         updatedAt: new Date(),
       });
 
-      const result = await processAdhocRequests();
+      const result = await processPendingPosts();
       expect(result).toEqual({ processed: 0, failed: 0 });
     });
 
@@ -83,7 +93,7 @@ describe('adhoc-processor integration', () => {
         updatedAt: new Date(),
       });
 
-      const result = await processAdhocRequests();
+      const result = await processPendingPosts();
       expect(result).toEqual({ processed: 1, failed: 0 });
 
       const updatedPost = await db.collection('posts').findOne({ _id: postId });
@@ -105,7 +115,7 @@ describe('adhoc-processor integration', () => {
         updatedAt: new Date(),
       });
 
-      const result = await processAdhocRequests();
+      const result = await processPendingPosts();
       expect(result.processed).toBe(1);
 
       const updatedPost = await db.collection('posts').findOne({ _id: postId });
@@ -126,7 +136,7 @@ describe('adhoc-processor integration', () => {
         updatedAt: new Date(),
       });
 
-      const result = await processAdhocRequests();
+      const result = await processPendingPosts();
       expect(result.processed).toBe(1);
 
       const updatedPost = await db.collection('posts').findOne({ _id: postId });
@@ -157,8 +167,61 @@ describe('adhoc-processor integration', () => {
         },
       ]);
 
-      const result = await processAdhocRequests();
+      const result = await processPendingPosts();
       expect(result).toEqual({ processed: 2, failed: 0 });
+    });
+
+    it('under concurrent ticks, only one run advances a given post (race-safe via status filter)', async () => {
+      const db = client.db('content-engine-test');
+      const postId = new ObjectId();
+      await db.collection('posts').insertOne({
+        _id: postId,
+        type: 'IMAGE',
+        status: 'PENDING_CONTENT',
+        platforms: ['INSTAGRAM'],
+        concept: 'Concurrency check',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const [a, b] = await Promise.all([processPendingPosts(), processPendingPosts()]);
+
+      // Exactly one of the two runs matched+advanced the post; the other was a no-op.
+      expect(a.processed + b.processed).toBe(1);
+
+      const updatedPost = await db.collection('posts').findOne({ _id: postId });
+      expect(updatedPost?.status).toBe('PENDING_APPROVAL');
+    });
+
+    it('passes correlationId = postId to the generator', async () => {
+      const db = client.db('content-engine-test');
+      const postId = new ObjectId();
+      const calls: unknown[] = [];
+      setContentGenerator({
+        name: 'spy',
+        draftCycle: async () => ({ summary: '', plannedPosts: [], focus: [] }),
+        reviseCycle: async () => ({ summary: '', plannedPosts: [], focus: [] }),
+        generatePost: async (_input, ctx) => {
+          calls.push(ctx);
+          return { caption: 'hi', thumbnail: 'http://x/y.jpg' };
+        },
+        revisePost: async () => ({ caption: '', thumbnail: '' }),
+      });
+
+      await db.collection('posts').insertOne({
+        _id: postId,
+        type: 'IMAGE',
+        status: 'PENDING_CONTENT',
+        platforms: ['INSTAGRAM'],
+        concept: 'With ctx',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await processPendingPosts();
+
+      expect(calls).toHaveLength(1);
+      expect((calls[0] as { correlationId?: string }).correlationId).toBe(postId.toString());
     });
 
     it('uses caption field as concept when concept is absent', async () => {
@@ -174,7 +237,7 @@ describe('adhoc-processor integration', () => {
         updatedAt: new Date(),
       });
 
-      const result = await processAdhocRequests();
+      const result = await processPendingPosts();
       expect(result.processed).toBe(1);
 
       const updatedPost = await db.collection('posts').findOne({ _id: postId });

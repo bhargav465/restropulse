@@ -1,19 +1,22 @@
 /**
- * Adhoc Post Processor
+ * Pending Posts Processor
  *
  * Polls for posts with status PENDING_CONTENT and generates content for them.
- * These are posts created by users via the API's /posts/generate endpoint.
+ * These are posts created by users via the API's /posts/generate endpoint,
+ * and stub posts inserted by the rolling-window processor for upcoming cycle
+ * slots. Both flow through the same generator call.
  */
 
-import { getPostsCollection } from '@restropulse/db';
+import { getPostsCollection, findRestaurantById } from '@restropulse/db';
 import type { PostType, Platform } from '@restropulse/shared';
 import { createLogger } from '@restropulse/telemetry/server';
-import { generateContent } from './content-generator.js';
+import { getContentGenerator, ContentGenerationError } from './content-generator/index.js';
 
 const logger = createLogger('content-engine:adhoc-processor');
 
-export async function processAdhocRequests(): Promise<{ processed: number; failed: number }> {
+export async function processPendingPosts(): Promise<{ processed: number; failed: number }> {
   const col = getPostsCollection();
+  const generator = getContentGenerator();
   const stats = { processed: 0, failed: 0 };
 
   const pendingPosts = await col
@@ -25,22 +28,35 @@ export async function processAdhocRequests(): Promise<{ processed: number; faile
     return stats;
   }
 
-  logger.info({ count: pendingPosts.length }, 'Found adhoc posts pending content generation');
+  logger.info(
+    { count: pendingPosts.length, generator: generator.name },
+    'Found adhoc posts pending content generation',
+  );
 
   for (const postDoc of pendingPosts) {
     const postId = postDoc._id.toString();
 
     try {
-      // Generate content based on post metadata
-      const content = await generateContent({
-        concept: postDoc.caption || postDoc.concept || '',
-        type: (postDoc.type as PostType) || 'IMAGE',
-        platforms: (postDoc.platforms as Platform[]) || ['INSTAGRAM'],
-      });
+      const restaurant = postDoc.restaurantId
+        ? await findRestaurantById(postDoc.restaurantId)
+        : null;
 
-      // Update the post with generated content and advance status
-      await col.updateOne(
-        { _id: postDoc._id },
+      const content = await generator.generatePost(
+        {
+          concept: postDoc.caption || postDoc.concept || '',
+          type: (postDoc.type as PostType) || 'IMAGE',
+          platforms: (postDoc.platforms as Platform[]) || ['INSTAGRAM'],
+          themes: Array.isArray(postDoc.themes) ? (postDoc.themes as string[]) : undefined,
+        },
+        {
+          correlationId: postId,
+          restaurantId: postDoc.restaurantId,
+          restaurantName: restaurant?.name,
+        },
+      );
+
+      const result = await col.updateOne(
+        { _id: postDoc._id, status: 'PENDING_CONTENT' },
         {
           $set: {
             caption: content.caption,
@@ -53,10 +69,19 @@ export async function processAdhocRequests(): Promise<{ processed: number; faile
         },
       );
 
-      logger.info({ postId }, 'Generated content for post');
+      if (result.matchedCount === 0) {
+        logger.warn({ postId }, 'Post no longer in PENDING_CONTENT; skipping advance');
+        continue;
+      }
+
+      logger.info({ postId, generator: generator.name }, 'Generated content for post');
       stats.processed++;
     } catch (error) {
-      logger.error({ postId, err: error }, 'Failed to generate content for post');
+      if (error instanceof ContentGenerationError) {
+        logger.error({ postId, code: error.code, err: error }, 'Content generation failed');
+      } else {
+        logger.error({ postId, err: error }, 'Failed to generate content for post');
+      }
       stats.failed++;
     }
   }

@@ -7,7 +7,7 @@ import {
     createCycle,
     updateCycle
 } from '@restropulse/db';
-import { ApiResponse, StrategyCycle, ContentStrategy } from '@restropulse/shared';
+import { ApiResponse, StrategyCycle, ContentStrategy, isCyclePastApprovalDeadline } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -96,6 +96,20 @@ router.post('/cycles', requireAuth, handle(async (req: Request, res: Response<Ap
 // Update cycle
 router.put('/cycles/:id', requireAuth, handle(async (req: Request, res: Response<ApiResponse<StrategyCycle>>) => {
     const { id } = req.params;
+
+    // Block CHANGES_REQUESTED transitions past the approval deadline.
+    // Approval transitions (APPROVED/ACTIVE) remain allowed so the
+    // content-engine's auto-advance and rolling-window can proceed.
+    if (req.body?.status === 'CHANGES_REQUESTED') {
+        const existing = await findCycleById(id);
+        if (existing && isCyclePastApprovalDeadline(existing, new Date())) {
+            return res.status(409).json({
+                success: false,
+                error: 'Cycle is past the approval deadline'
+            });
+        }
+    }
+
     const cycle = await updateCycle(id, req.body);
 
     if (cycle) {

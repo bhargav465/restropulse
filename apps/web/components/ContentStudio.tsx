@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, CheckCircle, MessageCircle, RefreshCw, Send, Edit, Clock, Lock, Undo2, AlertTriangle, FileText, Image as ImageIcon, MoreHorizontal, CheckSquare, Square, AlertCircle, ChevronDown, LockKeyhole, History, Sparkles, Phone, Film, CircleDashed, Layers, Play, Video, ChevronLeft, ChevronRight, Pause, ScanEye, CalendarClock, Archive, X, Plus, PenTool } from 'lucide-react';
-import { Post, Restaurant } from '@restropulse/shared';
+import {
+    Post,
+    Restaurant,
+    computePostApprovalDeadline,
+    isPostPastApprovalDeadline
+} from '@restropulse/shared';
 import { postsAPI, restaurantAPI } from '../api';
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { ActionNotice } from './ActionNotice';
@@ -114,6 +119,21 @@ const formatFeedbackDisplay = (feedbackStr?: string) => {
     );
 };
 
+function formatPostCountdown(deadline: Date, now: Date): string {
+    const diffMs = deadline.getTime() - now.getTime();
+    if (diffMs <= 0) return 'Feedback window closed';
+    const minutes = Math.floor(diffMs / 60000);
+    if (minutes < 60) return `Feedback closes in ${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+        const m = minutes % 60;
+        return m > 0 ? `Feedback closes in ${hours}h ${m}m` : `Feedback closes in ${hours}h`;
+    }
+    const days = Math.floor(hours / 24);
+    const h = hours % 24;
+    return h > 0 ? `Feedback closes in ${days}d ${h}h` : `Feedback closes in ${days}d`;
+}
+
 interface PostCardProps {
     post: Post;
     tab: 'REVIEW' | 'SCHEDULED' | 'HISTORY';
@@ -121,9 +141,10 @@ interface PostCardProps {
     onFeedback: (id: string, type: 'EDIT' | 'REVERT') => void;
     approving?: string | null;
     instagramConnected?: boolean;
+    now: Date;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, approving, instagramConnected = true }) => {
+const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, approving, instagramConnected = true, now }) => {
     // Local state for Carousel
     const [currentSlide, setCurrentSlide] = useState(0);
     const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -140,6 +161,9 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
     }
 
     const isLocked = hoursRemaining <= 3;
+    const isPendingReview = post.status === 'PENDING_APPROVAL' || post.status === 'CHANGES_REQUESTED';
+    const postDeadline = isPendingReview ? computePostApprovalDeadline(post) : null;
+    const feedbackLocked = isPendingReview && postDeadline !== null && isPostPastApprovalDeadline(post, now);
     const isVertical = post.type === 'STORY' || post.type === 'REEL';
     const isVideoContent = post.type === 'VIDEO' || post.type === 'REEL' || post.type === 'STORY';
     const isCarousel = post.type === 'CAROUSEL' && post.mediaUrls && post.mediaUrls.length > 0;
@@ -397,56 +421,79 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
 
                 {/* Actions - Review Tab */}
                 {tab === 'REVIEW' && (
-                    post.status === 'CHANGES_REQUESTED' ? (
-                        <div className="mt-3 flex items-center justify-between bg-orange-50/50 p-3 rounded-xl border border-orange-100/50">
-                            <div className="flex items-center gap-2 text-orange-700">
-                                <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></div>
-                                <span className="text-xs font-bold">Revision in progress</span>
+                    <>
+                        {postDeadline && (
+                            <div
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold ${feedbackLocked ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}
+                                aria-label={feedbackLocked ? 'Feedback window closed' : 'Time remaining to request changes'}
+                            >
+                                {feedbackLocked ? <Lock size={12} /> : <Clock size={12} />}
+                                <span>{formatPostCountdown(postDeadline, now)}</span>
                             </div>
+                        )}
+                        {post.status === 'CHANGES_REQUESTED' ? (
+                            <div className="mt-3 flex items-center justify-between bg-orange-50/50 p-3 rounded-xl border border-orange-100/50">
+                                <div className="flex items-center gap-2 text-orange-700">
+                                    <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></div>
+                                    <span className="text-xs font-bold">Revision in progress</span>
+                                </div>
 
-                            <div className="flex items-center gap-4">
-                                <button
-                                    type="button"
-                                    onClick={() => onFeedback(post.id, 'EDIT')}
-                                    className="text-[10px] font-bold text-slate-400 hover:text-orange-600 uppercase tracking-wide transition-colors"
-                                >
-                                    Add Note
-                                </button>
+                                <div className="flex items-center gap-4">
+                                    {feedbackLocked ? (
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1">
+                                            <Lock size={12} /> Feedback Closed
+                                        </span>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => onFeedback(post.id, 'EDIT')}
+                                            className="text-[10px] font-bold text-slate-400 hover:text-orange-600 uppercase tracking-wide transition-colors"
+                                        >
+                                            Add Note
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => onApprove(post.id)}
+                                        disabled={approving === post.id || !instagramConnected}
+                                        className={`text-[10px] font-bold uppercase tracking-wide transition-colors ${!instagramConnected ? 'text-slate-300 cursor-not-allowed' : approving === post.id ? 'text-slate-300 cursor-wait' : 'text-slate-400 hover:text-green-600'}`}
+                                        title={!instagramConnected ? 'Connect Instagram first' : undefined}
+                                    >
+                                        {approving === post.id ? 'Approving...' : 'Approve'}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3 pt-2">
+                                {feedbackLocked ? (
+                                    <div className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 font-bold text-sm">
+                                        <Lock size={16} /> Feedback Closed
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => onFeedback(post.id, 'EDIT')}
+                                        className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all"
+                                    >
+                                        <Edit size={16} /> Request Edit
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => onApprove(post.id)}
                                     disabled={approving === post.id || !instagramConnected}
-                                    className={`text-[10px] font-bold uppercase tracking-wide transition-colors ${!instagramConnected ? 'text-slate-300 cursor-not-allowed' : approving === post.id ? 'text-slate-300 cursor-wait' : 'text-slate-400 hover:text-green-600'}`}
+                                    className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm transition-all ${!instagramConnected ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : approving === post.id ? 'bg-orange-400 text-white/80 cursor-wait' : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'}`}
                                     title={!instagramConnected ? 'Connect Instagram first' : undefined}
                                 >
-                                    {approving === post.id ? 'Approving...' : 'Approve'}
+                                    {approving === post.id ? (
+                                        <><RefreshCw size={16} className="animate-spin" /> Approving...</>
+                                    ) : (
+                                        <><CheckCircle size={16} /> Approve</>
+                                    )}
                                 </button>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => onFeedback(post.id, 'EDIT')}
-                                className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all"
-                            >
-                                <Edit size={16} /> Request Edit
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => onApprove(post.id)}
-                                disabled={approving === post.id || !instagramConnected}
-                                className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm transition-all ${!instagramConnected ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : approving === post.id ? 'bg-orange-400 text-white/80 cursor-wait' : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'}`}
-                                title={!instagramConnected ? 'Connect Instagram first' : undefined}
-                            >
-                                {approving === post.id ? (
-                                    <><RefreshCw size={16} className="animate-spin" /> Approving...</>
-                                ) : (
-                                    <><CheckCircle size={16} /> Approve</>
-                                )}
-                            </button>
-                        </div>
-                    )
+                        )}
+                    </>
                 )}
 
                 {/* Actions - Scheduled Tab */}
@@ -518,6 +565,12 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
     const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
     const [loading, setLoading] = useState(true);
     const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+    const [now, setNow] = useState(() => new Date());
+
+    useEffect(() => {
+        const interval = setInterval(() => setNow(new Date()), 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Auto-dismiss notice
     useEffect(() => {
@@ -938,6 +991,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
                             onFeedback={openFeedbackModal}
                             approving={approving}
                             instagramConnected={instagramConnected}
+                            now={now}
                         />
                     ))
                 ) : posts.length === 0 && onCreatePost ? (

@@ -175,7 +175,7 @@ export interface Post {
   publishError?: string;
   publishAttempts?: number;
   duration?: string;
-  strategyId?: string;
+  cycleId?: string;
   isAdhoc?: boolean;
   instagramMediaId?: string;
   facebookPostId?: string;
@@ -447,3 +447,13 @@ export interface GeneratePostResponse {
 }
 
 export { loadEnvFile, validateEnv, loadAndValidateEnv, z } from './env.js';
+
+export {
+  POST_APPROVAL_BUFFER_HOURS,
+  CYCLE_APPROVAL_BUFFER_HOURS,
+  ROLLING_WINDOW_HOURS,
+  computePostApprovalDeadline,
+  computeCycleApprovalDeadline,
+  isPostPastApprovalDeadline,
+  isCyclePastApprovalDeadline,
+} from './approval-deadlines.js';

@@ -1,20 +1,19 @@
 /**
  * Strategy Processor
  *
- * Handles two jobs:
- *   1. Process approved strategy cycles -- generate posts for each day in the cycle
- *   2. Process strategy generation requests -- create strategies from user input
+ * processPendingCycles: cycles in PENDING_GENERATION get a draft summary +
+ * plannedPosts + focus from the content generator, then advance to PENDING_APPROVAL.
+ *
+ * Activation (APPROVED -> ACTIVE) is handled by the rolling-window processor
+ * once the cycle's startDate enters the 48h window.
  */
 
 import {
-  getPostsCollection,
   getStrategyCyclesCollection,
-  getContentStrategiesCollection,
   findRestaurantById,
 } from '@restropulse/db';
-import type { PostType } from '@restropulse/shared';
 import { createLogger } from '@restropulse/telemetry/server';
-import { generateContent, generateCycleContent } from './content-generator.js';
+import { getContentGenerator, ContentGenerationError } from './content-generator/index.js';
 
 const logger = createLogger('content-engine:strategy-processor');
 
@@ -59,167 +58,77 @@ export function parseBestTime(value: unknown): { hours: number; minutes: number 
 }
 
 /**
- * Process approved strategy cycles that need content generated.
- * Looks for cycles with status APPROVED that don't yet have posts linked.
+ * Draft new cycles by asking the generator for summary + plannedPosts + focus.
+ * Looks for cycles with status PENDING_GENERATION.
  */
-export async function processApprovedCycles(): Promise<{ processed: number; failed: number }> {
+export async function processPendingCycles(): Promise<{ processed: number; failed: number }> {
   const cyclesCol = getStrategyCyclesCollection();
-  const postsCol = getPostsCollection();
+  const generator = getContentGenerator();
   const stats = { processed: 0, failed: 0 };
 
-  // Find approved cycles that haven't been processed yet
-  const approvedCycles = await cyclesCol
-    .find({
-      status: 'APPROVED',
-      contentGenerated: { $ne: true },
-    })
-    .toArray();
-
-  if (approvedCycles.length === 0) {
-    return stats;
-  }
-
-  logger.info({ count: approvedCycles.length }, 'Found approved cycles needing content generation');
-
-  for (const cycleDoc of approvedCycles) {
-    const cycleId = cycleDoc._id.toString();
-    const restaurantId = cycleDoc.restaurantId;
-
-    try {
-      // Get restaurant info for context
-      const restaurant = restaurantId ? await findRestaurantById(restaurantId) : null;
-
-      // Get the content strategy for posting frequency
-      const strategiesCol = getContentStrategiesCollection();
-      const strategy = await strategiesCol.findOne({ restaurantId });
-
-      const postsPerWeek = strategy?.postsPerWeek || 3;
-      const themes = cycleDoc.focus || ['Food & Menu', 'Offers', 'Behind the Scenes'];
-      const contentTypes: PostType[] = ['IMAGE', 'CAROUSEL', 'REEL'];
-
-      const now = new Date();
-      const safeStartDate = parseDateOrFallback(cycleDoc.startDate, now);
-      const safeEndDate = parseDateOrFallback(cycleDoc.endDate, safeStartDate);
-
-      // Generate content for the cycle
-      const contents = await generateCycleContent({
-        startDate: safeStartDate.toISOString(),
-        endDate: safeEndDate.toISOString(),
-        postsPerWeek,
-        themes,
-        contentTypes,
-        restaurantName: restaurant?.name,
-      });
-
-      // Calculate posting schedule
-      const start = new Date(safeStartDate);
-      const daysBetweenPosts = Math.floor(7 / postsPerWeek);
-
-      // Create posts in the database
-      for (let i = 0; i < contents.length; i++) {
-        const content = contents[i];
-        const postDate = new Date(start);
-        postDate.setDate(postDate.getDate() + i * daysBetweenPosts);
-
-        // Set posting time to strategy's bestTime or default 10:00 AM
-        const bestTime = parseBestTime(strategy?.bestTime);
-        const hours = bestTime.hours;
-        const minutes = bestTime.minutes;
-        postDate.setHours(hours, minutes, 0, 0);
-
-        const type = contentTypes[i % contentTypes.length];
-
-        await postsCol.insertOne({
-          type,
-          status: 'PENDING_APPROVAL',
-          caption: content.caption,
-          thumbnail: content.thumbnail,
-          mediaUrls: content.mediaUrls || null,
-          videoUrl: content.videoUrl || null,
-          platforms: ['INSTAGRAM', 'FACEBOOK'],
-          restaurantId,
-          strategyId: cycleId,
-          isAdhoc: false,
-          scheduledFor: postDate.toISOString(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
-
-      // Mark cycle as content generated
-      await cyclesCol.updateOne(
-        { _id: cycleDoc._id },
-        {
-          $set: {
-            contentGenerated: true,
-            status: 'ACTIVE',
-            updatedAt: new Date(),
-          },
-        },
-      );
-
-      logger.info({ cycleId, postCount: contents.length }, 'Generated posts for cycle');
-      stats.processed++;
-    } catch (error) {
-      logger.error({ cycleId, err: error }, 'Failed to process cycle');
-      stats.failed++;
-    }
-  }
-
-  return stats;
-}
-
-/**
- * Process strategy generation requests.
- * Looks for strategy cycles with status PENDING_GENERATION.
- */
-export async function processStrategyRequests(): Promise<{ processed: number; failed: number }> {
-  const cyclesCol = getStrategyCyclesCollection();
-  const stats = { processed: 0, failed: 0 };
-
-  const pendingCycles = await cyclesCol
-    .find({ status: 'PENDING_GENERATION' })
-    .toArray();
+  const pendingCycles = await cyclesCol.find({ status: 'PENDING_GENERATION' }).toArray();
 
   if (pendingCycles.length === 0) {
     return stats;
   }
 
-  logger.info({ count: pendingCycles.length }, 'Found strategy generation requests');
+  logger.info(
+    { count: pendingCycles.length, generator: generator.name },
+    'Found cycles pending draft generation',
+  );
 
   for (const cycleDoc of pendingCycles) {
     const cycleId = cycleDoc._id.toString();
 
     try {
-      // TODO: Use AI to generate strategy recommendations based on restaurant profile
-      // For now, create a basic strategy structure
+      const restaurant = cycleDoc.restaurantId
+        ? await findRestaurantById(cycleDoc.restaurantId)
+        : null;
 
-      const themes = ['Food & Menu', 'Chef Specials', 'Behind the Scenes', 'Customer Stories', 'Offers'];
-      const plannedPosts = themes.slice(0, 3).map((category) => ({
-        category,
-        count: 2,
-      }));
+      const draft = await generator.draftCycle(
+        {
+          period: cycleDoc.period || '',
+          strategyFocus: Array.isArray(cycleDoc.strategyFocus)
+            ? (cycleDoc.strategyFocus as string[])
+            : undefined,
+        },
+        {
+          correlationId: cycleId,
+          restaurantId: cycleDoc.restaurantId,
+          restaurantName: restaurant?.name,
+        },
+      );
 
-      await cyclesCol.updateOne(
-        { _id: cycleDoc._id },
+      const result = await cyclesCol.updateOne(
+        { _id: cycleDoc._id, status: 'PENDING_GENERATION' },
         {
           $set: {
             status: 'PENDING_APPROVAL',
-            summary: `Content strategy for ${cycleDoc.period}: ${themes.slice(0, 3).join(', ')} focus`,
-            plannedPosts,
-            focus: themes.slice(0, 3),
+            summary: draft.summary,
+            plannedPosts: draft.plannedPosts,
+            focus: draft.focus,
             updatedAt: new Date(),
           },
         },
       );
 
-      logger.info({ cycleId }, 'Generated strategy for cycle');
+      if (result.matchedCount === 0) {
+        logger.warn({ cycleId }, 'Cycle no longer in PENDING_GENERATION; skipping advance');
+        continue;
+      }
+
+      logger.info({ cycleId, generator: generator.name }, 'Drafted cycle');
       stats.processed++;
     } catch (error) {
-      logger.error({ cycleId, err: error }, 'Failed to generate strategy for cycle');
+      if (error instanceof ContentGenerationError) {
+        logger.error({ cycleId, code: error.code, err: error }, 'Cycle draft failed');
+      } else {
+        logger.error({ cycleId, err: error }, 'Failed to draft cycle');
+      }
       stats.failed++;
     }
   }
 
   return stats;
 }
+

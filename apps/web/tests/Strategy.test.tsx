@@ -37,6 +37,10 @@ describe('Strategy Component', () => {
         theme: 'Local food enthusiasts',
     };
 
+    // PENDING_APPROVAL cycle needs a future startDate so the deadline window is still open.
+    const pendingStart = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const pendingEnd = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+
     const mockCycles = [
         {
             id: 'c1',
@@ -71,8 +75,8 @@ describe('Strategy Component', () => {
             period: 'March 2024',
             goals: ['Spring menu launch'],
             status: 'PENDING_APPROVAL' as const,
-            startDate: new Date('2024-03-01').toISOString(),
-            endDate: new Date('2024-03-31').toISOString(),
+            startDate: pendingStart,
+            endDate: pendingEnd,
             summary: 'Spring menu promotions',
             plannedPosts: [
                 { category: 'Food', count: 4 },
