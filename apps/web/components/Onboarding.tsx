@@ -183,10 +183,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         emailVerificationAttempted = true;
         setEmailStatus('verifying');
         completeEmailVerification()
-            .then((verifiedEmail) => {
+            .then((result) => {
                 if (!isMountedRef.current) return;
-                if (verifiedEmail) {
-                    setEmail(verifiedEmail);
+                if (result) {
+                    setEmail(result.email);
                     setEmailStatus('verified');
                     setEmailError(null);
                     const savedName = localStorage.getItem('rp_onboarding_name');
@@ -194,7 +194,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         setUserName(savedName);
                         localStorage.removeItem('rp_onboarding_name');
                     }
-                    authAPI.verifyEmail(verifiedEmail).catch(() => {
+                    authAPI.verifyEmail(result.idToken).catch(() => {
                         // Non-fatal: email locally verified; persisted on restaurantAPI.create
                     });
                 } else {

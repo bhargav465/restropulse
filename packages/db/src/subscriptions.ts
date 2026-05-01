@@ -49,6 +49,14 @@ export async function findSubscriptionByRazorpayId(
   return toApiFormat(doc) as Subscription | null;
 }
 
+export async function findSubscriptionByPendingRazorpayId(
+  pendingRazorpaySubscriptionId: string,
+): Promise<Subscription | null> {
+  const col = getSubscriptionsCollection();
+  const doc = await col.findOne({ pendingRazorpaySubscriptionId, endedAt: null });
+  return toApiFormat(doc) as Subscription | null;
+}
+
 /**
  * Get weekly post counts for a restaurant, grouped by platform and post type.
  * Counts posts created in the current ISO week (Mon-Sun).

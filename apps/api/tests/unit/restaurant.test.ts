@@ -697,7 +697,9 @@ describe('Restaurant Routes - Unit Tests', () => {
         })();
 
         beforeEach(async () => {
-            // Create a new user without a restaurant
+            // Create a new user without a restaurant. emailVerified=true so the
+            // onboarding endpoint accepts the request (B6: POST /restaurant now
+            // requires the user to have verified their email first).
             const usersCol = getUsersCollection();
             await usersCol.updateOne(
                 { _id: 'u-new' as any },
@@ -705,6 +707,7 @@ describe('Restaurant Routes - Unit Tests', () => {
                     $set: {
                         name: 'New User',
                         email: 'new@test.com',
+                        emailVerified: true,
                         phone: '+919000000000',
                         role: 'OWNER',
                         restaurantId: '',

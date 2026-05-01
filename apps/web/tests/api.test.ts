@@ -594,13 +594,13 @@ describe('API Service', () => {
                 }),
             });
 
-            const result = await subscriptionAPI.subscribe('growth', 'ANNUAL', 'SAVE20');
+            const result = await subscriptionAPI.subscribe('growth', 'SAVE20');
             expect(result.subscriptionId).toBe('sub_456');
             expect(mockFetch).toHaveBeenCalledWith(
                 expect.stringContaining('/subscriptions/subscribe'),
                 expect.objectContaining({
                     method: 'POST',
-                    body: JSON.stringify({ planSlug: 'growth', billingCycle: 'ANNUAL', couponCode: 'SAVE20' }),
+                    body: JSON.stringify({ planSlug: 'growth', billingCycle: 'MONTHLY', couponCode: 'SAVE20' }),
                 })
             );
         });

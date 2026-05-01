@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
 import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft, Phone, Mail } from 'lucide-react';
-import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Restaurant, InstagramConnectionError, InstagramAccount, Invoice, FeatureFlags } from '@restropulse/shared';
+import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, Restaurant, InstagramConnectionError, InstagramAccount, Invoice, FeatureFlags } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, configAPI, accountAPI } from '../api';
 import ConfirmDialog from './ConfirmDialog';
 import InvoiceHistoryPanel from './InvoiceHistoryPanel';
@@ -119,6 +119,25 @@ function getCityFromAddress(address: string): string {
 }
 
 
+const RAZORPAY_DISPLAY_CONFIG = {
+    display: {
+        blocks: {
+            payment: {
+                name: 'Pay using',
+                instruments: [
+                    { method: 'card' },
+                    { method: 'upi' },
+                    { method: 'netbanking' },
+                ],
+            },
+        },
+        sequence: ['block.payment'],
+        preferences: {
+            show_default_blocks: false,
+        },
+    },
+} as const;
+
 const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled, featureFlags }) => {
     const topupCreditsEnabled = featureFlags?.topupCredits === true;
 
@@ -150,7 +169,6 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const [usage, setUsage] = useState<PlanUsage | null>(null);
     const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
     const [creditPacks, setCreditPacks] = useState<CreditPack[]>([]);
-    const [billingCycle, setBillingCycle] = useState<BillingCycle>('MONTHLY');
     const [couponCode, setCouponCode] = useState('');
     const [couponValid, setCouponValid] = useState<boolean | null>(null);
     const [loadingPlanSlug, setLoadingPlanSlug] = useState<string | null>(null);
@@ -159,6 +177,10 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionErrorKey, setActionErrorKey] = useState(0);
+    // B12 fix: track the last attempted plan switch so Tap-to-retry can actually
+    // re-invoke handleSwitchPlan with the same slug instead of just dismissing the
+    // error and forcing the user to re-click the plan card from scratch.
+    const [lastFailedPlanSlug, setLastFailedPlanSlug] = useState<string | null>(null);
     const [showInvoiceHistory, setShowInvoiceHistory] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -166,6 +188,8 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const [isCancellingPlan, setIsCancellingPlan] = useState(false);
     const [switchConfirmPlan, setSwitchConfirmPlan] = useState<SubscriptionPlan | null>(null);
     const [resubscribeConfirmPlan, setResubscribeConfirmPlan] = useState<SubscriptionPlan | null>(null);
+    const [keepCurrentConfirmPlan, setKeepCurrentConfirmPlan] = useState<SubscriptionPlan | null>(null);
+    const [showReactivateConfirm, setShowReactivateConfirm] = useState(false);
 
     const loadSubscriptionData = async () => {
         setSubscriptionLoading(true);
@@ -468,6 +492,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         setIsCancellingPlan(true);
         try {
             await subscriptionAPI.cancel();
+            setActionError(null);
             await loadSubscriptionData();
             setShowCancelConfirm(false);
         } catch (err: any) {
@@ -477,31 +502,75 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         }
     };
 
-    const handleSwitchPlan = async (planSlug: string) => {
+    const handleSwitchPlan = async (planSlug: string, opts?: { mode?: 'now' | 'cycle_end' }) => {
         if (loadingPlanSlug) return;
         try {
             setLoadingPlanSlug(planSlug);
             setActionError(null);
+            setLastFailedPlanSlug(null); // clear stale failure so retry doesn't replay an old slug
             const normalizedCouponCode = couponCode.trim().toUpperCase();
-            if ((subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE') && !subscription?.cancelAtPeriodEnd) {
-                // Use change-plan API: upgrades apply immediately, downgrades at cycle end
-                const result = await subscriptionAPI.changePlan(planSlug, billingCycle);
-                browserEvents.subscriptionStarted(planSlug, billingCycle);
-                if (result.effective === 'cycle_end') {
-                    // Downgrade: keep the subscription section open so the notice is visible
+            // Route to change-plan when the subscription is amendable:
+            // - ACTIVE/PAST_DUE with no pending cancellation (normal switch), OR
+            // - ACTIVE/PAST_DUE with a pending plan scheduled (amend the schedule in place
+            //   rather than destructively re-checkout, which would charge twice and lose
+            //   the already-paid current period).
+            // Route through /change-plan for any ACTIVE or PAST_DUE subscription, including
+            // cancelAtPeriodEnd=true ones. /change-plan handles all transitions (reactivate,
+            // switch-while-cancelled, amend-pending). Raw /subscribe is only for NONE/CANCELLED.
+            const hasAmendableSub =
+                subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE';
+            if (hasAmendableSub) {
+                // Unified plan-change flow: backend cancels-at-cycle-end + creates a new
+                // deferred sub (or immediate sub for mode='now'). Always opens Razorpay
+                // checkout (₹5 mandate auth for cycle_end, full new-plan amount for now).
+                const result = await subscriptionAPI.changePlan(planSlug, opts);
+                browserEvents.subscriptionStarted(planSlug, 'MONTHLY');
+                if (result.requiresCheckout && result.subscriptionId && result.keyId) {
+                    if (!(window as any).Razorpay) throw new Error('Payment service not available');
+                    const rzp = new (window as any).Razorpay({
+                        key: result.keyId,
+                        subscription_id: result.subscriptionId,
+                        name: 'RestroPulse',
+                        description: `${planSlug} plan - monthly`,
+                        config: RAZORPAY_DISPLAY_CONFIG,
+                        handler: async (response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => {
+                            try {
+                                await subscriptionAPI.verifySubscription(
+                                    response.razorpay_payment_id,
+                                    response.razorpay_subscription_id,
+                                    response.razorpay_signature,
+                                );
+                            } catch (verifyErr) {
+                                console.error('Subscription verify failed:', verifyErr);
+                            }
+                            closeSubscription();
+                            loadSubscriptionData();
+                            scheduleSubscriptionPoll(3_000);
+                        },
+                    });
+                    if (typeof rzp.on === 'function') {
+                        rzp.on('payment.failed', (response: { error?: { description?: string; reason?: string } }) => {
+                            const detail = response?.error?.description || response?.error?.reason;
+                            showActionError(detail ? `Payment failed: ${detail}` : 'Payment failed. Please try again.');
+                        });
+                        rzp.on('modal.ondismiss', () => { loadSubscriptionData(); });
+                    }
+                    rzp.open();
+                } else if (result.effective === 'cycle_end') {
+                    // Downgrade via update API: keep panel open so the notice is visible
                     const endDate = result.currentPeriodEnd
                         ? new Date(result.currentPeriodEnd).toLocaleDateString()
                         : 'next billing date';
                     showActionError(`Switching to ${result.planName} on ${endDate}.`);
                     loadSubscriptionData();
                 } else {
-                    // Upgrade: change takes effect immediately, close panel and refresh
+                    // Upgrade via update API: takes effect immediately
                     closeSubscription();
                     loadSubscriptionData();
                 }
             } else {
-                const data = await subscriptionAPI.subscribe(planSlug, billingCycle, normalizedCouponCode || undefined);
-                browserEvents.subscriptionStarted(planSlug, billingCycle);
+                const data = await subscriptionAPI.subscribe(planSlug, normalizedCouponCode || undefined);
+                browserEvents.subscriptionStarted(planSlug, 'MONTHLY');
                 if (!(window as any).Razorpay) {
                     throw new Error('Payment service not available');
                 }
@@ -509,11 +578,21 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     key: data.keyId,
                     subscription_id: data.subscriptionId,
                     name: 'RestroPulse',
-                    description: `${planSlug} plan - ${billingCycle.toLowerCase()}`,
-                    handler: () => {
-                        // Razorpay calls this immediately after payment. Webhook updates DB asynchronously.
-                        // Close the modal, do an immediate data refresh, then poll with exponential backoff
-                        // until the subscription status confirms ACTIVE or PAST_DUE.
+                    description: `${planSlug} plan - monthly`,
+                    config: RAZORPAY_DISPLAY_CONFIG,
+                    handler: async (response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => {
+                        // Razorpay calls this immediately after payment. Verify synchronously
+                        // so activation doesn't depend on webhook delivery, then refresh + poll
+                        // as a belt-and-suspenders fallback.
+                        try {
+                            await subscriptionAPI.verifySubscription(
+                                response.razorpay_payment_id,
+                                response.razorpay_subscription_id,
+                                response.razorpay_signature,
+                            );
+                        } catch (verifyErr) {
+                            console.error('Subscription verify failed:', verifyErr);
+                        }
                         closeSubscription();
                         loadSubscriptionData();
                         scheduleSubscriptionPoll(3_000);
@@ -533,6 +612,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             }
         } catch (error: any) {
             showActionError(error?.message || 'Something went wrong. Please try again in a moment.');
+            setLastFailedPlanSlug(planSlug);
         } finally {
             setLoadingPlanSlug(null);
         }
@@ -541,11 +621,38 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const handleReactivate = async () => {
         try {
             setActionError(null);
-            await subscriptionAPI.reactivate();
-            loadSubscriptionData();
-        } catch (error) {
-            console.error('Reactivate failed:', error);
-            showActionError('Something went wrong. Please try again in a moment.');
+            const data = await subscriptionAPI.reactivate();
+            if (!(window as any).Razorpay) throw new Error('Payment service not available');
+            const rzp = new (window as any).Razorpay({
+                key: data.keyId,
+                subscription_id: data.subscriptionId,
+                name: 'RestroPulse',
+                description: `${subscription?.planSnapshot?.name ?? 'Plan'} - monthly`,
+                config: RAZORPAY_DISPLAY_CONFIG,
+                handler: async (response: { razorpay_payment_id: string; razorpay_subscription_id: string; razorpay_signature: string }) => {
+                    try {
+                        await subscriptionAPI.verifySubscription(
+                            response.razorpay_payment_id,
+                            response.razorpay_subscription_id,
+                            response.razorpay_signature,
+                        );
+                    } catch (verifyErr) {
+                        console.error('Subscription verify failed:', verifyErr);
+                    }
+                    loadSubscriptionData();
+                    scheduleSubscriptionPoll(3_000);
+                },
+            });
+            if (typeof rzp.on === 'function') {
+                rzp.on('payment.failed', (response: { error?: { description?: string; reason?: string } }) => {
+                    const detail = response?.error?.description || response?.error?.reason;
+                    showActionError(detail ? `Payment failed: ${detail}` : 'Payment failed. Please try again.');
+                });
+                rzp.on('modal.ondismiss', () => { loadSubscriptionData(); });
+            }
+            rzp.open();
+        } catch (error: any) {
+            showActionError(error?.message || 'Something went wrong. Please try again in a moment.');
         }
     };
 
@@ -563,6 +670,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                 order_id: data.orderId,
                 name: 'RestroPulse',
                 description: `${data.credits} Credits`,
+                config: RAZORPAY_DISPLAY_CONFIG,
                 handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
                     await subscriptionAPI.verifyCredits(
                         response.razorpay_order_id,
@@ -745,7 +853,9 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         const [editCuisine, setEditCuisine] = useState(restaurantData.cuisine);
         const [editAddress, setEditAddress] = useState(restaurantData.location.address);
         const [editCoordinates, setEditCoordinates] = useState<[number, number]>(
-            [restaurantData.location.lng, restaurantData.location.lat] || [0, 0]
+            restaurantData.location
+                ? [restaurantData.location.lng, restaurantData.location.lat]
+                : [0, 0]
         );
         const googleMapsApiKey = getGoogleMapsApiKey();
 
@@ -852,6 +962,36 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                         </div>
                     </div>
 
+                    {/* Pending plan-change banner (shown only when user has a scheduled
+                        change). Replaces the old "Keep current" button on the pending
+                        plan card with a clearer top-of-panel affordance. */}
+                    {subscription?.pendingPlanSnapshot && subscription?.planSnapshot && (() => {
+                        const currentPlan = plans.find(p => p.slug === subscription.planSnapshot!.slug);
+                        const currentName = subscription.planSnapshot!.name;
+                        const pendingName = subscription.pendingPlanSnapshot!.name;
+                        const switchDate = subscription.currentPeriodEnd
+                            ? new Date(subscription.currentPeriodEnd as string).toLocaleDateString()
+                            : 'next billing date';
+                        return (
+                            <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+                                <p className="font-bold text-amber-900 text-sm mb-1">Scheduled plan change</p>
+                                <p className="text-sm text-amber-800 mb-3">
+                                    You're switching from <b>{currentName}</b> to <b>{pendingName}</b> on <b>{switchDate}</b>.
+                                </p>
+                                {currentPlan && (
+                                    <button
+                                        onClick={() => setKeepCurrentConfirmPlan(currentPlan)}
+                                        disabled={loadingPlanSlug !== null}
+                                        aria-label="Cancel scheduled plan change"
+                                        className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${loadingPlanSlug !== null ? 'border-amber-200 text-amber-400 cursor-not-allowed' : 'border-amber-400 text-amber-900 hover:bg-amber-100'}`}
+                                    >
+                                        Cancel scheduled change
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })()}
+
                     {actionError && (
                         <div className="mb-4">
                             <ActionNotice
@@ -860,7 +1000,19 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                 onDismiss={() => setActionError(null)}
                             />
                             <button
-                                onClick={() => { setActionError(null); loadSubscriptionData(); }}
+                                onClick={() => {
+                                    setActionError(null);
+                                    // B12 fix: actually re-invoke the failed plan switch when we
+                                    // have one captured; otherwise just refresh subscription data
+                                    // so the UI reflects whatever happened in the meantime.
+                                    if (lastFailedPlanSlug) {
+                                        const slug = lastFailedPlanSlug;
+                                        setLastFailedPlanSlug(null);
+                                        handleSwitchPlan(slug);
+                                    } else {
+                                        loadSubscriptionData();
+                                    }
+                                }}
                                 className="mt-2 text-xs font-medium text-slate-500 hover:text-slate-700 underline underline-offset-2 transition-colors"
                             >
                                 Tap to retry
@@ -908,9 +1060,9 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                         Cancel plan
                                     </button>
                                 )}
-                                {subscription?.status === 'ACTIVE' && subscription.cancelAtPeriodEnd && (
+                                {subscription?.status === 'ACTIVE' && subscription.cancelAtPeriodEnd && !subscription.pendingPlanSnapshot && (
                                     <button
-                                        onClick={handleReactivate}
+                                        onClick={() => setShowReactivateConfirm(true)}
                                         className="text-xs text-green-600 active:text-green-800 underline underline-offset-2 py-1 transition-colors font-medium"
                                     >
                                         Reactivate
@@ -919,10 +1071,26 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                             </div>
                         </div>
                         {(subscription?.status === 'CREATED' || subscription?.status === 'AUTHENTICATED') && (
-                            <p className="text-xs text-blue-300 mt-2 flex items-center gap-1.5">
-                                <Loader2 size={11} className="animate-spin shrink-0" />
-                                New plan activating — this may take a moment.
-                            </p>
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                                <p className="text-xs text-blue-300 flex items-center gap-1.5">
+                                    <Loader2 size={11} className="animate-spin shrink-0" />
+                                    New plan activating — this may take a moment.
+                                </p>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => loadSubscriptionData()}
+                                        className="text-xs text-blue-200 hover:text-white underline underline-offset-2 transition-colors"
+                                    >
+                                        Refresh
+                                    </button>
+                                    <button
+                                        onClick={() => setShowCancelConfirm(true)}
+                                        className="text-xs text-red-400 hover:text-red-300 underline underline-offset-2 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
                         )}
                     </div>
 
@@ -1029,29 +1197,37 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     <div>
                         <h4 className="font-bold text-slate-800 mb-4">Change Plan</h4>
 
-                        {/* Billing Cycle Toggle */}
-                        <div className="flex items-center justify-center gap-1 mb-4 bg-slate-100 rounded-xl p-1">
-                            <button onClick={() => setBillingCycle('MONTHLY')} disabled={loadingPlanSlug !== null} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors ${billingCycle === 'MONTHLY' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Monthly</button>
-                            <button onClick={() => setBillingCycle('ANNUAL')} disabled={loadingPlanSlug !== null} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-colors ${billingCycle === 'ANNUAL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}>Annual <span className="text-green-600">(save 17%)</span></button>
-                        </div>
-
                         <div className="space-y-3">
                             {plans.map((plan) => {
                                 const meta = TIER_ICONS[plan.tier] || TIER_ICONS.STARTER;
                                 const PlanIcon = meta.icon;
-                                const price = billingCycle === 'MONTHLY' ? plan.pricing.monthly : plan.pricing.annual;
-                                const priceLabel = billingCycle === 'MONTHLY' ? `${formatPaise(price)}/mo` : `${formatPaise(price)}/yr`;
+                                const priceLabel = `${formatPaise(plan.pricing.monthly)}/mo`;
+                                const subPlanSlug = subscription?.planSnapshot?.slug;
+                                // B3: while a subscription is mid-checkout (CREATED/AUTHENTICATED),
+                                // every plan card's primary action is disabled to prevent duplicate
+                                // /subscribe submissions and the destructive replace they used to cause.
+                                const subscriptionInTransition =
+                                    subscription?.status === 'CREATED' ||
+                                    subscription?.status === 'AUTHENTICATED';
+                                // Gap 4 fix: highlight regardless of billing cycle toggle
+                                // Guard: both slugs must be non-empty to prevent undefined===undefined false-positive
                                 const isCurrentPlan =
-                                    subscription?.planSnapshot?.slug === plan.slug &&
-                                    (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE') &&
-                                    subscription?.billingCycle === billingCycle;
+                                    !!subPlanSlug &&
+                                    subPlanSlug === plan.slug &&
+                                    (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE');
 
+                                // Gap 1 fix: only highlight the matching billing cycle when pending payment
                                 const isActivatingPlan =
-                                    subscription?.planSnapshot?.slug === plan.slug &&
+                                    !!subPlanSlug &&
+                                    subPlanSlug === plan.slug &&
                                     (subscription?.status === 'CREATED' || subscription?.status === 'AUTHENTICATED');
 
+                                // Gap 5: show scheduled downgrade
+                                const pendingSlug = subscription?.pendingPlanSnapshot?.slug;
+                                const isPendingPlan = !!pendingSlug && pendingSlug === plan.slug;
+
                                 return (
-                                    <div key={plan.id} className={`border rounded-2xl p-4 transition-all ${isCurrentPlan ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : isActivatingPlan ? 'border-blue-300 bg-blue-50' : 'border-slate-200'}`}>
+                                    <div key={plan.id} className={`border rounded-2xl p-4 transition-all ${isCurrentPlan ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : isActivatingPlan ? 'border-blue-300 bg-blue-50' : isPendingPlan ? 'border-slate-300 bg-slate-50' : 'border-slate-200'}`}>
                                         <div className="flex justify-between items-center mb-3">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${meta.color}`}>
@@ -1063,18 +1239,58 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                                 </div>
                                             </div>
                                             {isCurrentPlan ? (
-                                                <CheckCircle2 size={24} className="text-orange-500" />
+                                                <div className="flex items-center gap-2">
+                                                    <CheckCircle2 size={20} className="text-orange-500" />
+                                                    {subscription?.cancelAtPeriodEnd && !subscription?.pendingPlanSnapshot && (
+                                                        <span className="text-xs text-red-500 font-medium">
+                                                            Expires {subscription?.currentPeriodEnd
+                                                                ? new Date(subscription.currentPeriodEnd as string).toLocaleDateString()
+                                                                : 'this cycle'}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             ) : isActivatingPlan ? (
                                                 <div className="flex items-center gap-1.5">
                                                     <Loader2 size={14} className="text-blue-500 animate-spin" />
-                                                    <span className="text-xs text-blue-600 font-medium">Activating...</span>
+                                                    <span className="text-xs text-blue-600 font-medium">
+                                                        {subscription?.status === 'CREATED' ? 'Awaiting payment' : 'Activating...'}
+                                                    </span>
                                                 </div>
+                                            ) : isPendingPlan ? (
+                                                // Pending-plan card now shows only the start-date tag.
+                                                // The "Cancel scheduled change" affordance lives in the
+                                                // top-of-panel banner instead — see the {pendingPlanSnapshot}
+                                                // banner above.
+                                                <span className="text-xs text-slate-500 font-medium">
+                                                    Starts {subscription?.currentPeriodEnd
+                                                        ? new Date(subscription.currentPeriodEnd as string).toLocaleDateString()
+                                                        : 'next cycle'}
+                                                </span>
+                                            ) : subscriptionInTransition ? (
+                                                // B3 fix: while a subscription is mid-checkout (CREATED/AUTHENTICATED on
+                                                // some other plan), disable Subscribe/Upgrade on every plan card. Clicking
+                                                // would otherwise fire /subscribe and create a duplicate Razorpay sub.
+                                                <button
+                                                    disabled
+                                                    title="Activating, please wait"
+                                                    className="px-4 py-2 text-xs font-bold rounded-xl bg-slate-200 text-slate-500 cursor-not-allowed"
+                                                >
+                                                    Activating...
+                                                </button>
                                             ) : (
                                                 <button
                                                     onClick={() => {
-                                                        if (subscription?.cancelAtPeriodEnd && subscription?.status === 'ACTIVE') {
-                                                            setResubscribeConfirmPlan(plan);
+                                                        const hasPending = !!subscription?.pendingPlanSnapshot;
+                                                        if (subscription?.cancelAtPeriodEnd && subscription?.status === 'ACTIVE' && !hasPending) {
+                                                            if (plan.slug === subscription.planSnapshot?.slug) {
+                                                                // Same plan: reactivation ("Continue on [Plan]?" deferred dialog)
+                                                                setResubscribeConfirmPlan(plan);
+                                                            } else {
+                                                                // Different plan: schedule switch at cycle_end via unified dialog
+                                                                setSwitchConfirmPlan(plan);
+                                                            }
                                                         } else if (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE') {
+                                                            // Normal switch OR amending an existing pending plan change
                                                             setSwitchConfirmPlan(plan);
                                                         } else {
                                                             handleSwitchPlan(plan.slug);
@@ -1084,9 +1300,9 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                                     className={`px-4 py-2 text-white text-xs font-bold rounded-xl ${loadingPlanSlug !== null ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-900 active:bg-slate-700'}`}
                                                 >
                                                     {loadingPlanSlug === plan.slug ? 'Processing...' : (
-                                                        subscription?.status === 'ACTIVE' ? 'Switch' :
-                                                        subscription?.status === 'PAST_DUE' ? 'Retry' :
-                                                        'Subscribe'
+                                                        (subscription?.status === 'ACTIVE' || subscription?.status === 'PAST_DUE')
+                                                            ? (plan.pricing.monthly > (subscription?.planSnapshot?.pricing.monthly ?? 0) ? 'Upgrade' : 'Downgrade')
+                                                            : 'Subscribe'
                                                     )}
                                                 </button>
                                             )}
@@ -1394,54 +1610,153 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                         </a>
                     ]}
                     onConfirm={handleCancelPlan}
-                    onCancel={() => !isCancellingPlan && setShowCancelConfirm(false)}
+                    onCancel={() => { if (!isCancellingPlan) { setShowCancelConfirm(false); setActionError(null); } }}
                 />
             )}
-            {switchConfirmPlan && (() => {
-                const currentEffective = subscription?.billingCycle === 'MONTHLY'
-                    ? (subscription?.planSnapshot?.pricing.monthly ?? 0)
-                    : (subscription?.planSnapshot?.pricing.annual ?? 0) / 12;
-                const targetEffective = billingCycle === 'MONTHLY'
-                    ? switchConfirmPlan.pricing.monthly
-                    : switchConfirmPlan.pricing.annual / 12;
-                const isUpgrade = targetEffective > currentEffective;
+            {keepCurrentConfirmPlan && (
+                <ConfirmDialog
+                    title={`Keep ${keepCurrentConfirmPlan.name}?`}
+                    message={`To stay on ${keepCurrentConfirmPlan.name}, you'll authorize a new mandate today (a small ~₹5 verification charge). Your already-paid period continues uninterrupted; the next ${keepCurrentConfirmPlan.name} cycle (${formatPaise(keepCurrentConfirmPlan.pricing.monthly)}) charges on your renewal date. The previously scheduled plan change will be cleared.`}
+                    confirmLabel="Keep current plan"
+                    cancelLabel="Go back"
+                    onConfirm={() => { setKeepCurrentConfirmPlan(null); handleSwitchPlan(keepCurrentConfirmPlan.slug, { mode: 'cycle_end' }); }}
+                    onCancel={() => setKeepCurrentConfirmPlan(null)}
+                />
+            )}
+            {showReactivateConfirm && (() => {
+                const planName = subscription?.planSnapshot?.name ?? 'your plan';
+                const periodEnd = subscription?.currentPeriodEnd
+                    ? new Date(subscription.currentPeriodEnd).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : 'the end of your billing period';
+                const monthlyPrice = subscription?.planSnapshot?.pricing?.monthly
+                    ? `₹${(subscription.planSnapshot.pricing.monthly / 100).toLocaleString('en-IN')}`
+                    : 'your plan amount';
                 return (
                     <ConfirmDialog
-                        title={`Switch to ${switchConfirmPlan.name}?`}
-                        message={isUpgrade
-                            ? `You'll be charged for ${switchConfirmPlan.name} immediately. The difference in price is applied to your account now.`
-                            : `You're switching to a lower-tier plan. The change will take effect on your next billing date.`}
-                        confirmLabel={isUpgrade ? 'Confirm Upgrade' : 'Confirm Downgrade'}
+                        title={`Continue on ${planName}?`}
+                        message={`Your ${planName} plan continues until ${periodEnd} — no change to what you've already paid.\n\nTo keep ${planName} running beyond that, a ₹5 verification charge registers a new payment mandate today. ${monthlyPrice} is then charged automatically on ${periodEnd}.`}
+                        confirmLabel="Confirm — pay ₹5 now"
                         cancelLabel="Go back"
-                        details={[
-                            <a key="policy" href="/terms#refund" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                                View refund policy
-                            </a>
-                        ]}
-                        onConfirm={() => { setSwitchConfirmPlan(null); handleSwitchPlan(switchConfirmPlan.slug); }}
-                        onCancel={() => setSwitchConfirmPlan(null)}
+                        onConfirm={() => { setShowReactivateConfirm(false); handleReactivate(); }}
+                        onCancel={() => setShowReactivateConfirm(false)}
                     />
                 );
             })()}
+            {switchConfirmPlan && (() => {
+                const currentName = subscription?.planSnapshot?.name ?? 'current';
+                const pendingName = subscription?.pendingPlanSnapshot?.name;
+                const isAmending = !!pendingName;
+                const isUpgrade = switchConfirmPlan.pricing.monthly > (subscription?.planSnapshot?.pricing.monthly ?? 0);
+                const endDate = subscription?.currentPeriodEnd
+                    ? new Date(subscription.currentPeriodEnd as string).toLocaleDateString()
+                    : 'your next billing date';
+                const targetPriceStr = formatPaise(switchConfirmPlan.pricing.monthly);
+                const title = isAmending && !isUpgrade
+                    ? `Change scheduled plan to ${switchConfirmPlan.name}?`
+                    : isUpgrade
+                        ? `Upgrade to ${switchConfirmPlan.name}?`
+                        : `Switch to ${switchConfirmPlan.name}?`;
+
+                // Three-line story (today / current plan / next cycle), per-mode.
+                // Indian card mandates require a fresh ₹5 verify charge for any
+                // deferred resubscribe — be explicit so the user is not surprised
+                // by the small auth charge in the Razorpay iframe.
+                const cycleEndDescription = (
+                    <>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            <span className="font-semibold text-slate-800">Today:</span>{' '}
+                            small ~₹5 verification charge to register a new payment mandate with your bank.
+                        </p>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            <span className="font-semibold text-slate-800">Until {endDate}:</span>{' '}
+                            your existing {currentName} subscription continues uninterrupted (already paid).
+                        </p>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            <span className="font-semibold text-slate-800">From {endDate}:</span>{' '}
+                            {targetPriceStr} per month on {switchConfirmPlan.name}.
+                            {isAmending && pendingName ? <> (Replaces the previously scheduled switch to {pendingName}.)</> : null}
+                        </p>
+                    </>
+                );
+                const upgradeNowDescription = (
+                    <>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            <span className="font-semibold text-slate-800">Today:</span>{' '}
+                            full {targetPriceStr} charged immediately for the first cycle of {switchConfirmPlan.name}.
+                        </p>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            <span className="font-semibold text-slate-800">Your {currentName} plan:</span>{' '}
+                            cancelled now. Unused days from the existing paid period are forfeit (Indian card mandates do not support mid-cycle proration).
+                        </p>
+                    </>
+                );
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="absolute inset-0" onClick={() => setSwitchConfirmPlan(null)}></div>
+                        <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 relative z-10">
+                            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 shrink-0 sm:hidden"></div>
+                            <h3 className="text-lg font-bold text-slate-800 mb-3">{title}</h3>
+                            <div className="space-y-2 mb-5">
+                                {cycleEndDescription}
+                            </div>
+                            {isUpgrade && (
+                                <details className="mb-5 rounded-xl border border-slate-200 p-3 text-sm">
+                                    <summary className="cursor-pointer font-semibold text-slate-700">
+                                        Want immediate access? (charges full {targetPriceStr} today)
+                                    </summary>
+                                    <div className="mt-3 space-y-2">{upgradeNowDescription}</div>
+                                </details>
+                            )}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setSwitchConfirmPlan(null)}
+                                    className="flex-1 py-3 rounded-2xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all"
+                                >
+                                    Go back
+                                </button>
+                                {isUpgrade && (
+                                    <button
+                                        onClick={() => {
+                                            const slug = switchConfirmPlan.slug;
+                                            setSwitchConfirmPlan(null);
+                                            handleSwitchPlan(slug, { mode: 'now' });
+                                        }}
+                                        className="flex-1 py-3 rounded-2xl border border-slate-300 text-slate-800 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all"
+                                    >
+                                        Upgrade now
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        const slug = switchConfirmPlan.slug;
+                                        setSwitchConfirmPlan(null);
+                                        handleSwitchPlan(slug, { mode: 'cycle_end' });
+                                    }}
+                                    className="flex-1 py-3 rounded-2xl bg-slate-900 text-white font-bold text-sm hover:bg-slate-800 active:scale-[0.98] transition-all shadow-lg"
+                                >
+                                    {isUpgrade ? 'Schedule from next cycle' : isAmending ? 'Change scheduled plan' : 'Confirm'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
             {resubscribeConfirmPlan && (() => {
-                const daysLeft = subscription?.currentPeriodEnd
-                    ? Math.max(0, Math.ceil((new Date(subscription.currentPeriodEnd as string).getTime() - Date.now()) / 86_400_000))
-                    : null;
+                const planName = resubscribeConfirmPlan.name;
+                const periodEnd = subscription?.currentPeriodEnd
+                    ? new Date(subscription.currentPeriodEnd as string).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : 'your renewal date';
+                const monthlyPrice = resubscribeConfirmPlan.pricing?.monthly
+                    ? `₹${(resubscribeConfirmPlan.pricing.monthly / 100).toLocaleString('en-IN')}`
+                    : 'your plan amount';
                 return (
                     <ConfirmDialog
-                        title="Start new plan now?"
-                        message={daysLeft
-                            ? `You have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining on your current plan. Starting a new plan immediately will cancel it — unused days are not refunded.`
-                            : 'Starting a new plan will cancel your current subscription immediately. Unused days are not refunded.'
-                        }
-                        confirmLabel="Start new plan"
-                        cancelLabel="Wait until period ends"
-                        details={[
-                            <a key="policy" href="/terms#cancellation" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                                View cancellation policy
-                            </a>
-                        ]}
-                        onConfirm={() => { setResubscribeConfirmPlan(null); handleSwitchPlan(resubscribeConfirmPlan.slug); }}
+                        title={`Continue on ${planName}?`}
+                        message={`Your ${planName} plan continues until ${periodEnd} — no change to what you've already paid.\n\nTo keep ${planName} running after that, a ₹5 verification charge registers a new payment mandate today. ${monthlyPrice} is then charged automatically on ${periodEnd}.`}
+                        confirmLabel="Confirm — pay ₹5 now"
+                        cancelLabel="Keep cancelled"
+                        onConfirm={() => { setResubscribeConfirmPlan(null); handleSwitchPlan(resubscribeConfirmPlan.slug, { mode: 'cycle_end' }); }}
                         onCancel={() => setResubscribeConfirmPlan(null)}
                     />
                 );

@@ -138,10 +138,10 @@ export const authAPI = {
         return fetchAPI<AuthResponse>('/auth/session');
     },
 
-    verifyEmail: async (email: string): Promise<void> => {
+    verifyEmail: async (idToken: string): Promise<void> => {
         await fetchAPI('/auth/verify-email', {
             method: 'POST',
-            body: JSON.stringify({ email }),
+            body: JSON.stringify({ idToken }),
         });
     },
 };
@@ -429,10 +429,10 @@ export const subscriptionAPI = {
         return response.data!;
     },
 
-    subscribe: async (planSlug: string, billingCycle: BillingCycle, couponCode?: string): Promise<{ subscriptionId: string; keyId: string }> => {
+    subscribe: async (planSlug: string, couponCode?: string): Promise<{ subscriptionId: string; keyId: string }> => {
         const response = await fetchAPI<ApiResponse<{ subscriptionId: string; keyId: string }>>('/subscriptions/subscribe', {
             method: 'POST',
-            body: JSON.stringify({ planSlug, billingCycle, couponCode }),
+            body: JSON.stringify({ planSlug, billingCycle: 'MONTHLY', couponCode }),
         });
         return response.data!;
     },
@@ -441,16 +441,38 @@ export const subscriptionAPI = {
         await fetchAPI('/subscriptions/cancel', { method: 'POST' });
     },
 
-    changePlan: async (planSlug: string, billingCycle: BillingCycle): Promise<{ effective: 'immediate' | 'cycle_end'; planName: string; currentPeriodEnd?: string | Date }> => {
-        const response = await fetchAPI<ApiResponse<{ effective: 'immediate' | 'cycle_end'; planName: string; currentPeriodEnd?: string | Date }>>('/subscriptions/change-plan', {
+    changePlan: async (planSlug: string, opts?: { mode?: 'now' | 'cycle_end' }): Promise<{
+        effective: 'immediate' | 'cycle_end';
+        planName: string;
+        currentPeriodEnd?: string | Date;
+        requiresCheckout?: boolean;
+        subscriptionId?: string;
+        keyId?: string;
+    }> => {
+        const response = await fetchAPI<ApiResponse<{
+            effective: 'immediate' | 'cycle_end';
+            planName: string;
+            currentPeriodEnd?: string | Date;
+            requiresCheckout?: boolean;
+            subscriptionId?: string;
+            keyId?: string;
+        }>>('/subscriptions/change-plan', {
             method: 'POST',
-            body: JSON.stringify({ planSlug, billingCycle }),
+            body: JSON.stringify({
+                planSlug,
+                billingCycle: 'MONTHLY',
+                ...(opts?.mode ? { mode: opts.mode } : {}),
+            }),
         });
         return response.data!;
     },
 
-    reactivate: async (): Promise<void> => {
-        await fetchAPI('/subscriptions/reactivate', { method: 'POST' });
+    reactivate: async (): Promise<{ requiresCheckout: true; subscriptionId: string; keyId: string }> => {
+        const res = await fetchAPI<ApiResponse<{ requiresCheckout: true; subscriptionId: string; keyId: string }>>(
+            '/subscriptions/reactivate',
+            { method: 'POST' },
+        );
+        return res.data!;
     },
 
     purchaseCredits: async (creditPackId: string): Promise<{ orderId: string; amount: number; currency: string; keyId: string; credits: number }> => {
@@ -466,6 +488,18 @@ export const subscriptionAPI = {
             method: 'POST',
             body: JSON.stringify({ razorpayOrderId, razorpayPaymentId, razorpaySignature }),
         });
+    },
+
+    verifySubscription: async (
+        razorpayPaymentId: string,
+        razorpaySubscriptionId: string,
+        razorpaySignature: string,
+    ): Promise<{ status: string; subscriptionId: string }> => {
+        const response = await fetchAPI<ApiResponse<{ status: string; subscriptionId: string }>>('/subscriptions/verify', {
+            method: 'POST',
+            body: JSON.stringify({ razorpayPaymentId, razorpaySubscriptionId, razorpaySignature }),
+        });
+        return response.data!;
     },
 };
 
@@ -505,7 +539,10 @@ export const invoiceAPI = {
 export const configAPI = {
     getFeatures: async (): Promise<FeatureFlags> => {
         const res = await fetchAPI<ApiResponse<FeatureFlags>>('/config/features');
-        return res.data ?? { deleteAccount: false };
+        // Fallback: if the endpoint returns no data, default every flag to false.
+        // The shape MUST match FeatureFlags exactly so downstream consumers can
+        // safely read every flag without optional-chains or undefined checks.
+        return res.data ?? { deleteAccount: false, topupCredits: false, updatesSection: false };
     },
 };
 

@@ -48,7 +48,12 @@ const mockOnComplete = vi.fn();
  */
 const mockEmailVerified = (email = 'john@test.com') => {
     (isEmailSignInLink as ReturnType<typeof vi.fn>).mockReturnValue(true);
-    (completeEmailVerification as ReturnType<typeof vi.fn>).mockResolvedValue(email);
+    // After the B5 fix, completeEmailVerification returns the verified email AND the
+    // Firebase ID token so the backend can independently verify ownership.
+    (completeEmailVerification as ReturnType<typeof vi.fn>).mockResolvedValue({
+        email,
+        idToken: 'mock-firebase-id-token',
+    });
 };
 
 const mockCitiesResponse = [
@@ -659,13 +664,14 @@ describe('Onboarding Component', () => {
         });
     });
 
-    it('should call authAPI.verifyEmail after clicking confirm on magic link return', async () => {
+    it('should call authAPI.verifyEmail with the Firebase ID token after clicking confirm on magic link return', async () => {
         mockEmailVerified('verified@email.com');
         render(<Onboarding onComplete={mockOnComplete} />);
         await waitFor(() => expect(screen.getByRole('button', { name: /Confirm email verification/i })).toBeInTheDocument());
         fireEvent.click(screen.getByRole('button', { name: /Confirm email verification/i }));
         await waitFor(() => expect(screen.getByText(/Email verified/i)).toBeInTheDocument());
-        expect(authAPI.verifyEmail).toHaveBeenCalledWith('verified@email.com');
+        // B5 fix: backend receives the Firebase ID token, NOT the bare email
+        expect(authAPI.verifyEmail).toHaveBeenCalledWith('mock-firebase-id-token');
     });
 
     it('should show error when verification fails after clicking confirm', async () => {

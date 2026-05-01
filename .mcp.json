@@ -13,49 +13,67 @@
     "lsp-web": {
       "command": "mcp-language-server",
       "args": [
-        "--workspace", "./apps/web",
-        "--lsp", "typescript-language-server",
-        "--", "--stdio"
+        "--workspace",
+        "./apps/web",
+        "--lsp",
+        "typescript-language-server",
+        "--",
+        "--stdio"
       ]
     },
     "lsp-api": {
       "command": "mcp-language-server",
       "args": [
-        "--workspace", "./apps/api",
-        "--lsp", "typescript-language-server",
-        "--", "--stdio"
+        "--workspace",
+        "./apps/api",
+        "--lsp",
+        "typescript-language-server",
+        "--",
+        "--stdio"
       ]
     },
     "lsp-publisher": {
       "command": "mcp-language-server",
       "args": [
-        "--workspace", "./apps/publisher",
-        "--lsp", "typescript-language-server",
-        "--", "--stdio"
+        "--workspace",
+        "./apps/publisher",
+        "--lsp",
+        "typescript-language-server",
+        "--",
+        "--stdio"
       ]
     },
     "lsp-content-engine": {
       "command": "mcp-language-server",
       "args": [
-        "--workspace", "./apps/content-engine",
-        "--lsp", "typescript-language-server",
-        "--", "--stdio"
+        "--workspace",
+        "./apps/content-engine",
+        "--lsp",
+        "typescript-language-server",
+        "--",
+        "--stdio"
       ]
     },
     "lsp-shared": {
       "command": "mcp-language-server",
       "args": [
-        "--workspace", "./packages/shared",
-        "--lsp", "typescript-language-server",
-        "--", "--stdio"
+        "--workspace",
+        "./packages/shared",
+        "--lsp",
+        "typescript-language-server",
+        "--",
+        "--stdio"
       ]
     },
     "lsp-db": {
       "command": "mcp-language-server",
       "args": [
-        "--workspace", "./packages/db",
-        "--lsp", "typescript-language-server",
-        "--", "--stdio"
+        "--workspace",
+        "./packages/db",
+        "--lsp",
+        "typescript-language-server",
+        "--",
+        "--stdio"
       ]
     },
     "project-memory": {
@@ -75,6 +93,13 @@
       "args": [
         "-y",
         "lighthouse-mcp"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
       ]
     }
   }

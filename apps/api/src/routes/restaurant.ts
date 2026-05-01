@@ -35,6 +35,10 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
         return res.status(404).json({ success: false, error: 'User not found' });
     }
 
+    if (!user.emailVerified) {
+        return res.status(403).json({ success: false, error: 'Email must be verified before creating a restaurant' });
+    }
+
     if (user.restaurantId && user.restaurantId !== '') {
         return res.status(400).json({ success: false, error: 'User already has a restaurant' });
     }

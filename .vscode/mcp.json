@@ -97,6 +97,18 @@
     // ---------------------------------------------------------------
     "project-memory": {
       "command": "mcp-server-memory"
+    },
+    // ---------------------------------------------------------------
+    // Layer 4 -- Browser Automation (Playwright)
+    // Role: Drive the running web app for E2E QA / bug repro.
+    // Use ONLY when exercising the live app; never to read source files.
+    // ---------------------------------------------------------------
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }

@@ -39,6 +39,12 @@ data/
 CLAUDE.local.md
 .claude/settings.local.json
 
+# Playwright MCP session snapshots (accessibility dumps from AI-driven testing)
+.playwright-mcp/
+# Root-level screenshots and scratch snapshots from AI-driven testing sessions
+/*.png
+/*.md
+
 # Old directory names (moved to apps/)
 restropulse-pwa/
 restropulse-pwa-backend/

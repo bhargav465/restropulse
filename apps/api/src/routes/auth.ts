@@ -313,14 +313,41 @@ router.get('/session', handle(async (req: Request, res: Response) => {
 }));
 
 router.post('/verify-email', requireAuth, handle(async (req: Request, res: Response) => {
-    const { email } = req.body;
+    const { idToken, devEmail } = req.body;
     const userId = req.user!.userId;
 
-    if (!email) {
-        return res.status(400).json({ success: false, error: 'Email is required' });
+    // Dev-only escape hatch: accept an explicit `devEmail` body field when running
+    // outside production. This unblocks Playwright/CI tests that don't have access
+    // to a real email inbox to click the magic link. Production requests must take
+    // the Firebase ID token path below.
+    if (devEmail && process.env.NODE_ENV !== 'production') {
+        await updateUser(userId, { email: devEmail, emailVerified: true });
+        log.warn({ userId, devEmail }, 'verify-email: dev bypass used');
+        return res.json({ success: true, message: 'Email verified (dev bypass)' });
     }
 
-    await updateUser(userId, { email, emailVerified: true });
+    if (!idToken) {
+        return res.status(400).json({ success: false, error: 'idToken is required' });
+    }
+
+    if (!isFirebaseInitialized()) {
+        return res.status(503).json({ success: false, error: 'Email verification service not configured' });
+    }
+
+    const decoded = await verifyFirebaseToken(idToken);
+    if (!decoded) {
+        return res.status(401).json({ success: false, error: 'Invalid Firebase ID token' });
+    }
+
+    // The email and verification state come from the verified token, never from the
+    // client. signInWithEmailLink populates email_verified=true automatically; for any
+    // other sign-in method, the claim must be true to count as proof of ownership.
+    const verifiedEmail = decoded.email;
+    if (!verifiedEmail || decoded.email_verified !== true) {
+        return res.status(400).json({ success: false, error: 'Token does not prove email ownership' });
+    }
+
+    await updateUser(userId, { email: verifiedEmail, emailVerified: true });
     res.json({ success: true, message: 'Email verified successfully' });
 }));
 

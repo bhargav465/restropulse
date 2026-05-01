@@ -1,6 +1,6 @@
 # MCP Server Configuration
 
-RestroPulse uses four Model Context Protocol (MCP) servers arranged as a
+RestroPulse uses five Model Context Protocol (MCP) servers arranged as a
 non-redundant **context stack**. Each layer has a distinct role and strict
 scope so the AI assistant never receives conflicting or duplicate data.
 
@@ -12,6 +12,7 @@ scope so the AI assistant never receives conflicting or duplicate data.
 | Logic / Navigation | `mcp-language-server` | Type-aware jump-to-definition, references, diagnostics | One instance per app/package boundary |
 | Knowledge / Memory | `@modelcontextprotocol/server-memory` | Persist architecture decisions, conventions, preferences | Decision-only -- never code snippets |
 | Azure | `@azure/mcp` | Inspect and manage live Azure resources | Subscriptions, resource groups, App Service, Key Vault, Application Insights |
+| Browser Automation | `@playwright/mcp` | Drive the running web app for E2E QA, bug repro, exploratory testing | Live app at localhost or staging; never source files |
 
 ## Prerequisites (one-time)
 
@@ -116,6 +117,7 @@ Code) so every AI assistant session respects them.
 | "What convention do we use for X?" | `project-memory` | -- | `codebase-rag` |
 | Debugging a logic error | `lsp-*` | `project-memory` (past context) | -- |
 | Reading/writing file contents | Filesystem tools | -- | `codebase-rag` |
+| E2E test, bug repro, drive the running app | `playwright` | -- | Filesystem tools (do not read source via playwright) |
 
 ## Index Hygiene
 
@@ -141,6 +143,27 @@ Verify it is active:
 ```bash
 claude mcp list
 # Should show: azure   npx -y @azure/mcp@latest server start
+```
+
+### Browser Automation (`playwright`)
+
+- Runs `@playwright/mcp` via `npx -y @playwright/mcp@latest`.
+- No additional install required; npx fetches the package + browser on first
+  use (Chromium is downloaded automatically).
+- Use to drive the running web app for E2E QA, bug repro, exploratory testing
+  of subscription/checkout flows, and any task that requires interacting with
+  rendered DOM, iframes (e.g., Razorpay checkout), or network requests.
+- Tool-routing rule: use `playwright` only for live app interaction. Never use
+  it to read source files (use Filesystem tools) or to search code (use
+  `codebase-rag`).
+- Requires the local dev environment to be running (`npm run dev`) or a
+  reachable staging URL.
+
+Verify it is active:
+
+```bash
+claude mcp list
+# Should show: playwright   npx -y @playwright/mcp@latest
 ```
 
 ## Claude Code Setup

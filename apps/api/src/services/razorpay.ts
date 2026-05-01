@@ -66,12 +66,16 @@ export async function fetchRazorpayCustomersByContact(
 
 /**
  * Create a Razorpay Subscription for recurring billing.
+ * Notes are round-tripped via fetchRazorpaySubscription so the /verify path can
+ * recover context (e.g. couponCode, planSlug) without reaching back into our DB.
  */
 export async function createRazorpaySubscription(
     planId: string,
     totalCount: number,
     offerId?: string,
     customerId?: string,
+    startAt?: number,
+    notes?: Record<string, string>,
 ): Promise<{ id: string; shortUrl: string; status: string }> {
     const body: any = {
         plan_id: planId,
@@ -79,13 +83,10 @@ export async function createRazorpaySubscription(
         quantity: 1,
     };
 
-    if (offerId) {
-        body.offer_id = offerId;
-    }
-
-    if (customerId) {
-        body.customer_id = customerId;
-    }
+    if (offerId) body.offer_id = offerId;
+    if (customerId) body.customer_id = customerId;
+    if (startAt) body.start_at = startAt;
+    if (notes && Object.keys(notes).length > 0) body.notes = notes;
 
     return razorpayRequest('/subscriptions', 'POST', body);
 }
@@ -203,6 +204,85 @@ export function verifyPaymentSignature(
         Buffer.from(expectedSignature),
         Buffer.from(signature),
     );
+}
+
+/**
+ * Verify subscription-checkout signature.
+ * Razorpay signs subscription payments as `payment_id|subscription_id`
+ * (reverse of orders, which are `order_id|payment_id`).
+ */
+export function verifySubscriptionSignature(
+    paymentId: string,
+    subscriptionId: string,
+    signature: string,
+): boolean {
+    const { keySecret } = getConfig();
+    const payload = `${paymentId}|${subscriptionId}`;
+
+    const expectedSignature = crypto
+        .createHmac('sha256', keySecret)
+        .update(payload)
+        .digest('hex');
+
+    return crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(signature),
+    );
+}
+
+/**
+ * Fetch a Razorpay Subscription by ID.
+ * Used as a webhook-independent fallback to reconcile local state after checkout.
+ */
+export async function fetchRazorpaySubscription(
+    subscriptionId: string,
+): Promise<{
+    id: string;
+    status: string;
+    current_start: number | null;
+    current_end: number | null;
+    start_at?: number | null;
+    customer_id?: string;
+    plan_id: string;
+    notes?: Record<string, string>;
+}> {
+    return razorpayRequest(`/subscriptions/${subscriptionId}`, 'GET');
+}
+
+/**
+ * List Razorpay Subscriptions for a customer.
+ * Used to sweep orphan in-flight (created/authenticated) subscriptions left
+ * over from abandoned/failed checkouts before creating a new one.
+ */
+export async function listRazorpaySubscriptionsForCustomer(
+    customerId: string,
+    count: number = 25,
+): Promise<{
+    items: Array<{
+        id: string;
+        status: string;
+        plan_id: string;
+        customer_id?: string;
+        created_at?: number;
+    }>;
+}> {
+    return razorpayRequest(`/subscriptions?customer_id=${encodeURIComponent(customerId)}&count=${count}`, 'GET');
+}
+
+/**
+ * Fetch a Razorpay Payment by ID.
+ * Used during subscription verify to attach a real payment record to the invoice.
+ */
+export async function fetchRazorpayPayment(
+    paymentId: string,
+): Promise<{
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    invoice_id?: string | null;
+}> {
+    return razorpayRequest(`/payments/${paymentId}`, 'GET');
 }
 
 /**

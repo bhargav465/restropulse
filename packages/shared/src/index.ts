@@ -270,7 +270,7 @@ export interface Subscription {
   cancelAtPeriodEnd?: boolean;
   pendingPlanId?: string;
   pendingPlanSnapshot?: SubscriptionPlan | null;
-  pendingBillingCycle?: BillingCycle;
+  pendingRazorpaySubscriptionId?: string | null;
   endedAt?: string | null;
   createdAt?: string | Date;
   updatedAt?: string | Date;
@@ -358,7 +358,6 @@ export type PlanUsage = Partial<Record<Platform, PostTypeUsage>>;
 
 export interface SubscribeRequest {
   planSlug: string;
-  billingCycle: BillingCycle;
   couponCode?: string;
 }
 

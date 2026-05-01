@@ -82,14 +82,14 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, 
         <div className="flex justify-around items-center px-2 pt-1 pb-1">
           <NavItem view="DASHBOARD" icon={Home} label="Home" />
           <NavItem view="STUDIO" icon={PenTool} label="Studio" />
-          {featureFlags?.updatesSection === false ? (
+          {featureFlags?.updatesSection ? (
+              <NavItem view="INPUTS" icon={Megaphone} label="Updates" />
+          ) : (
               <div className="flex flex-col items-center justify-center w-full py-2 text-slate-300">
                   <Megaphone size={24} strokeWidth={2} />
                   <span className="text-[10px] mt-0.5 font-medium">Updates</span>
                   <span className="text-[8px] font-bold text-orange-300 uppercase tracking-wide leading-none">Soon</span>
               </div>
-          ) : (
-              <NavItem view="INPUTS" icon={Megaphone} label="Updates" />
           )}
           <NavItem view="STRATEGY" icon={Lightbulb} label="Strategy" />
         </div>

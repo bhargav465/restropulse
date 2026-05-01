@@ -140,7 +140,7 @@ export async function sendEmailVerificationLink(email: string): Promise<void> {
     localStorage.setItem(EMAIL_STORAGE_KEY, email);
 }
 
-export async function completeEmailVerification(): Promise<string | null> {
+export async function completeEmailVerification(): Promise<{ email: string; idToken: string } | null> {
     const currentUrl = window.location.href;
     if (!isSignInWithEmailLink(auth, currentUrl)) {
         return null;
@@ -153,9 +153,10 @@ export async function completeEmailVerification(): Promise<string | null> {
         email = window.prompt('Please enter your email to confirm verification');
     }
     if (!email) return null;
-    await signInWithEmailLink(auth, email, currentUrl);
+    const credential = await signInWithEmailLink(auth, email, currentUrl);
     localStorage.removeItem(EMAIL_STORAGE_KEY);
-    return email;
+    const idToken = await credential.user.getIdToken();
+    return { email, idToken };
 }
 
 export function isEmailSignInLink(): boolean {

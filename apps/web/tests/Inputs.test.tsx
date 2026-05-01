@@ -38,9 +38,7 @@ describe('Inputs Component', () => {
             avatar: '/avatar.jpg',
         },
         integrations: {
-            whatsapp: true,
             instagram: true,
-            facebook: false,
         },
         activeOffers: ['Summer Special', 'Happy Hour'],
         chefSpecials: ['Truffle Pasta'],

@@ -70,6 +70,74 @@ describe('Razorpay Service', () => {
         });
     });
 
+    describe('verifySubscriptionSignature', () => {
+        test('should return true for valid subscription signature (payment_id|subscription_id)', () => {
+            const crypto = require('crypto');
+            const payload = 'pay_abc|sub_xyz';
+            const expectedSig = crypto
+                .createHmac('sha256', 'rzp_test_secret456')
+                .update(payload)
+                .digest('hex');
+
+            expect(razorpay.verifySubscriptionSignature('pay_abc', 'sub_xyz', expectedSig)).toBe(true);
+        });
+
+        test('should return false for invalid subscription signature', () => {
+            const crypto = require('crypto');
+            const wrongSig = crypto
+                .createHmac('sha256', 'wrong_secret')
+                .update('pay_abc|sub_xyz')
+                .digest('hex');
+            expect(razorpay.verifySubscriptionSignature('pay_abc', 'sub_xyz', wrongSig)).toBe(false);
+        });
+
+        test('should reject a signature built with order-style payload (subscription uses payment_id|subscription_id)', () => {
+            const crypto = require('crypto');
+            // Order-style payload would be sub_xyz|pay_abc (reverse); reject it.
+            const orderStyleSig = crypto
+                .createHmac('sha256', 'rzp_test_secret456')
+                .update('sub_xyz|pay_abc')
+                .digest('hex');
+            expect(razorpay.verifySubscriptionSignature('pay_abc', 'sub_xyz', orderStyleSig)).toBe(false);
+        });
+    });
+
+    describe('fetchRazorpaySubscription', () => {
+        test('should call GET /v1/subscriptions/:id', async () => {
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ id: 'sub_xyz', status: 'active', current_start: 1, current_end: 2, plan_id: 'plan_123' }),
+            });
+            vi.stubGlobal('fetch', mockFetch);
+
+            const result = await razorpay.fetchRazorpaySubscription('sub_xyz');
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                'https://api.razorpay.com/v1/subscriptions/sub_xyz',
+                expect.objectContaining({ method: 'GET' }),
+            );
+            expect(result.status).toBe('active');
+        });
+    });
+
+    describe('fetchRazorpayPayment', () => {
+        test('should call GET /v1/payments/:id', async () => {
+            const mockFetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ id: 'pay_abc', amount: 99900, currency: 'INR', status: 'captured', invoice_id: 'inv_1' }),
+            });
+            vi.stubGlobal('fetch', mockFetch);
+
+            const result = await razorpay.fetchRazorpayPayment('pay_abc');
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                'https://api.razorpay.com/v1/payments/pay_abc',
+                expect.objectContaining({ method: 'GET' }),
+            );
+            expect(result.amount).toBe(99900);
+        });
+    });
+
     describe('createRazorpaySubscription', () => {
         test('should call Razorpay subscriptions API', async () => {
             const mockFetch = vi.fn().mockResolvedValue({

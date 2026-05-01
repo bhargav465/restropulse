@@ -81,11 +81,18 @@ describe('Layout Component', () => {
         expect(mockSetView).toHaveBeenCalledWith('STRATEGY');
     });
 
-    it('should call setView when Updates nav item is clicked', () => {
-        render(<Layout {...defaultProps}>{mockChildren}</Layout>);
+    it('should call setView when Updates nav item is clicked (updatesSection enabled)', () => {
+        render(<Layout {...defaultProps} featureFlags={{ updatesSection: true, deleteAccount: false, topupCredits: false }}>{mockChildren}</Layout>);
         const updatesButton = screen.getByText('Updates').closest('button');
         fireEvent.click(updatesButton!);
         expect(mockSetView).toHaveBeenCalledWith('INPUTS');
+    });
+
+    it('should show Updates as disabled when featureFlags.updatesSection is falsy', () => {
+        render(<Layout {...defaultProps}>{mockChildren}</Layout>);
+        const updatesButton = screen.getByText('Updates').closest('button');
+        expect(updatesButton).toBeNull();
+        expect(screen.getByText('Soon')).toBeInTheDocument();
     });
 
     it('should show [+] button only on STUDIO view', () => {
