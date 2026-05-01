@@ -50,6 +50,7 @@ import {
     fetchRazorpayInvoice,
     fetchRazorpaySubscription,
     fetchRazorpayPayment,
+    listRazorpayPaymentsForSubscription,
 } from '../services/razorpay.js';
 import { createLogger, trackEvent } from '@restropulse/telemetry/server';
 
@@ -373,6 +374,27 @@ router.get('/current', requireAuth, handle(async (req: Request, res: Response<Ap
     }
 
     res.json({ success: true, data: { subscription, usage } });
+}));
+
+// GET /payments -- requireAuth, list all Razorpay payments for the active subscription
+// Returns payments straight from Razorpay (no DB storage). Mandate auth charges have
+// invoice_id=null; regular billing charges have invoice_id set.
+router.get('/payments', requireAuth, handle(async (req: Request, res: Response<ApiResponse>) => {
+    if (!isRazorpayConfigured()) {
+        return res.json({ success: true, data: [] });
+    }
+    const restaurantId = req.user!.restaurantId;
+    const sub = await findActiveSubscription(restaurantId);
+    if (!sub?.razorpaySubscriptionId) {
+        return res.json({ success: true, data: [] });
+    }
+    try {
+        const result = await listRazorpayPaymentsForSubscription(sub.razorpaySubscriptionId);
+        res.json({ success: true, data: result.items ?? [] });
+    } catch (err) {
+        log.warn({ err }, 'Failed to fetch Razorpay payment history');
+        res.json({ success: true, data: [] });
+    }
 }));
 
 // POST /subscribe -- requireAuth, create Razorpay subscription

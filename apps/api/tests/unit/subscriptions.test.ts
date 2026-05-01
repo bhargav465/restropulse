@@ -67,6 +67,7 @@ const mockFetchRazorpaySubscription = vi.fn();
 const mockFetchRazorpayPayment = vi.fn();
 
 const mockListRazorpaySubscriptionsForCustomer = vi.fn().mockResolvedValue({ items: [] });
+const mockListRazorpayPaymentsForSubscription = vi.fn().mockResolvedValue({ items: [] });
 
 vi.mock('../../src/services/razorpay.js', () => ({
     createRazorpaySubscription: mockCreateRazorpaySubscription,
@@ -83,6 +84,7 @@ vi.mock('../../src/services/razorpay.js', () => ({
     fetchRazorpayPayment: mockFetchRazorpayPayment,
     listRazorpayInvoices: vi.fn(),
     listRazorpaySubscriptionsForCustomer: mockListRazorpaySubscriptionsForCustomer,
+    listRazorpayPaymentsForSubscription: mockListRazorpayPaymentsForSubscription,
     createRazorpayCustomer: mockCreateRazorpayCustomer,
     fetchRazorpayCustomersByContact: mockFetchRazorpayCustomersByContact,
     isRazorpayConfigured: vi.fn().mockReturnValue(true),
@@ -443,6 +445,68 @@ describe('Subscription Routes', () => {
                 );
                 expect(res.body.data.subscription.status).toBe('HALTED');
             });
+        });
+    });
+
+    describe('GET /api/subscriptions/payments', () => {
+        test('returns mandate auth payments (invoice_id null) from Razorpay', async () => {
+            mockFindActiveSubscription.mockResolvedValue(mockSubscription);
+            mockListRazorpayPaymentsForSubscription.mockResolvedValue({
+                items: [
+                    { id: 'pay_auth_1', amount: 500, currency: 'INR', status: 'captured', method: 'card', created_at: 1714567890, invoice_id: null },
+                    { id: 'pay_billing_1', amount: 999900, currency: 'INR', status: 'captured', method: 'card', created_at: 1712000000, invoice_id: 'inv_rzp_001' },
+                ],
+            });
+
+            const res = await request(app)
+                .get('/api/subscriptions/payments')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toHaveLength(2);
+            expect(res.body.data[0].id).toBe('pay_auth_1');
+            expect(res.body.data[0].amount).toBe(500);
+            expect(mockListRazorpayPaymentsForSubscription).toHaveBeenCalledWith(mockSubscription.razorpaySubscriptionId);
+        });
+
+        test('returns empty array when no active subscription', async () => {
+            mockFindActiveSubscription.mockResolvedValue(null);
+
+            const res = await request(app)
+                .get('/api/subscriptions/payments')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toEqual([]);
+            expect(mockListRazorpayPaymentsForSubscription).not.toHaveBeenCalled();
+        });
+
+        test('returns empty array when subscription has no razorpaySubscriptionId', async () => {
+            mockFindActiveSubscription.mockResolvedValue({ ...mockSubscription, razorpaySubscriptionId: undefined });
+
+            const res = await request(app)
+                .get('/api/subscriptions/payments')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toEqual([]);
+        });
+
+        test('returns empty array (not 500) when Razorpay API fails', async () => {
+            mockFindActiveSubscription.mockResolvedValue(mockSubscription);
+            mockListRazorpayPaymentsForSubscription.mockRejectedValue(new Error('Razorpay timeout'));
+
+            const res = await request(app)
+                .get('/api/subscriptions/payments')
+                .set('Authorization', `Bearer ${authToken}`);
+
+            expect(res.status).toBe(200);
+            expect(res.body.data).toEqual([]);
+        });
+
+        test('returns 401 without auth', async () => {
+            const res = await request(app).get('/api/subscriptions/payments');
+            expect(res.status).toBe(401);
         });
     });
 

@@ -501,6 +501,11 @@ export const subscriptionAPI = {
         });
         return response.data!;
     },
+
+    getPayments: async (): Promise<Array<{ id: string; amount: number; currency: string; status: string; method?: string; created_at: number; invoice_id?: string | null }>> => {
+        const response = await fetchAPI<ApiResponse<Array<{ id: string; amount: number; currency: string; status: string; method?: string; created_at: number; invoice_id?: string | null }>>>('/subscriptions/payments');
+        return response.data ?? [];
+    },
 };
 
 // Coupon API

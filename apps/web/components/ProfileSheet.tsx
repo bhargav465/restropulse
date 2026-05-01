@@ -175,6 +175,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const [subscriptionLoading, setSubscriptionLoading] = useState(true);
     const pollingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [razorpayPayments, setRazorpayPayments] = useState<Array<{ id: string; amount: number; currency: string; status: string; method?: string; created_at: number; invoice_id?: string | null }>>([]);
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionErrorKey, setActionErrorKey] = useState(0);
     // B12 fix: track the last attempted plan switch so Tap-to-retry can actually
@@ -194,17 +195,19 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const loadSubscriptionData = async () => {
         setSubscriptionLoading(true);
         try {
-            const [currentData, plansData, packsData, invoicesData] = await Promise.all([
+            const [currentData, plansData, packsData, invoicesData, paymentsData] = await Promise.all([
                 subscriptionAPI.getCurrent(),
                 subscriptionAPI.getPlans(),
                 creditPacksAPI.getAll(),
                 invoiceAPI.getAll().catch(() => [] as Invoice[]),
+                subscriptionAPI.getPayments().catch(() => []),
             ]);
             setSubscription(currentData.subscription);
             setUsage(currentData.usage);
             setPlans(plansData);
             setCreditPacks(packsData);
             setInvoices(invoicesData);
+            setRazorpayPayments(paymentsData);
         } catch (error) {
             console.error('Failed to load subscription data:', error);
         } finally {
@@ -1559,6 +1562,32 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                     <ChevronRight size={14} />
                                 </button>
                             )}
+                        </div>
+                    )}
+
+                    {/* Payment History — mandate auth charges (₹5) not captured as invoices */}
+                    {razorpayPayments.filter(p => !p.invoice_id).length > 0 && (
+                        <div>
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">Payment History</h3>
+                            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
+                                {razorpayPayments.filter(p => !p.invoice_id).map((payment) => (
+                                    <div key={payment.id} className="p-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600">
+                                                <CreditCard size={18} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-bold text-slate-700 truncate">Mandate Verification</p>
+                                                <p className="text-xs text-slate-500">
+                                                    {new Date(payment.created_at * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    {payment.method && ` · ${payment.method.toUpperCase()}`}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <span className="text-sm font-bold text-slate-800 shrink-0 ml-3">{formatPaise(payment.amount)}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
