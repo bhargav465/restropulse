@@ -27,13 +27,19 @@ npm install
 # Install dev tools (mprocs TUI runner + ngrok tunnel) -- one-time setup
 npm run setup:dev
 
+# Set up collections and indexes -- one-time per environment
+# Creates correct schema including the partial unique index on subscriptions
+# required for subscription renewals. Must run BEFORE seed.
+npm run setup --workspace=@restropulse/db-cli
+
 # Seed the database (subscription plans, sample data) -- one-time per environment
 npm run seed --workspace=@restropulse/db-cli
 
-# Run required DB migrations -- one-time per environment (dev AND production)
-# Skipping these causes 500 errors on first subscription webhook delivery.
-npm run migrate --workspace=@restropulse/db-cli -- --migration subscription-history
-npm run migrate --workspace=@restropulse/db-cli -- --migration rename-strategy-id-to-cycle-id
+# Verify schema is correct
+npm run validate --workspace=@restropulse/db-cli
+
+# Migrations are only needed for EXISTING databases with old schema.
+# New environments that run setup first do not need migrations.
 
 # Start all services in a split-pane TUI (web, api, publisher, content-engine, ngrok)
 npm run dev
