@@ -33,6 +33,7 @@ import { processPendingCycles } from './services/strategy-processor.js';
 import { processRollingWindow } from './services/rolling-window/processor.js';
 import { processRevisions } from './services/revision-processor.js';
 import { processDeadlines } from './services/deadline-processor.js';
+import { processCycleSync } from './services/cycle-sync-processor.js';
 import { startAssetServer } from './services/asset-server.js';
 import {
   PlaceholderContentGenerator,
@@ -64,6 +65,7 @@ const env = loadAndValidateEnv({
     CRON_ROLLING_WINDOW: z.string().default('*/2 * * * *'),
     CRON_REVISIONS: z.string().default('*/2 * * * *'),
     CRON_DEADLINES: z.string().default('*/2 * * * *'),
+    CRON_CYCLE_SYNC: z.string().default('*/2 * * * *'),
     ENABLED_PLATFORMS: z.string().default('INSTAGRAM,FACEBOOK'),
   }).passthrough(),
 });
@@ -121,6 +123,7 @@ const startWorker = async () => {
     schedule(env.CRON_ROLLING_WINDOW,  'rolling-window',  () => processRollingWindow(rollingWindowConfig));
     schedule(env.CRON_REVISIONS,       'revisions',       () => processRevisions());
     schedule(env.CRON_DEADLINES,       'deadlines',       () => processDeadlines(deadlineConfig));
+    schedule(env.CRON_CYCLE_SYNC,      'cycle-sync',      () => processCycleSync());
 
     logger.info(
       {
@@ -134,6 +137,7 @@ const startWorker = async () => {
           rollingWindow: env.CRON_ROLLING_WINDOW,
           revisions: env.CRON_REVISIONS,
           deadlines: env.CRON_DEADLINES,
+          cycleSync: env.CRON_CYCLE_SYNC,
         },
       },
       'Content engine is running',

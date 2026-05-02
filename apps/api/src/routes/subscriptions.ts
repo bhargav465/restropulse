@@ -52,7 +52,8 @@ import {
     fetchRazorpayPayment,
 } from '../services/razorpay.js';
 import { createLogger, trackEvent } from '@restropulse/telemetry/server';
-import { ensureCycleForRestaurant } from '../services/strategy-sync.js';
+// strategy-sync is no longer called from webhooks — cycle creation is owned
+// by the content-engine cycle-sync-processor cron.
 
 const log = createLogger('subscriptions');
 
@@ -750,19 +751,9 @@ router.post('/webhook', async (req: Request, res: Response) => {
                             }
                         }
 
-                        // Ensure a StrategyCycle exists for the current billing period
-                        try {
-                            const planSlug = sub.planSnapshot?.slug ?? entity.notes?.planSlug;
-                            if (entity.current_start && entity.current_end && planSlug) {
-                                await ensureCycleForRestaurant(sub.restaurantId, planSlug, {
-                                    start: new Date(entity.current_start * 1000),
-                                    end: new Date(entity.current_end * 1000),
-                                });
-                            }
-                        } catch (err) {
-                            log.error({ err, restaurantId: sub.restaurantId }, 'Failed to ensure cycle on subscription activation');
-                            // Non-fatal: webhook should still succeed
-                        }
+                        // StrategyCycle creation is handled by the content-engine
+                        // cycle-sync-processor cron (runs every ~2 min). No direct
+                        // call needed here — decouples billing events from content lifecycle.
                     }
                 }
                 break;
@@ -879,19 +870,8 @@ router.post('/webhook', async (req: Request, res: Response) => {
                             if (updatedSub) Object.assign(sub, updatedSub);
                         }
 
-                        // Ensure a StrategyCycle exists for the current billing period
-                        try {
-                            const planSlug = sub.planSnapshot?.slug ?? entity.notes?.planSlug;
-                            if (entity.current_start && entity.current_end && planSlug) {
-                                await ensureCycleForRestaurant(sub.restaurantId, planSlug, {
-                                    start: new Date(entity.current_start * 1000),
-                                    end: new Date(entity.current_end * 1000),
-                                });
-                            }
-                        } catch (err) {
-                            log.error({ err, restaurantId: sub.restaurantId }, 'Failed to ensure cycle on subscription charge');
-                            // Non-fatal: webhook should still succeed
-                        }
+                        // StrategyCycle creation is handled by the content-engine
+                        // cycle-sync-processor cron (runs every ~2 min).
                     }
                 }
                 break;

@@ -9,6 +9,16 @@ import {
 } from '@restropulse/shared';
 import { ActionNotice } from './ActionNotice';
 
+function formatBillingRange(startDate?: string, endDate?: string): string | null {
+    if (!startDate || !endDate) return null;
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+    const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) =>
+        d.toLocaleDateString('en-US', opts);
+    return `${fmt(s, { month: 'short', day: 'numeric' })} – ${fmt(e, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
 function formatCountdown(deadline: Date, now: Date): string {
     const diffMs = deadline.getTime() - now.getTime();
     if (diffMs <= 0) return 'Feedback window closed';
@@ -172,8 +182,13 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 {/* Status Badge */}
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Cycle Period</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Billing Period</span>
                         <h3 className="text-lg font-bold text-slate-800">{cycle.period}</h3>
+                        {formatBillingRange(cycle.startDate, cycle.endDate) && (
+                            <span className="text-[11px] text-slate-500 mt-0.5">
+                                {formatBillingRange(cycle.startDate, cycle.endDate)}
+                            </span>
+                        )}
                     </div>
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide flex items-center gap-1.5 ${cycle.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
                         cycle.status === 'PENDING_APPROVAL' ? 'bg-orange-100 text-orange-700' :

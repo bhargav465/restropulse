@@ -40,6 +40,7 @@ const PROFILES = {
       CRON_ROLLING_WINDOW:  '*/15 * * * * *',
       CRON_REVISIONS:       '*/15 * * * * *',
       CRON_DEADLINES:       '*/15 * * * * *',
+      CRON_CYCLE_SYNC:      '*/15 * * * * *',
 
       ENABLED_PLATFORMS:    'INSTAGRAM',
     },
@@ -70,6 +71,7 @@ const PROFILES = {
       CRON_ROLLING_WINDOW:  '*/2 * * * *',
       CRON_REVISIONS:       '*/2 * * * *',
       CRON_DEADLINES:       '*/2 * * * *',
+      CRON_CYCLE_SYNC:      '*/2 * * * *',
 
       ENABLED_PLATFORMS:    'INSTAGRAM',
     },
