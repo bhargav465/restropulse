@@ -452,6 +452,7 @@ export {
   POST_APPROVAL_BUFFER_HOURS,
   CYCLE_APPROVAL_BUFFER_HOURS,
   ROLLING_WINDOW_HOURS,
+  MIN_SCHEDULE_AHEAD_HOURS,
   computePostApprovalDeadline,
   computeCycleApprovalDeadline,
   isPostPastApprovalDeadline,

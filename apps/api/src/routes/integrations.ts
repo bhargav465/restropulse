@@ -19,7 +19,7 @@ import {
     encrypt,
     checkAndRefreshTokenIfNeeded
 } from '@restropulse/publishing';
-import { getRestaurantsCollection, getOauthSessionsCollection, getDataDeletionAuditsCollection } from '@restropulse/db';
+import { getRestaurantsCollection, getOauthSessionsCollection, getDataDeletionAuditsCollection, toObjectId } from '@restropulse/db';
 import { createLogger } from '@restropulse/telemetry/server';
 import { handle } from '../middleware/async-handler.js';
 
@@ -171,7 +171,7 @@ router.get('/instagram/callback', handle(async (req: Request, res: Response) => 
             log.debug({ restaurantId }, 'Saving Instagram credentials');
             const col = getRestaurantsCollection();
             const updateResult = await col.updateOne(
-                { _id: restaurantId as any },
+                { _id: toObjectId(restaurantId) as any },
                 {
                     $set: {
                         'integrations.instagram': true,
@@ -181,6 +181,9 @@ router.get('/instagram/callback', handle(async (req: Request, res: Response) => 
                 }
             );
             log.debug({ matchedCount: updateResult.matchedCount, modifiedCount: updateResult.modifiedCount }, 'Credentials update result');
+            if (updateResult.matchedCount === 0) {
+                log.error({ restaurantId }, 'Instagram credentials save failed: restaurant not found');
+            }
 
             return res.redirect(`${frontendCallbackUrl}/auth/instagram/callback?success=true&username=${encodeURIComponent(result.account.username)}`);
         }
@@ -385,7 +388,7 @@ router.post('/instagram/select-account', handle(async (req: Request, res: Respon
         log.debug({ restaurantId: targetRestaurantId }, 'select-account: saving Instagram credentials');
         const restaurantsCol = getRestaurantsCollection();
         const updateResult = await restaurantsCol.updateOne(
-            { _id: targetRestaurantId as any },
+            { _id: toObjectId(targetRestaurantId) as any },
             {
                 $set: {
                     'integrations.instagram': true,
@@ -429,7 +432,7 @@ router.delete('/instagram/disconnect/:restaurantId', handle(async (req: Request,
     try {
         const col = getRestaurantsCollection();
         const result = await col.updateOne(
-            { _id: restaurantId as any },
+            { _id: toObjectId(restaurantId) as any },
             {
                 $set: {
                     'integrations.instagram': false,
@@ -470,7 +473,7 @@ router.get('/instagram/status/:restaurantId', handle(async (req: Request, res: R
 
     try {
         const col = getRestaurantsCollection();
-        const restaurant = await col.findOne({ _id: restaurantId as any });
+        const restaurant = await col.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant) {
             return res.status(404).json({
@@ -557,7 +560,7 @@ router.post('/instagram/validate/:restaurantId', handle(async (req: Request, res
 
     try {
         const col = getRestaurantsCollection();
-        const restaurant = await col.findOne({ _id: restaurantId as any });
+        const restaurant = await col.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant?.instagramCredentials?.accessToken) {
             return res.status(400).json({
@@ -571,7 +574,7 @@ router.post('/instagram/validate/:restaurantId', handle(async (req: Request, res
         if (!isValid) {
             // Mark as needing reauthorization
             await col.updateOne(
-                { _id: restaurantId as any },
+                { _id: toObjectId(restaurantId) as any },
                 {
                     $set: {
                         'integrations.instagram': false,
@@ -618,7 +621,7 @@ router.get('/instagram/profile/:restaurantId', handle(async (req: Request, res: 
         await checkAndRefreshTokenIfNeeded(restaurantId);
 
         const col = getRestaurantsCollection();
-        const restaurant = await col.findOne({ _id: restaurantId as any });
+        const restaurant = await col.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant?.instagramCredentials) {
             return res.status(400).json({
@@ -859,7 +862,7 @@ router.get('/instagram/debug-token/:restaurantId', handle(async (req: Request, r
 
     try {
         const col = getRestaurantsCollection();
-        const restaurant = await col.findOne({ _id: restaurantId as any });
+        const restaurant = await col.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant?.instagramCredentials?.accessToken) {
             return res.status(400).json({ success: false, error: 'No credentials found' });
@@ -941,7 +944,7 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', handle(async (req:
 
     try {
         const col = getRestaurantsCollection();
-        const restaurant = await col.findOne({ _id: restaurantId as any });
+        const restaurant = await col.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant?.instagramCredentials?.accessToken) {
             return res.status(400).json({ success: false, error: 'No credentials found' });
@@ -1021,7 +1024,7 @@ router.post('/instagram/migrate-to-page-token/:restaurantId', handle(async (req:
         // Update the stored token to the page token
         const encryptedPageToken = encrypt(pageToken);
         await col.updateOne(
-            { _id: restaurantId as any },
+            { _id: toObjectId(restaurantId) as any },
             {
                 $set: {
                     'instagramCredentials.accessToken': encryptedPageToken,

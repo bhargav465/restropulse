@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from './utils/test-utils';
 import ProfileSheet from '../components/ProfileSheet';
 import { getGoogleMapsApiKey } from '../utils/env';
@@ -44,7 +44,7 @@ vi.mock('../api', () => ({
                 status: 'ACTIVE',
                 billingCycle: 'MONTHLY',
                 credits: 15,
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 currentPeriodEnd: '2026-04-01',
             },
             usage: {
@@ -144,7 +144,7 @@ describe('ProfileSheet Component', () => {
                 status: 'ACTIVE',
                 billingCycle: 'MONTHLY',
                 credits: 15,
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 currentPeriodEnd: '2026-04-01',
             },
             usage: {
@@ -487,7 +487,7 @@ describe('ProfileSheet Component', () => {
     });
 
     it('should start OAuth flow from setup guide option 1', async () => {
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth', state: 'test-state' });
         mockWindowOpen.mockReturnValue({ closed: false });
 
         render(<ProfileSheet {...defaultProps} />);
@@ -501,7 +501,7 @@ describe('ProfileSheet Component', () => {
     });
 
     it('should start guided OAuth flow from setup guide option 2', async () => {
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth', state: 'test-state' });
         mockWindowOpen.mockReturnValue({ closed: false });
 
         render(<ProfileSheet {...defaultProps} />);
@@ -515,7 +515,6 @@ describe('ProfileSheet Component', () => {
     });
 
     it('should handle Instagram disconnect', async () => {
-        mockConfirm.mockReturnValue(true);
         vi.mocked(instagramAPI.disconnect).mockResolvedValue(undefined);
 
         const connectedData = {
@@ -524,7 +523,16 @@ describe('ProfileSheet Component', () => {
             instagramConnection: { connected: true, username: 'testrestaurant', pageName: 'Test Page' },
         };
         render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
-        fireEvent.click(screen.getByText('Connected'));
+
+        // Open Advanced section and click Disconnect Instagram
+        fireEvent.click(screen.getByText('Advanced'));
+        fireEvent.click(screen.getByText('Disconnect Instagram'));
+
+        // Confirm in the dialog
+        await waitFor(() => {
+            expect(screen.getByText('Disconnect Instagram?')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /^Disconnect$/i }));
 
         await waitFor(() => {
             expect(instagramAPI.disconnect).toHaveBeenCalledWith('r1');
@@ -577,8 +585,9 @@ describe('ProfileSheet Component', () => {
         expect(mockOnLogout).toHaveBeenCalledOnce();
     });
 
-    it('should show Delete Account button', () => {
+    it('should show Delete Account button inside Advanced section', () => {
         render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Advanced'));
         expect(screen.getByText('Delete Account')).toBeInTheDocument();
     });
 
@@ -780,7 +789,6 @@ describe('ProfileSheet Component', () => {
     // --- Disconnect error handling ---
 
     it('should handle disconnect error gracefully', async () => {
-        mockConfirm.mockReturnValue(true);
         vi.mocked(instagramAPI.disconnect).mockRejectedValue(new Error('Disconnect failed'));
         const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
 
@@ -791,11 +799,15 @@ describe('ProfileSheet Component', () => {
         };
         render(<ProfileSheet {...defaultProps} restaurantData={connectedData} />);
 
-        await waitFor(() => {
-            expect(screen.getByText('Connected')).toBeInTheDocument();
-        });
+        // Open Advanced section and click Disconnect Instagram
+        fireEvent.click(screen.getByText('Advanced'));
+        fireEvent.click(screen.getByText('Disconnect Instagram'));
 
-        fireEvent.click(screen.getByText('Connected'));
+        // Confirm in the dialog
+        await waitFor(() => {
+            expect(screen.getByText('Disconnect Instagram?')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByRole('button', { name: /^Disconnect$/i }));
 
         await waitFor(() => {
             expect(consoleSpy).toHaveBeenCalledWith('Disconnect error:', expect.any(Error));
@@ -808,7 +820,7 @@ describe('ProfileSheet Component', () => {
     // --- Popup blocked scenario ---
 
     it('should handle popup blocked during OAuth', async () => {
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth', state: 'test-state' });
         mockWindowOpen.mockReturnValue(null); // popup blocked
         mockConfirm.mockReturnValue(false);
 
@@ -870,7 +882,7 @@ describe('ProfileSheet Component', () => {
                 status: 'NONE',
                 credits: 5,
                 planSnapshot: null,
-                currentPeriodEnd: null,
+                currentPeriodEnd: undefined,
             },
             usage: null,
         });
@@ -1029,7 +1041,7 @@ describe('ProfileSheet Component', () => {
                 status: 'NONE',
                 credits: 5,
                 planSnapshot: null,
-                currentPeriodEnd: null,
+                currentPeriodEnd: undefined,
             },
             usage: null,
         });
@@ -1060,7 +1072,7 @@ describe('ProfileSheet Component', () => {
                 status: 'NONE',
                 credits: 5,
                 planSnapshot: null,
-                currentPeriodEnd: null,
+                currentPeriodEnd: undefined,
             },
             usage: null,
         });
@@ -1168,7 +1180,7 @@ describe('ProfileSheet Component', () => {
                 status: 'NONE',
                 credits: 5,
                 planSnapshot: null,
-                currentPeriodEnd: null,
+                currentPeriodEnd: undefined,
             },
             usage: null,
         });
@@ -1272,7 +1284,7 @@ describe('ProfileSheet Component', () => {
 
         // Use NONE status so the Subscribe path (with Razorpay) is triggered
         vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
-            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: undefined },
             usage: null,
         });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
@@ -1314,7 +1326,7 @@ describe('ProfileSheet Component', () => {
 
         // Use NONE status so the Subscribe path (with Razorpay) is triggered
         vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
-            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: undefined },
             usage: null,
         });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
@@ -1350,7 +1362,7 @@ describe('ProfileSheet Component', () => {
 
         // Use NONE status so the Subscribe path (with Razorpay) is triggered
         vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
-            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: undefined },
             usage: null,
         });
         vi.mocked(subscriptionAPI.subscribe).mockResolvedValue({
@@ -1460,7 +1472,7 @@ describe('ProfileSheet Component', () => {
                 status: 'NONE',
                 credits: 5,
                 planSnapshot: null,
-                currentPeriodEnd: null,
+                currentPeriodEnd: undefined,
             },
             usage: null,
         });
@@ -1480,7 +1492,7 @@ describe('ProfileSheet Component', () => {
         (window as any).Razorpay = MockRazorpay;
 
         vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
-            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: undefined },
             usage: null,
         });
         vi.mocked(couponAPI.validate).mockResolvedValue({ valid: true });
@@ -1518,7 +1530,7 @@ describe('ProfileSheet Component', () => {
         (window as any).Razorpay = MockRazorpay;
 
         vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
-            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: null },
+            subscription: { id: 'sub1', restaurantId: 'r1', status: 'NONE', credits: 0, planSnapshot: null, currentPeriodEnd: undefined },
             usage: null,
         });
         vi.mocked(couponAPI.validate).mockResolvedValue({ valid: true });
@@ -1557,7 +1569,7 @@ describe('ProfileSheet Component', () => {
     // --- InstagramErrorModal ---
 
     it('should show InstagramErrorModal when OAuth error occurs with known error type', async () => {
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth', state: 'test-state' });
         mockWindowOpen.mockReturnValue({ closed: false });
 
         render(<ProfileSheet {...defaultProps} />);
@@ -1595,7 +1607,7 @@ describe('ProfileSheet Component', () => {
     });
 
     it('should close InstagramErrorModal when Close is clicked', async () => {
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth', state: 'test-state' });
         mockWindowOpen.mockReturnValue({ closed: false });
 
         render(<ProfileSheet {...defaultProps} />);
@@ -1623,7 +1635,7 @@ describe('ProfileSheet Component', () => {
     });
 
     it('should retry OAuth when Try Again is clicked in error modal', async () => {
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth', state: 'test-state' });
         mockWindowOpen.mockReturnValue({ closed: false });
 
         render(<ProfileSheet {...defaultProps} />);
@@ -1644,7 +1656,7 @@ describe('ProfileSheet Component', () => {
         await waitFor(() => expect(screen.getByText('Connection Error')).toBeInTheDocument());
 
         vi.mocked(instagramAPI.getOAuthUrl).mockClear();
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth2' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth2', state: 'test-state' });
 
         fireEvent.click(screen.getByText('Try Again'));
 
@@ -1654,7 +1666,7 @@ describe('ProfileSheet Component', () => {
     });
 
     it('should show error modal with NO_IG_ACCOUNT_FOUND error info', async () => {
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth', state: 'test-state' });
         mockWindowOpen.mockReturnValue({ closed: false });
 
         render(<ProfileSheet {...defaultProps} />);
@@ -1681,7 +1693,7 @@ describe('ProfileSheet Component', () => {
     // --- InstagramErrorModal: popup blocked shows error modal ---
 
     it('should show error modal when popup is blocked', async () => {
-        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth' });
+        vi.mocked(instagramAPI.getOAuthUrl).mockResolvedValue({ oauthUrl: 'https://facebook.com/oauth', state: 'test-state' });
         mockWindowOpen.mockReturnValue(null); // popup blocked
         mockConfirm.mockReturnValue(false);
 
@@ -1901,6 +1913,7 @@ describe('ProfileSheet Component', () => {
 
     it('should show action error message when Delete Account is clicked', () => {
         render(<ProfileSheet {...defaultProps} />);
+        fireEvent.click(screen.getByText('Advanced'));
         fireEvent.click(screen.getByText('Delete Account'));
         expect(screen.getByText(/To delete your account, please contact your account manager/i)).toBeInTheDocument();
     });
@@ -2137,7 +2150,7 @@ describe('ProfileSheet Component', () => {
                 billingCycle: 'MONTHLY',
                 credits: 15,
                 cancelAtPeriodEnd: true,
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 currentPeriodEnd: '2026-05-01',
             },
             usage: null,
@@ -2180,7 +2193,7 @@ describe('ProfileSheet Component', () => {
                 credits: 15,
                 cancelAtPeriodEnd: true,
                 currentPeriodEnd: new Date(Date.now() + 10 * 86_400_000).toISOString(),
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
             },
             usage: null,
         });
@@ -2258,8 +2271,8 @@ describe('ProfileSheet Component', () => {
                 status: 'ACTIVE',
                 billingCycle: 'MONTHLY',
                 credits: 15,
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
-                pendingPlanSnapshot: { name: 'Starter', slug: 'starter', tier: 'STARTER', limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
+                pendingPlanSnapshot: { id: 'p-starter', name: 'Starter', slug: 'starter', tier: 'STARTER', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 currentPeriodEnd: '2026-05-01T00:00:00.000Z',
             },
             usage: null,
@@ -2286,17 +2299,17 @@ describe('ProfileSheet Component', () => {
         vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
             subscription: {
                 id: 'sub1', restaurantId: 'r1', status: 'ACTIVE', billingCycle: 'MONTHLY', credits: 15,
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
-                pendingPlanSnapshot: { name: 'Starter', slug: 'starter', tier: 'STARTER', limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
+                pendingPlanSnapshot: { id: 'p-starter', name: 'Starter', slug: 'starter', tier: 'STARTER', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 currentPeriodEnd: '2026-05-01T00:00:00.000Z',
             },
             usage: null,
         });
         // Override plans so Premium is available as an upgrade
         vi.mocked(subscriptionAPI.getPlans).mockResolvedValue([
-            { id: 'plan_starter_id', slug: 'starter', name: 'Starter', tier: 'STARTER', limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'plan_starter_m', annual: 'plan_starter_a' } },
-            { id: 'plan_growth_id', slug: 'growth', name: 'Growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'plan_growth_m', annual: 'plan_growth_a' } },
-            { id: 'plan_premium_id', slug: 'premium', name: 'Premium', tier: 'PREMIUM', limits: { weekly: { INSTAGRAM: { IMAGE: 20, STORY: 20, CAROUSEL: 5, REEL: 10, VIDEO: 10 }, FACEBOOK: { IMAGE: 20, CAROUSEL: 5, VIDEO: 10, STORY: 20 } } }, pricing: { monthly: 199900, annual: 1999000, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'plan_premium_m', annual: 'plan_premium_a' } },
+            { id: 'plan_starter_id', slug: 'starter', name: 'Starter', tier: 'STARTER', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'plan_starter_m', annual: 'plan_starter_a' } },
+            { id: 'plan_growth_id', slug: 'growth', name: 'Growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'plan_growth_m', annual: 'plan_growth_a' } },
+            { id: 'plan_premium_id', slug: 'premium', name: 'Premium', tier: 'PREMIUM', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 20, STORY: 20, CAROUSEL: 5, REEL: 10, VIDEO: 10 }, FACEBOOK: { IMAGE: 20, CAROUSEL: 5, VIDEO: 10, STORY: 20 } } }, pricing: { monthly: 199900, annual: 1999000, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'plan_premium_m', annual: 'plan_premium_a' } },
         ]);
 
         render(<ProfileSheet {...defaultProps} />);
@@ -2333,16 +2346,16 @@ describe('ProfileSheet Component', () => {
                 credits: 15,
                 cancelAtPeriodEnd: true,
                 cancelledAt: '2026-04-10T00:00:00.000Z',
-                planSnapshot: { name: 'Premium', slug: 'premium', tier: 'PREMIUM', limits: { weekly: { INSTAGRAM: { IMAGE: 20, STORY: 20, CAROUSEL: 5, REEL: 10, VIDEO: 10 } } }, pricing: { monthly: 199900, annual: 1999000, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
-                pendingPlanSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
+                planSnapshot: { id: 'p-premium', name: 'Premium', slug: 'premium', tier: 'PREMIUM', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 20, STORY: 20, CAROUSEL: 5, REEL: 10, VIDEO: 10 } } }, pricing: { monthly: 199900, annual: 1999000, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
+                pendingPlanSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 currentPeriodEnd: '2026-05-01T00:00:00.000Z',
             },
             usage: null,
         });
         vi.mocked(subscriptionAPI.getPlans).mockResolvedValue([
-            { id: 'plan_starter_id', slug: 'starter', name: 'Starter', tier: 'STARTER', limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'plan_starter_m', annual: 'plan_starter_a' } },
-            { id: 'plan_growth_id', slug: 'growth', name: 'Growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'plan_growth_m', annual: 'plan_growth_a' } },
-            { id: 'plan_premium_id', slug: 'premium', name: 'Premium', tier: 'PREMIUM', limits: { weekly: { INSTAGRAM: { IMAGE: 20, STORY: 20, CAROUSEL: 5, REEL: 10, VIDEO: 10 } } }, pricing: { monthly: 199900, annual: 1999000, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'plan_premium_m', annual: 'plan_premium_a' } },
+            { id: 'plan_starter_id', slug: 'starter', name: 'Starter', tier: 'STARTER', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'plan_starter_m', annual: 'plan_starter_a' } },
+            { id: 'plan_growth_id', slug: 'growth', name: 'Growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'plan_growth_m', annual: 'plan_growth_a' } },
+            { id: 'plan_premium_id', slug: 'premium', name: 'Premium', tier: 'PREMIUM', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 20, STORY: 20, CAROUSEL: 5, REEL: 10, VIDEO: 10 } } }, pricing: { monthly: 199900, annual: 1999000, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'plan_premium_m', annual: 'plan_premium_a' } },
         ]);
         vi.mocked(subscriptionAPI.changePlan).mockResolvedValue({
             effective: 'cycle_end',
@@ -2388,7 +2401,7 @@ describe('ProfileSheet Component', () => {
                 credits: 100,
                 cancelAtPeriodEnd: true,
                 planSnapshot: { id: 'p2', slug: 'growth', name: 'Growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, razorpayPlanIds: { monthly: 'rp3', annual: 'rp4' }, features: ['INSTAGRAM', 'FACEBOOK'] },
-                pendingPlanSnapshot: { name: 'Starter', slug: 'starter', tier: 'STARTER', limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                pendingPlanSnapshot: { id: 'p-starter', name: 'Starter', slug: 'starter', tier: 'STARTER', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 currentPeriodEnd: '2026-06-01T00:00:00.000Z',
                 razorpaySubscriptionId: 'rzp_sub_growth',
             } as any,
@@ -2438,8 +2451,8 @@ describe('ProfileSheet Component', () => {
                 status: 'CREATED',
                 billingCycle: 'MONTHLY',
                 credits: 0,
-                planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'] },
-                currentPeriodEnd: null,
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 }, FACEBOOK: { IMAGE: 10, CAROUSEL: 3, VIDEO: 5, STORY: 10 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM', 'FACEBOOK'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
+                currentPeriodEnd: undefined,
             },
             usage: null,
         });
@@ -2567,7 +2580,7 @@ describe('ProfileSheet Component', () => {
             vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
                 subscription: {
                     id: 'sub1', restaurantId: 'r1', status: 'ACTIVE', billingCycle: 'MONTHLY', credits: 5,
-                    planSnapshot: { name: 'Starter', slug: 'starter', tier: 'STARTER', limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                    planSnapshot: { id: 'p-starter', name: 'Starter', slug: 'starter', tier: 'STARTER', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 },
                 usage: null,
             });
@@ -2607,7 +2620,7 @@ describe('ProfileSheet Component', () => {
             vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
                 subscription: {
                     id: 'sub1', restaurantId: 'r1', status: 'ACTIVE', billingCycle: 'MONTHLY', credits: 5,
-                    planSnapshot: { name: 'Starter', slug: 'starter', tier: 'STARTER', limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                    planSnapshot: { id: 'p-starter', name: 'Starter', slug: 'starter', tier: 'STARTER', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 5, STORY: 5, CAROUSEL: 1, REEL: 2, VIDEO: 2 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                 },
                 usage: null,
             });
@@ -2645,7 +2658,7 @@ describe('ProfileSheet Component', () => {
                     status: 'CANCELLED',
                     credits: 0,
                     planSnapshot: null,
-                    currentPeriodEnd: null,
+                    currentPeriodEnd: undefined,
                 },
                 usage: null,
             });
@@ -2674,7 +2687,7 @@ describe('ProfileSheet Component', () => {
 
         // [S7] Pure cancel action
         it('[S7] should call cancel API when user initiates cancellation', async () => {
-            vi.mocked(subscriptionAPI.cancel).mockResolvedValue({ success: true });
+            vi.mocked(subscriptionAPI.cancel).mockResolvedValue(undefined);
 
             // Mock subscription with visible cancel UI
             vi.mocked(subscriptionAPI.getCurrent).mockResolvedValueOnce({
@@ -2684,7 +2697,7 @@ describe('ProfileSheet Component', () => {
                     status: 'ACTIVE',
                     billingCycle: 'MONTHLY',
                     credits: 15,
-                    planSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                    planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                     currentPeriodEnd: '2026-05-01',
                     cancelAtPeriodEnd: false,
                 },
@@ -2739,8 +2752,8 @@ describe('ProfileSheet Component', () => {
                     status: 'ACTIVE',
                     billingCycle: 'MONTHLY',
                     credits: 5,
-                    planSnapshot: { name: 'Premium', slug: 'premium', tier: 'PREMIUM', limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 5, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM'] },
-                    pendingPlanSnapshot: { name: 'Growth', slug: 'growth', tier: 'GROWTH', limits: { weekly: { INSTAGRAM: { IMAGE: 7, STORY: 7, CAROUSEL: 3, REEL: 3, VIDEO: 3 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'] },
+                    planSnapshot: { id: 'p-premium', name: 'Premium', slug: 'premium', tier: 'PREMIUM', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 5, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
+                    pendingPlanSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 7, STORY: 7, CAROUSEL: 3, REEL: 3, VIDEO: 3 } } }, pricing: { monthly: 49900, annual: 499900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
                     currentPeriodEnd: '2026-05-15',
                 },
                 usage: null,

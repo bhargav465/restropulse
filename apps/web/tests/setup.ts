@@ -65,5 +65,5 @@ global.IntersectionObserver = class IntersectionObserver {
     unobserve() { }
 } as any;
 
-vi.mock('@vis.gl/react-google-maps', () => ({ APIProvider: ({children}) => children, Map: ({children}) => children, AdvancedMarker: () => null, useMap: () => null, useMapsLibrary: () => null }));
+vi.mock('@vis.gl/react-google-maps', () => ({ APIProvider: ({children}: {children: any}) => children, Map: ({children}: {children: any}) => children, AdvancedMarker: () => null, useMap: () => null, useMapsLibrary: () => null }));
 

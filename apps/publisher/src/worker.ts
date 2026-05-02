@@ -34,6 +34,7 @@ loadAndValidateEnv({
     INSTAGRAM_APP_SECRET: z.string().min(1),
     ENCRYPTION_KEY: z.string().regex(/^[A-Fa-f0-9]{64}$/),
     INSTAGRAM_REDIRECT_URI: z.string().url().optional(),
+    ASSET_SERVER_BASE_URL: z.string().url().optional(),
   }).passthrough(),
 });
 

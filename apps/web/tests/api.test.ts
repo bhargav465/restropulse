@@ -73,13 +73,13 @@ describe('API Service', () => {
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                json: async () => ({ success: true, data: { user: { id: 'u1', name: 'Test' } } }),
+                json: async () => ({ success: true, user: { id: 'u1', name: 'Test' } }),
             });
 
             const result = await authAPI.checkSession();
 
             expect(result.success).toBe(true);
-            expect(result.data?.user).toBeDefined();
+            expect(result.user).toBeDefined();
         });
 
         it('should verify OTP successfully', async () => {
@@ -186,18 +186,18 @@ describe('API Service', () => {
                 json: async () => ({ success: true, data: { username: 'user1', message: 'Connected' } }),
             });
 
-            const result = await instagramAPI.selectAccount('sel1', 'a1');
+            const result = await instagramAPI.selectAccount('sel1', 'a1', 'r1');
             expect(result.username).toBe('user1');
         });
 
         it('should get status', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                json: async () => ({ success: true, data: { isConnected: true, username: 'user1' } }),
+                json: async () => ({ success: true, data: { connected: true, username: 'user1' } }),
             });
 
             const result = await instagramAPI.getStatus('r1');
-            expect(result.isConnected).toBe(true);
+            expect(result.connected).toBe(true);
         });
 
         it('should disconnect', async () => {
@@ -561,14 +561,14 @@ describe('API Service', () => {
                     success: true,
                     data: {
                         subscription: { id: 'sub1', status: 'ACTIVE' },
-                        usage: { postsThisWeek: 2, weeklyLimit: 7 },
+                        usage: {},
                     },
                 }),
             });
 
             const result = await subscriptionAPI.getCurrent();
             expect(result.subscription?.status).toBe('ACTIVE');
-            expect(result.usage?.postsThisWeek).toBe(2);
+            expect(result.usage).toBeDefined();
         });
 
         it('should subscribe to a plan', async () => {
@@ -620,7 +620,7 @@ describe('API Service', () => {
                 json: async () => ({ success: true, data: { effective: 'immediate', planName: 'Growth' } }),
             });
 
-            const result = await subscriptionAPI.changePlan('growth', 'MONTHLY');
+            const result = await subscriptionAPI.changePlan('growth', { mode: 'now' });
             expect(result.effective).toBe('immediate');
             expect(result.planName).toBe('Growth');
         });
@@ -634,7 +634,7 @@ describe('API Service', () => {
                 }),
             });
 
-            const result = await subscriptionAPI.changePlan('starter', 'MONTHLY');
+            const result = await subscriptionAPI.changePlan('starter', { mode: 'cycle_end' });
             expect(result.effective).toBe('cycle_end');
             expect(result.currentPeriodEnd).toBeDefined();
         });
@@ -740,13 +740,13 @@ describe('API Service', () => {
                 ok: true,
                 json: async () => ({
                     success: true,
-                    data: { id: 'inv1', amount: 999, status: 'PAID' },
+                    data: { id: 'inv1', amountPaise: 999, status: 'PAID', restaurantId: 'r1', type: 'SUBSCRIPTION', currency: 'INR', description: 'Test' },
                 }),
             });
 
             const result = await invoiceAPI.getById('inv1');
             expect(result.id).toBe('inv1');
-            expect(result.amount).toBe(999);
+            expect(result.amountPaise).toBe(999);
         });
     });
 

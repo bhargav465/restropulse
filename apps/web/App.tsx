@@ -41,8 +41,11 @@ const App: React.FC = () => {
         const path = window.location.pathname;
         const searchParams = new URLSearchParams(window.location.search);
 
-        // Check for Instagram callback path or OAuth parameters
-        if (path === '/instagram/callback' ||
+        // Check for Instagram callback path or OAuth parameters.
+        // The API redirects to /auth/instagram/callback (redirect flow) or the
+        // popup flow lands with ?code=&state= query params on any path.
+        if (path === '/auth/instagram/callback' ||
+            path === '/instagram/callback' ||
             searchParams.has('code') && searchParams.has('state')) {
             setIsInstagramCallback(true);
             setLoading(false);
@@ -236,9 +239,33 @@ const App: React.FC = () => {
 
     // Render Instagram callback handler if this is an OAuth callback
     if (isInstagramCallback) {
+        const handleInstagramComplete = async (success: boolean) => {
+            if (success) {
+                // Re-initialise the app so fresh restaurant data (with instagram connected) is loaded.
+                const token = localStorage.getItem('rp_token');
+                const restaurantId = localStorage.getItem('rp_restaurant_id');
+                if (token && restaurantId) {
+                    try {
+                        const restaurant = await restaurantAPI.get(restaurantId);
+                        setRestaurantData(restaurant);
+                        const sessionData = await authAPI.checkSession();
+                        setUserData(sessionData.user ?? null);
+                        setIsLoggedIn(true);
+                        setIsInstagramCallback(false);
+                        window.history.replaceState({ view: 'DASHBOARD' }, '', '/');
+                        setCurrentView('DASHBOARD');
+                        return;
+                    } catch { /* fall through to manual navigation */ }
+                }
+            }
+            // On error or missing session: clear callback state so user can retry
+            setIsInstagramCallback(false);
+            window.history.replaceState({}, '', '/');
+        };
+
         return (
             <ErrorBoundary>
-                <InstagramCallback />
+                <InstagramCallback onComplete={handleInstagramComplete} />
             </ErrorBoundary>
         );
     }

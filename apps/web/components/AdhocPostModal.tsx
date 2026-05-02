@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Calendar, Image as ImageIcon, Video, Sparkles, Clock, Send, AlertCircle, Loader2 } from 'lucide-react';
-import { Post, Platform, PLATFORM_POST_TYPES } from '@restropulse/shared';
+import { Post, Platform, PLATFORM_POST_TYPES, MIN_SCHEDULE_AHEAD_HOURS } from '@restropulse/shared';
 import { postsAPI } from '../api';
 import { FacebookIcon, InstagramIcon } from './BrandIcons';
 
@@ -37,9 +37,9 @@ interface FormData {
     mediaUrl: string;
 }
 
-/** Returns scheduledDate and scheduledTime strings for 10 minutes from now in local time. */
+/** Returns scheduledDate and scheduledTime strings for MIN_SCHEDULE_AHEAD_HOURS from now in local time. */
 function getDefaultSchedule(): { scheduledDate: string; scheduledTime: string } {
-    const d = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+    const d = new Date(Date.now() + MIN_SCHEDULE_AHEAD_HOURS * 3600 * 1000);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -143,10 +143,21 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
         setError(null);
 
         try {
-            // Build the scheduled time -- default to 10 min from now for ASAP posts
-            const scheduledFor = formData.scheduleType === 'later'
-                ? new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString()
-                : new Date(Date.now() + 10 * 60 * 1000).toISOString();
+            const minScheduledFor = new Date(Date.now() + MIN_SCHEDULE_AHEAD_HOURS * 3600 * 1000);
+
+            // Build the scheduled time -- ASAP defaults to MIN_SCHEDULE_AHEAD_HOURS from now
+            let scheduledFor: string;
+            if (formData.scheduleType === 'later') {
+                const provided = new Date(`${formData.scheduledDate}T${formData.scheduledTime}`);
+                if (isNaN(provided.getTime()) || provided < minScheduledFor) {
+                    setError(`Posts must be scheduled at least ${MIN_SCHEDULE_AHEAD_HOURS} hours from now`);
+                    setIsSubmitting(false);
+                    return;
+                }
+                scheduledFor = provided.toISOString();
+            } else {
+                scheduledFor = minScheduledFor.toISOString();
+            }
 
             // Use the generate endpoint which will create the post with AI-generated content
             await postsAPI.generate({
@@ -193,6 +204,13 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
 
     // Get minimum date (today) for date picker
     const today = new Date().toISOString().split('T')[0];
+
+    // Compute ASAP label: MIN_SCHEDULE_AHEAD_HOURS from now, formatted as "Today at HH:MM" or "Tomorrow at HH:MM"
+    const asapDate = new Date(Date.now() + MIN_SCHEDULE_AHEAD_HOURS * 3600 * 1000);
+    const asapHours = String(asapDate.getHours()).padStart(2, '0');
+    const asapMinutes = String(asapDate.getMinutes()).padStart(2, '0');
+    const asapDateStr = asapDate.toISOString().split('T')[0];
+    const asapLabel = asapDateStr === today ? `Today at ${asapHours}:${asapMinutes}` : `Tomorrow at ${asapHours}:${asapMinutes}`;
 
     const validPostTypes = getValidPostTypes(formData.platforms);
 
@@ -393,7 +411,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                 data-testid="schedule-now"
                             >
                                 <Send size={16} />
-                                <span className="text-sm font-medium">ASAP</span>
+                                <span className="text-sm font-medium">{asapLabel}</span>
                             </button>
                             <button
                                 onClick={() => setFormData(prev => ({ ...prev, scheduleType: 'later' }))}

@@ -24,6 +24,11 @@ export const CYCLE_APPROVAL_BUFFER_HOURS = 48;
 // the next wave of post stubs.
 export const ROLLING_WINDOW_HOURS = 48;
 
+// Minimum hours ahead a post must be scheduled.
+// = POST_APPROVAL_BUFFER_HOURS (2h) + 0.5h review buffer.
+// ASAP scheduling defaults to exactly this value.
+export const MIN_SCHEDULE_AHEAD_HOURS = 2.5;
+
 const MS_PER_HOUR = 60 * 60 * 1000;
 
 function toDateOrNull(value: unknown): Date | null {

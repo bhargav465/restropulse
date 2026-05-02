@@ -22,3 +22,7 @@ procs:
   webhook-tunnel:
     cmd: ["cmd", "/c", "node scripts/start-ngrok.mjs"]
     cwd: .
+
+  asset-tunnel:
+    cmd: ["cmd", "/c", "node scripts/start-asset-tunnel.mjs"]
+    cwd: .

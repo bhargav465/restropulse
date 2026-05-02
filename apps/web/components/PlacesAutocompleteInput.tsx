@@ -70,7 +70,7 @@ export const PlacesAutocompleteInput: React.FC<PlacesAutocompleteInputProps> = (
                 }
 
                 const { suggestions: results } =
-                    await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions(request as google.maps.places.AutocompleteRequest);
+                    await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions(request as unknown as google.maps.places.AutocompleteRequest);
 
                 setSuggestions(
                     results

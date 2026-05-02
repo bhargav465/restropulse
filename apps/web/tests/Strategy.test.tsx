@@ -22,7 +22,7 @@ const mockRestaurantData: Restaurant = {
     cuisine: 'Italian',
     accountManager: { name: 'Manager', phone: '1234567890', email: 'mgr@test.com', avatar: '' },
     integrations: { whatsapp: true, instagram: true, facebook: false },
-} as Restaurant;
+} as unknown as Restaurant;
 
 // Mock window.history
 const mockHistoryPushState = vi.fn();

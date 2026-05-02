@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
 import { publishPost, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
-import { ApiResponse, Post, isPostPastApprovalDeadline } from '@restropulse/shared';
+import { ApiResponse, Post, isPostPastApprovalDeadline, MIN_SCHEDULE_AHEAD_HOURS } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { enforcePlanLimits } from '../middleware/enforce-plan-limits.js';
@@ -104,78 +104,45 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
     });
 }));
 
-// Generate post with AI-created content (for adhoc posts)
+// Create an adhoc post stub for content generation by the content-engine.
+// The post is stored as PENDING_CONTENT; the content-engine picks it up and
+// calls generator.generatePost(concept, type, platforms) to fill caption + media,
+// then advances the post to PENDING_APPROVAL for user review.
 router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
     const { concept, type, platforms, scheduledFor } = req.body;
 
-    // Validate required fields
     if (!concept || concept.trim().length === 0) {
-        return res.status(400).json({
-            success: false,
-            error: 'Concept/description is required'
-        });
+        return res.status(400).json({ success: false, error: 'Concept/description is required' });
     }
 
     if (!type) {
-        return res.status(400).json({
-            success: false,
-            error: 'Post type is required'
-        });
+        return res.status(400).json({ success: false, error: 'Post type is required' });
     }
 
-    log.info({ type, concept: concept.substring(0, 50) }, 'Creating post for content generation');
+    const minScheduledFor = new Date(Date.now() + MIN_SCHEDULE_AHEAD_HOURS * 3600 * 1000);
 
-    // TODO: Replace with actual AI content generation service
-    // For now, generate placeholder media based on type
-    const seed = Date.now();
-    const placeholderImage = `https://picsum.photos/seed/${seed}/1080/1080`;
-    const placeholderVideo = `https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4`;
-
-    let thumbnail: string;
-    let videoUrl: string | undefined;
-    let mediaUrls: string[] | undefined;
-
-    switch (type) {
-        case 'REEL':
-        case 'STORY':
-        case 'VIDEO':
-            // Video content types - use actual video URL
-            thumbnail = placeholderImage;
-            videoUrl = placeholderVideo;
-            log.info({ videoUrl }, 'Generated video content');
-            break;
-
-        case 'CAROUSEL':
-            // Multiple images for carousel
-            thumbnail = placeholderImage;
-            mediaUrls = [
-                `https://picsum.photos/seed/${seed}/1080/1080`,
-                `https://picsum.photos/seed/${seed + 1}/1080/1080`,
-                `https://picsum.photos/seed/${seed + 2}/1080/1080`
-            ];
-            log.info({ imageCount: mediaUrls.length }, 'Generated carousel content');
-            break;
-
-        case 'IMAGE':
-        default:
-            // Single image
-            thumbnail = placeholderImage;
-            log.info('Generated image content');
-            break;
+    if (scheduledFor) {
+        const provided = new Date(scheduledFor);
+        if (isNaN(provided.getTime()) || provided < minScheduledFor) {
+            return res.status(400).json({
+                success: false,
+                error: `Posts must be scheduled at least ${MIN_SCHEDULE_AHEAD_HOURS} hours from now`,
+            });
+        }
     }
 
-    // Create the post with generated content
+    log.info({ type, concept: concept.substring(0, 50) }, 'Queueing adhoc post for content generation');
+
     const postData = {
         type: type as Post['type'],
-        status: 'PENDING_APPROVAL' as const,
+        status: 'PENDING_CONTENT' as const,
         platforms: platforms || ['INSTAGRAM'],
-        caption: concept,
-        thumbnail,
-        videoUrl,
-        mediaUrls,
+        concept: concept.trim(),
+        caption: '',
+        thumbnail: '',
         restaurantId: req.user!.restaurantId,
-        scheduledFor: scheduledFor || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        isAdhoc: true
+        scheduledFor: scheduledFor || minScheduledFor.toISOString(),
+        isAdhoc: true,
     };
 
     const newPost = await createPost(postData);
@@ -188,12 +155,12 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         }
     }
 
-    log.info({ postId: newPost.id }, 'Post created successfully');
+    log.info({ postId: newPost.id }, 'Adhoc post stub created, queued for content-engine');
 
     res.status(201).json({
         success: true,
         data: newPost,
-        message: 'Post generated with content successfully'
+        message: 'Post queued for content generation',
     });
 }));
 
@@ -247,7 +214,7 @@ router.post('/:id/test-publish', async (req: Request, res: Response) => {
         }
 
         const restaurantsCol = getRestaurantsCollection();
-        const restaurant = await restaurantsCol.findOne({ _id: restaurantId as any });
+        const restaurant = await restaurantsCol.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant?.instagramCredentials) {
             return res.status(400).json({ success: false, error: 'Instagram not connected' });
@@ -388,7 +355,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
         }
 
         const restaurantsCol = getRestaurantsCollection();
-        const restaurant = await restaurantsCol.findOne({ _id: restaurantId as any });
+        const restaurant = await restaurantsCol.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant?.instagramCredentials) {
             // Update DB with error before returning

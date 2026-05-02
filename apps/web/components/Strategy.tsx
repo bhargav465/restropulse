@@ -30,6 +30,7 @@ interface StrategyProps {
 const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected = false, onConnectInstagram }) => {
     const [cycles, setCycles] = useState<StrategyCycle[]>([]);
     const [loading, setLoading] = useState(true);
+    const [suggestCreateCycle, setSuggestCreateCycle] = useState(false);
     const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
     const [now, setNow] = useState(() => new Date());
 
@@ -47,17 +48,21 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     }, [notice]);
 
     useEffect(() => {
-        const loadCycles = async () => {
+        const loadData = async () => {
             try {
-                const data = await strategyAPI.getAllCycles();
-                setCycles(data);
+                const [cycleData, strategyData] = await Promise.all([
+                    strategyAPI.getAllCycles(),
+                    strategyAPI.getStrategy(),
+                ]);
+                setCycles(cycleData);
+                setSuggestCreateCycle(strategyData.suggestCreateCycle ?? false);
             } catch (error) {
-                console.error('Failed to load cycles:', error);
+                console.error('Failed to load strategy data:', error);
             } finally {
                 setLoading(false);
             }
         };
-        loadCycles();
+        loadData();
     }, []);
 
     // Feedback Modal State
@@ -325,14 +330,24 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 </div>
             )}
 
-            {!pendingCycle && !approvedCycle && (
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-3xl border border-green-100 text-center">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-green-600">
-                        <CheckCircle size={24} />
+            {!pendingCycle && !approvedCycle && !activeCycle && (
+                suggestCreateCycle ? (
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-3xl border border-blue-100 text-center">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-blue-600">
+                            <Zap size={24} />
+                        </div>
+                        <h3 className="font-bold text-blue-900">Setting Up Your Strategy</h3>
+                        <p className="text-xs text-blue-700 mt-1">Your first content strategy is being prepared. It will appear here shortly.</p>
                     </div>
-                    <h3 className="font-bold text-green-900">All Caught Up!</h3>
-                    <p className="text-xs text-green-700 mt-1">Next strategy cycle will be generated on {new Date().getDate() < 15 ? '15th' : '1st'}.</p>
-                </div>
+                ) : (
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-3xl border border-green-100 text-center">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-green-600">
+                            <CheckCircle size={24} />
+                        </div>
+                        <h3 className="font-bold text-green-900">All Caught Up!</h3>
+                        <p className="text-xs text-green-700 mt-1">Your next strategy cycle will be created when your billing period begins.</p>
+                    </div>
+                )
             )}
 
             {/* Active Strategy Section */}

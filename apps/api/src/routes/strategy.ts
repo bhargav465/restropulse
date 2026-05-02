@@ -5,7 +5,9 @@ import {
     findAllCycles,
     findCycleById,
     createCycle,
-    updateCycle
+    updateCycle,
+    getStrategyCyclesCollection,
+    findActiveSubscription,
 } from '@restropulse/db';
 import { ApiResponse, StrategyCycle, ContentStrategy, isCyclePastApprovalDeadline } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
@@ -14,7 +16,7 @@ import { requireAuth } from '../middleware/auth.js';
 const router = express.Router();
 
 // Get content strategy
-router.get('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse<ContentStrategy>>) => {
+router.get('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse<ContentStrategy & { suggestCreateCycle?: boolean }>>) => {
     const { restaurantId } = req.user!;
     let strategy = await findContentStrategy(restaurantId);
 
@@ -30,9 +32,20 @@ router.get('/', requireAuth, handle(async (req: Request, res: Response<ApiRespon
         } as ContentStrategy;
     }
 
+    // Check if we should suggest creating a cycle
+    const cyclesCol = getStrategyCyclesCollection();
+    const existingCycle = await cyclesCol.findOne({
+        restaurantId,
+        status: { $in: ['PENDING_GENERATION', 'PENDING_APPROVAL', 'CHANGES_REQUESTED', 'APPROVED', 'ACTIVE'] },
+    });
+
+    const activeSubscription = await findActiveSubscription(restaurantId);
+    const suggestCreateCycle = !existingCycle && !!activeSubscription &&
+        ['ACTIVE', 'AUTHENTICATED'].includes(activeSubscription.status);
+
     res.json({
         success: true,
-        data: strategy
+        data: { ...strategy, suggestCreateCycle },
     });
 }));
 

@@ -262,8 +262,8 @@ export const postsAPI = {
 
 // Strategy API
 export const strategyAPI = {
-    getStrategy: async (): Promise<ContentStrategy> => {
-        const response = await fetchAPI<ApiResponse<ContentStrategy>>('/strategy');
+    getStrategy: async (): Promise<ContentStrategy & { suggestCreateCycle?: boolean }> => {
+        const response = await fetchAPI<ApiResponse<ContentStrategy & { suggestCreateCycle?: boolean }>>('/strategy');
         return response.data!;
     },
 

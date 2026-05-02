@@ -4,7 +4,7 @@
  */
 
 import cron from 'node-cron';
-import { getRestaurantsCollection } from '@restropulse/db';
+import { getRestaurantsCollection, toObjectId } from '@restropulse/db';
 import { refreshAccessToken } from './meta-api.js';
 import { encrypt } from './encryption.js';
 import { createLogger, tracedCronJob, trackEvent } from '@restropulse/telemetry/server';
@@ -145,7 +145,7 @@ async function runTokenRefreshJob(): Promise<void> {
  */
 export async function checkAndRefreshTokenIfNeeded(restaurantId: string): Promise<boolean> {
     const col = getRestaurantsCollection();
-    const restaurant = await col.findOne({ _id: restaurantId as any });
+    const restaurant = await col.findOne({ _id: toObjectId(restaurantId) as any });
 
     if (!restaurant?.instagramCredentials?.accessToken) {
         return false;

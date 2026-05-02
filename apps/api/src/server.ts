@@ -3,6 +3,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import http from 'node:http';
 import { fileURLToPath } from 'url';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
@@ -124,6 +125,24 @@ app.use('/api/credit-packs', creditPackRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/account', accountRoutes);
+
+// Dev-only: proxy /dev-assets/* to the content-engine asset server (port 3002).
+// Allows the single ngrok tunnel to serve both API routes and placeholder media
+// URLs that Facebook CDN can reach during local publishing tests.
+if (env.NODE_ENV === 'development') {
+    const assetPort = parseInt(process.env.ASSET_SERVER_PORT ?? '3002', 10);
+    app.use('/dev-assets', (req: Request, res: Response) => {
+        const proxy = http.request(
+            { hostname: 'localhost', port: assetPort, path: req.url, method: req.method, headers: req.headers },
+            (proxyRes) => {
+                res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+                proxyRes.pipe(res, { end: true });
+            },
+        );
+        proxy.on('error', () => res.status(502).json({ error: 'Asset server unavailable' }));
+        req.pipe(proxy, { end: true });
+    });
+}
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

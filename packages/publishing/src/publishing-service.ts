@@ -149,6 +149,22 @@ async function getPublishableImageUrl(
     pageId: string,
     accessToken: string
 ): Promise<string> {
+    // Rewrite localhost asset server URLs to the public ASSET_SERVER_BASE_URL if configured.
+    // Posts generated before the asset tunnel was set up have localhost thumbnails that
+    // Facebook CDN cannot fetch. This substitutes the origin transparently at publish time.
+    const assetBaseUrl = process.env.ASSET_SERVER_BASE_URL;
+    if (imageUrl.startsWith('http://localhost:') && assetBaseUrl) {
+        try {
+            const srcUrl = new URL(imageUrl);
+            const baseUrl = new URL(assetBaseUrl);
+            const rewritten = baseUrl.origin + srcUrl.pathname + srcUrl.search;
+            log.warn({ original: imageUrl, rewritten }, 'Rewriting localhost asset URL to public URL');
+            imageUrl = rewritten;
+        } catch {
+            // If URL parsing fails, continue with original URL
+        }
+    }
+
     log.info({ imageUrl }, 'getPublishableImageUrl called');
     const cdnUrl = await uploadImageToFacebook(imageUrl, pageId, accessToken);
     log.info('getPublishableImageUrl success');

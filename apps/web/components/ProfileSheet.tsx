@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
-import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft, Phone, Mail } from 'lucide-react';
+import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, ChevronDown, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft, Phone, Mail } from 'lucide-react';
 import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, Restaurant, InstagramConnectionError, InstagramAccount, Invoice, FeatureFlags } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, configAPI, accountAPI } from '../api';
 import ConfirmDialog from './ConfirmDialog';
@@ -184,6 +184,8 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     const [showInvoiceHistory, setShowInvoiceHistory] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [isCancellingPlan, setIsCancellingPlan] = useState(false);
     const [switchConfirmPlan, setSwitchConfirmPlan] = useState<SubscriptionPlan | null>(null);
@@ -328,26 +330,25 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     };
 
     const handleInstagramConnect = async () => {
-        if (instagramConnected) {
-            if (confirm('Are you sure you want to disconnect Instagram?')) {
-                setInstagramLoading(true);
-                try {
-                    await instagramAPI.disconnect(restaurantData.id);
-                    setInstagramConnected(false);
-                    setInstagramUsername('');
-                    browserEvents.instagramDisconnected();
-                    refreshRestaurantData();
-                } catch (err) {
-                    console.error('Disconnect error:', err);
-                    setActionError('Something went wrong. Please try again in a moment.');
-                } finally {
-                    setInstagramLoading(false);
-                }
-            }
-            return;
-        }
         setShowSetupGuide(true);
         window.history.pushState({ modal: 'setupGuide' }, '', '#setup-guide');
+    };
+
+    const handleInstagramDisconnect = async () => {
+        setInstagramLoading(true);
+        try {
+            await instagramAPI.disconnect(restaurantData.id);
+            setInstagramConnected(false);
+            setInstagramUsername('');
+            setShowDisconnectConfirm(false);
+            browserEvents.instagramDisconnected();
+            refreshRestaurantData();
+        } catch (err) {
+            console.error('Disconnect error:', err);
+            setActionError('Something went wrong. Please try again in a moment.');
+        } finally {
+            setInstagramLoading(false);
+        }
     };
 
     const startInstagramOAuth = async (useOnboarding: boolean = false) => {
@@ -1536,6 +1537,58 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                         )}
                     </div>
 
+                    {/* Advanced section */}
+                    <div className="pt-2">
+                        <button
+                            onClick={() => setShowAdvanced(prev => !prev)}
+                            className="w-full flex items-center justify-between px-1 py-2 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:text-slate-500 transition-colors"
+                        >
+                            <span>Advanced</span>
+                            <ChevronDown size={14} className={`transition-transform duration-200 ${showAdvanced ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {showAdvanced && (
+                            <div className="space-y-2 pt-1">
+                                {instagramConnected && (
+                                    <button
+                                        onClick={() => setShowDisconnectConfirm(true)}
+                                        disabled={instagramLoading}
+                                        className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-orange-50 group disabled:opacity-50"
+                                    >
+                                        <div className="w-9 h-9 bg-orange-50 text-orange-400 group-hover:text-orange-500 rounded-lg flex items-center justify-center">
+                                            <InstagramIcon size={18} />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-medium text-orange-600 group-hover:text-orange-700">Disconnect Instagram</span>
+                                            <p className="text-xs text-slate-400 mt-0.5">Scheduled posts will stop publishing</p>
+                                        </div>
+                                    </button>
+                                )}
+                                {featureFlags?.deleteAccount === true ? (
+                                    <button onClick={() => setShowDeleteConfirm(true)} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-red-50 group">
+                                        <div className="w-9 h-9 bg-red-50 text-red-400 group-hover:text-red-500 rounded-lg flex items-center justify-center">
+                                            <Trash2 size={18} />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-medium text-red-500 group-hover:text-red-600">Delete Account</span>
+                                            <p className="text-xs text-slate-400 mt-0.5">Permanently remove your account and data</p>
+                                        </div>
+                                    </button>
+                                ) : (
+                                    <button onClick={() => setActionError('To delete your account, please contact your account manager. They will guide you through the process.')} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-red-50 group">
+                                        <div className="w-9 h-9 bg-red-50 text-red-400 group-hover:text-red-500 rounded-lg flex items-center justify-center">
+                                            <Trash2 size={18} />
+                                        </div>
+                                        <div>
+                                            <span className="text-sm font-medium text-red-500 group-hover:text-red-600">Delete Account</span>
+                                            <p className="text-xs text-slate-400 mt-0.5">Contact your account manager</p>
+                                        </div>
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Footer actions */}
                     <div className="space-y-2 pt-2">
                         <button onClick={onLogout} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-slate-50">
@@ -1544,21 +1597,6 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                             </div>
                             <span className="text-sm font-medium text-slate-700">Log Out</span>
                         </button>
-                        {featureFlags?.deleteAccount === true ? (
-                            <button onClick={() => setShowDeleteConfirm(true)} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-red-50 group">
-                                <div className="w-9 h-9 bg-red-50 text-red-400 group-hover:text-red-500 rounded-lg flex items-center justify-center">
-                                    <Trash2 size={18} />
-                                </div>
-                                <span className="text-sm font-medium text-red-500 group-hover:text-red-600">Delete Account</span>
-                            </button>
-                        ) : (
-                            <button onClick={() => setActionError('To delete your account, please contact your account manager. They will guide you through the process.')} className="w-full p-4 flex items-center gap-3 text-left bg-white rounded-2xl border border-slate-100 shadow-sm hover:bg-red-50 group">
-                                <div className="w-9 h-9 bg-red-50 text-red-400 group-hover:text-red-500 rounded-lg flex items-center justify-center">
-                                    <Trash2 size={18} />
-                                </div>
-                                <span className="text-sm font-medium text-red-500 group-hover:text-red-600">Delete Account</span>
-                            </button>
-                        )}
                     </div>
 
                     <div className="h-24"></div>
@@ -1735,6 +1773,15 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     />
                 );
             })()}
+            {showDisconnectConfirm && (
+                <ConfirmDialog
+                    title="Disconnect Instagram?"
+                    message="Your scheduled posts will stop publishing and you'll need to reconnect to continue. Content you've already created won't be deleted."
+                    confirmLabel={instagramLoading ? 'Disconnecting...' : 'Disconnect'}
+                    onConfirm={handleInstagramDisconnect}
+                    onCancel={() => !instagramLoading && setShowDisconnectConfirm(false)}
+                />
+            )}
             {showDeleteConfirm && (
                 <ConfirmDialog
                     title="Delete Account"
