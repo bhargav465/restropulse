@@ -173,11 +173,22 @@ async function materializeSubscriptionFromRazorpay(params: {
     // Path B: no local doc yet for this Razorpay sub. Resolve the plan from notes.
     const planSlug = rzpSub.notes?.planSlug;
     if (!planSlug) {
-        throw new Error(`materialize: Razorpay subscription ${razorpaySubscriptionId} has no planSlug note`);
+        // Razorpay fired the webhook before /subscribe stamped the notes.
+        // Return 500 so Razorpay retries; /verify will materialise the doc when
+        // the user returns from checkout.
+        throw new Error(
+            `materialize: Razorpay subscription ${razorpaySubscriptionId} has no planSlug note — ` +
+            `webhook may have arrived before /subscribe completed. Razorpay will retry.`
+        );
     }
     const plan = await findPlanBySlug(planSlug);
     if (!plan) {
-        throw new Error(`materialize: plan ${planSlug} from Razorpay notes not found`);
+        // Subscription plans not seeded in DB, or slug mismatch.
+        // Run: npm run seed --workspace=@restropulse/db-cli to seed plans.
+        throw new Error(
+            `materialize: plan "${planSlug}" not found in subscriptionPlans collection ` +
+            `(isCurrentVersion=true). Ensure plans are seeded via db-cli before accepting subscriptions.`
+        );
     }
 
     const existingActive = await findActiveSubscription(restaurantId);

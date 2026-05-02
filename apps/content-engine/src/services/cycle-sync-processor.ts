@@ -30,8 +30,13 @@ function postsPerWeekForSlug(planSlug: string): number {
   return POSTS_PER_WEEK_BY_TIER[planSlug.toLowerCase()] ?? 5;
 }
 
-function formatPeriod(date: Date): string {
-  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+function formatPeriod(start: Date, end: Date): string {
+  const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) =>
+    d.toLocaleDateString('en-US', opts);
+  const startStr = fmt(start, { month: 'short', day: 'numeric' });
+  const endStr   = fmt(end,   { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${startStr} – ${endStr}`;
+  // e.g. "May 1 – May 31, 2026"
 }
 
 async function ensureCycleForRestaurant(
@@ -97,7 +102,7 @@ async function ensureCycleForRestaurant(
     _id: new ObjectId(),
     restaurantId,
     status: 'PENDING_GENERATION',
-    period: formatPeriod(billingPeriod.start),
+    period: formatPeriod(billingPeriod.start, billingPeriod.end),
     startDate: billingPeriod.start.toISOString(),
     endDate: billingPeriod.end.toISOString(),
     plannedPosts: [],
@@ -108,7 +113,7 @@ async function ensureCycleForRestaurant(
   } as any);
 
   logger.info(
-    { restaurantId, period: formatPeriod(billingPeriod.start) },
+    { restaurantId, period: formatPeriod(billingPeriod.start, billingPeriod.end) },
     'Created new cycle for billing period',
   );
 }

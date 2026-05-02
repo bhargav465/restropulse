@@ -235,7 +235,19 @@ from previous deployments before extracting the new zip.
    npm run dev --filter=@restropulse/web   # Frontend only
    ```
 5. For database seeding: `npm run seed --filter=@restropulse/db-cli`
-6. For a fresh empty database: `npm run reset --workspace=@restropulse/db-cli` (prompts for URI + DB name, 10s safety delay)
+6. **Run required migrations** (must run once per environment, including production):
+   ```bash
+   # Converts hard unique index on restaurantId to partial unique index
+   # (unique only where endedAt IS NULL). Required for subscription renewals
+   # and re-subscriptions to work — skipping this causes 500 errors on the
+   # first subscription webhook delivery.
+   npm run migrate --workspace=@restropulse/db-cli -- --migration subscription-history
+
+   # Rename legacy strategyId field to cycleId on posts
+   npm run migrate --workspace=@restropulse/db-cli -- --migration rename-strategy-id-to-cycle-id
+   ```
+   Verify with: `npm run validate --workspace=@restropulse/db-cli`
+7. For a fresh empty database: `npm run reset --workspace=@restropulse/db-cli` (prompts for URI + DB name, 10s safety delay)
 
 ## Build and Deploy
 
