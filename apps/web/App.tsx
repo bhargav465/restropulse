@@ -208,14 +208,14 @@ const App: React.FC = () => {
             case 'DASHBOARD':
                 return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
             case 'STUDIO':
-                return <ContentStudio onCreatePost={instagramConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} />;
+                return <ContentStudio onCreatePost={instagramConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} postApprovalBufferMins={featureFlags?.postApprovalBufferMins} />;
             case 'INPUTS':
                 if (featureFlags?.updatesSection === false) {
                     return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
                 }
                 return <Inputs restaurantData={restaurantData} onRefresh={refreshRestaurantData} />;
             case 'STRATEGY':
-                return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} />;
+                return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} cycleApprovalBufferMins={featureFlags?.cycleApprovalBufferMins} />;
             default:
                 return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
         }
@@ -335,6 +335,7 @@ const App: React.FC = () => {
                 isOpen={isAdhocModalOpen}
                 onClose={() => setIsAdhocModalOpen(false)}
                 onSuccess={handleAdhocPostSuccess}
+                minScheduleAheadMins={featureFlags?.minScheduleAheadMins}
             />
         </ErrorBoundary>
     );

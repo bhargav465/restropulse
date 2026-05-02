@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
 import { publishPost, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
-import { ApiResponse, Post, isPostPastApprovalDeadline, MIN_SCHEDULE_AHEAD_HOURS } from '@restropulse/shared';
+import { ApiResponse, Post, isPostPastApprovalDeadline } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { enforcePlanLimits } from '../middleware/enforce-plan-limits.js';
@@ -109,7 +109,7 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
 // calls generator.generatePost(concept, type, platforms) to fill caption + media,
 // then advances the post to PENDING_APPROVAL for user review.
 router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
-    const { concept, type, platforms, scheduledFor } = req.body;
+    const { concept, type, platforms, scheduledFor, asap } = req.body;
 
     if (!concept || concept.trim().length === 0) {
         return res.status(400).json({ success: false, error: 'Concept/description is required' });
@@ -119,16 +119,29 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         return res.status(400).json({ success: false, error: 'Post type is required' });
     }
 
-    const minScheduledFor = new Date(Date.now() + MIN_SCHEDULE_AHEAD_HOURS * 3600 * 1000);
+    const minAheadMins = parseInt(process.env.MIN_SCHEDULE_AHEAD_MINS ?? '150', 10);
 
-    if (scheduledFor) {
+    let resolvedScheduledFor: string;
+
+    if (asap || !scheduledFor) {
+        // API computes the time from its own clock — immune to client/server clock skew and
+        // network latency. Used for all ASAP posts and as the fallback when no time is given.
+        resolvedScheduledFor = new Date(Date.now() + minAheadMins * 60 * 1000).toISOString();
+    } else {
         const provided = new Date(scheduledFor);
+        const minScheduledFor = new Date(Date.now() + minAheadMins * 60 * 1000);
         if (isNaN(provided.getTime()) || provided < minScheduledFor) {
+            const minDisplay = minAheadMins % 60 === 0
+                ? `${minAheadMins / 60} hour${minAheadMins / 60 === 1 ? '' : 's'}`
+                : minAheadMins >= 60
+                    ? `${minAheadMins / 60} hours`
+                    : `${minAheadMins} minute${minAheadMins === 1 ? '' : 's'}`;
             return res.status(400).json({
                 success: false,
-                error: `Posts must be scheduled at least ${MIN_SCHEDULE_AHEAD_HOURS} hours from now`,
+                error: `Posts must be scheduled at least ${minDisplay} from now`,
             });
         }
+        resolvedScheduledFor = provided.toISOString();
     }
 
     log.info({ type, concept: concept.substring(0, 50) }, 'Queueing adhoc post for content generation');
@@ -141,7 +154,7 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         caption: '',
         thumbnail: '',
         restaurantId: req.user!.restaurantId,
-        scheduledFor: scheduledFor || minScheduledFor.toISOString(),
+        scheduledFor: resolvedScheduledFor,
         isAdhoc: true,
     };
 
@@ -173,7 +186,8 @@ router.put('/:id', requireAuth, handle(async (req: Request, res: Response<ApiRes
     // content-engine's auto-advance can proceed without racing the UI.
     if (req.body?.status === 'CHANGES_REQUESTED') {
         const existing = await findPostById(id);
-        if (existing && isPostPastApprovalDeadline(existing, new Date())) {
+        const postBufferHours = parseInt(process.env.POST_APPROVAL_BUFFER_MINS ?? '120', 10) / 60;
+        if (existing && isPostPastApprovalDeadline(existing, new Date(), postBufferHours)) {
             return res.status(409).json({
                 success: false,
                 error: 'Post is past the approval deadline'

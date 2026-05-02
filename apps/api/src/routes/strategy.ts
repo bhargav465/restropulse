@@ -115,7 +115,8 @@ router.put('/cycles/:id', requireAuth, handle(async (req: Request, res: Response
     // content-engine's auto-advance and rolling-window can proceed.
     if (req.body?.status === 'CHANGES_REQUESTED') {
         const existing = await findCycleById(id);
-        if (existing && isCyclePastApprovalDeadline(existing, new Date())) {
+        const cycleBufferHours = parseInt(process.env.CYCLE_APPROVAL_BUFFER_MINS ?? '4320', 10) / 60;
+        if (existing && isCyclePastApprovalDeadline(existing, new Date(), cycleBufferHours)) {
             return res.status(409).json({
                 success: false,
                 error: 'Cycle is past the approval deadline'

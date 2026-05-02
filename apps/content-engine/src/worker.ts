@@ -25,7 +25,7 @@ import './instrument.js';
 import http from 'node:http';
 import path from 'node:path';
 import cron from 'node-cron';
-import { loadAndValidateEnv, z, ROLLING_WINDOW_HOURS, POST_APPROVAL_BUFFER_HOURS, CYCLE_APPROVAL_BUFFER_HOURS } from '@restropulse/shared';
+import { loadAndValidateEnv, z, ROLLING_WINDOW_HOURS, POST_APPROVAL_BUFFER_HOURS, CYCLE_APPROVAL_BUFFER_HOURS, validateTimingConstraints } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
 import { processPendingPosts } from './services/adhoc-processor.js';
@@ -50,11 +50,15 @@ const env = loadAndValidateEnv({
     MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
     ASSET_SERVER_PORT: z.coerce.number().int().positive().default(3002),
     ASSET_SERVER_BASE_URL: z.string().url().optional(),
-    // Time window configuration (hours). Override these in .env for local testing.
-    ROLLING_WINDOW_HOURS: z.coerce.number().positive().default(ROLLING_WINDOW_HOURS),
-    POST_APPROVAL_BUFFER_HOURS: z.coerce.number().positive().default(POST_APPROVAL_BUFFER_HOURS),
-    CYCLE_APPROVAL_BUFFER_HOURS: z.coerce.number().positive().default(CYCLE_APPROVAL_BUFFER_HOURS),
-    // Per-processor cron schedules. All default to every 2 minutes.
+    // Time window configuration in MINUTES — easier to set small values for testing.
+    // Default values mirror the shared constants (converted to mins).
+    // node-cron v4 supports 6-field cron (seconds) for the CRON_* vars:
+    //   5-field: */2 * * * *   = every 2 minutes  (production)
+    //   6-field: */30 * * * * * = every 30 seconds (local testing)
+    ROLLING_WINDOW_MINS: z.coerce.number().positive().default(ROLLING_WINDOW_HOURS * 60),
+    POST_APPROVAL_BUFFER_MINS: z.coerce.number().positive().default(POST_APPROVAL_BUFFER_HOURS * 60),
+    CYCLE_APPROVAL_BUFFER_MINS: z.coerce.number().positive().default(CYCLE_APPROVAL_BUFFER_HOURS * 60),
+    // Per-processor cron schedules.
     CRON_PENDING_POSTS: z.string().default('*/2 * * * *'),
     CRON_PENDING_CYCLES: z.string().default('*/2 * * * *'),
     CRON_ROLLING_WINDOW: z.string().default('*/2 * * * *'),
@@ -63,12 +67,18 @@ const env = loadAndValidateEnv({
   }).passthrough(),
 });
 
+validateTimingConstraints({
+  postApprovalBufferMins: env.POST_APPROVAL_BUFFER_MINS,
+  rollingWindowMins: env.ROLLING_WINDOW_MINS,
+  cycleApprovalBufferMins: env.CYCLE_APPROVAL_BUFFER_MINS,
+});
+
 const ASSET_PORT = env.ASSET_SERVER_PORT;
 
-const rollingWindowConfig = { rollingWindowHours: env.ROLLING_WINDOW_HOURS };
+const rollingWindowConfig = { rollingWindowHours: env.ROLLING_WINDOW_MINS / 60 };
 const deadlineConfig = {
-  postApprovalBufferHours: env.POST_APPROVAL_BUFFER_HOURS,
-  cycleApprovalBufferHours: env.CYCLE_APPROVAL_BUFFER_HOURS,
+  postApprovalBufferHours: env.POST_APPROVAL_BUFFER_MINS / 60,
+  cycleApprovalBufferHours: env.CYCLE_APPROVAL_BUFFER_MINS / 60,
 };
 
 function schedule(cronExpr: string, name: string, job: () => Promise<unknown>): void {
@@ -114,9 +124,9 @@ const startWorker = async () => {
     logger.info(
       {
         assetServerUrl: `http://localhost:${ASSET_PORT}`,
-        rollingWindowHours: env.ROLLING_WINDOW_HOURS,
-        postApprovalBufferHours: env.POST_APPROVAL_BUFFER_HOURS,
-        cycleApprovalBufferHours: env.CYCLE_APPROVAL_BUFFER_HOURS,
+        rollingWindowMins: env.ROLLING_WINDOW_MINS,
+        postApprovalBufferMins: env.POST_APPROVAL_BUFFER_MINS,
+        cycleApprovalBufferMins: env.CYCLE_APPROVAL_BUFFER_MINS,
         schedules: {
           pendingPosts: env.CRON_PENDING_POSTS,
           pendingCycles: env.CRON_PENDING_CYCLES,

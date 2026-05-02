@@ -114,11 +114,19 @@ export interface RevisePostInput {
   currentAffairsHints?: string[];
 }
 
+export interface MediaMetadata {
+  widthPx?: number;
+  heightPx?: number;
+  durationSeconds?: number;
+  fileSizeBytes?: number;
+}
+
 export interface GeneratedPost {
   caption: string;
   thumbnail: string;
   mediaUrls?: string[];
   videoUrl?: string;
+  mediaMetadata?: MediaMetadata;
 }
 
 // ---------------------------------------------------------------------------

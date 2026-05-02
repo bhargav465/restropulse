@@ -1,12 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
-// Set ASSET_SERVER_BASE_URL before importing asset-manager so the module
-// picks up the test value when it is first loaded.
-beforeAll(() => {
-  process.env['ASSET_SERVER_BASE_URL'] = 'http://localhost:3002';
-});
-
-// Dynamic import is used so the env var is set before module evaluation.
+// asset-manager always uses http://localhost:{ASSET_SERVER_PORT} — no env var needed.
 const { getRandomImage, getRandomCarousel, getRandomVideo, buildCaption } = await import(
   '../../src/services/asset-manager.js'
 );

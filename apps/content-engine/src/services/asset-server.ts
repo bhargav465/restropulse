@@ -47,14 +47,40 @@ export function startAssetServer(port: number): http.Server {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] ?? 'application/octet-stream';
 
-    fs.readFile(filePath, (err, data) => {
-      if (err) {
+    // Use streaming with Range request support so browsers can play videos.
+    // Without HTTP 206 / Content-Range, Chrome refuses to play <video> src.
+    fs.stat(filePath, (statErr, stat) => {
+      if (statErr || !stat.isFile()) {
         res.writeHead(404);
         res.end('Asset not found');
         return;
       }
-      res.writeHead(200, { 'Content-Type': contentType });
-      res.end(data);
+
+      const fileSize = stat.size;
+      const rangeHeader = req.headers.range;
+
+      if (rangeHeader) {
+        // Partial content — required for video seek and metadata preload
+        const [startStr, endStr] = rangeHeader.replace(/bytes=/, '').split('-');
+        const start = parseInt(startStr, 10);
+        const end = endStr ? parseInt(endStr, 10) : fileSize - 1;
+        const chunkSize = end - start + 1;
+
+        res.writeHead(206, {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunkSize,
+          'Content-Type': contentType,
+        });
+        fs.createReadStream(filePath, { start, end }).pipe(res);
+      } else {
+        res.writeHead(200, {
+          'Content-Length': fileSize,
+          'Accept-Ranges': 'bytes',
+          'Content-Type': contentType,
+        });
+        fs.createReadStream(filePath).pipe(res);
+      }
     });
   });
 

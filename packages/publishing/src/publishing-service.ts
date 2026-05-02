@@ -149,26 +149,145 @@ async function getPublishableImageUrl(
     pageId: string,
     accessToken: string
 ): Promise<string> {
-    // Rewrite localhost asset server URLs to the public ASSET_SERVER_BASE_URL if configured.
-    // Posts generated before the asset tunnel was set up have localhost thumbnails that
-    // Facebook CDN cannot fetch. This substitutes the origin transparently at publish time.
-    const assetBaseUrl = process.env.ASSET_SERVER_BASE_URL;
-    if (imageUrl.startsWith('http://localhost:') && assetBaseUrl) {
-        try {
-            const srcUrl = new URL(imageUrl);
-            const baseUrl = new URL(assetBaseUrl);
-            const rewritten = baseUrl.origin + srcUrl.pathname + srcUrl.search;
-            log.warn({ original: imageUrl, rewritten }, 'Rewriting localhost asset URL to public URL');
-            imageUrl = rewritten;
-        } catch {
-            // If URL parsing fails, continue with original URL
-        }
-    }
-
+    // The publisher downloads the image binary locally then uploads it to
+    // Facebook CDN. Instagram only ever sees the Facebook CDN URL — it never
+    // fetches from the original URL. So localhost:3002 always works here
+    // regardless of whether an ngrok tunnel is running.
     log.info({ imageUrl }, 'getPublishableImageUrl called');
     const cdnUrl = await uploadImageToFacebook(imageUrl, pageId, accessToken);
     log.info('getPublishableImageUrl success');
     return cdnUrl;
+}
+
+/**
+ * Download video binary from any URL accessible to the publisher process.
+ * Works with localhost since publisher and asset server share the same machine.
+ */
+async function downloadVideoBuffer(videoUrl: string): Promise<{ buffer: Buffer; contentType: string }> {
+    log.info({ videoUrl }, 'Downloading video binary');
+    const response = await axios.get(videoUrl, {
+        responseType: 'arraybuffer',
+        maxRedirects: 5,
+        timeout: 120_000,
+        headers: { Accept: 'video/*,*/*' },
+    });
+    return {
+        buffer: Buffer.from(response.data),
+        contentType: response.headers['content-type'] || 'video/mp4',
+    };
+}
+
+/**
+ * Upload a video to Instagram using the resumable upload API.
+ * No public URL required — the publisher uploads binary directly to Meta.
+ * Returns the Instagram container ID (pass to waitForContainerReady then media_publish).
+ */
+async function uploadVideoToInstagram(
+    videoUrl: string,
+    igUserId: string,
+    accessToken: string,
+    caption: string,
+    mediaType: 'REELS' | 'STORIES',
+): Promise<string> {
+    const { buffer, contentType } = await downloadVideoBuffer(videoUrl);
+    const fileSize = buffer.length;
+    log.info({ fileSize, contentType, mediaType }, 'Starting Instagram resumable video upload');
+
+    // Step 1: Initialize upload session
+    const initParams: Record<string, string> = {
+        media_type: mediaType,
+        upload_type: 'resumable',
+        access_token: accessToken,
+    };
+    if (mediaType === 'REELS' && caption) initParams.caption = caption;
+
+    const initResponse = await metaApi.post(`/${igUserId}/media`, null, { params: initParams });
+    const containerId: string = initResponse.data.id;
+    const uploadUri: string = initResponse.data.uri;
+    if (!containerId || !uploadUri) {
+        throw new Error('Instagram resumable upload init returned no container ID or upload URI');
+    }
+
+    log.info({ containerId }, 'Instagram upload session created, uploading binary');
+
+    // Step 2: Upload binary to the session URI
+    await axios.put(uploadUri, buffer, {
+        headers: {
+            Authorization: `OAuth ${accessToken}`,
+            'Content-Type': contentType,
+            file_size: String(fileSize),
+            offset: '0',
+        },
+        timeout: 120_000,
+        maxContentLength: 100 * 1024 * 1024,
+    });
+
+    log.info({ containerId }, 'Instagram video binary upload complete');
+    return containerId;
+}
+
+/**
+ * Upload a video binary to a Facebook Page using multipart form upload.
+ * Returns the Facebook video ID.
+ */
+async function uploadVideoToFacebookPage(
+    videoUrl: string,
+    pageId: string,
+    accessToken: string,
+    caption: string,
+    published = true,
+): Promise<string> {
+    const { buffer, contentType } = await downloadVideoBuffer(videoUrl);
+    log.info({ fileSize: buffer.length, contentType, published }, 'Uploading video binary to Facebook');
+
+    const formData = new FormData();
+    formData.append('source', buffer, { filename: 'video.mp4', contentType });
+    formData.append('published', published ? 'true' : 'false');
+    formData.append('description', caption);
+    formData.append('access_token', accessToken);
+
+    const response = await axios.post(
+        `${META_GRAPH_API}/${pageId}/videos`,
+        formData,
+        {
+            headers: formData.getHeaders(),
+            timeout: 120_000,
+            maxContentLength: 100 * 1024 * 1024,
+        },
+    );
+
+    const videoId: string = response.data.id || response.data.video_id;
+    if (!videoId) throw new Error('No video ID returned from Facebook binary video upload');
+    log.info({ videoId }, 'Facebook video binary upload complete');
+    return videoId;
+}
+
+/**
+ * Resolve a video URL for use as Instagram's `video_url` parameter.
+ *
+ * Instagram needs a direct downloadable MP4, not a streaming URL.
+ * In local dev, `post.videoUrl` is `http://localhost:PORT/videos/...`.
+ * We rewrite it to the public ngrok URL via ASSET_SERVER_BASE_URL so
+ * Instagram's CDN can fetch it directly — same approach as the API proxy.
+ *
+ * In staging/production, `post.videoUrl` is already a public HTTPS URL
+ * so no rewrite is needed.
+ */
+function resolvePublicVideoUrl(videoUrl: string): string {
+    const assetBaseUrl = process.env.ASSET_SERVER_BASE_URL;
+    if (videoUrl.startsWith('http://localhost:') && assetBaseUrl) {
+        try {
+            const src = new URL(videoUrl);
+            // Use the FULL base URL (not just origin) to preserve path prefix like /dev-assets
+            const base = assetBaseUrl.replace(/\/$/, '');
+            const rewritten = base + src.pathname + src.search;
+            log.info({ original: videoUrl, rewritten }, 'Rewriting localhost video URL to public URL for Instagram');
+            return rewritten;
+        } catch {
+            // fall through on parse error
+        }
+    }
+    return videoUrl;
 }
 
 // -- Types --
@@ -216,12 +335,16 @@ function parsePublishError(error: unknown): { message: string; code: string | nu
         if (metaError) {
             // Rate limit codes: 4 (app-level), 17 (user-level), 32 (page-level)
             const isRateLimit = [4, 17, 32].includes(metaError.code);
-            // Transient errors are retryable
+            // Transient errors flagged by Meta
             const isTransient = metaError.is_transient === true;
+            // Media upload failures (2207xxx) can be caused by a temporarily
+            // unreachable media URL (e.g. ngrok tunnel down). Always retry these
+            // so a transient tunnel outage doesn't permanently fail the post.
+            const isMediaUploadFailure = String(metaError.code ?? '').startsWith('2207');
             return {
                 message: metaError.message || 'Unknown Meta API error',
                 code: String(metaError.code),
-                retryable: isRateLimit || isTransient
+                retryable: isRateLimit || isTransient || isMediaUploadFailure
             };
         }
 
@@ -353,7 +476,12 @@ async function waitForContainerReady(containerId: string, accessToken: string): 
         }
 
         if (statusCode === 'ERROR') {
-            const errorMsg = response.data.status || 'Container processing failed';
+            // status field can be a string or an object with error_code/error_message
+            const statusData = response.data.status;
+            const errorMsg = typeof statusData === 'string'
+                ? statusData
+                : statusData?.error_message || statusData?.error_type || `Container processing failed (code: ${statusData?.error_code ?? 'unknown'})`;
+            log.error({ containerId, statusData }, 'Instagram container processing failed');
             return { ready: false, statusCode, error: errorMsg };
         }
 
@@ -470,13 +598,16 @@ async function publishReelPost(
     post: PublishablePost
 ): Promise<PublishResult> {
     try {
-        const videoUrl = post.videoUrl;
-        if (!videoUrl) {
+        if (!post.videoUrl) {
             return publishImagePost(igUserId, pageId, accessToken, post);
         }
 
-        // Step 1: Create reel container
-        const containerId = await createVideoContainer(igUserId, accessToken, videoUrl, post.caption, 'REELS');
+        // Resolve the video URL: rewrites localhost → ngrok for local dev;
+        // in staging/prod the URL is already public so no rewrite occurs.
+        // Instagram needs a direct progressive MP4 — the Facebook CDN approach
+        // returns DASH URLs for HD video, which Instagram rejects.
+        const publicVideoUrl = resolvePublicVideoUrl(post.videoUrl);
+        const containerId = await createVideoContainer(igUserId, accessToken, publicVideoUrl, post.caption, 'REELS');
 
         // Step 2: Wait for video processing
         const status = await waitForContainerReady(containerId, accessToken);
@@ -512,12 +643,12 @@ async function publishStoryPost(
 ): Promise<PublishResult> {
     try {
         const isVideo = !!post.videoUrl;
-        const mediaUrl = isVideo ? post.videoUrl! : post.thumbnail;
 
         // Step 1: Create story container
         let containerId: string;
         if (isVideo) {
-            containerId = await createVideoContainer(igUserId, accessToken, mediaUrl, '', 'STORIES');
+            const publicVideoUrl = resolvePublicVideoUrl(post.videoUrl!);
+            containerId = await createVideoContainer(igUserId, accessToken, publicVideoUrl, '', 'STORIES');
 
             // Step 2: Wait for video processing
             const status = await waitForContainerReady(containerId, accessToken);
@@ -531,7 +662,7 @@ async function publishStoryPost(
             }
         } else {
             // Image stories: upload to CDN first
-            const cdnUrl = await getPublishableImageUrl(mediaUrl, pageId, accessToken);
+            const cdnUrl = await getPublishableImageUrl(post.thumbnail, pageId, accessToken);
             const response = await metaApi.post(`/${igUserId}/media`, null, {
                 params: {
                     image_url: cdnUrl,
@@ -802,19 +933,19 @@ export async function publishToFacebook(
                 };
             }
 
-            const response = await metaApi.post(`/${pageId}/video_reels`, null, {
-                params: {
-                    upload_phase: 'start',
-                    access_token: accessToken
-                }
+            // Two-phase upload to the dedicated Reels endpoint.
+            // Rewrites localhost → ngrok URL; in staging/prod the URL is already public.
+            const publicVideoUrl = resolvePublicVideoUrl(post.videoUrl!);
+
+            const startResponse = await metaApi.post(`/${pageId}/video_reels`, null, {
+                params: { upload_phase: 'start', access_token: accessToken }
             });
+            const videoId: string = startResponse.data.video_id;
+            if (!videoId) throw new Error('No video_id returned from Facebook Reels start phase');
 
-            const videoId = response.data.video_id;
-
-            // Upload the video
             await metaApi.post(`/${videoId}`, null, {
                 params: {
-                    file_url: post.videoUrl,
+                    file_url: publicVideoUrl,
                     upload_phase: 'finish',
                     description: post.caption,
                     access_token: accessToken
@@ -833,12 +964,14 @@ export async function publishToFacebook(
         if (post.type === 'STORY') {
             // Stories can be either photo or video
             if (post.videoUrl) {
-                // Video story
+                // Facebook video_stories requires a publicly accessible file_url.
+                // Rewrite localhost → ngrok URL; in staging/prod the URL is already public.
+                const publicVideoUrl = resolvePublicVideoUrl(post.videoUrl);
                 const response = await metaApi.post(`/${pageId}/video_stories`, null, {
                     params: {
-                        file_url: post.videoUrl,
-                        access_token: accessToken
-                    }
+                        file_url: publicVideoUrl,
+                        access_token: accessToken,
+                    },
                 });
 
                 log.info({ facebookPostId: response.data.id }, 'Facebook video story posted');
@@ -878,18 +1011,13 @@ export async function publishToFacebook(
                 };
             }
 
-            const response = await metaApi.post(`/${pageId}/videos`, null, {
-                params: {
-                    file_url: post.videoUrl,
-                    description: post.caption,
-                    access_token: accessToken
-                }
-            });
+            // Binary upload — no public URL required
+            const videoId = await uploadVideoToFacebookPage(post.videoUrl, pageId, accessToken, post.caption);
 
-            log.info({ facebookPostId: response.data.id }, 'Facebook video posted');
+            log.info({ facebookPostId: videoId }, 'Facebook video posted');
             return {
                 success: true,
-                facebookPostId: response.data.id,
+                facebookPostId: videoId,
                 retryable: false
             };
         }

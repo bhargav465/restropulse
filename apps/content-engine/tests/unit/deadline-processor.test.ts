@@ -247,12 +247,12 @@ describe('processDeadlines -> cycles', () => {
 
     expect(result.cyclesAdvanced).toBe(0);
     expect(cyclesCol.updateOne).not.toHaveBeenCalled();
-    expect(CYCLE_APPROVAL_BUFFER_HOURS).toBe(48);
+    expect(CYCLE_APPROVAL_BUFFER_HOURS).toBe(72);
   });
 
   it('skips cycle that clears pre-filter but is still before deadline (JS guard)', async () => {
-    // Buffer is 48h; startDate is 50h from now -> deadline is 2h from now (future).
-    const startDate = new Date(Date.now() + 50 * MS_PER_HOUR).toISOString();
+    // Buffer is 72h; startDate is 74h from now -> deadline is 2h from now (future).
+    const startDate = new Date(Date.now() + 74 * MS_PER_HOUR).toISOString();
     const cycleDoc = {
       _id: { toString: () => 'cycle-borderline' },
       startDate,

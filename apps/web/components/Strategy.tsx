@@ -25,20 +25,23 @@ interface StrategyProps {
     restaurantData: Restaurant;
     instagramConnected?: boolean;
     onConnectInstagram?: () => void;
+    cycleApprovalBufferMins?: number;
 }
 
-const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected = false, onConnectInstagram }) => {
+const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected = false, onConnectInstagram, cycleApprovalBufferMins }) => {
     const [cycles, setCycles] = useState<StrategyCycle[]>([]);
     const [loading, setLoading] = useState(true);
     const [suggestCreateCycle, setSuggestCreateCycle] = useState(false);
     const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
     const [now, setNow] = useState(() => new Date());
 
-    // Tick every 60s for deadline countdown. No API calls.
+    // Tick proportionally to the buffer: 1/12 of buffer, capped 10 s–60 s.
     useEffect(() => {
-        const interval = setInterval(() => setNow(new Date()), 60 * 1000);
+        const bufferMs = (cycleApprovalBufferMins ?? 4320) * 60 * 1000;
+        const tickMs = Math.min(60_000, Math.max(10_000, bufferMs / 12));
+        const interval = setInterval(() => setNow(new Date()), tickMs);
         return () => clearInterval(interval);
-    }, []);
+    }, [cycleApprovalBufferMins]);
 
     // Auto-dismiss notice
     useEffect(() => {
@@ -158,8 +161,9 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     const StrategyCard = ({ cycle, isActionable }: { cycle: StrategyCycle, isActionable: boolean }) => {
         const isChangesRequested = cycle.status === 'CHANGES_REQUESTED';
         const isPendingReview = cycle.status === 'PENDING_APPROVAL' || isChangesRequested;
-        const deadline = isPendingReview ? computeCycleApprovalDeadline(cycle) : null;
-        const feedbackLocked = isPendingReview && isCyclePastApprovalDeadline(cycle, now);
+        const cycleBufferHours = (cycleApprovalBufferMins ?? 4320) / 60;
+        const deadline = isPendingReview ? computeCycleApprovalDeadline(cycle, cycleBufferHours) : null;
+        const feedbackLocked = isPendingReview && isCyclePastApprovalDeadline(cycle, now, cycleBufferHours);
 
         return (
             <div className={`rounded-3xl p-6 shadow-sm border relative overflow-hidden ${isActionable ? 'bg-white border-orange-100 shadow-md' : 'bg-slate-50 border-slate-200'}`}>

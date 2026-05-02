@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Calendar, Image as ImageIcon, Video, Sparkles, Clock, Send, AlertCircle, Loader2 } from 'lucide-react';
 import { Post, Platform, PLATFORM_POST_TYPES, MIN_SCHEDULE_AHEAD_HOURS } from '@restropulse/shared';
+
+const DEFAULT_MIN_SCHEDULE_AHEAD_MINS = MIN_SCHEDULE_AHEAD_HOURS * 60;
 import { postsAPI } from '../api';
 import { FacebookIcon, InstagramIcon } from './BrandIcons';
 
@@ -25,6 +27,7 @@ interface AdhocPostModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    minScheduleAheadMins?: number;
 }
 
 interface FormData {
@@ -37,9 +40,10 @@ interface FormData {
     mediaUrl: string;
 }
 
-/** Returns scheduledDate and scheduledTime strings for MIN_SCHEDULE_AHEAD_HOURS from now in local time. */
-function getDefaultSchedule(): { scheduledDate: string; scheduledTime: string } {
-    const d = new Date(Date.now() + MIN_SCHEDULE_AHEAD_HOURS * 3600 * 1000);
+function getDefaultSchedule(minScheduleAheadMins: number): { scheduledDate: string; scheduledTime: string } {
+    // Ceil to the next full minute so the stored "HH:MM" string is always >= the threshold.
+    const rawMs = Date.now() + minScheduleAheadMins * 60 * 1000;
+    const d = new Date(Math.ceil(rawMs / 60_000) * 60_000);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -51,8 +55,8 @@ function getDefaultSchedule(): { scheduledDate: string; scheduledTime: string } 
     };
 }
 
-function getDefaultFormData(): FormData {
-    const { scheduledDate, scheduledTime } = getDefaultSchedule();
+function getDefaultFormData(minScheduleAheadMins: number): FormData {
+    const { scheduledDate, scheduledTime } = getDefaultSchedule(minScheduleAheadMins);
     return {
         concept: '',
         postType: 'IMAGE',
@@ -64,12 +68,22 @@ function getDefaultFormData(): FormData {
     };
 }
 
-const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSuccess }) => {
-    const [formData, setFormData] = useState<FormData>(getDefaultFormData);
+const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSuccess, minScheduleAheadMins }) => {
+    const minMins = minScheduleAheadMins ?? DEFAULT_MIN_SCHEDULE_AHEAD_MINS;
+    const [formData, setFormData] = useState<FormData>(() => getDefaultFormData(minMins));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Refresh default scheduled time when the modal opens OR when minMins changes
+    // (featureFlags arrives async — if it loads after the modal is already open,
+    // the scheduled time must update to reflect the runtime value, not the fallback).
+    useEffect(() => {
+        if (isOpen) {
+            setFormData(getDefaultFormData(minMins));
+        }
+    }, [isOpen, minMins]);
 
     // Touch handling for swipe-to-close
     const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -143,46 +157,50 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
         setError(null);
 
         try {
-            const minScheduledFor = new Date(Date.now() + MIN_SCHEDULE_AHEAD_HOURS * 3600 * 1000);
+            let scheduledFor: string | undefined;
+            let asap: boolean | undefined;
 
-            // Build the scheduled time -- ASAP defaults to MIN_SCHEDULE_AHEAD_HOURS from now
-            let scheduledFor: string;
             if (formData.scheduleType === 'later') {
                 const provided = new Date(`${formData.scheduledDate}T${formData.scheduledTime}`);
-                if (isNaN(provided.getTime()) || provided < minScheduledFor) {
-                    setError(`Posts must be scheduled at least ${MIN_SCHEDULE_AHEAD_HOURS} hours from now`);
+                if (isNaN(provided.getTime()) || provided <= new Date()) {
+                    setError('Please select a future date and time');
                     setIsSubmitting(false);
                     return;
                 }
                 scheduledFor = provided.toISOString();
             } else {
-                scheduledFor = minScheduledFor.toISOString();
+                // API uses its own clock for ASAP — eliminates client/server time skew entirely
+                asap = true;
             }
 
-            // Use the generate endpoint which will create the post with AI-generated content
             await postsAPI.generate({
                 concept: formData.concept,
                 type: formData.postType,
                 platforms: formData.platforms,
-                scheduledFor
+                scheduledFor,
+                asap,
             });
 
             // Reset form
-            setFormData(getDefaultFormData());
+            setFormData(getDefaultFormData(minMins));
             setPreviewUrl(null);
 
             onSuccess();
             onClose();
         } catch (err) {
             console.error('Failed to create post:', err);
-            setError('Something went wrong. Please try again.');
+            const msg = err instanceof Error ? err.message : null;
+            // Show API validation messages (e.g. scheduling constraint) directly.
+            // HTTP status strings ("HTTP 4xx") and network errors fall back to generic.
+            const isUserFacing = msg && !msg.match(/^(HTTP \d+|network error|failed to fetch)/i);
+            setError(isUserFacing ? msg : 'Something went wrong. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const resetForm = () => {
-        setFormData(getDefaultFormData());
+        setFormData(getDefaultFormData(minMins));
         setPreviewUrl(null);
         setError(null);
     };
@@ -205,8 +223,8 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
     // Get minimum date (today) for date picker
     const today = new Date().toISOString().split('T')[0];
 
-    // Compute ASAP label: MIN_SCHEDULE_AHEAD_HOURS from now, formatted as "Today at HH:MM" or "Tomorrow at HH:MM"
-    const asapDate = new Date(Date.now() + MIN_SCHEDULE_AHEAD_HOURS * 3600 * 1000);
+    // Compute ASAP label: minMins from now, formatted as "Today at HH:MM" or "Tomorrow at HH:MM"
+    const asapDate = new Date(Date.now() + minMins * 60 * 1000);
     const asapHours = String(asapDate.getHours()).padStart(2, '0');
     const asapMinutes = String(asapDate.getMinutes()).padStart(2, '0');
     const asapDateStr = asapDate.toISOString().split('T')[0];

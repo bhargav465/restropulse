@@ -77,6 +77,10 @@ const env = loadAndValidateEnv({
         RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
         RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
         FEATURE_DELETE_ACCOUNT: booleanFlag,
+        // Adhoc post scheduling: minimum minutes ahead a post must be scheduled.
+        // ASAP defaults to exactly this value. Must be > POST_APPROVAL_BUFFER (120 min)
+        // to leave a review window. Default = 150 min (2h approval buffer + 30min review).
+        MIN_SCHEDULE_AHEAD_MINS: z.coerce.number().positive().default(150),
     }).passthrough(),
 });
 

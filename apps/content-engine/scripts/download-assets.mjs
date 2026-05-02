@@ -68,55 +68,49 @@ const VIDEO_THUMBS = [
   { filename: 'default-video-thumb.jpg',  url: 'https://picsum.photos/seed/rp-vid-default/1080/1920' },
 ];
 
-// Short sample MP4 videos from Google's public test video bucket.
-// These are open-licensed Blender Foundation films re-encoded for streaming.
-// File sizes: ForBiggerJoyrides ~6 MB, ForBiggerMeltdowns ~6 MB,
-//             ForBiggerBlazes ~11 MB, ForBiggerEscapes ~11 MB,
-//             WeAreGoingOnBullrun ~10 MB.
+// Portrait placeholder videos generated locally by ffmpeg (1080×1920, 9:16, 30 s).
+// Generated rather than downloaded to guarantee portrait dimensions and avoid
+// external URL failures. ffmpeg creates solid-color H.264/AAC MP4s — minimal
+// file size (~150 KB each), valid for Instagram REEL and STORY publishing.
 const VIDEOS = [
-  {
-    filename: 'food-video-01.mp4',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-  },
-  {
-    filename: 'food-video-02.mp4',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-  },
-  {
-    filename: 'chef-video-01.mp4',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-  },
-  {
-    filename: 'chef-video-02.mp4',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
-  },
-  {
-    filename: 'bts-video-01.mp4',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-  },
-  {
-    filename: 'default-video.mp4',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-  },
+  { filename: 'food-video-01.mp4',  color: '0xE8552B' },  // warm orange  – Food & Menu
+  { filename: 'food-video-02.mp4',  color: '0xC0392B' },  // deep red      – Food & Menu
+  { filename: 'chef-video-01.mp4',  color: '0x8E44AD' },  // purple        – Chef Specials
+  { filename: 'chef-video-02.mp4',  color: '0x6C3483' },  // dark purple   – Chef Specials
+  { filename: 'bts-video-01.mp4',   color: '0x1A5276' },  // dark blue     – Behind the Scenes
+  { filename: 'default-video.mp4',  color: '0x2C3E50' },  // slate         – default
 ];
 
 // ---------------------------------------------------------------------------
 // Download helper
 // ---------------------------------------------------------------------------
 
-async function downloadFile(url, destPath) {
+async function downloadFile(url, destPath, { optional = false } = {}) {
   const name = path.basename(destPath);
 
   if (fs.existsSync(destPath)) {
     console.log(`  ✓ ${name} (already exists, skipping)`);
-    return;
+    return true;
   }
 
   process.stdout.write(`  ↓ ${name} ...`);
 
-  const response = await fetch(url, { redirect: 'follow' });
+  let response;
+  try {
+    response = await fetch(url, { redirect: 'follow' });
+  } catch (err) {
+    if (optional) {
+      process.stdout.write(` skipped (${err.message})\n`);
+      return false;
+    }
+    throw err;
+  }
 
   if (!response.ok) {
+    if (optional) {
+      process.stdout.write(` skipped (HTTP ${response.status})\n`);
+      return false;
+    }
     throw new Error(`HTTP ${response.status} ${response.statusText} for ${url}`);
   }
 
@@ -125,6 +119,45 @@ async function downloadFile(url, destPath) {
 
   const kb = Math.round(buffer.byteLength / 1024);
   process.stdout.write(` done (${kb} KB)\n`);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Portrait video generator
+// ---------------------------------------------------------------------------
+
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+const execFileAsync = promisify(execFile);
+
+/**
+ * Generate a 1080×1920 portrait H.264/AAC MP4 using ffmpeg.
+ * Creates a 30-second solid-color placeholder — valid for Instagram Reels and Stories.
+ */
+async function generatePortraitVideo(filename, color) {
+  const destPath = path.join(VIDEOS_DIR, filename);
+
+  if (fs.existsSync(destPath)) {
+    console.log(`  ✓ ${filename} (already exists, skipping)`);
+    return;
+  }
+
+  process.stdout.write(`  ⚙ ${filename} (generating) ...`);
+
+  await execFileAsync('ffmpeg', [
+    '-f', 'lavfi', '-i', `color=c=${color}:s=1080x1920:r=30`,
+    '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo',
+    '-t', '30',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '35',
+    '-c:a', 'aac', '-b:a', '64k',
+    '-pix_fmt', 'yuv420p',
+    '-movflags', 'faststart',
+    '-y', destPath,
+  ]);
+
+  const { size } = fs.statSync(destPath);
+  process.stdout.write(` done (${Math.round(size / 1024)} KB)\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -150,10 +183,10 @@ async function main() {
     await downloadFile(thumb.url, path.join(VIDEOS_DIR, thumb.filename));
   }
 
-  // Videos
-  console.log('\nVideos (may take a moment — files are 6–11 MB each, ~54 MB total):');
+  // Videos — generated locally with ffmpeg (portrait 1080×1920, 30 s, H.264/AAC).
+  console.log('\nVideos (portrait 1080×1920, generated with ffmpeg):');
   for (const video of VIDEOS) {
-    await downloadFile(video.url, path.join(VIDEOS_DIR, video.filename));
+    await generatePortraitVideo(video.filename, video.color);
   }
 
   console.log('\nAll assets ready. You can now run: npm run dev\n');

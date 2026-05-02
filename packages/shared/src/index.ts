@@ -367,6 +367,11 @@ export interface FeatureFlags {
   deleteAccount: boolean;
   topupCredits: boolean;
   updatesSection: boolean;
+  // Runtime scheduling config — optional so existing tests don't need updating.
+  // The frontend falls back to compile-time constants when absent.
+  minScheduleAheadMins?: number;
+  postApprovalBufferMins?: number;
+  cycleApprovalBufferMins?: number;
 }
 
 // ----- Account Deletion / Archive -----
@@ -457,4 +462,6 @@ export {
   computeCycleApprovalDeadline,
   isPostPastApprovalDeadline,
   isCyclePastApprovalDeadline,
+  validateTimingConstraints,
 } from './approval-deadlines.js';
+export type { TimingConstraintConfig } from './approval-deadlines.js';

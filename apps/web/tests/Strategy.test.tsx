@@ -117,7 +117,7 @@ describe('Strategy Component', () => {
             render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
-                expect(consoleSpy).toHaveBeenCalledWith('Failed to load cycles:', expect.any(Error));
+                expect(consoleSpy).toHaveBeenCalledWith('Failed to load strategy data:', expect.any(Error));
             });
 
             consoleSpy.mockRestore();

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Configure the content-engine asset server URL for local publishing tests.
+ * Configure the public asset URL for local publishing tests.
  *
  * Requires NGROK_DOMAIN to be set (the same domain used by the webhook tunnel).
  * The API mounts a /dev-assets reverse proxy in development, so a second ngrok
@@ -10,8 +10,10 @@
  *   Facebook CDN  →  https://<NGROK_DOMAIN>/dev-assets/images/foo.jpg
  *                →  ngrok → API :3001 → /dev-assets proxy → asset server :3002
  *
- * Writes ASSET_SERVER_BASE_URL to apps/content-engine/.env.
- * tsx --watch on .env auto-restarts the content-engine to pick it up.
+ * Writes ASSET_SERVER_BASE_URL to apps/publisher/.env and apps/api/.env.
+ * The publisher and API use this to rewrite localhost thumbnail URLs to the
+ * public ngrok URL at publish time. The content-engine always stores thumbnails
+ * as http://localhost:3002/... so Studio can display them without ngrok running.
  *
  * Usage:
  *   npm run ngrok:assets
@@ -43,16 +45,20 @@ function loadRootEnv() {
     }
 }
 
-function writeAssetUrl(publicUrl) {
-    const envPath = join(WORKSPACE_ROOT, 'apps', 'content-engine', '.env');
-    let content = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
+function patchEnvFile(relPath, publicUrl) {
+    const envPath = join(WORKSPACE_ROOT, relPath);
+    if (!existsSync(envPath)) {
+        log('warn', `${relPath} does not exist — skipping`);
+        return;
+    }
+    let content = readFileSync(envPath, 'utf8');
     if (/^ASSET_SERVER_BASE_URL\s*=/m.test(content)) {
         content = content.replace(/^ASSET_SERVER_BASE_URL\s*=.*/m, `ASSET_SERVER_BASE_URL=${publicUrl}`);
     } else {
         content = content.trimEnd() + `\nASSET_SERVER_BASE_URL=${publicUrl}\n`;
     }
     writeFileSync(envPath, content, 'utf8');
-    log('ok', `apps/content-engine/.env  →  ASSET_SERVER_BASE_URL=${publicUrl}`);
+    log('ok', `${relPath}  →  ASSET_SERVER_BASE_URL=${publicUrl}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +79,11 @@ const assetUrl = `https://${domain}/dev-assets`;
 console.log('');
 log('info', `Webhook domain: ${domain}`);
 log('info', 'Routing asset requests through /dev-assets on the existing tunnel.');
-writeAssetUrl(assetUrl);
+// Write to publisher and API — these are the processes that rewrite localhost
+// thumbnail URLs to the public URL at publish time. Content-engine always stores
+// thumbnails as localhost so Studio can display them without an active tunnel.
+patchEnvFile('apps/publisher/.env', assetUrl);
+patchEnvFile('apps/api/.env', assetUrl);
 log('ok', `Asset URL: ${assetUrl}`);
 console.log('');
 

@@ -5,13 +5,18 @@
  * via asset-manager.ts and a small set of heuristic strategy templates. No AI calls.
  */
 
-import type { PlannedPost, PostType } from '@restropulse/shared';
+import type { Platform, PlannedPost, PostType } from '@restropulse/shared';
+import { createLogger } from '@restropulse/telemetry/server';
 import {
   buildCaption,
+  getConstraintCompatibleImage,
+  getConstraintCompatibleVideo,
   getRandomCarousel,
   getRandomImage,
   getRandomVideo,
 } from '../asset-manager.js';
+import { getMergedConstraints } from '../content-validator/media-constraints.js';
+import { BaseContentGenerator } from './base-generator.js';
 import {
   ContentGenerationError,
   type DraftCycleInput,
@@ -19,10 +24,11 @@ import {
   type GeneratedPost,
   type GenerationContext,
   type GeneratePostInput,
-  type IContentGenerator,
   type ReviseCycleInput,
   type RevisePostInput,
 } from './types.js';
+
+const log = createLogger('content-generator');
 
 const DEFAULT_THEMES = [
   'Food & Menu',
@@ -45,27 +51,85 @@ function pickConcept(input: Pick<GeneratePostInput, 'concept' | 'themes'>): stri
   return pickTheme(input.themes);
 }
 
-function assembleMedia(type: PostType, theme: string): Omit<GeneratedPost, 'caption'> {
+function assembleMedia(
+  type: PostType,
+  platforms: Platform[],
+  theme: string,
+): Omit<GeneratedPost, 'caption'> {
+  const constraints = getMergedConstraints(type, platforms);
+
   switch (type) {
     case 'CAROUSEL': {
-      const { urls } = getRandomCarousel(theme);
-      return { thumbnail: urls[0], mediaUrls: urls };
+      const { urls, set } = getRandomCarousel(theme);
+      return {
+        thumbnail: urls[0],
+        mediaUrls: urls,
+        mediaMetadata: { widthPx: set.widthPx, heightPx: set.heightPx },
+      };
     }
     case 'REEL':
-    case 'VIDEO':
+    case 'VIDEO': {
+      const selected = getConstraintCompatibleVideo(constraints, theme);
+      if (selected) {
+        return {
+          thumbnail: selected.thumbnail,
+          videoUrl: selected.videoUrl,
+          mediaMetadata: {
+            widthPx: selected.asset.widthPx,
+            heightPx: selected.asset.heightPx,
+            durationSeconds: selected.asset.durationSeconds,
+          },
+        };
+      }
+      // No compatible video found; fall back to image asset and log warning
+      log.warn(
+        { type, platforms, theme },
+        'No constraint-compatible video asset found; falling back to image thumbnail',
+      );
+      const imgFallback = getConstraintCompatibleImage(constraints, theme) ?? getRandomImage(theme);
+      return {
+        thumbnail: imgFallback.url,
+        mediaMetadata: { widthPx: imgFallback.asset.widthPx, heightPx: imgFallback.asset.heightPx },
+      };
+    }
     case 'STORY': {
-      const { videoUrl, thumbnail } = getRandomVideo(theme);
-      return { thumbnail, videoUrl };
+      // Try to find a compatible video first (e.g. Sintel 854×480 52s passes
+      // Instagram STORY constraints: max 1920px wide, 3–60s, no min resolution).
+      // Fall back to a photo story only when no compatible video exists.
+      const storyVideo = getConstraintCompatibleVideo(constraints, theme);
+      if (storyVideo) {
+        return {
+          thumbnail: storyVideo.thumbnail,
+          videoUrl: storyVideo.videoUrl,
+          mediaMetadata: {
+            widthPx: storyVideo.asset.widthPx,
+            heightPx: storyVideo.asset.heightPx,
+            durationSeconds: storyVideo.asset.durationSeconds,
+          },
+        };
+      }
+      log.warn(
+        { type, platforms, theme },
+        'No constraint-compatible video for STORY; falling back to photo story',
+      );
+      const imgSelected = getConstraintCompatibleImage(constraints, theme) ?? getRandomImage(theme);
+      return {
+        thumbnail: imgSelected.url,
+        mediaMetadata: { widthPx: imgSelected.asset.widthPx, heightPx: imgSelected.asset.heightPx },
+      };
     }
     case 'IMAGE':
     default: {
-      const { url } = getRandomImage(theme);
-      return { thumbnail: url };
+      const imgSelected = getConstraintCompatibleImage(constraints, theme) ?? getRandomImage(theme);
+      return {
+        thumbnail: imgSelected.url,
+        mediaMetadata: { widthPx: imgSelected.asset.widthPx, heightPx: imgSelected.asset.heightPx },
+      };
     }
   }
 }
 
-export class PlaceholderContentGenerator implements IContentGenerator {
+export class PlaceholderContentGenerator extends BaseContentGenerator {
   readonly name = 'placeholder';
 
   async draftCycle(input: DraftCycleInput, _ctx?: GenerationContext): Promise<GeneratedCycle> {
@@ -109,7 +173,7 @@ export class PlaceholderContentGenerator implements IContentGenerator {
     };
   }
 
-  async generatePost(
+  async generatePostContent(
     input: GeneratePostInput,
     ctx?: GenerationContext,
   ): Promise<GeneratedPost> {
@@ -120,12 +184,12 @@ export class PlaceholderContentGenerator implements IContentGenerator {
     const theme = pickTheme(input.themes);
     const concept = pickConcept(input);
     const caption = buildCaption(concept, theme, ctx?.restaurantName);
-    const media = assembleMedia(input.type, theme);
+    const media = assembleMedia(input.type, input.platforms ?? [], theme);
 
     return { caption, ...media };
   }
 
-  async revisePost(
+  async revisePostContent(
     input: RevisePostInput,
     ctx?: GenerationContext,
   ): Promise<GeneratedPost> {
@@ -143,7 +207,7 @@ export class PlaceholderContentGenerator implements IContentGenerator {
       [feedback.note, details].filter((s) => s && s.trim().length > 0).join(' - ') ||
       pickTheme(existingPost.themes);
     const caption = buildCaption(concept, theme, ctx?.restaurantName);
-    const media = assembleMedia(existingPost.type, theme);
+    const media = assembleMedia(existingPost.type, existingPost.platforms ?? [], theme);
 
     return { caption, ...media };
   }

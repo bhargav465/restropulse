@@ -35,6 +35,7 @@ loadAndValidateEnv({
     ENCRYPTION_KEY: z.string().regex(/^[A-Fa-f0-9]{64}$/),
     INSTAGRAM_REDIRECT_URI: z.string().url().optional(),
     ASSET_SERVER_BASE_URL: z.string().url().optional(),
+    CRON_PUBLISHER: z.string().default('*/5 * * * *'),
   }).passthrough(),
 });
 

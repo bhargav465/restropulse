@@ -62,13 +62,16 @@ describe('PlaceholderContentGenerator', () => {
       expect(result.videoUrl).toMatch(/\.mp4$/);
     });
 
-    it('produces video for STORY', async () => {
+    it('produces a video story for STORY when a compatible video exists', async () => {
       const result = await generator.generatePost({
         concept: 'Daily story',
         type: 'STORY',
         platforms: ['INSTAGRAM'],
       });
-      expect(result.videoUrl).toMatch(/\.mp4$/);
+      // Sintel (854×480, 52s) passes INSTAGRAM STORY constraints (max 1920px, 3–60s).
+      // Generator prefers video; only falls back to image when no compatible video found.
+      expect(result.thumbnail).toMatch(/^http:\/\/localhost:3002\/videos\/.+\.(jpg|jpeg|png)$/);
+      expect(result.videoUrl).toMatch(/^http:\/\/localhost:3002\/videos\/.+\.mp4$/);
     });
 
     it('includes restaurant name in caption when provided via context', async () => {

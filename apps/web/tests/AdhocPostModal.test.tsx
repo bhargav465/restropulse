@@ -300,7 +300,7 @@ describe('AdhocPostModal Component', () => {
     });
 
     describe('Form Submission', () => {
-        it('should call postsAPI.generate with correct data for ASAP post (10 min from now)', async () => {
+        it('should call postsAPI.generate with asap:true for ASAP post', async () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -332,8 +332,10 @@ describe('AdhocPostModal Component', () => {
                     concept: 'New brunch menu special',
                     type: 'CAROUSEL',
                     platforms: ['INSTAGRAM', 'FACEBOOK'],
-                    scheduledFor: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+                    asap: true,
                 }));
+                const payload = vi.mocked(postsAPI.generate).mock.calls[0][0];
+                expect(payload.scheduledFor).toBeUndefined();
             });
         });
 
@@ -352,9 +354,10 @@ describe('AdhocPostModal Component', () => {
             });
 
             // Schedule-later is already the default, date/time are pre-filled
-            // Override with custom date and time
+            // Override with a date clearly in the future (computed at test runtime)
+            const futureDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
             fireEvent.change(screen.getByTestId('schedule-date'), {
-                target: { value: '2026-02-15' }
+                target: { value: futureDate }
             });
             fireEvent.change(screen.getByTestId('schedule-time'), {
                 target: { value: '14:30' }
@@ -369,7 +372,7 @@ describe('AdhocPostModal Component', () => {
                     concept: 'Weekend special announcement',
                     type: 'IMAGE',
                     platforms: ['INSTAGRAM'],
-                    scheduledFor: expect.stringContaining('2026-02-15'),
+                    scheduledFor: expect.stringContaining(futureDate),
                 }));
             });
         });
@@ -731,7 +734,7 @@ describe('AdhocPostModal Component', () => {
             });
         });
 
-        it('should include scheduledFor as valid ISO string for ASAP posts', async () => {
+        it('should send asap:true and no scheduledFor for ASAP posts', async () => {
             render(
                 <AdhocPostModal
                     isOpen={true}
@@ -749,12 +752,8 @@ describe('AdhocPostModal Component', () => {
 
             await waitFor(() => {
                 const payload = vi.mocked(postsAPI.generate).mock.calls[0][0];
-                expect(payload.scheduledFor).toBeDefined();
-                expect(typeof payload.scheduledFor).toBe('string');
-                // Should be roughly 10 min from now (within 2-minute tolerance)
-                const scheduled = new Date(payload.scheduledFor!).getTime();
-                const tenMinFromNow = Date.now() + 10 * 60 * 1000;
-                expect(Math.abs(scheduled - tenMinFromNow)).toBeLessThan(2 * 60 * 1000);
+                expect(payload.asap).toBe(true);
+                expect(payload.scheduledFor).toBeUndefined();
             });
         });
 
