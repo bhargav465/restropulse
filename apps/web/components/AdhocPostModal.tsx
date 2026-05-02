@@ -28,6 +28,8 @@ interface AdhocPostModalProps {
     onClose: () => void;
     onSuccess: () => void;
     minScheduleAheadMins?: number;
+    instagramEnabled?: boolean;
+    facebookEnabled?: boolean;
 }
 
 interface FormData {
@@ -55,12 +57,12 @@ function getDefaultSchedule(minScheduleAheadMins: number): { scheduledDate: stri
     };
 }
 
-function getDefaultFormData(minScheduleAheadMins: number): FormData {
+function getDefaultFormData(minScheduleAheadMins: number, defaultPlatforms: Platform[]): FormData {
     const { scheduledDate, scheduledTime } = getDefaultSchedule(minScheduleAheadMins);
     return {
         concept: '',
         postType: 'IMAGE',
-        platforms: ['INSTAGRAM'],
+        platforms: defaultPlatforms,
         scheduleType: 'later',
         scheduledDate,
         scheduledTime,
@@ -68,22 +70,29 @@ function getDefaultFormData(minScheduleAheadMins: number): FormData {
     };
 }
 
-const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSuccess, minScheduleAheadMins }) => {
+const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSuccess, minScheduleAheadMins, instagramEnabled = true, facebookEnabled = true }) => {
     const minMins = minScheduleAheadMins ?? DEFAULT_MIN_SCHEDULE_AHEAD_MINS;
-    const [formData, setFormData] = useState<FormData>(() => getDefaultFormData(minMins));
+
+    const AVAILABLE_PLATFORMS = [
+        instagramEnabled && { id: 'INSTAGRAM' as const, label: 'Instagram', icon: InstagramIcon },
+        facebookEnabled  && { id: 'FACEBOOK'  as const, label: 'Facebook',  icon: FacebookIcon  },
+    ].filter(Boolean) as Array<{ id: Platform; label: string; icon: React.ComponentType<any> }>;
+
+    const defaultPlatforms: Platform[] = instagramEnabled ? ['INSTAGRAM'] : facebookEnabled ? ['FACEBOOK'] : [];
+
+    const [formData, setFormData] = useState<FormData>(() => getDefaultFormData(minMins, defaultPlatforms));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Refresh default scheduled time when the modal opens OR when minMins changes
-    // (featureFlags arrives async — if it loads after the modal is already open,
-    // the scheduled time must update to reflect the runtime value, not the fallback).
+    // Refresh default scheduled time and platforms when the modal opens, when minMins changes,
+    // or when platform availability changes (featureFlags arrives async).
     useEffect(() => {
         if (isOpen) {
-            setFormData(getDefaultFormData(minMins));
+            setFormData(getDefaultFormData(minMins, defaultPlatforms));
         }
-    }, [isOpen, minMins]);
+    }, [isOpen, minMins, instagramEnabled, facebookEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Touch handling for swipe-to-close
     const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -182,7 +191,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
             });
 
             // Reset form
-            setFormData(getDefaultFormData(minMins));
+            setFormData(getDefaultFormData(minMins, defaultPlatforms));
             setPreviewUrl(null);
 
             onSuccess();
@@ -200,7 +209,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
     };
 
     const resetForm = () => {
-        setFormData(getDefaultFormData(minMins));
+        setFormData(getDefaultFormData(minMins, defaultPlatforms));
         setPreviewUrl(null);
         setError(null);
     };
@@ -298,16 +307,14 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                         </p>
                     </div>
 
-                    {/* Platform Selection (multi-select checkboxes) */}
+                    {/* Platform Selection (multi-select checkboxes) — hidden when only one platform available */}
+                    {AVAILABLE_PLATFORMS.length > 1 && (
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">
                             Platforms
                         </label>
                         <div className="flex gap-2">
-                            {([
-                                { id: 'INSTAGRAM' as const, label: 'Instagram', icon: InstagramIcon },
-                                { id: 'FACEBOOK' as const, label: 'Facebook', icon: FacebookIcon },
-                            ]).map((platform) => {
+                            {AVAILABLE_PLATFORMS.map((platform) => {
                                 const selected = formData.platforms.includes(platform.id);
                                 return (
                                     <button
@@ -326,6 +333,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                             })}
                         </div>
                     </div>
+                    )}
 
                     {/* Post Type Selection */}
                     <div>

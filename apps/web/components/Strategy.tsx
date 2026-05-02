@@ -26,9 +26,10 @@ interface StrategyProps {
     instagramConnected?: boolean;
     onConnectInstagram?: () => void;
     cycleApprovalBufferMins?: number;
+    instagramEnabled?: boolean;
 }
 
-const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected = false, onConnectInstagram, cycleApprovalBufferMins }) => {
+const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected = false, onConnectInstagram, cycleApprovalBufferMins, instagramEnabled = true }) => {
     const [cycles, setCycles] = useState<StrategyCycle[]>([]);
     const [loading, setLoading] = useState(true);
     const [suggestCreateCycle, setSuggestCreateCycle] = useState(false);
@@ -250,7 +251,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                             <div className="col-span-2 bg-slate-100 text-slate-500 py-3 rounded-xl text-center text-xs font-bold">
                                 Awaiting Revision from Team
                             </div>
-                        ) : !instagramConnected ? (
+                        ) : instagramEnabled && !instagramConnected ? (
                             <div className="col-span-2 bg-amber-50 text-amber-700 py-3 rounded-xl text-center text-xs font-bold border border-amber-200">
                                 Connect Instagram to approve
                             </div>
@@ -294,7 +295,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
 
     return (
         <div className="p-4 space-y-8">
-            {!instagramConnected && (
+            {instagramEnabled && !instagramConnected && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
                     <p className="text-xs text-amber-800 font-medium">Connect Instagram to approve strategies and start publishing.</p>
                     {onConnectInstagram && (

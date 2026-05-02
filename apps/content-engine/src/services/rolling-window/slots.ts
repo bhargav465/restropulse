@@ -44,7 +44,10 @@ export interface CycleSlot {
   themes: string[];
 }
 
-const DEFAULT_PLATFORMS: Platform[] = ['INSTAGRAM', 'FACEBOOK'];
+const DEFAULT_PLATFORMS: Platform[] = (process.env.ENABLED_PLATFORMS ?? 'INSTAGRAM,FACEBOOK')
+  .split(',')
+  .map(p => p.trim())
+  .filter((p): p is Platform => p === 'INSTAGRAM' || p === 'FACEBOOK');
 const DEFAULT_POST_TYPE: PostType = 'IMAGE';
 
 export function deriveCycleSlots(input: DeriveSlotsInput): CycleSlot[] {

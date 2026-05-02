@@ -41,12 +41,14 @@ const PROFILES = {
       CRON_REVISIONS:       '*/15 * * * * *',
       CRON_DEADLINES:       '*/15 * * * * *',
 
+      ENABLED_PLATFORMS:    'INSTAGRAM',
     },
     'apps/api/.env': {
       // Scheduling — must match content-engine values so API deadline checks stay in sync
       MIN_SCHEDULE_AHEAD_MINS:      '5',   // ASAP posts scheduled 5 min from now
       POST_APPROVAL_BUFFER_MINS:    '2',
       CYCLE_APPROVAL_BUFFER_MINS:   '10',
+      ENABLED_PLATFORMS:            'INSTAGRAM',
     },
     'apps/publisher/.env': {
       CRON_PUBLISHER: '*/15 * * * * *',   // every 15 seconds
@@ -69,12 +71,14 @@ const PROFILES = {
       CRON_REVISIONS:       '*/2 * * * *',
       CRON_DEADLINES:       '*/2 * * * *',
 
+      ENABLED_PLATFORMS:    'INSTAGRAM',
     },
     'apps/api/.env': {
       // Scheduling — must match content-engine values so API deadline checks stay in sync
       MIN_SCHEDULE_AHEAD_MINS:      '150', // 2.5 h (2 h buffer + 30 min review)
       POST_APPROVAL_BUFFER_MINS:    '120', // 2 h
       CYCLE_APPROVAL_BUFFER_MINS:   '4320', // 72 h
+      ENABLED_PLATFORMS:            'INSTAGRAM',
     },
     'apps/publisher/.env': {
       CRON_PUBLISHER: '*/5 * * * *',      // every 5 minutes

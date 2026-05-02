@@ -372,6 +372,8 @@ export interface FeatureFlags {
   minScheduleAheadMins?: number;
   postApprovalBufferMins?: number;
   cycleApprovalBufferMins?: number;
+  // Which social platforms are active. When absent, all platforms are enabled.
+  enabledPlatforms?: Platform[];
 }
 
 // ----- Account Deletion / Archive -----

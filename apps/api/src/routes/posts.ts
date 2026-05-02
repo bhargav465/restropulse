@@ -1,13 +1,21 @@
 import express, { Request, Response } from 'express';
 import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
 import { publishPost, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
-import { ApiResponse, Post, isPostPastApprovalDeadline } from '@restropulse/shared';
+import { ApiResponse, Post, isPostPastApprovalDeadline, Platform } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { enforcePlanLimits } from '../middleware/enforce-plan-limits.js';
 import { createLogger } from '@restropulse/telemetry/server';
 
 const log = createLogger('posts');
+
+/** Default platforms derived from ENABLED_PLATFORMS env var (same logic as content-engine). */
+function getDefaultPlatforms(): Platform[] {
+    return (process.env.ENABLED_PLATFORMS ?? 'INSTAGRAM,FACEBOOK')
+        .split(',')
+        .map(p => p.trim())
+        .filter((p): p is Platform => p === 'INSTAGRAM' || p === 'FACEBOOK');
+}
 
 const router = express.Router();
 
@@ -80,7 +88,7 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
         thumbnail: postData.thumbnail || placeholderImage,
         ...postData,
         // Ensure platforms is always an array
-        platforms: postData.platforms || ['INSTAGRAM'],
+        platforms: postData.platforms || getDefaultPlatforms(),
         // Ensure restaurantId is always set from auth context
         restaurantId: req.user!.restaurantId,
         // Mark as adhoc if no cycleId
@@ -149,7 +157,7 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
     const postData = {
         type: type as Post['type'],
         status: 'PENDING_CONTENT' as const,
-        platforms: platforms || ['INSTAGRAM'],
+        platforms: platforms || getDefaultPlatforms(),
         concept: concept.trim(),
         caption: '',
         thumbnail: '',

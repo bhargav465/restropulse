@@ -64,6 +64,7 @@ const env = loadAndValidateEnv({
     CRON_ROLLING_WINDOW: z.string().default('*/2 * * * *'),
     CRON_REVISIONS: z.string().default('*/2 * * * *'),
     CRON_DEADLINES: z.string().default('*/2 * * * *'),
+    ENABLED_PLATFORMS: z.string().default('INSTAGRAM,FACEBOOK'),
   }).passthrough(),
 });
 

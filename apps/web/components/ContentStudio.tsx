@@ -586,9 +586,11 @@ interface ContentStudioProps {
     instagramConnected?: boolean;
     onConnectInstagram?: () => void;
     postApprovalBufferMins?: number;
+    instagramEnabled?: boolean;
+    facebookEnabled?: boolean;
 }
 
-const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey, instagramConnected = false, onConnectInstagram, postApprovalBufferMins }) => {
+const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey, instagramConnected = false, onConnectInstagram, postApprovalBufferMins, instagramEnabled = true, facebookEnabled = true }) => {
     type TabType = 'REVIEW' | 'SCHEDULED' | 'HISTORY';
     const [activeTab, setActiveTab] = useState<TabType>('REVIEW');
     const [posts, setPosts] = useState<Post[]>([]);
@@ -1016,7 +1018,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
                 </div>
             </div>
 
-            {!instagramConnected && (
+            {instagramEnabled && !instagramConnected && (
                 <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
                     <p className="text-xs text-amber-800 font-medium">Connect Instagram to approve and publish posts.</p>
                     {onConnectInstagram && (
