@@ -31,3 +31,7 @@ export {
   processRollingWindow,
   createRollingWindowProcessor,
 } from './rolling-window/index.js';
+
+export {
+  createCurrentAffairsRefreshProcessor,
+} from './current-affairs-refresh/index.js';

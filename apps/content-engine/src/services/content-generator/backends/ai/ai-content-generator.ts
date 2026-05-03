@@ -24,6 +24,7 @@ import {
 import type { IDomainSpecialization } from './specialization/index.js';
 import type { ILLMProvider } from './llm/types.js';
 import type { IMediaGenerator } from './media/types.js';
+import type { ICurrentAffairsProvider } from './current-affairs/types.js';
 import { runDraftCycle } from './pipeline/draft-cycle.js';
 import { runReviseCycle } from './pipeline/revise-cycle.js';
 import { runGeneratePost } from './pipeline/generate-post.js';
@@ -36,6 +37,8 @@ export interface AIContentGeneratorOptions {
   specialization: IDomainSpecialization;
   llm: ILLMProvider;
   media: IMediaGenerator;
+  /** Optional. When set, pipeline auto-enriches currentAffairsHints. */
+  currentAffairs?: ICurrentAffairsProvider;
 }
 
 export class AIContentGenerator extends BaseContentGenerator {
@@ -56,9 +59,16 @@ export class AIContentGenerator extends BaseContentGenerator {
       specialization: options.specialization,
       llm: options.llm,
       media: options.media,
+      ...(options.currentAffairs ? { currentAffairs: options.currentAffairs } : {}),
     };
     log.info(
-      { domain: this.specialization.domain, version: this.specialization.version, llm: options.llm.name, media: options.media.name },
+      {
+        domain: this.specialization.domain,
+        version: this.specialization.version,
+        llm: options.llm.name,
+        media: options.media.name,
+        currentAffairs: options.currentAffairs?.name ?? 'none',
+      },
       'AIContentGenerator instantiated',
     );
   }

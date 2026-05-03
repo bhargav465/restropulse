@@ -16,7 +16,7 @@ import { withRetry, RETRY_PROFILES } from '../with-retry.js';
 import { withCostTracking } from '../with-cost-tracking.js';
 import { CycleSchema } from '../llm/schemas.js';
 import { computeCostUsd } from '../llm/pricing.js';
-import { type PipelineDeps, toSpecializationContext } from './types.js';
+import { type PipelineDeps, toSpecializationContext, resolveCurrentAffairsHints } from './types.js';
 
 export async function runReviseCycle(
   input: ReviseCycleInput,
@@ -34,6 +34,16 @@ export async function runReviseCycle(
   const system = deps.specialization.getSystemPromptFragment(specCtx);
   const taskPrompt = deps.specialization.getTaskPrompt('reviseCycle', input, specCtx);
 
+  const hints = await resolveCurrentAffairsHints(
+    input.currentAffairsHints,
+    deps.currentAffairs,
+    {
+      operation: 'reviseCycle',
+      specializationContext: specCtx,
+      ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
+    },
+  );
+
   const userPrompt = [
     taskPrompt,
     '',
@@ -47,8 +57,8 @@ export async function runReviseCycle(
     `Areas: ${input.feedback.areas.join(', ')}`,
     `Note: ${input.feedback.note}`,
     input.feedback.resolution ? `Resolution: ${input.feedback.resolution}` : '',
-    input.currentAffairsHints?.length
-      ? `\nCurrent-affairs hints:\n- ${input.currentAffairsHints.join('\n- ')}`
+    hints.length
+      ? `\nCurrent-affairs hints:\n- ${hints.join('\n- ')}`
       : '',
   ].filter(Boolean).join('\n');
 

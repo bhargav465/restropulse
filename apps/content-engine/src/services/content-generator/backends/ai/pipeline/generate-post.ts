@@ -27,7 +27,7 @@ import { withRetry, RETRY_PROFILES } from '../with-retry.js';
 import { withCostTracking } from '../with-cost-tracking.js';
 import { PostCaptionSchema, type PostCaptionSchemaType } from '../llm/schemas.js';
 import { computeCostUsd } from '../llm/pricing.js';
-import { type PipelineDeps, toSpecializationContext } from './types.js';
+import { type PipelineDeps, toSpecializationContext, resolveCurrentAffairsHints } from './types.js';
 import type { MediaGenJob } from '../media/types.js';
 
 const log = createLogger('ai-generate-post');
@@ -136,12 +136,25 @@ async function runCaptionForPost(
 ): Promise<PostCaptionSchemaType> {
   const specCtx = toSpecializationContext(ctx);
   const system = deps.specialization.getSystemPromptFragment(specCtx);
+
+  const hints = await resolveCurrentAffairsHints(
+    input.currentAffairsHints,
+    deps.currentAffairs,
+    {
+      operation: 'generatePost',
+      specializationContext: specCtx,
+      concept: input.concept,
+      ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
+      ...(input.cycleId ? { cycleId: input.cycleId } : {}),
+    },
+  );
+
   const userPrompt = [
     deps.specialization.getTaskPrompt('generatePost', input, specCtx),
     input.themes?.length ? `Themes: ${input.themes.join(', ')}` : '',
     input.cycleId ? `Cycle id: ${input.cycleId}` : '',
-    input.currentAffairsHints?.length
-      ? `\nCurrent-affairs hints (use sparingly):\n- ${input.currentAffairsHints.join('\n- ')}`
+    hints.length
+      ? `\nCurrent-affairs hints (use sparingly):\n- ${hints.join('\n- ')}`
       : '',
     `\nReturn just the caption (no hashtags inline) plus 2-5 suggestedHashtags as separate field.`,
   ].filter(Boolean).join('\n');

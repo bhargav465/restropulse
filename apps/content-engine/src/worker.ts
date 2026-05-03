@@ -35,11 +35,13 @@ import {
   createRevisionProcessor,
   createDeadlineProcessor,
   createCycleSyncProcessor,
+  createCurrentAffairsRefreshProcessor,    // NEW
   type IProcessor,
 } from './services/processors/index.js';
 import { startAssetServer } from './services/asset-server.js';
 import {
   createContentGenerator,
+  getLastAiCurrentAffairsProvider,         // NEW
   setContentGenerator,
   type ContentGeneratorBackend,
 } from './services/content-generator/index.js';
@@ -72,6 +74,11 @@ const env = loadAndValidateEnv({
     CRON_CYCLE_SYNC: z.string().default('*/2 * * * *'),
     ENABLED_PLATFORMS: z.string().default('INSTAGRAM,FACEBOOK'),
     CONTENT_GENERATOR_BACKEND: z.enum(['placeholder', 'ai']).default('placeholder'),
+    CURRENT_AFFAIRS_V1_ENABLED: z.string().default('true'),
+    CURRENT_AFFAIRS_V2_ENABLED: z.string().default('false'),
+    GOOGLE_CALENDAR_API_KEY: z.string().optional(),
+    PERPLEXITY_API_KEY: z.string().optional(),
+    CRON_CURRENT_AFFAIRS_REFRESH: z.string().default('0 6 * * *'),
   }).passthrough(),
 });
 
@@ -117,7 +124,7 @@ const startWorker = async () => {
     // Start local asset server for placeholder media
     assetServer = startAssetServer(ASSET_PORT);
 
-    const processors: ReadonlyArray<IProcessor> = [
+    const processors: IProcessor[] = [
       createAdhocProcessor(env.CRON_PENDING_POSTS),
       createStrategyProcessor(env.CRON_PENDING_CYCLES),
       createRollingWindowProcessor(env.CRON_ROLLING_WINDOW, rollingWindowConfig),
@@ -125,6 +132,15 @@ const startWorker = async () => {
       createDeadlineProcessor(env.CRON_DEADLINES, deadlineConfig),
       createCycleSyncProcessor(env.CRON_CYCLE_SYNC),
     ];
+
+    const aiCurrentAffairs = getLastAiCurrentAffairsProvider();
+    if (aiCurrentAffairs && aiCurrentAffairs.name !== 'noop') {
+      processors.push(createCurrentAffairsRefreshProcessor(env.CRON_CURRENT_AFFAIRS_REFRESH, aiCurrentAffairs));
+      logger.info(
+        { provider: aiCurrentAffairs.name, cron: env.CRON_CURRENT_AFFAIRS_REFRESH },
+        'current-affairs-refresh processor registered',
+      );
+    }
 
     for (const processor of processors) {
       registerProcessor(processor);

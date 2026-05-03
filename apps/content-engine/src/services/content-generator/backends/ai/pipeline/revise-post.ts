@@ -21,7 +21,7 @@ import { withRetry, RETRY_PROFILES } from '../with-retry.js';
 import { withCostTracking } from '../with-cost-tracking.js';
 import { PostCaptionSchema } from '../llm/schemas.js';
 import { computeCostUsd } from '../llm/pricing.js';
-import { type PipelineDeps, toSpecializationContext } from './types.js';
+import { type PipelineDeps, toSpecializationContext, resolveCurrentAffairsHints } from './types.js';
 import type { MediaGenJob } from '../media/types.js';
 
 const log = createLogger('ai-revise-post');
@@ -85,6 +85,17 @@ export async function runRevisePost(
   const system = deps.specialization.getSystemPromptFragment(specCtx);
   const taskPrompt = deps.specialization.getTaskPrompt('revisePost', input, specCtx);
 
+  const hints = await resolveCurrentAffairsHints(
+    input.currentAffairsHints,
+    deps.currentAffairs,
+    {
+      operation: 'revisePost',
+      specializationContext: specCtx,
+      concept: input.existingPost.caption,
+      ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
+    },
+  );
+
   const detailLines = Object.entries(input.feedback.details).map(([k, v]) => `  ${k}: ${v}`);
   const userPrompt = [
     taskPrompt,
@@ -100,8 +111,8 @@ export async function runRevisePost(
     detailLines.length ? `Details:\n${detailLines.join('\n')}` : '',
     `Note: ${input.feedback.note}`,
     input.feedback.resolution ? `Resolution: ${input.feedback.resolution}` : '',
-    input.currentAffairsHints?.length
-      ? `\nCurrent-affairs hints (use sparingly):\n- ${input.currentAffairsHints.join('\n- ')}`
+    hints.length
+      ? `\nCurrent-affairs hints (use sparingly):\n- ${hints.join('\n- ')}`
       : '',
     `\nReturn just the revised caption (no hashtags inline) plus 2-5 suggestedHashtags.`,
   ].filter(Boolean).join('\n');

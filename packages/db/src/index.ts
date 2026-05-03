@@ -15,6 +15,7 @@ export {
   getStrategyCyclesCollection,
   getContentStrategiesCollection,
   getCostEventsCollection,
+  getCurrentAffairsCacheCollection,
   getSessionsCollection,
   getOtpChallengesCollection,
   getOauthSessionsCollection,

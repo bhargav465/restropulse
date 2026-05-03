@@ -147,6 +147,10 @@ export function getCostEventsCollection(): Collection {
   return getDB().collection('costEvents');
 }
 
+export function getCurrentAffairsCacheCollection(): Collection {
+  return getDB().collection('currentAffairsCache');
+}
+
 // ----- Helpers -----
 
 /**

@@ -18,7 +18,7 @@ import { withRetry, RETRY_PROFILES } from '../with-retry.js';
 import { withCostTracking } from '../with-cost-tracking.js';
 import { CycleSchema } from '../llm/schemas.js';
 import { computeCostUsd } from '../llm/pricing.js';
-import { type PipelineDeps, toSpecializationContext } from './types.js';
+import { type PipelineDeps, toSpecializationContext, resolveCurrentAffairsHints } from './types.js';
 
 export async function runDraftCycle(
   input: DraftCycleInput,
@@ -32,10 +32,21 @@ export async function runDraftCycle(
 
   const specCtx = toSpecializationContext(ctx);
   const system = deps.specialization.getSystemPromptFragment(specCtx);
+
+  const hints = await resolveCurrentAffairsHints(
+    input.currentAffairsHints,
+    deps.currentAffairs,
+    {
+      operation: 'draftCycle',
+      specializationContext: specCtx,
+      ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
+    },
+  );
+
   const userPrompt = [
     deps.specialization.getTaskPrompt('draftCycle', input, specCtx),
-    input.currentAffairsHints?.length
-      ? `\nCurrent-affairs hints (use sparingly):\n- ${input.currentAffairsHints.join('\n- ')}`
+    hints.length
+      ? `\nCurrent-affairs hints (use sparingly):\n- ${hints.join('\n- ')}`
       : '',
   ].filter(Boolean).join('\n');
 

@@ -113,3 +113,60 @@ describe('AIContentGenerator (phase 2 complete)', () => {
     expect(r.ok).toBe(true);
   });
 });
+
+describe('AIContentGenerator currentAffairs auto-enrichment', () => {
+  it('passes currentAffairs into PipelineDeps and pipeline forwards hints to the prompt', async () => {
+    const generateObject = vi.fn().mockResolvedValue({
+      object: { caption: 'A warm post', suggestedHashtags: ['#warm'] },
+      usage: { inputTokens: 50, outputTokens: 30 },
+      modelId: 'claude-haiku-4-5-20251001',
+    });
+    const generateImage = vi.fn().mockResolvedValue({
+      jobId: 'jx', status: 'COMPLETED',
+      mediaUrl: 'http://localhost/x.jpg', thumbnail: 'http://localhost/x.jpg',
+      metadata: { widthPx: 1080, heightPx: 1080 },
+    });
+    const fetchHints = vi.fn(async () => ['Eid al-Fitr is in 2 days', 'IPL Final tonight']);
+    const currentAffairs = { name: 'mock-current-affairs', fetchHints, refresh: vi.fn() };
+
+    const gen = new AIContentGenerator({
+      specialization: new RestaurantSpecialization(),
+      llm: { name: 'mock', generateObject },
+      media: { name: 'mock-media', generateImage, generateVideo: vi.fn(), pollJob: vi.fn() },
+      currentAffairs: currentAffairs as any,
+    });
+
+    await gen.generatePost({ concept: 'cricket match-day biryani', type: 'IMAGE', platforms: ['INSTAGRAM'] });
+
+    expect(fetchHints).toHaveBeenCalledTimes(1);
+    const prompt = (generateObject.mock.calls[0][0] as any).prompt;
+    expect(prompt).toContain('Eid al-Fitr is in 2 days');
+    expect(prompt).toContain('IPL Final tonight');
+  });
+
+  it('does NOT call currentAffairs.fetchHints when caller already supplied currentAffairsHints', async () => {
+    const generateObject = vi.fn().mockResolvedValue({
+      object: { caption: 'x', suggestedHashtags: [] },
+      usage: { inputTokens: 1, outputTokens: 1 }, modelId: 'claude-haiku-4-5-20251001',
+    });
+    const generateImage = vi.fn().mockResolvedValue({ jobId: 'j', status: 'COMPLETED', mediaUrl: 'http://x', thumbnail: 'http://x', metadata: { widthPx: 1, heightPx: 1 } });
+    const fetchHints = vi.fn();
+    const currentAffairs = { name: 'mock', fetchHints, refresh: vi.fn() };
+
+    const gen = new AIContentGenerator({
+      specialization: new RestaurantSpecialization(),
+      llm: { name: 'mock', generateObject },
+      media: { name: 'mock-media', generateImage, generateVideo: vi.fn(), pollJob: vi.fn() },
+      currentAffairs: currentAffairs as any,
+    });
+
+    await gen.generatePost({
+      concept: 'plain biryani',
+      type: 'IMAGE',
+      platforms: ['INSTAGRAM'],
+      currentAffairsHints: ['caller-supplied hint'],
+    });
+
+    expect(fetchHints).not.toHaveBeenCalled();
+  });
+});
