@@ -104,12 +104,16 @@ async function runMediaForPost(
               platforms: input.platforms,
               concept: input.concept,
               themes: input.themes,
+              ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
+              ...(input.cycleId ? { cycleId: input.cycleId } : {}),
             })
           : await deps.media.generateImage({
               postType: input.type,
               platforms: input.platforms,
               concept: input.concept,
               themes: input.themes,
+              ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
+              ...(input.cycleId ? { cycleId: input.cycleId } : {}),
             });
 
         if (job.status === 'FAILED') {

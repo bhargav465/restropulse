@@ -19,3 +19,7 @@ export type { CycleSchemaType, PostCaptionSchemaType } from './llm/schemas.js';
 
 export type { IMediaGenerator, MediaGenJob, MediaJobStatus, ImageGenInput, VideoGenInput } from './media/types.js';
 export { PlaceholderMediaGenerator } from './media/placeholder-media-generator.js';
+
+export type { IMediaJobStore, MediaJobUpdatable } from './media/jobs/types.js';
+export { MongoMediaJobStore } from './media/jobs/mongo-media-job-store.js';
+export * from './media/fal-ai/index.js';

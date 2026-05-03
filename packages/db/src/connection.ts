@@ -151,6 +151,10 @@ export function getCurrentAffairsCacheCollection(): Collection {
   return getDB().collection('currentAffairsCache');
 }
 
+export function getMediaJobsCollection(): Collection {
+  return getDB().collection('mediaJobs');
+}
+
 // ----- Helpers -----
 
 /**

@@ -165,12 +165,14 @@ export async function runRevisePost(
                 platforms: input.existingPost.platforms,
                 concept: captionObj.caption,
                 themes: input.existingPost.themes,
+                ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
               })
             : await deps.media.generateImage({
                 postType: input.existingPost.type,
                 platforms: input.existingPost.platforms,
                 concept: captionObj.caption,
                 themes: input.existingPost.themes,
+                ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
               });
           if (result.status === 'FAILED') {
             throw new ContentGenerationError('UNKNOWN', `Media regeneration failed: ${result.error ?? 'unknown'}`);

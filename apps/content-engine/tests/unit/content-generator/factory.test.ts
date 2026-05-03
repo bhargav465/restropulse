@@ -92,3 +92,43 @@ describe('createContentGenerator -- current-affairs wiring', () => {
     expect(() => createContentGenerator('ai')).toThrow(/GOOGLE_CALENDAR_API_KEY/);
   });
 });
+
+describe('createContentGenerator -- media backend wiring', () => {
+  it('defaults MEDIA_BACKEND to placeholder when env is unset', () => {
+    delete process.env['MEDIA_BACKEND'];
+    process.env['ANTHROPIC_API_KEY'] = 'sk-test';
+    process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
+    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
+    const g = createContentGenerator('ai');
+    expect(g.name).toBe('ai');
+    // No way to inspect the media generator from outside; the factory uses
+    // PlaceholderMediaGenerator unless MEDIA_BACKEND=fal-ai.
+  });
+
+  it('builds the FalAIMediaGenerator when MEDIA_BACKEND=fal-ai and FAL_API_KEY is present', () => {
+    process.env['MEDIA_BACKEND'] = 'fal-ai';
+    process.env['FAL_API_KEY'] = 'fal-test';
+    process.env['ANTHROPIC_API_KEY'] = 'sk-test';
+    process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
+    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
+    const g = createContentGenerator('ai');
+    expect(g.name).toBe('ai');
+  });
+
+  it('throws a clear error when MEDIA_BACKEND=fal-ai but FAL_API_KEY is missing', () => {
+    process.env['MEDIA_BACKEND'] = 'fal-ai';
+    delete process.env['FAL_API_KEY'];
+    process.env['ANTHROPIC_API_KEY'] = 'sk-test';
+    process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
+    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
+    expect(() => createContentGenerator('ai')).toThrow(/FAL_API_KEY/);
+  });
+
+  it('throws on an unknown MEDIA_BACKEND value', () => {
+    process.env['MEDIA_BACKEND'] = 'midjourney';
+    process.env['ANTHROPIC_API_KEY'] = 'sk-test';
+    process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
+    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
+    expect(() => createContentGenerator('ai')).toThrow(/MEDIA_BACKEND/i);
+  });
+});

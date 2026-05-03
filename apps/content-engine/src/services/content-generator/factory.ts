@@ -10,6 +10,8 @@
  *   - reads CURRENT_AFFAIRS_V2_ENABLED (default 'false')
  *   - reads GOOGLE_CALENDAR_API_KEY (required when V1 enabled)
  *   - reads PERPLEXITY_API_KEY (required when V2 enabled)
+ *   - reads MEDIA_BACKEND ('placeholder' | 'fal-ai', default 'placeholder')
+ *   - reads FAL_API_KEY (required when MEDIA_BACKEND='fal-ai')
  *
  * Missing required keys throw at boot rather than letting the worker silently
  * misbehave.
@@ -21,6 +23,12 @@ import { AIContentGenerator } from './backends/ai/ai-content-generator.js';
 import { RestaurantSpecialization } from './backends/ai/specialization/index.js';
 import { AnthropicLLMProvider } from './backends/ai/llm/anthropic-provider.js';
 import { PlaceholderMediaGenerator } from './backends/ai/media/placeholder-media-generator.js';
+import {
+  FalAIMediaGenerator,
+  FalClient,
+  MongoMediaJobStore,
+} from './backends/ai/index.js';
+import type { IMediaGenerator } from './backends/ai/media/types.js';
 import {
   buildCurrentAffairsProvider,
   GoogleCalendarClient,
@@ -84,6 +92,29 @@ function buildCurrentAffairsForFactory(specialization: RestaurantSpecialization)
   );
 }
 
+type MediaBackend = 'placeholder' | 'fal-ai';
+
+function readMediaBackend(): MediaBackend {
+  const raw = (process.env.MEDIA_BACKEND ?? 'placeholder').trim();
+  if (raw === 'placeholder' || raw === 'fal-ai') return raw;
+  throw new Error(`Unknown MEDIA_BACKEND value: ${raw}. Expected 'placeholder' or 'fal-ai'.`);
+}
+
+function buildMediaGeneratorForFactory(): IMediaGenerator {
+  const backend = readMediaBackend();
+  if (backend === 'fal-ai') {
+    const apiKey = process.env.FAL_API_KEY;
+    if (!apiKey) {
+      throw new Error('FAL_API_KEY is required when MEDIA_BACKEND=fal-ai.');
+    }
+    return new FalAIMediaGenerator({
+      client: new FalClient({ apiKey }),
+      store: new MongoMediaJobStore(),
+    });
+  }
+  return new PlaceholderMediaGenerator();
+}
+
 /**
  * Stash the current-affairs provider per call so worker.ts can pull the same
  * instance for cron registration without re-running the env logic. This is a
@@ -119,7 +150,7 @@ export function createContentGenerator(backend: ContentGeneratorBackend): IConte
       return new AIContentGenerator({
         specialization,
         llm: new AnthropicLLMProvider({ apiKey }),
-        media: new PlaceholderMediaGenerator(),
+        media: buildMediaGeneratorForFactory(),
         currentAffairs,
       });
     }

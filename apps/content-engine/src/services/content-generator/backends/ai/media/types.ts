@@ -41,6 +41,10 @@ export interface ImageGenInput {
   caption?: string;
   /** Optional: edit a user-provided image (img2img) instead of generating from scratch. */
   baseImageUrl?: string;
+  // Phase 4 -- optional, used for cost attribution + audit
+  restaurantId?: string;
+  postId?: string;
+  cycleId?: string;
 }
 
 export interface VideoGenInput {
@@ -49,6 +53,10 @@ export interface VideoGenInput {
   concept: string;
   themes?: string[];
   caption?: string;
+  // Phase 4 -- optional
+  restaurantId?: string;
+  postId?: string;
+  cycleId?: string;
 }
 
 export interface IMediaGenerator {
