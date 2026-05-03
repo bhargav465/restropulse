@@ -24,7 +24,7 @@ vi.mock('@restropulse/telemetry/server', () => {
 // Set ASSET_SERVER_BASE_URL before content-generator loads asset-manager
 process.env['ASSET_SERVER_BASE_URL'] = 'http://localhost:3002';
 
-const { processPendingPosts } = await import('../../src/services/adhoc-processor.js');
+const { processPendingPosts } = await import('../../src/services/processors/adhoc/index.js');
 const {
   PlaceholderContentGenerator,
   setContentGenerator,

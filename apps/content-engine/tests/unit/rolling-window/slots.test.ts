@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveCycleSlots } from '../../../src/services/rolling-window/slots.js';
+import { deriveCycleSlots } from '../../../src/services/processors/rolling-window/slots.js';
 
 describe('deriveCycleSlots', () => {
   it('returns empty array when plannedPosts is missing or empty', () => {

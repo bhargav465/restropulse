@@ -21,7 +21,7 @@ vi.mock('@restropulse/db', () => ({
 }));
 
 import { getPostsCollection } from '@restropulse/db';
-import { processPendingPosts } from '../../src/services/adhoc-processor.js';
+import { processPendingPosts } from '../../src/services/processors/adhoc/index.js';
 import {
   setContentGenerator,
   resetContentGenerator,

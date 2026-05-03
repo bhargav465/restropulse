@@ -23,7 +23,7 @@ import {
   POST_APPROVAL_BUFFER_HOURS,
   CYCLE_APPROVAL_BUFFER_HOURS,
 } from '@restropulse/shared';
-import { processDeadlines } from '../../src/services/deadline-processor.js';
+import { processDeadlines } from '../../src/services/processors/deadline/index.js';
 
 const mockGetPostsCollection = vi.mocked(getPostsCollection);
 const mockGetStrategyCyclesCollection = vi.mocked(getStrategyCyclesCollection);

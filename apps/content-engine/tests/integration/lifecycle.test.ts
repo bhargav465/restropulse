@@ -13,14 +13,14 @@ vi.mock('@restropulse/telemetry/server', () => {
 
 process.env['ASSET_SERVER_BASE_URL'] = 'http://localhost:3002';
 
-const { processPendingPosts }  = await import('../../src/services/adhoc-processor.js');
-const { processPendingCycles } = await import('../../src/services/strategy-processor.js');
-const { processRollingWindow } = await import('../../src/services/rolling-window/processor.js');
-const { processRevisions }     = await import('../../src/services/revision-processor.js');
-const { processDeadlines }     = await import('../../src/services/deadline-processor.js');
+const { processPendingPosts }  = await import('../../src/services/processors/adhoc/index.js');
+const { processPendingCycles } = await import('../../src/services/processors/strategy/index.js');
+const { processRollingWindow } = await import('../../src/services/processors/rolling-window/index.js');
+const { processRevisions }     = await import('../../src/services/processors/revision/index.js');
+const { processDeadlines }     = await import('../../src/services/processors/deadline/index.js');
 const { PlaceholderContentGenerator, setContentGenerator, resetContentGenerator }
                                = await import('../../src/services/content-generator/index.js');
-const { deriveCycleSlots }     = await import('../../src/services/rolling-window/slots.js');
+const { deriveCycleSlots }     = await import('../../src/services/processors/rolling-window/slots.js');
 
 const DB_NAME = 'lifecycle-test';
 let mongod: MongoMemoryServer;

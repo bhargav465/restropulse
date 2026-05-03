@@ -21,7 +21,7 @@ vi.mock('@restropulse/telemetry/server', () => {
   };
 });
 
-const { processRollingWindow } = await import('../../src/services/rolling-window/processor.js');
+const { processRollingWindow } = await import('../../src/services/processors/rolling-window/index.js');
 
 let mongod: MongoMemoryServer;
 let client: MongoClient;
@@ -351,7 +351,7 @@ describe('processRollingWindow()', () => {
     });
 
     // Precompute exactly the same scheduledFor the processor would derive.
-    const { deriveCycleSlots } = await import('../../src/services/rolling-window/slots.js');
+    const { deriveCycleSlots } = await import('../../src/services/processors/rolling-window/slots.js');
     const slots = deriveCycleSlots({
       cycle: {
         startDate,

@@ -20,7 +20,7 @@ vi.mock('@restropulse/db', () => ({
 }));
 
 import { getPostsCollection, getStrategyCyclesCollection } from '@restropulse/db';
-import { processRevisions } from '../../src/services/revision-processor.js';
+import { processRevisions } from '../../src/services/processors/revision/index.js';
 import {
   setContentGenerator,
   resetContentGenerator,

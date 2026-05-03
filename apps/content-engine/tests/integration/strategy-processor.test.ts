@@ -25,7 +25,7 @@ vi.mock('@restropulse/telemetry/server', () => {
 process.env['ASSET_SERVER_BASE_URL'] = 'http://localhost:3002';
 
 const { processPendingCycles } = await import(
-  '../../src/services/strategy-processor.js'
+  '../../src/services/processors/strategy/index.js'
 );
 const {
   PlaceholderContentGenerator,

@@ -13,7 +13,7 @@ import {
   findRestaurantById,
 } from '@restropulse/db';
 import { createLogger } from '@restropulse/telemetry/server';
-import { getContentGenerator, ContentGenerationError } from './content-generator/index.js';
+import { getContentGenerator, ContentGenerationError } from '../../content-generator/index.js';
 
 const logger = createLogger('content-engine:strategy-processor');
 
@@ -132,3 +132,8 @@ export async function processPendingCycles(): Promise<{ processed: number; faile
   return stats;
 }
 
+import type { IProcessor } from '../types.js';
+
+export function createStrategyProcessor(cron: string): IProcessor {
+  return { name: 'pending-cycles', cron, run: async () => { await processPendingCycles(); } };
+}

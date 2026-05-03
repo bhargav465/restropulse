@@ -26,7 +26,7 @@ import {
   ContentGenerationError,
   type CycleFeedback,
   type PostFeedback,
-} from './content-generator/index.js';
+} from '../../content-generator/index.js';
 
 const logger = createLogger('content-engine:revision-processor');
 
@@ -227,4 +227,10 @@ export async function processRevisions(): Promise<{
   }
 
   return stats;
+}
+
+import type { IProcessor } from '../types.js';
+
+export function createRevisionProcessor(cron: string): IProcessor {
+  return { name: 'revisions', cron, run: async () => { await processRevisions(); } };
 }

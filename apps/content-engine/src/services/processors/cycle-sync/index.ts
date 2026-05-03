@@ -173,3 +173,9 @@ export async function processCycleSync(): Promise<{
 
   return stats;
 }
+
+import type { IProcessor } from '../types.js';
+
+export function createCycleSyncProcessor(cron: string): IProcessor {
+  return { name: 'cycle-sync', cron, run: async () => { await processCycleSync(); } };
+}

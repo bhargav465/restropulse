@@ -23,7 +23,7 @@ vi.mock('@restropulse/db', () => ({
 import { getStrategyCyclesCollection } from '@restropulse/db';
 import {
   processPendingCycles,
-} from '../../src/services/strategy-processor.js';
+} from '../../src/services/processors/strategy/index.js';
 import {
   setContentGenerator,
   resetContentGenerator,

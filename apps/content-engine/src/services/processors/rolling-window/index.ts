@@ -168,3 +168,9 @@ export async function processRollingWindow(config: RollingWindowConfig = {}): Pr
 
   return stats;
 }
+
+import type { IProcessor } from '../types.js';
+
+export function createRollingWindowProcessor(cron: string, config: RollingWindowConfig): IProcessor {
+  return { name: 'rolling-window', cron, run: async () => { await processRollingWindow(config); } };
+}

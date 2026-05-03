@@ -112,3 +112,9 @@ export async function processDeadlines(config: DeadlineConfig = {}): Promise<{
 
   return stats;
 }
+
+import type { IProcessor } from '../types.js';
+
+export function createDeadlineProcessor(cron: string, config: DeadlineConfig): IProcessor {
+  return { name: 'deadlines', cron, run: async () => { await processDeadlines(config); } };
+}

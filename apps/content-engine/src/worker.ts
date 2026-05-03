@@ -27,13 +27,16 @@ import path from 'node:path';
 import cron from 'node-cron';
 import { loadAndValidateEnv, z, ROLLING_WINDOW_HOURS, POST_APPROVAL_BUFFER_HOURS, CYCLE_APPROVAL_BUFFER_HOURS, validateTimingConstraints } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
-import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
-import { processPendingPosts } from './services/adhoc-processor.js';
-import { processPendingCycles } from './services/strategy-processor.js';
-import { processRollingWindow } from './services/rolling-window/processor.js';
-import { processRevisions } from './services/revision-processor.js';
-import { processDeadlines } from './services/deadline-processor.js';
-import { processCycleSync } from './services/cycle-sync-processor.js';
+import { createLogger, shutdownServerTelemetry, tracedCronJob } from '@restropulse/telemetry/server';
+import {
+  createAdhocProcessor,
+  createStrategyProcessor,
+  createRollingWindowProcessor,
+  createRevisionProcessor,
+  createDeadlineProcessor,
+  createCycleSyncProcessor,
+  type IProcessor,
+} from './services/processors/index.js';
 import { startAssetServer } from './services/asset-server.js';
 import {
   createContentGenerator,
@@ -86,22 +89,14 @@ const deadlineConfig = {
   cycleApprovalBufferHours: env.CYCLE_APPROVAL_BUFFER_MINS / 60,
 };
 
-function schedule(cronExpr: string, name: string, job: () => Promise<unknown>): void {
-  cron.schedule(cronExpr, async () => {
+function registerProcessor(processor: IProcessor): void {
+  cron.schedule(processor.cron, async () => {
     try {
-      await job();
+      await tracedCronJob(processor.name, () => processor.run());
     } catch (error) {
-      logger.error({ err: error, processor: name }, 'Processor job failed');
+      logger.error({ err: error, processor: processor.name }, 'Processor job failed');
     }
   }, { timezone: 'Asia/Kolkata' });
-}
-
-async function runAllProcessors(): Promise<void> {
-  await processPendingPosts();
-  await processPendingCycles();
-  await processRollingWindow(rollingWindowConfig);
-  await processRevisions();
-  await processDeadlines(deadlineConfig);
 }
 
 let assetServer: http.Server | null = null;
@@ -122,13 +117,18 @@ const startWorker = async () => {
     // Start local asset server for placeholder media
     assetServer = startAssetServer(ASSET_PORT);
 
-    // Schedule each processor independently so their frequencies can be tuned via env.
-    schedule(env.CRON_PENDING_POSTS,   'pending-posts',   () => processPendingPosts());
-    schedule(env.CRON_PENDING_CYCLES,  'pending-cycles',  () => processPendingCycles());
-    schedule(env.CRON_ROLLING_WINDOW,  'rolling-window',  () => processRollingWindow(rollingWindowConfig));
-    schedule(env.CRON_REVISIONS,       'revisions',       () => processRevisions());
-    schedule(env.CRON_DEADLINES,       'deadlines',       () => processDeadlines(deadlineConfig));
-    schedule(env.CRON_CYCLE_SYNC,      'cycle-sync',      () => processCycleSync());
+    const processors: ReadonlyArray<IProcessor> = [
+      createAdhocProcessor(env.CRON_PENDING_POSTS),
+      createStrategyProcessor(env.CRON_PENDING_CYCLES),
+      createRollingWindowProcessor(env.CRON_ROLLING_WINDOW, rollingWindowConfig),
+      createRevisionProcessor(env.CRON_REVISIONS),
+      createDeadlineProcessor(env.CRON_DEADLINES, deadlineConfig),
+      createCycleSyncProcessor(env.CRON_CYCLE_SYNC),
+    ];
+
+    for (const processor of processors) {
+      registerProcessor(processor);
+    }
 
     logger.info(
       {
@@ -136,14 +136,7 @@ const startWorker = async () => {
         rollingWindowMins: env.ROLLING_WINDOW_MINS,
         postApprovalBufferMins: env.POST_APPROVAL_BUFFER_MINS,
         cycleApprovalBufferMins: env.CYCLE_APPROVAL_BUFFER_MINS,
-        schedules: {
-          pendingPosts: env.CRON_PENDING_POSTS,
-          pendingCycles: env.CRON_PENDING_CYCLES,
-          rollingWindow: env.CRON_ROLLING_WINDOW,
-          revisions: env.CRON_REVISIONS,
-          deadlines: env.CRON_DEADLINES,
-          cycleSync: env.CRON_CYCLE_SYNC,
-        },
+        schedules: Object.fromEntries(processors.map((p) => [p.name, p.cron])),
       },
       'Content engine is running',
     );
@@ -153,7 +146,9 @@ const startWorker = async () => {
     if (process.env.NODE_ENV === 'development') {
       logger.info('Development mode: Running initial check in 5 seconds...');
       setTimeout(async () => {
-        await runAllProcessors();
+        for (const processor of processors) {
+          await processor.run();
+        }
       }, 5000);
     }
   } catch (error) {

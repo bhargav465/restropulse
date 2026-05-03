@@ -16,7 +16,7 @@
  */
 
 import type { PostType, Platform } from '@restropulse/shared';
-import { parseBestTime, parseDateOrFallback } from '../strategy-processor.js';
+import { parseBestTime, parseDateOrFallback } from '../strategy/index.js';
 
 export interface PlannedPostEntry {
   category: string;

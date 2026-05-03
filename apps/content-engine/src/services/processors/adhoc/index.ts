@@ -10,7 +10,7 @@
 import { getPostsCollection, findRestaurantById } from '@restropulse/db';
 import type { PostType, Platform } from '@restropulse/shared';
 import { createLogger } from '@restropulse/telemetry/server';
-import { getContentGenerator, ContentGenerationError } from './content-generator/index.js';
+import { getContentGenerator, ContentGenerationError } from '../../content-generator/index.js';
 
 const logger = createLogger('content-engine:adhoc-processor');
 
@@ -87,4 +87,10 @@ export async function processPendingPosts(): Promise<{ processed: number; failed
   }
 
   return stats;
+}
+
+import type { IProcessor } from '../types.js';
+
+export function createAdhocProcessor(cron: string): IProcessor {
+  return { name: 'pending-posts', cron, run: async () => { await processPendingPosts(); } };
 }
