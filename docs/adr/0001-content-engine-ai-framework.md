@@ -261,3 +261,58 @@ export interface SpecializationContext {
 **Extending to a new domain (future, not now)**: when a second domain is onboarded (e.g., a salon chain, a fitness studio), the path is to add a sibling folder under `specialization/`, implement `IDomainSpecialization`, and wire selection into worker boot via env var or per-restaurant DB field. No changes to `AIContentGenerator`, `ICurrentAffairsProvider`, `IMediaGenerator`, or any cron processor.
 
 **YAGNI guardrail**: no abstractions for cross-domain prompt sharing, domain registry, multi-domain composability, or A/B prompt experimentation are built today. Those are real future possibilities; designing for them now without a second domain in flight would add complexity that pays off only on speculation. The interface above is the smallest seam that protects the future option.
+
+## 7. Tradeoffs
+
+The decision in §4 accepts these tradeoffs intentionally — do not attempt to "fix" them during implementation:
+
+**Intentional commitments:**
+
+- The team maintains ~600–800 LOC of orchestration, durability, and cost-tracking code in lieu of delegating to a framework. This is the cost of provider neutrality.
+- No time-travel debugging. When a multi-step workflow fails four steps in, replay starts from the last `generationStep` checkpoint, not from arbitrary state.
+- The MongoDB-backed `mediaJobs` store ties durability to MongoDB availability. The entire app already depends on Atlas; this adds no new failure mode.
+- Brand-voice consistency relies on prompting alone until V3 ships. Quality may plateau for established restaurants whose customers know the brand voice well — addressed by V3 when triggers in §5.3 fire.
+- No built-in agent observability dashboards. The two Azure Monitor Workbooks specified in §4.3 are owned and maintained by the team.
+
+**Realized benefits** (named so the implementer recognizes when they hold):
+
+- Provider portability: model swap is a one-import change.
+- Anthropic prompt caching available immediately on Sonnet 4.6 / Haiku 4.5 [^prompt-caching].
+- Per-call cost attribution by `restaurantId` / `postId` enables transparent SaaS billing math.
+- OpenTelemetry spans flow into the existing Azure Monitor pipeline without new infrastructure.
+- Custom orchestrator is small enough (~200 LOC) to rewrite in a week if needed.
+- Domain knowledge isolated in `IDomainSpecialization` — restaurant prompts iterate without touching orchestration.
+
+[^prompt-caching]: Anthropic prompt caching documentation: <https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching>
+
+## 8. Revisit Triggers
+
+This ADR should be revisited if **any** of the following occur during or after implementation. If a trigger fires during implementation, escalate before continuing.
+
+1. **Vercel AI SDK license change** — Vercel changes the OSS license of the `ai` package or the `@ai-sdk/*` provider packages (currently MIT — free OSS).
+2. **End-of-life or abandonment** — Vercel deprecates or unmaintains the `ai` package (>6 months without a release, or a formal deprecation notice).
+3. **Compliance** — a customer requires hosted agent observability with SOC 2 attestation. The mitigation path is **not** to switch SDK; it is to add LangSmith ($39+/user/month) or migrate to a SOC 2-attested agent platform.
+4. **Capability gap** — the generator pipeline grows to ≥3 sub-agents, or requires durable execution semantics (resumable workflows from arbitrary state, exactly-once tool execution, time-travel debugging) that custom code becomes infeasible to maintain. In that case, migrate to LangGraph.js or Mastra.
+5. **Perplexity Sonar pricing ≥2× current** (currently approximately $1/M input tokens / $1/M output tokens for Sonar; ~$3/M for Sonar Pro) — switch to Brave Search plus custom Claude Haiku summarization.
+6. **MongoDB Atlas Vector Search pricing model changes** before V3 ships — re-evaluate against pgvector.
+7. **fal.ai outage rate or pricing change** — switch to Replicate using the already-documented fallback implementation.
+
+## 9. Out of Scope
+
+The following are explicitly NOT decided by this ADR and require their own ADRs or specs. Do not build them as part of the current implementation:
+
+- Embedding model choice for V3 (deferred to the V3 ADR).
+- Plan-limit / credit-cost economics around AI generation (separate billing decision).
+- Image generation safety / NSFW filtering policies (separate ADR).
+- Multi-language support beyond English plus Hindi/Hinglish prompts.
+- A second `IDomainSpecialization` (salon, fitness, retail) — interface exists; the second implementation is future work.
+- Cross-domain prompt sharing, a domain registry, and prompt A/B testing infrastructure — explicit YAGNI; revisit when 2+ domains exist.
+
+## 10. References
+
+- Brainstorm spec: `docs/superpowers/specs/2026-05-03-content-engine-ai-framework-adr-design.md`
+- Existing `IContentGenerator` contract: `apps/content-engine/src/services/content-generator/types.ts`
+- Existing `PlaceholderContentGenerator`: `apps/content-engine/src/services/content-generator/placeholder-generator.ts`
+- Worker boot wiring point: `apps/content-engine/src/worker.ts:114`
+- Telemetry package: `packages/telemetry`
+- Python reference (LangGraph + LangChain proof-of-concept): `D:\Work\restx-experimental\restx-experimental` — uses LangGraph `MemorySaver` (in-memory checkpointing only, lost on process restart).
