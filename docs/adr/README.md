@@ -23,5 +23,5 @@ Each ADR is a single markdown file named `NNNN-short-slug.md` where `NNNN` is a 
 
 - Use plain ASCII (no emoji, per the project's "No Special Characters" rule)
 - Cite primary sources for every claim about an external framework or API
-- Keep §7 Decision definitive — do not write "TBD"
-- Include §9 Exit Criteria so a future engineer knows when to revisit
+- Keep the Decision section definitive — do not write "TBD"
+- Include Revisit Triggers (or equivalent) so a future engineer knows when to re-evaluate the ADR

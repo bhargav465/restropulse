@@ -28,7 +28,7 @@ This ADR captures both decisions, the implementation patterns required to make t
 
 ## 3. Decision Drivers
 
-The eight drivers below are listed in priority order. Each option in §4 is scored on how well it serves these drivers, weighted by the priority of the drivers it touches.
+The eight drivers below are listed in priority order. The decision in §4 is justified against these drivers, with the heaviest weight given to the P0 drivers.
 
 1. **Time-to-robust-product (P0)** — minimal cognitive load, idiomatic TypeScript, slides into the existing `IContentGenerator` interface without architectural changes.
 2. **Cost (P0)** — per-call model selection (Haiku for cheap steps, Sonnet for reasoning), Anthropic prompt caching available, transparent token attribution per `restaurantId` / `postId`.
@@ -55,7 +55,7 @@ No agent state-machine framework is adopted; orchestration stays plain TypeScrip
 
 ### 4.2 Current-Affairs RAG
 
-**Implement V1 (calendar/holiday injection) and V2 (daily Sonar Pro refresh + per-post hyperlocal triggers) in the initial release. Defer V3 (Atlas Vector Search for brand voice) until production evidence justifies it, per the rebuild triggers in §5.**
+**Implement V1 (calendar/holiday injection) and V2 (daily Sonar Pro refresh + per-post hyperlocal triggers) in the initial release. Defer V3 (Atlas Vector Search for brand voice) until production evidence justifies it, per the rebuild triggers in §5.3.**
 
 ### 4.3 Implementation patterns scoped IN
 
@@ -131,7 +131,7 @@ V3 is **not built** in the initial release. Its design and rebuild triggers are 
 | Tier | Scope | Build now? | Estimated cost / restaurant / month |
 |---|---|---|---|
 | V1 | Calendar / holiday injection | Yes | $0 |
-| V2 | Daily Sonar refresh + per-post hyperlocal triggers | Yes | ~$0.30–1.00 |
+| V2 | Daily Sonar refresh + per-post hyperlocal triggers | Yes | ~$0.30–1.00 (incl. amortized daily refresh) |
 | V3 | Atlas Vector Search for brand voice | No (deferred with explicit triggers) | n/a |
 
 **Vector store decision**: not relevant to V1 or V2 (current affairs has a half-life of hours). Only relevant to V3, where MongoDB Atlas Vector Search is the primary candidate by infrastructure adjacency.
@@ -315,4 +315,4 @@ The following are explicitly NOT decided by this ADR and require their own ADRs 
 - Existing `PlaceholderContentGenerator`: `apps/content-engine/src/services/content-generator/placeholder-generator.ts`
 - Worker boot wiring point: `apps/content-engine/src/worker.ts:114`
 - Telemetry package: `packages/telemetry`
-- Python reference (LangGraph + LangChain proof-of-concept): `D:\Work\restx-experimental\restx-experimental` — uses LangGraph `MemorySaver` (in-memory checkpointing only, lost on process restart).
+- Python reference (LangGraph + LangChain proof-of-concept; not in this repo — ask the original author for access): uses LangGraph `MemorySaver` (in-memory checkpointing only, lost on process restart). The MongoDB-backed `mediaJobs` durability described in §4.3 is a deliberate upgrade over what that proof-of-concept achieved in practice.
