@@ -222,6 +222,7 @@ Every layer is independently swappable behind an interface.
 ```
 IContentGenerator (top-level contract; already exists in code today)
   └── AIContentGenerator (Vercel-AI-SDK-based concrete impl, NEW)
+       ├── IDomainSpecialization        ← restaurant-specific prompts, knowledge, Sonar queries
        ├── ILLMProvider                 ← Vercel AI SDK abstracts; one-import swap
        ├── ICurrentAffairsProvider      ← V1 / V2 / V3 are decorators here
        ├── IMediaGenerator              ← fal.ai / Replicate / Runway impls swap here
@@ -260,6 +261,141 @@ Same composition pattern applies to `IMediaGenerator` and `ILLMProvider`.
 
 ---
 
+## 7A. Decision: Domain Specialization Module (restaurant-first, extensible)
+
+All domain-specific knowledge — *what makes restaurant content sound like restaurant content* — lives in a single dedicated module behind one interface. This is the seam at which the platform becomes multi-domain in the future. The current scope ships **only one** specialization (`RestaurantSpecialization`); the interface stays small enough that adding the second domain doesn't force a redesign, but we explicitly do **not** build abstractions for hypothetical second domains today.
+
+### Location
+
+`apps/content-engine/src/services/content-generator/ai-generator/specialization/`
+
+```
+specialization/
+  index.ts                      # exports IDomainSpecialization + provider DI
+  types.ts                      # IDomainSpecialization interface
+  restaurant/
+    index.ts                    # RestaurantSpecialization concrete impl
+    prompts.ts                  # system prompts, task prompts, voice guidelines
+    sonar-queries.ts            # restaurant-tuned Perplexity Sonar prompt templates
+    content-patterns.ts         # post archetypes (chef special, behind-the-scenes, etc.)
+    visual-direction.ts         # food-photography rules, image-prompt fragments
+    platform-tactics.ts         # Instagram-vs-Facebook playbook for restaurants
+    hashtag-strategy.ts         # restaurant + cuisine + location hashtag heuristics
+    psychology.ts               # buyer-psychology hooks (scarcity, social proof, FOMO)
+```
+
+### Interface (intentionally small)
+
+```typescript
+export interface IDomainSpecialization {
+  readonly domain: string;                              // "restaurant" | <future>
+  readonly version: string;                             // semver, for prompt-evolution tracking
+
+  /** System prompt fragment injected into every LLM call for this domain. */
+  getSystemPromptFragment(ctx: SpecializationContext): string;
+
+  /** Task-specific prompt augmentation per IContentGenerator operation. */
+  getTaskPrompt(
+    operation: "draftCycle" | "reviseCycle" | "generatePost" | "revisePost",
+    input: unknown,
+    ctx: SpecializationContext,
+  ): string;
+
+  /** Sonar query templates for V2 current-affairs RAG, tuned to this domain. */
+  getSonarQueries(scope: "daily-platform" | "per-post-trigger", ctx: SpecializationContext): string[];
+
+  /** Image generation prompt fragment (style direction, composition, lighting). */
+  getImagePromptFragment(input: ImageGenInput, ctx: SpecializationContext): string;
+
+  /** Hashtag selection strategy. */
+  selectHashtags(caption: string, ctx: SpecializationContext): string[];
+
+  /** Validate that generated output respects domain conventions
+   *  (e.g., restaurant captions should not over-promise health benefits). */
+  validateOutput(output: GeneratedPost | GeneratedCycle, ctx: SpecializationContext): ValidationResult;
+}
+
+export interface SpecializationContext {
+  restaurantId?: string;
+  restaurantName?: string;
+  cuisine?: string;          // "South Indian", "Italian", "Multi-cuisine"
+  region?: string;           // "Bengaluru", "Mumbai", "NCR"
+  brandVoice?: string;       // "playful", "premium", "homestyle"
+  dietaryFocus?: string[];   // ["vegetarian", "jain", "vegan"]
+  locale?: string;           // "en-IN", "hi-IN"
+}
+```
+
+### What `RestaurantSpecialization` ships with (initial content)
+
+This is the prose that experienced food-and-beverage social media specialists use, captured in code rather than tribal knowledge:
+
+**Prompt voice & tone**
+- Sensory-first language: "crispy, golden, hand-tossed" beats "good pizza"
+- Specificity wins: name the dish, the technique, the origin
+- Avoid hyperbolic health claims (legal/regulatory exposure in India under FSSAI)
+- Match the restaurant's own voice (premium / homestyle / playful) — read from `brandVoice`
+
+**Content archetypes** (the 7 high-performing post patterns for Indian restaurants)
+1. **Daily Special / Chef's Pick** — featured dish + price + scarcity hook ("today only")
+2. **Behind-the-scenes** — kitchen prep, plating, ingredient sourcing
+3. **Customer/social proof** — review screenshots, repost UGC, occasion celebrations
+4. **Festival/event tie-in** — Diwali thalis, IPL match-day combos, Friday-night specials
+5. **Cuisine education** — "what makes a real Hyderabadi biryani" explainer reels
+6. **Offer/promo** — combo deals, weekday discounts, loyalty rewards (clear CTA + redemption rule)
+7. **Origin story / values** — chef interviews, sourcing stories, sustainability angles
+
+**Sonar query templates (V2)**
+- Daily platform-wide: *"What sports outcomes, festivals, weather events, viral food trends, or cultural moments in India today/tomorrow could a restaurant reference in social media content? Include hashtag suggestions."*
+- Per-post triggers (matched against `concept`):
+  - Sports: *"Today's/tomorrow's major cricket/football match in India and likely audience sentiment around it"*
+  - Weather: *"Current weather pattern in {region} and how it affects food/dining preferences"*
+  - Festival: *"Festival/observance happening in {region} this week and traditional food associations"*
+  - Cuisine: *"Recent viral food trends related to {cuisine} on Indian Instagram/Reddit"*
+
+**Image-prompt direction (food photography heuristics)**
+- Default lighting: warm, golden-hour-style; soft shadows
+- Composition: 45° hero angle for plated dishes; flat-lay for spreads; macro for textures
+- Always specify: surface (wooden / marble / banana leaf), garnish state (fresh, glistening), mood (cozy / vibrant)
+- Avoid: clinical white backgrounds, plastic-looking food, generic stock-style framing
+
+**Platform tactics**
+- Instagram: square (1:1) for feed, 9:16 portrait for Reels, ~5–8 hashtags inline at end of caption
+- Facebook: 4:5 portrait, longer captions OK, fewer hashtags, link-friendly
+- Reels: hook in first 1.5 seconds, on-screen text in first frame, 6–15 second sweet spot
+
+**Hashtag strategy**
+- 3-tier mix: 2–3 broad (#foodie, #indianfood), 2–3 cuisine-specific (#biryanilove, #southindianfood), 2–3 location-specific (#bengalurueats, #cpfoodies)
+- Avoid banned/shadowbanned tags (maintain a small denylist)
+- Refresh trending tags from V2 Sonar daily refresh
+
+**Validation rules**
+- Reject captions making medical/health-cure claims (FSSAI compliance)
+- Warn on captions exceeding platform limits (Instagram caption: 2200 chars; first 125 chars are above-the-fold)
+- Warn on missing CTA when `triggerType` is `OFFER` or `PROMO`
+- Reject hashtag count outside [3, 15] range
+
+### Extending to a new domain (future, not now)
+
+When a second domain is onboarded (e.g., a salon chain, a fitness studio), the path is:
+
+1. Add `salon/` (or `fitness/`) sibling under `specialization/`
+2. Implement `IDomainSpecialization` with that domain's prompts/queries/heuristics
+3. Wire into worker boot via env var (`CONTENT_DOMAIN=salon`) or per-restaurant DB field
+4. **No changes** to `AIContentGenerator`, `ICurrentAffairsProvider`, `IMediaGenerator`, or any cron processor
+
+**YAGNI guardrail**: we do **not** build abstractions for cross-domain prompt sharing, a domain registry, multi-domain composability, or A/B prompt experiments today. Those are real possibilities, but designing for them now without a second domain in flight would add complexity that pays off only on speculation. The interface above is the smallest seam that protects the future option.
+
+### Why this earns a dedicated module (not just inline strings)
+
+- **Testability**: `RestaurantSpecialization` becomes a unit-testable artifact with golden-output tests for prompt regressions
+- **Versioning**: bumping `version` lets the team A/B-compare prompt iterations against historical generation quality
+- **Marketer collaboration**: a non-engineer with editorial input can review/edit `prompts.ts` and `content-patterns.ts` without touching orchestration code
+- **Regulatory hygiene**: validation rules (FSSAI, ad-platform compliance) live in one auditable place
+- **Future onboarding**: when a second domain lands, the implementation cost is predictable (~2 weeks per new domain) and limited to one folder
+
+---
+
 ## 8. Consequences (for §8 of the ADR)
 
 ### Positive
@@ -272,6 +408,7 @@ Same composition pattern applies to `IMediaGenerator` and `ILLMProvider`.
 - V1+V2 RAG ships in ~6–8 days; total RAG cost <$1/restaurant/month at MVP scale
 - Custom orchestrator is small enough (~200 LOC) to rewrite in a week if needed
 - Pluggable architecture means V3 / alternative providers / framework migration are future options, not rewrites
+- Domain knowledge isolated in `IDomainSpecialization` — restaurant content quality improves via prompt iteration without touching orchestration; future domains (salon, fitness, retail) plug in without core changes
 
 ### Negative
 
@@ -306,11 +443,12 @@ Trigger a revisit of this ADR if **any** of:
 
 The following are explicitly NOT decided by this ADR and will require their own ADRs / specs:
 
-- Specific prompt content for `draftCycle` / `reviseCycle` / `generatePost` / `revisePost` (covered in implementation plan)
 - Embedding model choice for V3 (deferred to V3 ADR)
 - The plan-limit / credit-cost economics around AI generation (separate billing decision)
 - Image generation safety / NSFW filtering (separate ADR)
 - Multi-language support beyond English + Hindi/Hinglish prompts
+- A second `IDomainSpecialization` (salon, fitness, retail) — interface exists, second impl is future work
+- Cross-domain prompt sharing, domain registry, prompt A/B testing infrastructure — explicit YAGNI; revisit when 2+ domains exist
 
 ---
 
@@ -319,10 +457,10 @@ The following are explicitly NOT decided by this ADR and will require their own 
 For the writing-plans skill that runs after this spec:
 
 - **Final ADR location**: `docs/adr/0001-content-engine-ai-framework.md` (create `docs/adr/` directory)
-- **Required ADR sections**: §1 Status, §2 Context, §3 Decision Drivers, §4 Considered Options (full 11-axis × 9-framework scoring matrix with primary-source citations + tiered prose for top-4 / one-paragraph dismissal for bottom-5), §5 Current-Affairs RAG Sub-Decision, §7 Decision (definitive — pick a winner per the design above), §8 Consequences, §9 Exit Criteria
+- **Required ADR sections**: §1 Status, §2 Context, §3 Decision Drivers, §4 Considered Options (full 11-axis × 9-framework scoring matrix with primary-source citations + tiered prose for top-4 / one-paragraph dismissal for bottom-5), §5 Current-Affairs RAG Sub-Decision, §6 Pluggable Architecture (incl. `IDomainSpecialization` module — restaurant impl + extensibility note), §7 Decision (definitive — pick a winner per the design above), §8 Consequences, §9 Exit Criteria
 - **Primary-source citations required** for every framework in the scoring matrix (one per header, linking to official docs)
 - **No code in the PR** — docs-only
-- **Self-contained** — a future engineer should be able to read the ADR alone and understand both the framework choice AND the implementation patterns required to make it succeed
+- **Self-contained** — a future engineer should be able to read the ADR alone and understand: framework choice, RAG strategy, implementation patterns required, AND the domain-specialization seam that makes future-domain extensibility a non-rewrite
 
 ---
 
