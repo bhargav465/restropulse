@@ -1,0 +1,60 @@
+/**
+ * IMediaGenerator -- the seam between AIContentGenerator orchestration and
+ * media providers (image/video). Phase 2 ships PlaceholderMediaGenerator as
+ * the only impl. Phase 4 introduces FalAIMediaGenerator and the MongoDB-backed
+ * mediaJobs durable polling pattern. Phase 5 extends to long-running video.
+ *
+ * Phase 2's contract is intentionally synchronous (Promise<MediaGenJob with
+ * status 'COMPLETED' immediately); phase 5 will introduce the PENDING/RUNNING
+ * states without changing this interface shape -- callers must already handle
+ * the wider state space.
+ */
+
+import type { Platform, PostType } from '@restropulse/shared';
+
+export type MediaJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+
+export interface MediaGenJob {
+  jobId: string;
+  status: MediaJobStatus;
+  /** Public URL of the resulting media. Required when status is COMPLETED. */
+  mediaUrl?: string;
+  /** Carousel sets resolve with multiple URLs. */
+  mediaUrls?: string[];
+  /** Thumbnail URL (for video and carousel). */
+  thumbnail?: string;
+  /** Width/height/duration metadata when available. */
+  metadata?: {
+    widthPx?: number;
+    heightPx?: number;
+    durationSeconds?: number;
+  };
+  /** Failure detail when status is FAILED. */
+  error?: string;
+}
+
+export interface ImageGenInput {
+  postType: PostType;          // IMAGE | CAROUSEL | STORY (this method's domain)
+  platforms: Platform[];
+  concept: string;
+  themes?: string[];
+  caption?: string;
+  /** Optional: edit a user-provided image (img2img) instead of generating from scratch. */
+  baseImageUrl?: string;
+}
+
+export interface VideoGenInput {
+  postType: 'REEL' | 'VIDEO' | 'STORY';
+  platforms: Platform[];
+  concept: string;
+  themes?: string[];
+  caption?: string;
+}
+
+export interface IMediaGenerator {
+  readonly name: string;
+  generateImage(input: ImageGenInput): Promise<MediaGenJob>;
+  generateVideo(input: VideoGenInput): Promise<MediaGenJob>;
+  /** Phase 5: poll a previously-submitted job. Phase 2 impls return COMPLETED jobs immediately so this is a no-op for them. */
+  pollJob(jobId: string): Promise<MediaGenJob>;
+}

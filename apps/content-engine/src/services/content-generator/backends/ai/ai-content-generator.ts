@@ -1,12 +1,12 @@
 /**
- * AIContentGenerator -- phase 1 stub.
+ * AIContentGenerator -- phase 2 implementation for cycle ops.
  *
- * Implements IContentGenerator (via BaseContentGenerator) and holds a reference
- * to its IDomainSpecialization. Each operation throws BACKEND_UNAVAILABLE until
- * phase 2 wires Vercel AI SDK LLM calls. The factory still returns this when
- * CONTENT_GENERATOR_BACKEND=ai so the seam is exercised end-to-end and any
- * misconfigured environment fails loudly at the first generation attempt rather
- * than silently falling back to placeholder.
+ * Holds three injected collaborators (specialization, llm, media) so tests
+ * substitute mocks for any of them without monkey-patching modules.
+ *
+ * draftCycle + reviseCycle delegate to pipeline/draft-cycle.ts +
+ * pipeline/revise-cycle.ts. generatePost + revisePost still throw
+ * BACKEND_UNAVAILABLE -- they land in Checkpoint C.
  */
 
 import { createLogger } from '@restropulse/telemetry/server';
@@ -22,51 +22,64 @@ import {
   type RevisePostInput,
 } from '../../types.js';
 import type { IDomainSpecialization } from './specialization/index.js';
+import type { ILLMProvider } from './llm/types.js';
+import type { IMediaGenerator } from './media/types.js';
+import { runDraftCycle } from './pipeline/draft-cycle.js';
+import { runReviseCycle } from './pipeline/revise-cycle.js';
+import { runGeneratePost } from './pipeline/generate-post.js';
+import { runRevisePost } from './pipeline/revise-post.js';
+import type { PipelineDeps } from './pipeline/types.js';
 
 const log = createLogger('ai-content-generator');
 
-const NOT_WIRED_DETAIL = 'AI generator scaffolded but the LLM provider is not yet wired. This lands in phase 2.';
-
 export interface AIContentGeneratorOptions {
   specialization: IDomainSpecialization;
+  llm: ILLMProvider;
+  media: IMediaGenerator;
 }
 
 export class AIContentGenerator extends BaseContentGenerator {
   readonly name = 'ai';
   readonly specialization: IDomainSpecialization;
+  private readonly deps: PipelineDeps;
 
   constructor(options: AIContentGeneratorOptions) {
     super();
-    if (!options || !options.specialization) {
+    if (!options || !options.specialization || !options.llm || !options.media) {
       throw new ContentGenerationError(
         'INVALID_INPUT',
-        'AIContentGenerator requires a specialization in its constructor options.',
+        'AIContentGenerator requires { specialization, llm, media } in its constructor options.',
       );
     }
     this.specialization = options.specialization;
+    this.deps = {
+      specialization: options.specialization,
+      llm: options.llm,
+      media: options.media,
+    };
     log.info(
-      { domain: this.specialization.domain, version: this.specialization.version },
-      'AIContentGenerator instantiated (phase 1 stub)',
+      { domain: this.specialization.domain, version: this.specialization.version, llm: options.llm.name, media: options.media.name },
+      'AIContentGenerator instantiated',
     );
   }
 
-  async draftCycle(_input: DraftCycleInput, _ctx?: GenerationContext): Promise<GeneratedCycle> {
-    throw new ContentGenerationError('BACKEND_UNAVAILABLE', NOT_WIRED_DETAIL);
+  async draftCycle(input: DraftCycleInput, ctx?: GenerationContext): Promise<GeneratedCycle> {
+    return runDraftCycle(input, this.deps, ctx);
   }
 
-  async reviseCycle(_input: ReviseCycleInput, _ctx?: GenerationContext): Promise<GeneratedCycle> {
-    throw new ContentGenerationError('BACKEND_UNAVAILABLE', NOT_WIRED_DETAIL);
+  async reviseCycle(input: ReviseCycleInput, ctx?: GenerationContext): Promise<GeneratedCycle> {
+    return runReviseCycle(input, this.deps, ctx);
   }
 
-  async generatePostContent(_input: GeneratePostInput, _ctx?: GenerationContext): Promise<GeneratedPost> {
-    throw new ContentGenerationError('BACKEND_UNAVAILABLE', NOT_WIRED_DETAIL);
+  async generatePostContent(input: GeneratePostInput, ctx?: GenerationContext): Promise<GeneratedPost> {
+    return runGeneratePost(input, this.deps, ctx);
   }
 
-  async revisePostContent(_input: RevisePostInput, _ctx?: GenerationContext): Promise<GeneratedPost> {
-    throw new ContentGenerationError('BACKEND_UNAVAILABLE', NOT_WIRED_DETAIL);
+  async revisePostContent(input: RevisePostInput, ctx?: GenerationContext): Promise<GeneratedPost> {
+    return runRevisePost(input, this.deps, ctx);
   }
 
   async healthCheck(): Promise<{ ok: boolean; detail?: string }> {
-    return { ok: false, detail: NOT_WIRED_DETAIL };
+    return { ok: true, detail: `llm=${this.deps.llm.name} media=${this.deps.media.name}` };
   }
 }

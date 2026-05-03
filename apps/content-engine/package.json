@@ -17,10 +17,15 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@restropulse/shared": "*",
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
+    "@ai-sdk/openai": "^1.0.0",
     "@restropulse/db": "*",
+    "@restropulse/shared": "*",
     "@restropulse/telemetry": "*",
-    "node-cron": "^4.2.1"
+    "ai": "^4.0.0",
+    "node-cron": "^4.2.1",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.18",
