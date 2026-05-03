@@ -79,3 +79,63 @@ These four patterns are mandatory implementation scope; the framework choice doe
 Vercel AI SDK is the most mature TypeScript LLM library, gives provider neutrality at zero cost, has first-class structured output via Zod, supports Anthropic prompt caching natively, and emits OpenTelemetry spans that route into the existing `@restropulse/telemetry` and Azure Monitor pipeline without new infrastructure. The four `IContentGenerator` operations are bounded enough that a custom orchestrator is faster to write than learning an agent DSL, and remains easy to evolve toward Mastra or LangGraph if multi-agent patterns later emerge. Per-customer cost attribution via `withCostTracking` and durable video-generation polling via the `mediaJobs` collection cover the operational gaps that not-using-an-agent-framework leaves, in less than 800 LOC. The `IDomainSpecialization` seam keeps domain knowledge isolated so prompts can iterate without touching orchestration and a future second domain plugs in without core changes. The decision favors time-to-robust-product and cost over framework richness, matching the explicit P0 drivers.
 
 [^fal-ai]: fal.ai documentation: <https://docs.fal.ai/>
+
+## 5. Current-Affairs RAG Strategy
+
+The `currentAffairsHints: string[]` field on each `IContentGenerator` operation accepts time-sensitive context that informs caption tone and thematic angles (festival tie-ins, sports outcomes, weather, regional cuisine trends). This section specifies how those strings are populated.
+
+The strategy is **layered by data freshness vs cost vs value**, with three tiers and an explicit split between current-affairs RAG (real-time, no vector store) and brand-voice RAG (long-lived, vector store). Tiers V1 and V2 ship in the initial release; V3 is documented as a deferred future option with explicit rebuild triggers.
+
+### 5.1 V1 — Calendar / holiday injection (in scope, ships first)
+
+- **Source**: Google Calendar Public Holidays API, India calendar id `en.indian#holiday@group.v.calendar.google.com` [^gcal]
+- **Cadence**: daily refresh job at 06:00 IST, cached in MongoDB for 24 hours
+- **Injection content**: today's date / weekday / month / India holiday name (when within ±3 days)
+- **Cost**: zero incremental
+- **Estimated build**: 150–200 LOC, 2–3 days
+
+### 5.2 V2 — Real-time current affairs (in scope, ships in same release as V1)
+
+- **Source**: Perplexity Sonar Pro API as a unified current-affairs and trending-hashtags oracle [^sonar]
+- **Cadence (two-tier)**:
+  1. **Daily refresh** at 06:00 IST: one Sonar Pro call asking *"What are the major events, sports outcomes, festivals, weather events, and trending topics in India today and tomorrow that a restaurant might want to reference in social media content?"* — cached 24 hours, shared across all restaurants generating posts that day.
+  2. **Per-post hyperlocal augmentation**: at `generatePost` time, when the `concept` field matches an allowlist of triggers (sports, festivals, weather, regional cuisine), make a targeted Sonar call for that specific angle.
+- **Cost**: ~$0.10/day platform-wide for the daily refresh, plus ~$0.30–0.90/restaurant/month for per-post triggers (assuming a 20% trigger rate on 30 posts/month/restaurant)
+- **Estimated build**: 300–500 LOC, 4–5 days
+
+### 5.3 V3 — Brand-voice / restaurant-specific RAG (DEFERRED)
+
+V3 is **not built** in the initial release. Its design and rebuild triggers are documented for the future engineer.
+
+- **Triggers to build V3** (any one is sufficient):
+  - Brand-voice complaints appear in ≥10% of revision-feedback `tags` over a rolling 30-day window
+  - A multi-restaurant brand customer (≥3 restaurants under one brand) onboards
+  - Restaurant retention analytics identify "AI-generated content doesn't sound like us" as a top-3 churn reason
+- **What V3 would do**: embed past approved posts per restaurant; retrieve top-K most semantically similar approved posts during caption generation to maintain brand-voice consistency.
+- **Primary backing store**: MongoDB Atlas Vector Search [^atlas-vector] (already running Atlas; no new infrastructure; available on the existing M10+ tier).
+- **Vector store alternatives (documented but rejected for V3)**:
+  - **pgvector** — would require Postgres alongside Mongo; operational overhead not justified
+  - **sqlite-vec / LanceDB / hnswlib-node** — embedded options do not scale to multi-instance content-engine
+  - **Pinecone** — paid SaaS, redundant with Atlas Vector
+  - **Chroma** — workable but smaller community than Atlas Vector
+- **Operational complexity V3 introduces** (and why it is deferred):
+  - Embedding pipeline lifecycle (when does a post get embedded? on approval? on publish? backfill?)
+  - Vector index versioning when prompts evolve
+  - Cold-start problem for new restaurants
+  - Quality evaluation: how to know whether retrieval is helping vs hurting
+  - Cost overhead: embedding API calls plus vector storage plus retrieval queries
+- **Estimated V3 build when triggered**: 7–10 days, plus ongoing operational cost.
+
+### 5.4 RAG decision summary
+
+| Tier | Scope | Build now? | Estimated cost / restaurant / month |
+|---|---|---|---|
+| V1 | Calendar / holiday injection | Yes | $0 |
+| V2 | Daily Sonar refresh + per-post hyperlocal triggers | Yes | ~$0.30–1.00 |
+| V3 | Atlas Vector Search for brand voice | No (deferred with explicit triggers) | n/a |
+
+**Vector store decision**: not relevant to V1 or V2 (current affairs has a half-life of hours). Only relevant to V3, where MongoDB Atlas Vector Search is the primary candidate by infrastructure adjacency.
+
+[^gcal]: Google Calendar API — Calendars resource: <https://developers.google.com/calendar/api/v3/reference/calendars>
+[^sonar]: Perplexity Sonar API reference: <https://docs.perplexity.ai/api-reference/chat-completions>
+[^atlas-vector]: MongoDB Atlas Vector Search documentation: <https://www.mongodb.com/docs/atlas/atlas-vector-search/>
