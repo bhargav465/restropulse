@@ -36,8 +36,9 @@ import { processDeadlines } from './services/deadline-processor.js';
 import { processCycleSync } from './services/cycle-sync-processor.js';
 import { startAssetServer } from './services/asset-server.js';
 import {
-  PlaceholderContentGenerator,
+  createContentGenerator,
   setContentGenerator,
+  type ContentGeneratorBackend,
 } from './services/content-generator/index.js';
 
 const logger = createLogger('content-engine');
@@ -67,6 +68,7 @@ const env = loadAndValidateEnv({
     CRON_DEADLINES: z.string().default('*/2 * * * *'),
     CRON_CYCLE_SYNC: z.string().default('*/2 * * * *'),
     ENABLED_PLATFORMS: z.string().default('INSTAGRAM,FACEBOOK'),
+    CONTENT_GENERATOR_BACKEND: z.enum(['placeholder', 'ai']).default('placeholder'),
   }).passthrough(),
 });
 
@@ -110,9 +112,12 @@ const startWorker = async () => {
 
     await connectDB();
 
-    // Register the default content generator backend. Tests swap this via setContentGenerator().
-    setContentGenerator(new PlaceholderContentGenerator());
-    logger.info({ generator: 'placeholder' }, 'Content generator registered');
+    // Register the configured content generator backend. Default is 'placeholder';
+    // flip CONTENT_GENERATOR_BACKEND=ai to engage the AI generator (see ADR 0001).
+    // Tests swap this via setContentGenerator().
+    const backend: ContentGeneratorBackend = env.CONTENT_GENERATOR_BACKEND;
+    setContentGenerator(createContentGenerator(backend));
+    logger.info({ generator: backend }, 'Content generator registered');
 
     // Start local asset server for placeholder media
     assetServer = startAssetServer(ASSET_PORT);

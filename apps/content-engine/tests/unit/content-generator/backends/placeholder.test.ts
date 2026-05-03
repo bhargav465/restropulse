@@ -6,10 +6,10 @@ beforeAll(() => {
 });
 
 const { PlaceholderContentGenerator } = await import(
-  '../../../src/services/content-generator/placeholder-generator.js'
+  '../../../../src/services/content-generator/backends/placeholder/index.js'
 );
 const { ContentGenerationError } = await import(
-  '../../../src/services/content-generator/types.js'
+  '../../../../src/services/content-generator/types.js'
 );
 
 const generator = new PlaceholderContentGenerator();

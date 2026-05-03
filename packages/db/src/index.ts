@@ -14,6 +14,7 @@ export {
   getPostsCollection,
   getStrategyCyclesCollection,
   getContentStrategiesCollection,
+  getCostEventsCollection,
   getSessionsCollection,
   getOtpChallengesCollection,
   getOauthSessionsCollection,
@@ -48,3 +49,4 @@ export * from './coupons.js';
 export * from './credit-packs.js';
 export * from './invoices.js';
 export * from './archived-accounts.js';
+export * from './cost-events.js';

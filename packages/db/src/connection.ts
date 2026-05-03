@@ -143,6 +143,10 @@ export function getArchivedAccountsCollection(): Collection {
   return getDB().collection('archivedAccounts');
 }
 
+export function getCostEventsCollection(): Collection {
+  return getDB().collection('costEvents');
+}
+
 // ----- Helpers -----
 
 /**

@@ -14,9 +14,9 @@ import {
   getRandomCarousel,
   getRandomImage,
   getRandomVideo,
-} from '../asset-manager.js';
-import { getMergedConstraints } from '../content-validator/media-constraints.js';
-import { BaseContentGenerator } from './base-generator.js';
+} from '../../../asset-manager.js';
+import { getMergedConstraints } from '../../../content-validator/media-constraints.js';
+import { BaseContentGenerator } from '../../base-generator.js';
 import {
   ContentGenerationError,
   type DraftCycleInput,
@@ -26,7 +26,7 @@ import {
   type GeneratePostInput,
   type ReviseCycleInput,
   type RevisePostInput,
-} from './types.js';
+} from '../../types.js';
 
 const log = createLogger('content-generator');
 
