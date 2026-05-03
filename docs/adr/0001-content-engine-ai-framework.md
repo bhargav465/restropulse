@@ -38,3 +38,44 @@ The eight drivers below are listed in priority order. Each option in §4 is scor
 6. **Telemetry integration (P1)** — must emit OpenTelemetry spans into the existing `@restropulse/telemetry` → Azure Monitor pipeline; no proprietary observability lock-in.
 7. **Per-customer cost attribution (P1)** — every LLM, image, and video API call must carry labels for `restaurantId`, `postId`, `cycleId`, `operation`, `model`, and `step`.
 8. **Vendor lock-in posture (P2)** — escape hatch must be ≤200 LOC if the framework is abandoned.
+
+## 4. Decision
+
+Two coupled decisions, in scope for the same release:
+
+### 4.1 Framework
+
+**Adopt Vercel AI SDK (`ai` package + `@ai-sdk/anthropic`, `@ai-sdk/openai`, `@ai-sdk/google` providers) as the LLM and tool-orchestration layer. Build a thin custom orchestrator (~200 LOC) inside `apps/content-engine/src/services/content-generator/ai-generator/` that implements `IContentGenerator` by composing typed async functions:**
+
+```text
+searchTrends() -> generateCaption() -> generateMedia() -> assemblePost()
+```
+
+No agent state-machine framework is adopted; orchestration stays plain TypeScript with typed Zod-validated boundaries.
+
+### 4.2 Current-Affairs RAG
+
+**Implement V1 (calendar/holiday injection) and V2 (daily Sonar Pro refresh + per-post hyperlocal triggers) in the initial release. Defer V3 (Atlas Vector Search for brand voice) until production evidence justifies it, per the rebuild triggers in §5.**
+
+### 4.3 Implementation patterns scoped IN
+
+These four patterns are mandatory implementation scope; the framework choice does not earn its keep without them:
+
+1. **Retry helper** — `withRetry(fn, { maxAttempts, backoff: "exponential", retryOn: [TransientError, RateLimitError] })`. Profiles per surface: LLM (3 attempts, 1s/2s/4s backoff), image gen submission (3 attempts, 5s/10s/20s backoff), video gen submission (5 attempts, 10s/20s/40s/80s/160s backoff). Never retry on 4xx; always retry on 429/502/503/504.
+2. **Durable video-generation polling** — new MongoDB `mediaJobs` collection; submission writes a row and returns immediately; new `mediaJobPoller` cron (every 30s) polls RUNNING jobs and resolves them; stale RUNNING jobs (>10 min) reset to PENDING. The `generatePost` worker never blocks for video gen.
+3. **Crash-safe partial durability** — idempotent operations keyed on `jobId`; `generationStep` checkpoints on the post (`SEARCHING_TRENDS -> CAPTION_DONE -> MEDIA_REQUESTED -> MEDIA_DONE`); worker startup re-enqueues posts in non-terminal states older than 5 min from the last completed step. Explicitly **not** implementing exactly-once tool execution or time-travel debugging.
+4. **Cost tracking + observability** — `withCostTracking(fn, { restaurantId, postId, cycleId, operation, model, step })` wrapper emits OTel metrics (`genai.tokens.input`, `genai.tokens.output`, `genai.cost.usd`, `genai.duration.ms`) and persists denormalized rows to a `cost_events` MongoDB collection. Two Azure Monitor Workbooks ship with the implementation: **Cost-by-restaurant** (stacked bar by API surface per restaurant per month) and **Per-post audit** (drill into any `postId` to see every API call's tokens, cost, and latency).
+
+### 4.4 Image / video generation API
+
+**Primary: `FalAIMediaGenerator` for image (Flux dev / Flux fill for editing) and video (Kling 1.6 / MiniMax) [^fal-ai].** Replicate is documented as the fallback and implemented as an `IMediaGenerator` alternative if fal.ai pricing or availability changes. Runway Gen-3 is deferred to a premium subscription tier and not built in the initial release.
+
+### 4.5 Domain Specialization
+
+**Adopt the `IDomainSpecialization` module described in §6.2. Ship `RestaurantSpecialization` as the only concrete implementation. Do not build registry, A/B prompt-testing, or cross-domain abstractions until a second domain is in flight.**
+
+### 4.6 Rationale
+
+Vercel AI SDK is the most mature TypeScript LLM library, gives provider neutrality at zero cost, has first-class structured output via Zod, supports Anthropic prompt caching natively, and emits OpenTelemetry spans that route into the existing `@restropulse/telemetry` and Azure Monitor pipeline without new infrastructure. The four `IContentGenerator` operations are bounded enough that a custom orchestrator is faster to write than learning an agent DSL, and remains easy to evolve toward Mastra or LangGraph if multi-agent patterns later emerge. Per-customer cost attribution via `withCostTracking` and durable video-generation polling via the `mediaJobs` collection cover the operational gaps that not-using-an-agent-framework leaves, in less than 800 LOC. The `IDomainSpecialization` seam keeps domain knowledge isolated so prompts can iterate without touching orchestration and a future second domain plugs in without core changes. The decision favors time-to-robust-product and cost over framework richness, matching the explicit P0 drivers.
+
+[^fal-ai]: fal.ai documentation: <https://docs.fal.ai/>
