@@ -139,3 +139,125 @@ V3 is **not built** in the initial release. Its design and rebuild triggers are 
 [^gcal]: Google Calendar API — Calendars resource: <https://developers.google.com/calendar/api/v3/reference/calendars>
 [^sonar]: Perplexity Sonar API reference: <https://docs.perplexity.ai/api-reference/chat-completions>
 [^atlas-vector]: MongoDB Atlas Vector Search documentation: <https://www.mongodb.com/docs/atlas/atlas-vector-search/>
+
+## 6. Pluggable Architecture
+
+Every layer of the AI generator is independently swappable behind an interface. This is the seam at which providers, RAG tiers, and future business domains can be replaced without touching unrelated code.
+
+```text
+IContentGenerator (top-level contract; already exists in code today)
+  AIContentGenerator (Vercel AI SDK-based concrete implementation, NEW)
+    IDomainSpecialization        domain-specific prompts, knowledge, Sonar queries
+    ILLMProvider                 abstracted by Vercel AI SDK; one-import swap
+    ICurrentAffairsProvider      V1 / V2 / V3 are decorators here
+    IMediaGenerator              fal.ai / Replicate / Runway impls swap here
+    IMediaJobStore               MongoDB today; could become Redis or Postgres later
+```
+
+### 6.1 Decorator pattern for V1 / V2 / V3 plug-ability
+
+```typescript
+// V1 alone (degraded mode, used in tests and as a fallback if V2 is offline)
+const provider = new CalendarOnlyProvider();
+
+// V1 + V2 (production target for the first release)
+const provider = new SonarAugmentedProvider(
+  new CalendarOnlyProvider(),
+  { dailyRefreshCache, sonarClient }
+);
+
+// V1 + V2 + V3 (future, no other code changes)
+const provider = new BrandVoiceProvider(
+  new SonarAugmentedProvider(
+    new CalendarOnlyProvider(),
+    { dailyRefreshCache, sonarClient }
+  ),
+  { atlasVectorClient, embeddingClient }
+);
+```
+
+Each layer reads the upstream context, contributes its own enrichment, and returns an enriched `CurrentAffairsContext`. Each layer carries its own toggle environment variable (e.g., `CURRENT_AFFAIRS_V2_ENABLED=true`), can be unit-tested in isolation, and can be removed or replaced without touching siblings. The same composition pattern applies to `IMediaGenerator` and `ILLMProvider`.
+
+### 6.2 Domain Specialization Module (`IDomainSpecialization`)
+
+All domain-specific knowledge — *what makes restaurant content sound like restaurant content* — lives in a single dedicated module behind one interface. This is the seam at which the platform becomes multi-domain in the future. The current scope ships only one specialization (`RestaurantSpecialization`); the interface stays small enough that adding the second domain does not force a redesign, but no abstractions for hypothetical second domains are built today.
+
+**Location**: `apps/content-engine/src/services/content-generator/ai-generator/specialization/`
+
+```text
+specialization/
+  index.ts                      exports IDomainSpecialization + provider DI
+  types.ts                      IDomainSpecialization interface
+  restaurant/
+    index.ts                    RestaurantSpecialization concrete impl
+    prompts.ts                  system prompts, task prompts, voice guidelines
+    sonar-queries.ts            restaurant-tuned Perplexity Sonar prompt templates
+    content-patterns.ts         post archetypes (chef special, behind-the-scenes, etc.)
+    visual-direction.ts         food-photography rules, image-prompt fragments
+    platform-tactics.ts         Instagram-vs-Facebook playbook for restaurants
+    hashtag-strategy.ts         restaurant + cuisine + location hashtag heuristics
+    psychology.ts               buyer-psychology hooks (scarcity, social proof, FOMO)
+```
+
+**Interface (intentionally small)**:
+
+```typescript
+export interface IDomainSpecialization {
+  readonly domain: string;                              // "restaurant" | <future>
+  readonly version: string;                             // semver, for prompt-evolution tracking
+
+  /** System prompt fragment injected into every LLM call for this domain. */
+  getSystemPromptFragment(ctx: SpecializationContext): string;
+
+  /** Task-specific prompt augmentation per IContentGenerator operation. */
+  getTaskPrompt(
+    operation: "draftCycle" | "reviseCycle" | "generatePost" | "revisePost",
+    input: unknown,
+    ctx: SpecializationContext,
+  ): string;
+
+  /** Sonar query templates for V2 current-affairs RAG, tuned to this domain. */
+  getSonarQueries(scope: "daily-platform" | "per-post-trigger", ctx: SpecializationContext): string[];
+
+  /** Image generation prompt fragment (style direction, composition, lighting). */
+  getImagePromptFragment(input: ImageGenInput, ctx: SpecializationContext): string;
+
+  /** Hashtag selection strategy. */
+  selectHashtags(caption: string, ctx: SpecializationContext): string[];
+
+  /** Validate that generated output respects domain conventions
+   *  (e.g., restaurant captions should not over-promise health benefits). */
+  validateOutput(output: GeneratedPost | GeneratedCycle, ctx: SpecializationContext): ValidationResult;
+}
+
+export interface SpecializationContext {
+  restaurantId?: string;
+  restaurantName?: string;
+  cuisine?: string;          // "South Indian", "Italian", "Multi-cuisine"
+  region?: string;           // "Bengaluru", "Mumbai", "NCR"
+  brandVoice?: string;       // "playful", "premium", "homestyle"
+  dietaryFocus?: string[];   // ["vegetarian", "jain", "vegan"]
+  locale?: string;           // "en-IN", "hi-IN"
+}
+```
+
+**Initial `RestaurantSpecialization` content (the codified marketing playbook)**:
+
+- **Voice and tone**: sensory-first language; specificity wins; avoid hyperbolic health claims (FSSAI exposure); match the restaurant's `brandVoice` field.
+- **Content archetypes** (the seven high-performing post patterns for Indian restaurants):
+  1. Daily Special / Chef's Pick — featured dish + price + scarcity hook
+  2. Behind-the-scenes — kitchen prep, plating, ingredient sourcing
+  3. Customer / social proof — review screenshots, repost UGC, occasion celebrations
+  4. Festival / event tie-in — Diwali thalis, IPL match-day combos, Friday-night specials
+  5. Cuisine education — "what makes a real Hyderabadi biryani" explainer reels
+  6. Offer / promo — combo deals, weekday discounts, loyalty rewards (clear CTA + redemption rule)
+  7. Origin story / values — chef interviews, sourcing stories, sustainability angles
+- **Sonar query templates** — domain-tuned fragments stored in `sonar-queries.ts`; the generic templates from §5 are wrapped with restaurant-specific framing ("…that a restaurant might want to reference…").
+- **Image-prompt direction**: warm, golden-hour-style lighting; 45° hero angle for plated dishes; flat-lay for spreads; macro for textures; specify surface (wooden, marble, banana leaf), garnish state, and mood.
+- **Platform tactics**: Instagram square (1:1) feed + 9:16 portrait Reels + 5–8 hashtags inline at end of caption; Facebook 4:5 portrait + longer captions + fewer hashtags.
+- **Hashtag strategy**: 3-tier mix (broad + cuisine-specific + location-specific); maintain a denylist of banned/shadowbanned tags; refresh trending tags from V2 Sonar daily refresh.
+- **Validation rules**: reject FSSAI-violating health claims; warn on captions exceeding platform character limits (Instagram: 2200 total, 125 above-the-fold); warn on missing CTA when post type is `OFFER` or `PROMO`; reject hashtag count outside [3, 15] range.
+
+**Extending to a new domain (future, not now)**: when a second domain is onboarded (e.g., a salon chain, a fitness studio), the path is to add a sibling folder under `specialization/`, implement `IDomainSpecialization`, and wire selection into worker boot via env var or per-restaurant DB field. No changes to `AIContentGenerator`, `ICurrentAffairsProvider`, `IMediaGenerator`, or any cron processor.
+
+**YAGNI guardrail**: no abstractions for cross-domain prompt sharing, domain registry, multi-domain composability, or A/B prompt experimentation are built today. Those are real future possibilities; designing for them now without a second domain in flight would add complexity that pays off only on speculation. The interface above is the smallest seam that protects the future option.
