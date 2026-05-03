@@ -108,6 +108,60 @@ Rules:
 | MONGODB_URI      | Yes      | --            | MongoDB connection string        |
 | MONGODB_DB_NAME  | No       | restropulse   | Database name                    |
 
+#### Content Engine AI backend (env additions)
+
+Default behavior unchanged unless `CONTENT_GENERATOR_BACKEND=ai` is set. The AI backend then reads the variables below; missing required keys throw at boot.
+
+| Variable                          | Required when                                          | Default                  | Purpose                                                                      |
+|-----------------------------------|--------------------------------------------------------|--------------------------|------------------------------------------------------------------------------|
+| `CONTENT_GENERATOR_BACKEND`       | always                                                 | `placeholder`            | Master switch: `placeholder` (asset catalog) or `ai` (Vercel AI SDK chain).  |
+| `ANTHROPIC_API_KEY`               | `CONTENT_GENERATOR_BACKEND=ai`                         | --                       | Anthropic API key for Sonnet 4.6 / Haiku 4.5 via `@ai-sdk/anthropic`.        |
+| `MEDIA_BACKEND`                   | always                                                 | `placeholder`            | Media generator: `placeholder` (asset catalog) or `fal-ai` (Flux + Kling).   |
+| `FAL_API_KEY`                     | `MEDIA_BACKEND=fal-ai`                                 | --                       | fal.ai API key for image (sync) and video (queue API) generation.            |
+| `CURRENT_AFFAIRS_V1_ENABLED`      | when AI backend selected                               | `true`                   | Enable Google Calendar holiday hint injection (free).                        |
+| `GOOGLE_CALENDAR_API_KEY`         | `CURRENT_AFFAIRS_V1_ENABLED=true`                      | --                       | Google Calendar API key for India public holidays calendar.                  |
+| `CURRENT_AFFAIRS_V2_ENABLED`      | when richer hints desired                              | `false`                  | Enable Perplexity Sonar Pro daily refresh + per-post triggers (~\$0.30-1/mo/restaurant). |
+| `PERPLEXITY_API_KEY`              | `CURRENT_AFFAIRS_V2_ENABLED=true`                      | --                       | Perplexity Sonar Pro API key.                                                |
+| `CRON_CURRENT_AFFAIRS_REFRESH`    | when V1 or V2 enabled                                  | `0 6 * * *`              | Daily refresh at 06:00 IST.                                                  |
+| `CRON_MEDIA_JOB_POLLER`           | `MEDIA_BACKEND=fal-ai`                                 | `*/30 * * * * *`         | Every 30 seconds; polls in-flight video jobs against fal queue API.          |
+
+Optional provider-portability keys (no behavior change unless code is changed to switch providers): `OPENAI_API_KEY`, `GOOGLE_API_KEY` -- declared in factory but unused in default chain.
+
+##### Cron schedules added by AI backend
+
+| Schedule                          | Default        | Timezone     | Purpose                                                          |
+|-----------------------------------|----------------|--------------|------------------------------------------------------------------|
+| `CRON_CURRENT_AFFAIRS_REFRESH`    | `0 6 * * *`    | Asia/Kolkata | Refresh calendar holidays + (if V2) daily Sonar platform answer. |
+| `CRON_MEDIA_JOB_POLLER`           | `*/30 * * * * *` | Asia/Kolkata | Poll RUNNING video media jobs against fal.ai queue.              |
+
+##### Collections added by AI backend
+
+| Collection              | Purpose                                                                                                        |
+|-------------------------|----------------------------------------------------------------------------------------------------------------|
+| `costEvents`            | One row per AI/external API call (LLM, image, video, Sonar, calendar). Powers per-restaurant cost dashboards.  |
+| `currentAffairsCache`   | 24h-TTL cache of calendar holidays and daily Sonar platform refresh.                                           |
+| `mediaJobs`             | One row per media generation job. Image jobs land COMPLETED immediately; video jobs cycle PENDING -> RUNNING -> COMPLETED/FAILED via the poller. |
+
+##### Cost expectations (per active restaurant per month)
+
+Estimates for 30 posts/month with V1 calendar enabled and V2 Sonar disabled:
+
+| Component       | Cost                  | Notes                                                                  |
+|-----------------|-----------------------|------------------------------------------------------------------------|
+| LLM (captions)  | ~\$0.10-0.30          | Haiku 4.5 per post; Sonnet for cycle planning is amortized across posts. |
+| LLM (cycle)     | ~\$0.05-0.10          | Sonnet, ~1-2 calls per cycle.                                          |
+| Calendar (V1)   | \$0                   | Free; daily refresh shared across all restaurants.                     |
+| Image (fal.ai)  | ~\$0.75               | 30 IMAGE/STORY posts at \$0.025/call.                                  |
+| Image carousel  | additional ~\$0.05/CAROUSEL | 3x per CAROUSEL post.                                            |
+| Video (fal.ai)  | ~\$0.30 per REEL      | Default: Kling 1.6 standard. MiniMax is \$0.40/clip.                   |
+
+When `CURRENT_AFFAIRS_V2_ENABLED=true`:
+
+| Component         | Cost                       | Notes                                                                |
+|-------------------|----------------------------|----------------------------------------------------------------------|
+| Sonar daily refresh | ~\$0.10/day platform-wide | One call per day, shared across all restaurants.                     |
+| Sonar per-post triggers | ~\$0.30-0.90/restaurant/month | Fires only when post concept matches an allowlist keyword (~20% rate). |
+
 ## Cron Schedules
 
 | Worker          | Schedule          | Timezone      | Description                       |

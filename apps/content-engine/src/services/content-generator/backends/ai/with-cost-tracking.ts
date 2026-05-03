@@ -54,7 +54,11 @@ export async function withCostTracking<T>(
       outputTokens: usage.outputTokens ?? 0,
       costUsd: usage.costUsd,
       durationMs,
-      restaurantId: labels.restaurantId,
+      ...(labels.restaurantId ? { restaurantId: labels.restaurantId } : {}),
+      ...(labels.postId ? { postId: labels.postId } : {}),
+      ...(labels.cycleId ? { cycleId: labels.cycleId } : {}),
+      surface: labels.surface,
+      step: labels.step,
     });
 
     await persistCostEvent({

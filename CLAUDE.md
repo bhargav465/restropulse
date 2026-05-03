@@ -6,6 +6,22 @@
 @docs/MCP-SETUP.md
 @docs/RTK.md
 
+## Content Engine AI Backend
+
+The content-engine has two pluggable backends behind a feature flag:
+
+- `CONTENT_GENERATOR_BACKEND=placeholder` (default, production): asset catalog at `apps/content-engine/src/services/content-generator/backends/placeholder/`
+- `CONTENT_GENERATOR_BACKEND=ai`: AI orchestration at `apps/content-engine/src/services/content-generator/backends/ai/`
+
+The AI backend composes four pluggable seams (`ILLMProvider`, `IMediaGenerator`, `ICurrentAffairsProvider`, `IDomainSpecialization`) with the chain selected by env vars. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the staged rollout (placeholder -> AI captions -> AI image -> AI video -> Sonar) and `docs/adr/0001-content-engine-ai-framework.md` for design rationale.
+
+Per-call cost events flow into both `costEvents` (MongoDB) and Application Insights `customEvents` (queryable from the workbooks at `infra/workbooks/`).
+
+When changing AI-backend code:
+- Tests use mocked external APIs (`vi.mock('ai', ...)` for Vercel AI SDK; mocked `fetch` for fal.ai/Sonar/Calendar). Do not introduce real network calls.
+- The `CostEvent` type lives in `@restropulse/shared`; the `MediaJobRecord` type lives there too. Don't duplicate types in app-local files.
+- Adding a new external API surface (e.g. a new media provider): also add per-call pricing in the relevant `pricing.ts` so cost dashboards stay accurate.
+
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands
 

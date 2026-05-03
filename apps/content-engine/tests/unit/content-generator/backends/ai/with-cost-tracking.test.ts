@@ -88,6 +88,11 @@ describe('withCostTracking', () => {
     expect(usage.outputTokens).toBe(20);
     expect(usage.costUsd).toBe(0.001);
     expect(usage.restaurantId).toBe('r1');
+    // Phase 6 -- additional dimensions
+    expect(usage.postId).toBe('p1');
+    expect(usage.cycleId).toBe('c1');
+    expect(usage.surface).toBe('llm');
+    expect(usage.step).toBe('caption');
   });
 
   it('records a failure cost event and rethrows the error', async () => {

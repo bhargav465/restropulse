@@ -42,23 +42,21 @@ export interface AIUsage {
     durationMs: number;
     postType?: string;
     restaurantId?: string;
+    // Phase 6 -- additional dimensions for per-restaurant cost dashboards
+    postId?: string;
+    cycleId?: string;
+    surface?: string;        // 'llm' | 'image' | 'video' | 'sonar' | 'calendar'
+    step?: string;           // e.g. 'caption', 'image', 'video-submit', 'daily', 'trigger'
 }
 
 /**
  * Record an AI API call's usage and cost.
  *
- * Usage (when AI is integrated):
- *   const start = Date.now();
- *   const result = await aiClient.generate(...);
- *   trackAIUsage({
- *     model: 'gpt-4o',
- *     operation: 'generate-caption',
- *     inputTokens: result.usage.input_tokens,
- *     outputTokens: result.usage.output_tokens,
- *     costUsd: calculateCost(result.usage),
- *     durationMs: Date.now() - start,
- *     postType: post.type,
- *   });
+ * Emits an OTel histogram (duration), counters (tokens, cost) labeled with
+ * model+operation; also emits a customEvents row to Application Insights with
+ * the full label set (restaurantId, postId, cycleId, surface, step) so the
+ * cost-by-restaurant and per-post-audit Workbooks under infra/workbooks/ can
+ * filter and group precisely. See docs/CONTENT_ENGINE_AI_ROLLOUT.md.
  */
 export function trackAIUsage(usage: AIUsage): void {
     const labels = { model: usage.model, operation: usage.operation };
@@ -75,6 +73,11 @@ export function trackAIUsage(usage: AIUsage): void {
         outputTokens: String(usage.outputTokens),
         costUsd: String(usage.costUsd),
         durationMs: String(usage.durationMs),
-        postType: usage.postType || '',
+        postType: usage.postType ?? '',
+        restaurantId: usage.restaurantId ?? '',
+        postId: usage.postId ?? '',
+        cycleId: usage.cycleId ?? '',
+        surface: usage.surface ?? '',
+        step: usage.step ?? '',
     });
 }
