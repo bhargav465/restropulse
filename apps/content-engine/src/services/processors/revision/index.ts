@@ -116,6 +116,29 @@ export async function processRevisions(): Promise<{
         },
       );
 
+      if (result.pendingMedia && result.mediaJobId) {
+        const update = await postsCol.updateOne(
+          { _id: postDoc._id, status: 'CHANGES_REQUESTED' },
+          {
+            $set: {
+              caption: result.caption,
+              status: 'PENDING_MEDIA',
+              mediaJobId: result.mediaJobId,
+              generationStep: result.generationStep ?? 'MEDIA_REQUESTED',
+              lastStepAt: new Date().toISOString(),
+              updatedAt: new Date(),
+            },
+          },
+        );
+        if (update.matchedCount === 0) {
+          logger.warn({ postId }, 'Post no longer CHANGES_REQUESTED; skipping advance');
+          continue;
+        }
+        logger.info({ postId, mediaJobId: result.mediaJobId }, 'Revised post advanced to PENDING_MEDIA awaiting fal.ai queue');
+        stats.postsRevised++;
+        continue;
+      }
+
       const stampedFeedback: ParsedFeedback = {
         ...feedback,
         resolution: buildResolutionText('post', feedback),

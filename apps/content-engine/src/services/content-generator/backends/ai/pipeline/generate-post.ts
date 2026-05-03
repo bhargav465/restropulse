@@ -227,6 +227,25 @@ export async function runGeneratePost(
   const specHashtags = deps.specialization.selectHashtags(captionObj.caption, specCtx);
   const fullCaption = mergeHashtags(captionObj.caption, captionObj.suggestedHashtags, specHashtags);
 
+  // Phase 5: video media may still be RUNNING. Caller writes post.status=PENDING_MEDIA
+  // and waits for the media-job-poller cron to advance it.
+  if (mediaJob.status === 'RUNNING') {
+    return {
+      caption: fullCaption,
+      thumbnail: '',           // populated when poller transitions COMPLETED
+      pendingMedia: true,
+      mediaJobId: mediaJob.jobId,
+      generationStep: 'MEDIA_REQUESTED',
+    };
+  }
+
+  if (mediaJob.status === 'FAILED') {
+    throw new ContentGenerationError(
+      'UNKNOWN',
+      `Media generation failed: ${mediaJob.error ?? 'unknown'}`,
+    );
+  }
+
   const post: GeneratedPost = {
     caption: fullCaption,
     thumbnail: mediaJob.thumbnail ?? mediaJob.mediaUrl ?? '',

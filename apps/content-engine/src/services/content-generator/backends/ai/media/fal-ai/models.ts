@@ -8,6 +8,8 @@
 export const FAL_MODELS = {
   fluxDev: 'fal-ai/flux/dev',
   fluxImg2Img: 'fal-ai/flux/dev/image-to-image',
+  klingVideo: 'fal-ai/kling-video/v1.6/standard/text-to-video',
+  minimaxVideo: 'fal-ai/minimax-video/text-to-video',
 } as const;
 
 export type FalModelId = (typeof FAL_MODELS)[keyof typeof FAL_MODELS];

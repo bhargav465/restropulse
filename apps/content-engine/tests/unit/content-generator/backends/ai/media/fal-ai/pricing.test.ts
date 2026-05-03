@@ -15,6 +15,12 @@ describe('FAL_PRICING', () => {
       expect(p.usdPerCall).toBeGreaterThan(0);
     }
   });
+
+  it('declares prices for the phase-5 video models (Kling + MiniMax)', () => {
+    expect(FAL_PRICING['fal-ai/kling-video/v1.6/standard/text-to-video']).toBeDefined();
+    expect(FAL_PRICING['fal-ai/minimax-video/text-to-video']).toBeDefined();
+    expect(FAL_PRICING['fal-ai/kling-video/v1.6/standard/text-to-video'].usdPerCall).toBeGreaterThan(0);
+  });
 });
 
 describe('computeFalCostUsd', () => {

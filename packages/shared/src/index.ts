@@ -26,12 +26,19 @@ export type PostType = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'STORY' | 'REEL';
 
 export type PostStatus =
   | 'PENDING_CONTENT'        // Awaiting content generation by content-engine
+  | 'PENDING_MEDIA'          // Caption ready; media generation in flight (phase 5)
   | 'PENDING_APPROVAL'       // Content created, awaiting user review
   | 'CHANGES_REQUESTED'      // User requested changes
   | 'SCHEDULED'              // Approved and scheduled for publishing
   | 'PUBLISHING'             // Currently being published by publisher worker
   | 'POSTED'                 // Successfully published
   | 'MISSED_DEADLINE';       // Failed after max retries
+
+export type GenerationStep =
+  | 'SEARCHING_TRENDS'   // currentAffairsHints being fetched (rare; sync)
+  | 'CAPTION_DONE'       // LLM caption produced
+  | 'MEDIA_REQUESTED'    // media job submitted (fal queue request_id captured)
+  | 'MEDIA_DONE';        // media URL retrieved and applied to post
 
 export type Platform = 'INSTAGRAM' | 'FACEBOOK';
 
@@ -176,6 +183,10 @@ export interface Post {
   publishAttempts?: number;
   duration?: string;
   cycleId?: string;
+  // Phase 5 -- async media generation lifecycle
+  mediaJobId?: string;          // FK to mediaJobs.jobId when status=PENDING_MEDIA
+  generationStep?: GenerationStep;
+  lastStepAt?: string;          // ISO; updated when generationStep advances
   isAdhoc?: boolean;
   instagramMediaId?: string;
   facebookPostId?: string;

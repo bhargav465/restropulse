@@ -127,6 +127,10 @@ export interface GeneratedPost {
   mediaUrls?: string[];
   videoUrl?: string;
   mediaMetadata?: MediaMetadata;
+  // Phase 5 -- async media flow markers
+  pendingMedia?: boolean;       // true means caller should set post.status=PENDING_MEDIA
+  mediaJobId?: string;          // present when pendingMedia=true
+  generationStep?: 'CAPTION_DONE' | 'MEDIA_REQUESTED' | 'MEDIA_DONE';
 }
 
 // ---------------------------------------------------------------------------

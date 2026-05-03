@@ -14,7 +14,8 @@ export interface FalModelPricing {
 export const FAL_PRICING: Record<string, FalModelPricing> = {
   'fal-ai/flux/dev': { usdPerCall: 0.025 },
   'fal-ai/flux/dev/image-to-image': { usdPerCall: 0.025 },
-  // Phase 5 video models added here.
+  'fal-ai/kling-video/v1.6/standard/text-to-video': { usdPerCall: 0.30 },
+  'fal-ai/minimax-video/text-to-video': { usdPerCall: 0.40 },
 };
 
 export function computeFalCostUsd(modelId: string): number {

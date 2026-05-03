@@ -64,15 +64,20 @@ describe('runGeneratePost', () => {
     expect(out.videoUrl).toBeUndefined();
   });
 
-  it('routes REEL post type through generateVideo', async () => {
+  it('routes REEL post type through generateVideo and returns pendingMedia=true', async () => {
     const deps = makeDeps();
-    await runGeneratePost(
+    (deps.media.generateVideo as any).mockResolvedValueOnce({
+      jobId: 'jobV1', status: 'RUNNING',
+    });
+    const out = await runGeneratePost(
       { concept: 'kitchen reel', type: 'REEL', platforms: ['INSTAGRAM'] },
       deps,
       {},
     );
-    expect((deps.media.generateVideo as any)).toHaveBeenCalledTimes(1);
-    expect((deps.media.generateImage as any)).not.toHaveBeenCalled();
+    expect(deps.media.generateVideo).toHaveBeenCalledTimes(1);
+    expect(out.pendingMedia).toBe(true);
+    expect(out.mediaJobId).toBe('jobV1');
+    expect(out.generationStep).toBe('MEDIA_REQUESTED');
   });
 
   it('routes CAROUSEL through generateImage with postType=CAROUSEL', async () => {

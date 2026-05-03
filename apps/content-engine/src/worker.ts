@@ -35,16 +35,20 @@ import {
   createRevisionProcessor,
   createDeadlineProcessor,
   createCycleSyncProcessor,
-  createCurrentAffairsRefreshProcessor,    // NEW
+  createCurrentAffairsRefreshProcessor,
+  createMediaJobPollerProcessor,
   type IProcessor,
 } from './services/processors/index.js';
 import { startAssetServer } from './services/asset-server.js';
 import {
   createContentGenerator,
-  getLastAiCurrentAffairsProvider,         // NEW
+  getLastAiCurrentAffairsProvider,
+  getLastAiMediaJobStore,
+  getLastAiMediaGenerator,
   setContentGenerator,
   type ContentGeneratorBackend,
 } from './services/content-generator/index.js';
+import { runPostResumeOnBoot } from './services/post-resume.js';
 
 const logger = createLogger('content-engine');
 
@@ -81,6 +85,7 @@ const env = loadAndValidateEnv({
     CRON_CURRENT_AFFAIRS_REFRESH: z.string().default('0 6 * * *'),
     MEDIA_BACKEND: z.enum(['placeholder', 'fal-ai']).default('placeholder'),
     FAL_API_KEY: z.string().optional(),
+    CRON_MEDIA_JOB_POLLER: z.string().default('*/30 * * * * *'),
   }).passthrough(),
 });
 
@@ -142,6 +147,26 @@ const startWorker = async () => {
         { provider: aiCurrentAffairs.name, cron: env.CRON_CURRENT_AFFAIRS_REFRESH },
         'current-affairs-refresh processor registered',
       );
+    }
+
+    const aiMediaStore = getLastAiMediaJobStore();
+    const aiMediaGen = getLastAiMediaGenerator();
+    if (aiMediaStore && aiMediaGen) {
+      processors.push(createMediaJobPollerProcessor(env.CRON_MEDIA_JOB_POLLER, {
+        store: aiMediaStore,
+        media: aiMediaGen,
+      }));
+      logger.info(
+        { cron: env.CRON_MEDIA_JOB_POLLER },
+        'media-job-poller processor registered',
+      );
+    }
+
+    if (aiMediaStore && aiMediaGen) {
+      // Best-effort -- failures don't block worker boot.
+      runPostResumeOnBoot({ store: aiMediaStore, media: aiMediaGen }).catch((err) => {
+        logger.error({ err }, 'post-resume scan failed');
+      });
     }
 
     for (const processor of processors) {

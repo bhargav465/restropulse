@@ -6,6 +6,6 @@ export {
   getContentGenerator,
   resetContentGenerator,
 } from './provider.js';
-export { createContentGenerator, getLastAiCurrentAffairsProvider } from './factory.js';
+export { createContentGenerator, getLastAiCurrentAffairsProvider, getLastAiMediaJobStore, getLastAiMediaGenerator } from './factory.js';
 export type { ContentGeneratorBackend } from './factory.js';
 export * from './backends/ai/index.js';

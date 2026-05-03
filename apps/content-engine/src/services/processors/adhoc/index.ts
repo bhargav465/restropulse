@@ -55,6 +55,29 @@ export async function processPendingPosts(): Promise<{ processed: number; failed
         },
       );
 
+      if (content.pendingMedia && content.mediaJobId) {
+        const result = await col.updateOne(
+          { _id: postDoc._id, status: 'PENDING_CONTENT' },
+          {
+            $set: {
+              caption: content.caption,
+              status: 'PENDING_MEDIA',
+              mediaJobId: content.mediaJobId,
+              generationStep: content.generationStep ?? 'MEDIA_REQUESTED',
+              lastStepAt: new Date().toISOString(),
+              updatedAt: new Date(),
+            },
+          },
+        );
+        if (result.matchedCount === 0) {
+          logger.warn({ postId }, 'Post no longer in PENDING_CONTENT; skipping advance');
+          continue;
+        }
+        logger.info({ postId, mediaJobId: content.mediaJobId }, 'Post advanced to PENDING_MEDIA awaiting fal.ai queue');
+        stats.processed++;
+        continue;
+      }
+
       const result = await col.updateOne(
         { _id: postDoc._id, status: 'PENDING_CONTENT' },
         {

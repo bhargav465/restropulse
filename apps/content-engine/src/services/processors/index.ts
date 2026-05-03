@@ -35,3 +35,7 @@ export {
 export {
   createCurrentAffairsRefreshProcessor,
 } from './current-affairs-refresh/index.js';
+
+export {
+  createMediaJobPollerProcessor,
+} from './media-job-poller/index.js';

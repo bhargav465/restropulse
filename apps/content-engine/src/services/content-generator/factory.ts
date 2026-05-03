@@ -107,11 +107,14 @@ function buildMediaGeneratorForFactory(): IMediaGenerator {
     if (!apiKey) {
       throw new Error('FAL_API_KEY is required when MEDIA_BACKEND=fal-ai.');
     }
-    return new FalAIMediaGenerator({
-      client: new FalClient({ apiKey }),
-      store: new MongoMediaJobStore(),
-    });
+    const store = new MongoMediaJobStore();
+    const media = new FalAIMediaGenerator({ client: new FalClient({ apiKey }), store });
+    lastAiMediaJobStore = store;
+    lastAiMediaGenerator = media;
+    return media;
   }
+  lastAiMediaJobStore = null;
+  lastAiMediaGenerator = null;
   return new PlaceholderMediaGenerator();
 }
 
@@ -121,6 +124,17 @@ function buildMediaGeneratorForFactory(): IMediaGenerator {
  * factory-internal cache keyed by the most recent backend selected.
  */
 let lastAiCurrentAffairs: ICurrentAffairsProvider | null = null;
+
+let lastAiMediaJobStore: import('./backends/ai/media/jobs/types.js').IMediaJobStore | null = null;
+let lastAiMediaGenerator: import('./backends/ai/media/types.js').IMediaGenerator | null = null;
+
+export function getLastAiMediaJobStore() {
+  return lastAiMediaJobStore;
+}
+
+export function getLastAiMediaGenerator() {
+  return lastAiMediaGenerator;
+}
 
 /**
  * Read the current-affairs provider built by the most recent createContentGenerator('ai') call.
@@ -135,6 +149,8 @@ export function createContentGenerator(backend: ContentGeneratorBackend): IConte
   switch (backend) {
     case 'placeholder':
       lastAiCurrentAffairs = null;
+      lastAiMediaJobStore = null;
+      lastAiMediaGenerator = null;
       return new PlaceholderContentGenerator();
 
     case 'ai': {

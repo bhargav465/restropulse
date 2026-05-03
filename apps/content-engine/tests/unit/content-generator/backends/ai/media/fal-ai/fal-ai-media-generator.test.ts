@@ -177,43 +177,154 @@ describe('FalAIMediaGenerator IMAGE happy path', () => {
   });
 });
 
-describe('FalAIMediaGenerator REEL/VIDEO throws BACKEND_UNAVAILABLE', () => {
-  it('generateVideo throws ContentGenerationError BACKEND_UNAVAILABLE', async () => {
-    const store = makeStore();
-    const client = makeClient();
+describe('FalAIMediaGenerator generateVideo (queue submit)', () => {
+  it('submits a video job via the queue API and inserts a RUNNING MediaJobRecord', async () => {
+    let captured: any = null;
+    const store = makeStore((j) => { captured = j; });
+    const client = {
+      generateImage: vi.fn(),
+      editImage: vi.fn(),
+      submitToQueue: vi.fn(async () => ({ requestId: 'req_v1' })),
+      getQueueStatus: vi.fn(),
+      getQueueResult: vi.fn(),
+    };
     const gen = new FalAIMediaGenerator({ client: client as any, store: store as any });
 
-    await expect(
-      gen.generateVideo({ postType: 'REEL', platforms: ['INSTAGRAM'], concept: 'x' }),
-    ).rejects.toMatchObject({ code: 'BACKEND_UNAVAILABLE' });
+    const job = await gen.generateVideo({
+      postType: 'REEL',
+      platforms: ['INSTAGRAM'],
+      concept: 'kitchen reel',
+      restaurantId: 'r1',
+      postId: 'p1',
+    });
+
+    expect(job.status).toBe('RUNNING');
+    expect(job.jobId).toBeTruthy();
+    expect(client.submitToQueue).toHaveBeenCalledTimes(1);
+    expect(captured.status).toBe('RUNNING');
+    expect(captured.providerJobId).toBe('req_v1');
+    expect(captured.modelId).toBe('fal-ai/kling-video/v1.6/standard/text-to-video');
+    expect(captured.postType).toBe('REEL');
+    expect(captured.restaurantId).toBe('r1');
+    expect(captured.postId).toBe('p1');
+  });
+
+  it('writes a cost event tagged surface=video at submission time', async () => {
+    const { insertCostEvent } = await import('@restropulse/db');
+    (insertCostEvent as any).mockClear();
+    const store = makeStore();
+    const client = {
+      generateImage: vi.fn(), editImage: vi.fn(),
+      submitToQueue: vi.fn(async () => ({ requestId: 'req_v2' })),
+      getQueueStatus: vi.fn(), getQueueResult: vi.fn(),
+    };
+    const gen = new FalAIMediaGenerator({ client: client as any, store: store as any });
+    await gen.generateVideo({
+      postType: 'REEL', platforms: ['INSTAGRAM'], concept: 'x',
+      restaurantId: 'r1', postId: 'p1',
+    });
+    expect(insertCostEvent).toHaveBeenCalledTimes(1);
+    const event = (insertCostEvent as any).mock.calls[0][0];
+    expect(event.surface).toBe('video');
+    expect(event.step).toBe('video-submit');
+    expect(event.model).toBe('fal-ai/kling-video/v1.6/standard/text-to-video');
+    expect(event.costUsd).toBeGreaterThan(0);
+  });
+
+  it('returns FAILED MediaGenJob when queue submission fails permanently', async () => {
+    const store = makeStore();
+    const client = {
+      generateImage: vi.fn(), editImage: vi.fn(),
+      submitToQueue: vi.fn().mockRejectedValue({ status: 422, message: 'bad prompt' }),
+      getQueueStatus: vi.fn(), getQueueResult: vi.fn(),
+    };
+    const gen = new FalAIMediaGenerator({ client: client as any, store: store as any });
+    const job = await gen.generateVideo({ postType: 'REEL', platforms: ['INSTAGRAM'], concept: 'x' });
+    expect(job.status).toBe('FAILED');
   });
 });
 
-describe('FalAIMediaGenerator pollJob', () => {
-  it('returns the latest record from the store', async () => {
+describe('FalAIMediaGenerator pollJob (queue-aware)', () => {
+  it('returns store-record unchanged when status is COMPLETED', async () => {
+    const completedRecord = {
+      id: 'p', jobId: 'j_done', provider: 'fal-ai', modelId: 'fal-ai/kling-video/v1.6/standard/text-to-video',
+      postType: 'REEL', status: 'COMPLETED', mediaUrl: 'https://fal.media/v.mp4',
+      attempts: 1, startedAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
+      providerJobId: 'req',
+    };
     const store = {
       insert: vi.fn(),
-      findById: vi.fn(async (id: string) => ({
-        id: 'persisted', jobId: id, provider: 'fal-ai', modelId: 'fal-ai/flux/dev',
-        postType: 'IMAGE', status: 'COMPLETED', mediaUrl: 'https://fal.media/x.jpg',
-        attempts: 1, startedAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
-      })),
+      findById: vi.fn(async () => completedRecord),
       updateStatus: vi.fn(),
       incrementAttempts: vi.fn(),
     };
-    const client = makeClient();
+    const client = {
+      generateImage: vi.fn(), editImage: vi.fn(),
+      submitToQueue: vi.fn(),
+      getQueueStatus: vi.fn(),
+      getQueueResult: vi.fn(),
+    };
     const gen = new FalAIMediaGenerator({ client: client as any, store: store as any });
-    const out = await gen.pollJob('job_xyz');
+    const out = await gen.pollJob('j_done');
     expect(out.status).toBe('COMPLETED');
-    expect(out.mediaUrl).toBe('https://fal.media/x.jpg');
+    expect(out.mediaUrl).toBe('https://fal.media/v.mp4');
+    expect(client.getQueueStatus).not.toHaveBeenCalled();
   });
 
-  it('returns FAILED when the store has no record for jobId (degraded)', async () => {
-    const store = makeStore();
-    const client = makeClient();
+  it('live-polls the queue when stored status is RUNNING; transitions to COMPLETED when fal says so', async () => {
+    const runningRecord = {
+      id: 'p', jobId: 'j_run', provider: 'fal-ai', modelId: 'fal-ai/kling-video/v1.6/standard/text-to-video',
+      postType: 'REEL', status: 'RUNNING', providerJobId: 'req_xyz',
+      attempts: 1, startedAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
+    };
+    const store = {
+      insert: vi.fn(),
+      findById: vi.fn(async () => runningRecord),
+      updateStatus: vi.fn(async (jobId: string, update: any) => ({
+        ...runningRecord, ...update, jobId,
+      })),
+      incrementAttempts: vi.fn(),
+    };
+    const client = {
+      generateImage: vi.fn(), editImage: vi.fn(),
+      submitToQueue: vi.fn(),
+      getQueueStatus: vi.fn(async () => ({ status: 'COMPLETED' })),
+      getQueueResult: vi.fn(async () => ({ video: { url: 'https://fal.media/done.mp4' } })),
+    };
     const gen = new FalAIMediaGenerator({ client: client as any, store: store as any });
-    const out = await gen.pollJob('unknown');
-    expect(out.status).toBe('FAILED');
-    expect(out.error).toMatch(/not found/i);
+    const out = await gen.pollJob('j_run');
+
+    expect(client.getQueueStatus).toHaveBeenCalledWith('fal-ai/kling-video/v1.6/standard/text-to-video', 'req_xyz');
+    expect(client.getQueueResult).toHaveBeenCalledTimes(1);
+    expect(store.updateStatus).toHaveBeenCalled();
+    const update = (store.updateStatus as any).mock.calls[0][1];
+    expect(update.status).toBe('COMPLETED');
+    expect(update.mediaUrl).toBe('https://fal.media/done.mp4');
+    expect(out.status).toBe('COMPLETED');
+    expect(out.mediaUrl).toBe('https://fal.media/done.mp4');
+  });
+
+  it('returns RUNNING from pollJob when fal still in progress', async () => {
+    const runningRecord = {
+      id: 'p', jobId: 'j_inprog', provider: 'fal-ai', modelId: 'fal-ai/kling-video/v1.6/standard/text-to-video',
+      postType: 'REEL', status: 'RUNNING', providerJobId: 'req_in',
+      attempts: 1, startedAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
+    };
+    const store = {
+      insert: vi.fn(),
+      findById: vi.fn(async () => runningRecord),
+      updateStatus: vi.fn(async (_jobId: string, update: any) => ({ ...runningRecord, ...update })),
+      incrementAttempts: vi.fn(),
+    };
+    const client = {
+      generateImage: vi.fn(), editImage: vi.fn(),
+      submitToQueue: vi.fn(),
+      getQueueStatus: vi.fn(async () => ({ status: 'IN_PROGRESS', queue_position: 0 })),
+      getQueueResult: vi.fn(),
+    };
+    const gen = new FalAIMediaGenerator({ client: client as any, store: store as any });
+    const out = await gen.pollJob('j_inprog');
+    expect(out.status).toBe('RUNNING');
+    expect(client.getQueueResult).not.toHaveBeenCalled();
   });
 });
