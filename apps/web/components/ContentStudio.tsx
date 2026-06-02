@@ -385,10 +385,17 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                     </div>
                 )}
 
-                {/* Status Overlay for Generating */}
+                {/* Status Overlay for Generating (caption + initial media) */}
                 {post.status === 'PENDING_CONTENT' && (
                     <div className="absolute bottom-4 left-4 bg-violet-500/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 z-20">
                         <Sparkles size={14} /> Generating
+                    </div>
+                )}
+
+                {/* Status Overlay for Generating Media (caption ready, video in flight) */}
+                {post.status === 'PENDING_MEDIA' && (
+                    <div className="absolute bottom-4 left-4 bg-violet-500/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1.5 z-20">
+                        <Sparkles size={14} className="animate-pulse" /> Generating media
                     </div>
                 )}
 
@@ -803,7 +810,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
         });
     }, []);
 
-    const reviewPosts = posts.filter(p => p.status === 'PENDING_APPROVAL' || p.status === 'CHANGES_REQUESTED' || p.status === 'PENDING_CONTENT');
+    const reviewPosts = posts.filter(p => p.status === 'PENDING_APPROVAL' || p.status === 'CHANGES_REQUESTED' || p.status === 'PENDING_CONTENT' || p.status === 'PENDING_MEDIA');
     const scheduledPosts = posts.filter(p => p.status === 'SCHEDULED');
     const historyPosts = posts.filter(p => p.status === 'POSTED' || p.status === 'MISSED_DEADLINE');
 

@@ -1,37 +1,70 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 
 vi.mock('@restropulse/telemetry/server', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
   trackAIUsage: vi.fn(),
 }));
 
-const ORIGINAL_KEY = process.env['ANTHROPIC_API_KEY'];
-const ORIGINAL_CAL_KEY = process.env['GOOGLE_CALENDAR_API_KEY'];
+const ORIGINAL_KEYS = {
+  anthropic: process.env['ANTHROPIC_API_KEY'],
+  cal: process.env['GOOGLE_CALENDAR_API_KEY'],
+  fal: process.env['FAL_API_KEY'],
+  pplx: process.env['PERPLEXITY_API_KEY'],
+  v1: process.env['CURRENT_AFFAIRS_V1_ENABLED'],
+  v2: process.env['CURRENT_AFFAIRS_V2_ENABLED'],
+  media: process.env['MEDIA_BACKEND'],
+};
 
 beforeAll(() => {
   process.env['ASSET_SERVER_BASE_URL'] = 'http://localhost:3002';
   process.env['ASSET_SERVER_PORT'] = '3002';
-  process.env['ANTHROPIC_API_KEY'] = 'sk-test-fixture';
-  // New factory requires GOOGLE_CALENDAR_API_KEY when CURRENT_AFFAIRS_V1_ENABLED=true (default)
-  process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test-fixture';
 });
 
 afterAll(() => {
-  if (ORIGINAL_KEY === undefined) delete process.env['ANTHROPIC_API_KEY'];
-  else process.env['ANTHROPIC_API_KEY'] = ORIGINAL_KEY;
-  if (ORIGINAL_CAL_KEY === undefined) delete process.env['GOOGLE_CALENDAR_API_KEY'];
-  else process.env['GOOGLE_CALENDAR_API_KEY'] = ORIGINAL_CAL_KEY;
+  // Restore originals to avoid leaking into other test files in the same run.
+  for (const [name, value] of Object.entries({
+    ANTHROPIC_API_KEY: ORIGINAL_KEYS.anthropic,
+    GOOGLE_CALENDAR_API_KEY: ORIGINAL_KEYS.cal,
+    FAL_API_KEY: ORIGINAL_KEYS.fal,
+    PERPLEXITY_API_KEY: ORIGINAL_KEYS.pplx,
+    CURRENT_AFFAIRS_V1_ENABLED: ORIGINAL_KEYS.v1,
+    CURRENT_AFFAIRS_V2_ENABLED: ORIGINAL_KEYS.v2,
+    MEDIA_BACKEND: ORIGINAL_KEYS.media,
+  })) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
 });
 
-const { createContentGenerator, getLastAiCurrentAffairsProvider } = await import('../../../src/services/content-generator/factory.js');
+beforeEach(() => {
+  // Each test starts from a clean slate. Tests that need keys / flags set them explicitly.
+  delete process.env['ANTHROPIC_API_KEY'];
+  delete process.env['GOOGLE_CALENDAR_API_KEY'];
+  delete process.env['FAL_API_KEY'];
+  delete process.env['PERPLEXITY_API_KEY'];
+  delete process.env['CURRENT_AFFAIRS_V1_ENABLED'];
+  delete process.env['CURRENT_AFFAIRS_V2_ENABLED'];
+  delete process.env['MEDIA_BACKEND'];
+});
+
+const { createContentGenerator } = await import('../../../src/services/content-generator/factory.js');
+
+/** Helper: set the four required AI-mode keys to test fixtures. */
+function setAllAiKeys() {
+  process.env['ANTHROPIC_API_KEY'] = 'sk-test';
+  process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
+  process.env['FAL_API_KEY'] = 'fal-test';
+  process.env['PERPLEXITY_API_KEY'] = 'pplx-test';
+}
 
 describe('createContentGenerator', () => {
-  it('returns the placeholder backend by default ("placeholder")', () => {
+  it('returns the placeholder backend by default', () => {
     const g = createContentGenerator('placeholder');
     expect(g.name).toBe('placeholder');
   });
 
-  it('returns the AI backend when "ai" and ANTHROPIC_API_KEY is present', () => {
+  it('returns the AI backend when "ai" and all four required keys are present (uber-flag mode)', () => {
+    setAllAiKeys();
     const g = createContentGenerator('ai');
     expect(g.name).toBe('ai');
   });
@@ -40,95 +73,69 @@ describe('createContentGenerator', () => {
     expect(() => createContentGenerator('chatgpt' as any)).toThrow(/unknown content generator backend/i);
   });
 
-  it('throws a clear error when ai backend is selected but ANTHROPIC_API_KEY is missing', () => {
-    const k = process.env['ANTHROPIC_API_KEY'];
-    delete process.env['ANTHROPIC_API_KEY'];
+  it('throws a single combined error listing every missing key when AI mode is enabled', () => {
+    // No keys set at all -- should surface all 4 in one error message
+    let caught: Error | undefined;
     try {
-      expect(() => createContentGenerator('ai')).toThrow(/ANTHROPIC_API_KEY/);
-    } finally {
-      if (k !== undefined) process.env['ANTHROPIC_API_KEY'] = k;
+      createContentGenerator('ai');
+    } catch (err) {
+      caught = err as Error;
     }
+    expect(caught).toBeDefined();
+    const msg = caught!.message;
+    expect(msg).toContain('ANTHROPIC_API_KEY');
+    expect(msg).toContain('FAL_API_KEY');
+    expect(msg).toContain('GOOGLE_CALENDAR_API_KEY');
+    expect(msg).toContain('PERPLEXITY_API_KEY');
+    // Helpful hint mentions the override path
+    expect(msg).toMatch(/MEDIA_BACKEND=placeholder|CURRENT_AFFAIRS_V[12]_ENABLED=false/);
+    expect(msg).toContain('docs/SECRETS.md');
   });
 });
 
-describe('createContentGenerator -- current-affairs wiring', () => {
-  it('attaches a CalendarOnly provider by default (V1=true, V2=false, GOOGLE_CALENDAR_API_KEY present)', () => {
-    const k = process.env['GOOGLE_CALENDAR_API_KEY'];
-    process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
-    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
-    process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'false';
-    try {
-      const g = createContentGenerator('ai') as any;
-      expect(g.specialization.domain).toBe('restaurant');
-      // Inspect the underlying deps via name; AIContentGenerator does not expose
-      // currentAffairs publicly, but its log line is enough -- we trust the test
-      // in ai-content-generator.test.ts to prove the wiring works once injected.
-      expect(g.name).toBe('ai');
-    } finally {
-      if (k === undefined) delete process.env['GOOGLE_CALENDAR_API_KEY'];
-      else process.env['GOOGLE_CALENDAR_API_KEY'] = k;
-    }
-  });
-
-  it('does not require GOOGLE_CALENDAR_API_KEY when V1 is disabled', () => {
-    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'false';
-    process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'false';
-    delete process.env['GOOGLE_CALENDAR_API_KEY'];
+describe('createContentGenerator -- AI uber-flag default-on behavior', () => {
+  it('with backend=ai and all four keys, V1 + V2 + fal-ai are all engaged by default', () => {
+    setAllAiKeys();
+    // No sub-flag overrides -- everything defaults on.
     expect(() => createContentGenerator('ai')).not.toThrow();
   });
 
-  it('throws a clear error when V2 is enabled but PERPLEXITY_API_KEY is missing', () => {
-    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
-    process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'true';
-    process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
-    delete process.env['PERPLEXITY_API_KEY'];
-    expect(() => createContentGenerator('ai')).toThrow(/PERPLEXITY_API_KEY/);
-  });
-
-  it('throws a clear error when V1 is enabled but GOOGLE_CALENDAR_API_KEY is missing', () => {
-    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
-    process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'false';
-    delete process.env['GOOGLE_CALENDAR_API_KEY'];
-    expect(() => createContentGenerator('ai')).toThrow(/GOOGLE_CALENDAR_API_KEY/);
-  });
-});
-
-describe('createContentGenerator -- media backend wiring', () => {
-  it('defaults MEDIA_BACKEND to placeholder when env is unset', () => {
-    delete process.env['MEDIA_BACKEND'];
+  it('does not require FAL_API_KEY when MEDIA_BACKEND=placeholder override is set', () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
     process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
-    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
-    const g = createContentGenerator('ai');
-    expect(g.name).toBe('ai');
-    // No way to inspect the media generator from outside; the factory uses
-    // PlaceholderMediaGenerator unless MEDIA_BACKEND=fal-ai.
+    process.env['PERPLEXITY_API_KEY'] = 'pplx-test';
+    process.env['MEDIA_BACKEND'] = 'placeholder';
+    expect(() => createContentGenerator('ai')).not.toThrow();
   });
 
-  it('builds the FalAIMediaGenerator when MEDIA_BACKEND=fal-ai and FAL_API_KEY is present', () => {
-    process.env['MEDIA_BACKEND'] = 'fal-ai';
+  it('does not require GOOGLE_CALENDAR_API_KEY when V1 override is set to false', () => {
+    process.env['ANTHROPIC_API_KEY'] = 'sk-test';
     process.env['FAL_API_KEY'] = 'fal-test';
+    process.env['PERPLEXITY_API_KEY'] = 'pplx-test';
+    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'false';
+    expect(() => createContentGenerator('ai')).not.toThrow();
+  });
+
+  it('does not require PERPLEXITY_API_KEY when V2 override is set to false', () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
+    process.env['FAL_API_KEY'] = 'fal-test';
     process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
-    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
+    process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'false';
+    expect(() => createContentGenerator('ai')).not.toThrow();
+  });
+
+  it('runs with only ANTHROPIC_API_KEY when all sub-flags are overridden off (degraded debug mode)', () => {
+    process.env['ANTHROPIC_API_KEY'] = 'sk-test';
+    process.env['MEDIA_BACKEND'] = 'placeholder';
+    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'false';
+    process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'false';
     const g = createContentGenerator('ai');
     expect(g.name).toBe('ai');
   });
 
-  it('throws a clear error when MEDIA_BACKEND=fal-ai but FAL_API_KEY is missing', () => {
-    process.env['MEDIA_BACKEND'] = 'fal-ai';
-    delete process.env['FAL_API_KEY'];
-    process.env['ANTHROPIC_API_KEY'] = 'sk-test';
-    process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
-    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
-    expect(() => createContentGenerator('ai')).toThrow(/FAL_API_KEY/);
-  });
-
-  it('throws on an unknown MEDIA_BACKEND value', () => {
+  it('throws on an unknown MEDIA_BACKEND value with a helpful message', () => {
+    setAllAiKeys();
     process.env['MEDIA_BACKEND'] = 'midjourney';
-    process.env['ANTHROPIC_API_KEY'] = 'sk-test';
-    process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
-    process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'true';
     expect(() => createContentGenerator('ai')).toThrow(/MEDIA_BACKEND/i);
   });
 });

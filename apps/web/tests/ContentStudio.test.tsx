@@ -191,6 +191,82 @@ describe('ContentStudio Component', () => {
         });
     });
 
+    describe('In-flight generation states', () => {
+        it('shows PENDING_CONTENT posts in the Review tab with a "Generating" badge', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([
+                {
+                    id: 'p_gen',
+                    caption: '',
+                    type: 'IMAGE' as const,
+                    status: 'PENDING_CONTENT' as const,
+                    thumbnail: '/mock.jpg',
+                    platforms: ['INSTAGRAM'] as Platform[],
+                    createdAt: new Date().toISOString(),
+                },
+            ]);
+
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => {
+                // The "Generating" badge text should be rendered
+                expect(screen.getByText('Generating')).toBeInTheDocument();
+                // And the placeholder caption hint
+                expect(screen.getByText(/Caption will appear here/i)).toBeInTheDocument();
+            });
+        });
+
+        it('shows PENDING_MEDIA posts in the Review tab with a "Generating media" badge and the real caption', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([
+                {
+                    id: 'p_media',
+                    caption: 'A warm kitchen reel',
+                    type: 'REEL' as const,
+                    status: 'PENDING_MEDIA' as const,
+                    thumbnail: '',
+                    platforms: ['INSTAGRAM'] as Platform[],
+                    mediaJobId: 'job_v1',
+                    generationStep: 'MEDIA_REQUESTED' as const,
+                    createdAt: new Date().toISOString(),
+                },
+            ]);
+
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => {
+                // The "Generating media" badge appears for PENDING_MEDIA posts
+                expect(screen.getByText('Generating media')).toBeInTheDocument();
+                // The caption is the real LLM-produced one (not the placeholder hint)
+                expect(screen.getByText('A warm kitchen reel')).toBeInTheDocument();
+                expect(screen.queryByText(/Caption will appear here/i)).not.toBeInTheDocument();
+            });
+        });
+
+        it('does NOT render Approve button for PENDING_MEDIA posts (action gated until poller completes)', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([
+                {
+                    id: 'p_media2',
+                    caption: 'Another reel',
+                    type: 'REEL' as const,
+                    status: 'PENDING_MEDIA' as const,
+                    thumbnail: '',
+                    platforms: ['INSTAGRAM'] as Platform[],
+                    mediaJobId: 'job_v2',
+                    createdAt: new Date().toISOString(),
+                },
+            ]);
+
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => {
+                // Post is rendered (badge visible) but the Approve button is not
+                expect(screen.getByText('Generating media')).toBeInTheDocument();
+                const buttons = screen.getAllByRole('button');
+                const approveButton = buttons.find(btn => btn.textContent?.trim() === 'Approve');
+                expect(approveButton).toBeUndefined();
+            });
+        });
+    });
+
     describe('Empty States', () => {
         it('should render when posts list is empty for review', async () => {
             vi.mocked(postsAPI.getAll).mockResolvedValue([

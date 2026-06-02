@@ -185,7 +185,9 @@ The content-engine has two pluggable backends behind a feature flag:
 - `CONTENT_GENERATOR_BACKEND=placeholder` (default, production): asset catalog at `apps/content-engine/src/services/content-generator/backends/placeholder/`
 - `CONTENT_GENERATOR_BACKEND=ai`: AI orchestration at `apps/content-engine/src/services/content-generator/backends/ai/`
 
-The AI backend composes four pluggable seams (`ILLMProvider`, `IMediaGenerator`, `ICurrentAffairsProvider`, `IDomainSpecialization`) with the chain selected by env vars. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the staged rollout (placeholder -> AI captions -> AI image -> AI video -> Sonar) and `docs/adr/0001-content-engine-ai-framework.md` for design rationale.
+The AI backend composes four pluggable seams (`ILLMProvider`, `IMediaGenerator`, `ICurrentAffairsProvider`, `IDomainSpecialization`). `CONTENT_GENERATOR_BACKEND=ai` is an "uber" master flag -- when set, all four sub-features default-on (Anthropic + fal.ai + V1 calendar + V2 Sonar) and all four required keys must be present. The factory throws a single combined error listing every missing key. Sub-flag overrides (`MEDIA_BACKEND=placeholder`, `CURRENT_AFFAIRS_V1_ENABLED=false`, `CURRENT_AFFAIRS_V2_ENABLED=false`) exist for debug/staged rollout but are advanced operator opt-outs, not the supported normal mode.
+
+See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the rollout runbook, `docs/SECRETS.md` for how to obtain the four required keys, and `docs/adr/0001-content-engine-ai-framework.md` for design rationale.
 
 Per-call cost events flow into both `costEvents` (MongoDB) and Application Insights `customEvents` (queryable from the workbooks at `infra/workbooks/`).
 

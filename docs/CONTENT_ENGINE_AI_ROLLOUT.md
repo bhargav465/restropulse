@@ -1,140 +1,147 @@
 # Content Engine AI - Rollout Runbook
 
-This runbook describes the staged rollout of the AI content generator behind feature flags. Each stage is independently rollback-able by flipping its flag back to default. The placeholder backend remains a permanent operational fallback -- it is not a temporary toggle.
+This runbook describes the rollout of the AI content generator behind a single master flag. Default behavior (placeholder generator) is the production fallback and never gets removed -- the flag is a permanent operational switch.
+
+## Master flag
+
+```
+CONTENT_GENERATOR_BACKEND=placeholder   # default -- asset-catalog generator (current production)
+CONTENT_GENERATOR_BACKEND=ai            # uber flag -- enables LLM + fal.ai + V1 calendar + V2 Sonar
+```
+
+When `CONTENT_GENERATOR_BACKEND=ai` is set, all four sub-features default-on:
+- Anthropic Claude for cycle planning + caption generation
+- fal.ai for image (Flux dev) + video (Kling 1.6) generation
+- Google Calendar for India holiday hint injection (V1)
+- Perplexity Sonar Pro for current-affairs hints (V2 -- daily refresh + per-post triggers)
+
+All four require keys; the factory pre-validates them upfront and throws a single combined error listing every missing key (with override hints).
 
 ## Pre-flight
 
-Before any flag is flipped:
+Before flipping the master flag in any environment:
 
 1. Application Insights connection string is configured for the content-engine deployment slot (workbooks won't populate otherwise).
 2. The two workbooks (`cost-by-restaurant`, `per-post-audit`) are imported into the Azure Portal under the App Insights resource. See `infra/workbooks/` for the JSON templates.
-3. Cost ceilings are agreed with billing: dashboards exist but alerts are operator's call.
-4. Every required API key for the target stage is provisioned (see stage env vars below). Missing keys cause the worker to throw at boot rather than silently degrade.
+3. Cost ceilings are agreed with billing -- dashboards exist but alerts are operator's call.
+4. All four required API keys are provisioned. See `docs/SECRETS.md` for step-by-step instructions on obtaining each key.
 
-## Stages
-
-Stages are additive. Each stage subsumes the previous stage's flags.
+## Rollout -- two stages
 
 ### Stage 0: Default (placeholder, no AI)
 
 ```
 CONTENT_GENERATOR_BACKEND=placeholder   # default
-MEDIA_BACKEND=placeholder               # default
 ```
 
-Behavior: the existing asset-catalog generator runs. No external AI calls. Zero cost. This is what production runs today and what every rollback target should be.
+Behavior: the existing asset-catalog generator runs. No external AI calls. Zero per-call cost. This is what production runs today and what every rollback target should be.
 
-### Stage 1: AI captions + cycles + V1 calendar (LLM only, no fal.ai)
+### Stage 1: AI mode (everything on)
 
-Flip these env vars on the staging deployment first; observe for 24 hours; then promote to production.
-
-```
-CONTENT_GENERATOR_BACKEND=ai
-ANTHROPIC_API_KEY=<key>
-GOOGLE_CALENDAR_API_KEY=<key>
-# CURRENT_AFFAIRS_V1_ENABLED=true is the default
-```
-
-**What happens:** Anthropic Sonnet/Haiku produces real cycles + captions. Calendar V1 auto-injects "Today is..." and nearby India holiday hints. Media still comes from the asset catalog (post.thumbnail / videoUrl point at the local asset server).
-
-**Smoke check at boot:**
-```bash
-cd apps/content-engine && CONTENT_GENERATOR_BACKEND=ai ANTHROPIC_API_KEY=<key> GOOGLE_CALENDAR_API_KEY=<key> npx tsx --eval "import('./src/services/content-generator/factory.js').then(m => { m.createContentGenerator('ai'); console.log('currentAffairs:', m.getLastAiCurrentAffairsProvider()?.name); })"
-# expected: currentAffairs: calendar-only
-```
-
-**Monitor:**
-- `cost-by-restaurant` workbook (LLM surface only). Validate per-restaurant LLM cost is within expected band (~\$0.10-0.30/restaurant/month).
-- Application Insights traces -> filter `customDimensions.operation in ('draftCycle','generatePost')`. Watch for spikes in `durationMs`.
-- The content-engine worker logs: look for `AIContentGenerator instantiated` at boot.
-
-**Rollback:** unset `CONTENT_GENERATOR_BACKEND` (or set to `placeholder`). No data cleanup needed.
-
-### Stage 2: AI image generation (fal.ai for IMAGE/STORY/CAROUSEL)
+Set the master flag and all four required keys on the staging deployment first; observe the workbooks for 24 hours; then promote to production.
 
 ```
 CONTENT_GENERATOR_BACKEND=ai
 ANTHROPIC_API_KEY=<key>
-GOOGLE_CALENDAR_API_KEY=<key>
-MEDIA_BACKEND=fal-ai
 FAL_API_KEY=<key>
-```
-
-**What happens:** IMAGE / STORY / CAROUSEL posts route through fal.ai Flux dev (text-to-image) or Flux dev image-to-image (when `baseImageUrl` is supplied). CAROUSEL fans out to 3 parallel calls. REEL/VIDEO posts will fail with `BACKEND_UNAVAILABLE` until Stage 3.
-
-**Smoke check at boot:**
-```bash
-... MEDIA_BACKEND=fal-ai FAL_API_KEY=<key> npx tsx --eval "import('./src/services/content-generator/factory.js').then(m => { m.createContentGenerator('ai'); console.log('store:', m.getLastAiMediaJobStore() ? 'set' : 'null', 'media:', m.getLastAiMediaGenerator()?.name); })"
-# expected: store: set media: fal-ai
-```
-
-**Monitor:**
-- `cost-by-restaurant` workbook (image surface). 30 IMAGE posts/month/restaurant at \$0.025/call ~ \$0.75/month.
-- Inspect `mediaJobs` collection: every IMAGE post now writes one row. CAROUSEL writes 3.
-- `per-post-audit` workbook -> spot-check a few postIds end-to-end.
-
-**Caveat:** REEL/VIDEO posts created during Stage 2 will fail with `BACKEND_UNAVAILABLE`. Either pause REEL/VIDEO scheduling at the application layer, or jump straight to Stage 3.
-
-**Rollback:** set `MEDIA_BACKEND=placeholder`. No data cleanup needed; existing `mediaJobs` rows are harmless.
-
-### Stage 3: AI video generation (fal.ai queue + poller)
-
-Same env vars as Stage 2. The poller cron and post-resume scan auto-register because `MEDIA_BACKEND=fal-ai` is set; no extra flag needed.
-
-**What happens:** REEL / VIDEO posts now submit to fal.ai's queue API (default model: Kling 1.6 standard). Posts move to `PENDING_MEDIA` while the queue runs. The `media-job-poller` cron (every 30s) advances them to `PENDING_APPROVAL` when fal.ai completes. Stale jobs (>10 min) are reaped as `MISSED_DEADLINE` with diagnostic on `publishError`.
-
-**Smoke check:**
-- Boot the worker. Logs should include `media-job-poller processor registered`.
-- Submit a test REEL post; observe in DB: `status=PENDING_MEDIA`, `mediaJobId=...` set within seconds. Up to 2 minutes later: `status=PENDING_APPROVAL`, `videoUrl` populated.
-
-**Monitor:**
-- `cost-by-restaurant` workbook (video surface). \$0.30/clip default.
-- `mediaJobs` collection: count of `RUNNING` jobs (steady-state should hover near 0). Sustained `RUNNING` count > 10 indicates fal.ai queue backlog or polling misconfiguration.
-- Worker logs: `media-job-poller tick { count: N }` should appear every 30s.
-
-**Open item -- web UI:** the new `PENDING_MEDIA` PostStatus needs a label/spinner in the studio UI. The web team must update `apps/web` separately. Until then, the studio will likely render PENDING_MEDIA posts with a blank or unknown-status badge for the duration the video is in flight (up to 2 minutes typical, 10 minutes worst-case).
-
-**Rollback:** set `MEDIA_BACKEND=placeholder`. Posts already in `PENDING_MEDIA` with a fal job in flight will be reaped as stale within 10 minutes; operators can manually advance them by running a post-resume scan or manually applying the latest fal queue result.
-
-### Stage 4 (optional): Sonar Pro current-affairs
-
-```
-... all Stage 3 vars ...
-CURRENT_AFFAIRS_V2_ENABLED=true
+GOOGLE_CALENDAR_API_KEY=<key>
 PERPLEXITY_API_KEY=<key>
 ```
 
-**What happens:** `current-affairs-refresh` cron (06:00 IST daily) now fires one Perplexity Sonar Pro call asking for India-wide trending topics. The response is cached in `currentAffairsCache` and shared across all restaurants. Per-post Sonar calls fire when the post concept matches the trigger keyword allowlist (sports/festivals/weather/celebrations).
+**What happens:**
+- Cycles + captions via Anthropic Claude (Sonnet for cycles, Haiku for posts)
+- Calendar V1 auto-injects holiday hints (free)
+- Sonar V2 daily refresh + per-post triggers run (~$0.30-1/restaurant/month)
+- IMAGE/STORY/CAROUSEL routes through fal.ai Flux dev (~$0.025/image)
+- REEL/VIDEO submits to fal.ai queue (Kling 1.6, ~$0.30/clip); posts go to `PENDING_MEDIA` while the queue runs; the `media-job-poller` cron advances them to `PENDING_APPROVAL` on completion
+- Per-call cost events written to MongoDB `costEvents` and Application Insights `customEvents` (queryable from the workbooks)
 
-**Cost:** ~\$0.10/day platform-wide for the daily refresh + ~\$0.30-0.90/restaurant/month for per-post triggers (assuming ~20% trigger rate on 30 posts/month).
+**Smoke check at boot:**
 
-**Monitor:**
-- `cost-by-restaurant` workbook (sonar surface).
-- `currentAffairsCache` collection should contain a `sonar-daily:YYYY-MM-DD` entry within 24h.
+```bash
+cd apps/content-engine && \
+  CONTENT_GENERATOR_BACKEND=ai \
+  ANTHROPIC_API_KEY=<key> \
+  FAL_API_KEY=<key> \
+  GOOGLE_CALENDAR_API_KEY=<key> \
+  PERPLEXITY_API_KEY=<key> \
+  npx tsx --eval "import('./src/services/content-generator/factory.js').then(m => { const g = m.createContentGenerator('ai'); console.log('ai:', g.name, 'media:', m.getLastAiMediaGenerator()?.name, 'currentAffairs:', m.getLastAiCurrentAffairsProvider()?.name); })"
 
-**Rollback:** unset `CURRENT_AFFAIRS_V2_ENABLED` or set to `false`.
+# Expected: ai: ai media: fal-ai currentAffairs: sonar-augmented
+```
+
+If any key is missing, the factory throws a single combined error listing every missing key plus override hints. Operators see the entire setup gap at once instead of fixing one key per boot.
+
+**Monitor (first 60 minutes after promotion):**
+- `cost-by-restaurant` workbook -- per-restaurant LLM/image/video/sonar surface costs roll in
+- `per-post-audit` workbook -- spot-check a few `postId` values end-to-end
+- Worker logs:
+  - `AIContentGenerator instantiated`
+  - `current-affairs-refresh processor registered`
+  - `media-job-poller processor registered`
+- DB collections: `mediaJobs` and `costEvents` should populate as posts are created
+
+**Web UI for `PENDING_MEDIA`:** `apps/web/components/ContentStudio.tsx` renders PENDING_MEDIA posts in the Review tab with a "Generating media" badge; the Approve action is gated until the poller advances the post to PENDING_APPROVAL. The web app must be rebuilt and deployed alongside (or before) the master flag flip in production.
+
+**Rollback:** set `CONTENT_GENERATOR_BACKEND=placeholder` (or unset). All AI behavior stops immediately. Any in-flight `mediaJobs` rows are left as-is; the poller no longer registers and the rows become inert. No data cleanup is required.
+
+## Advanced sub-flag overrides
+
+For staged rollouts, debug deployments, or cost control, individual sub-features can be disabled while the master flag stays on. Setting any sub-flag to `false` removes the corresponding key from the required-key validation.
+
+| Override                              | Effect                                                                                  |
+|---------------------------------------|-----------------------------------------------------------------------------------------|
+| `MEDIA_BACKEND=placeholder`           | Skip fal.ai. IMAGE posts use the asset catalog. REEL/VIDEO posts use placeholder media. |
+| `CURRENT_AFFAIRS_V1_ENABLED=false`    | Skip Google Calendar. Captions get no holiday hints injected.                           |
+| `CURRENT_AFFAIRS_V2_ENABLED=false`    | Skip Perplexity Sonar Pro. No daily refresh, no per-post triggers.                      |
+
+These are explicit operator opt-outs; the supported normal mode is "all on". Documented for completeness, not for routine rollouts.
+
+### Example -- LLM only, no fal.ai (validation deployment)
+
+```
+CONTENT_GENERATOR_BACKEND=ai
+ANTHROPIC_API_KEY=<key>
+GOOGLE_CALENDAR_API_KEY=<key>
+PERPLEXITY_API_KEY=<key>
+MEDIA_BACKEND=placeholder
+```
+
+LLM cycle + caption + V1 + V2 run; media falls back to the asset catalog. Useful for validating prompt changes without paying for image/video generation.
+
+### Example -- bare minimum AI (cheapest debug mode)
+
+```
+CONTENT_GENERATOR_BACKEND=ai
+ANTHROPIC_API_KEY=<key>
+MEDIA_BACKEND=placeholder
+CURRENT_AFFAIRS_V1_ENABLED=false
+CURRENT_AFFAIRS_V2_ENABLED=false
+```
+
+LLM-only mode: no media calls, no calendar, no Sonar. Use this to validate Anthropic credentials or the LLM-side test surface in isolation.
 
 ## Per-stage observations checklist
 
-After each promotion to production:
+After promotion to production:
 
-- [ ] cost-by-restaurant workbook shows the new surface
-- [ ] worker logs include the expected boot lines (factory + processors)
-- [ ] no spikes in worker error logs over the next 60 minutes
-- [ ] no spikes in cost beyond the expected envelope
+- [ ] cost-by-restaurant workbook shows non-zero rows
+- [ ] worker logs include the expected boot lines
+- [ ] no spikes in worker error logs over the first 60 minutes
+- [ ] no spikes in cost beyond the expected envelope (see `docs/INFRASTRUCTURE.md` cost expectations)
 
 ## Emergency rollback
-
-To stop all AI behavior immediately:
 
 ```
 CONTENT_GENERATOR_BACKEND=placeholder
 ```
 
-This forces every operation back to the asset-catalog generator. Any in-flight `mediaJobs` rows can be left as-is; the poller no longer registers and the rows become inert.
+Forces every operation back to the asset-catalog generator. AI keys can stay in the env (unused). In-flight `mediaJobs` rows become inert.
 
 ## Reference
 
-- ADR 0001: docs/adr/0001-content-engine-ai-framework.md (full rationale, decision drivers, alternatives)
-- Plans: docs/superpowers/plans/2026-05-03-content-engine-ai-phase-{1..6}.md (per-phase implementation breakdown)
-- Workbooks: infra/workbooks/cost-by-restaurant.workbook.json, per-post-audit.workbook.json
+- ADR 0001: `docs/adr/0001-content-engine-ai-framework.md` (full rationale, decision drivers, alternatives)
+- Phase plans: `docs/superpowers/plans/2026-05-03-content-engine-ai-phase-{1..6}.md`
+- Workbooks: `infra/workbooks/cost-by-restaurant.workbook.json`, `per-post-audit.workbook.json`
+- Secrets setup: `docs/SECRETS.md`
+- Architecture: `docs/ARCHITECTURE.md` (AI backend section)

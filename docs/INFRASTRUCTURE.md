@@ -110,20 +110,20 @@ Rules:
 
 #### Content Engine AI backend (env additions)
 
-Default behavior unchanged unless `CONTENT_GENERATOR_BACKEND=ai` is set. The AI backend then reads the variables below; missing required keys throw at boot.
+Default behavior unchanged unless `CONTENT_GENERATOR_BACKEND=ai` is set. The flag is an "uber" master switch: when set, every AI sub-feature defaults on. All four required keys (`ANTHROPIC_API_KEY`, `FAL_API_KEY`, `GOOGLE_CALENDAR_API_KEY`, `PERPLEXITY_API_KEY`) must be present or the factory throws a single combined error listing every missing key. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the supported rollout path and `docs/SECRETS.md` for how to obtain each key.
 
-| Variable                          | Required when                                          | Default                  | Purpose                                                                      |
-|-----------------------------------|--------------------------------------------------------|--------------------------|------------------------------------------------------------------------------|
-| `CONTENT_GENERATOR_BACKEND`       | always                                                 | `placeholder`            | Master switch: `placeholder` (asset catalog) or `ai` (Vercel AI SDK chain).  |
-| `ANTHROPIC_API_KEY`               | `CONTENT_GENERATOR_BACKEND=ai`                         | --                       | Anthropic API key for Sonnet 4.6 / Haiku 4.5 via `@ai-sdk/anthropic`.        |
-| `MEDIA_BACKEND`                   | always                                                 | `placeholder`            | Media generator: `placeholder` (asset catalog) or `fal-ai` (Flux + Kling).   |
-| `FAL_API_KEY`                     | `MEDIA_BACKEND=fal-ai`                                 | --                       | fal.ai API key for image (sync) and video (queue API) generation.            |
-| `CURRENT_AFFAIRS_V1_ENABLED`      | when AI backend selected                               | `true`                   | Enable Google Calendar holiday hint injection (free).                        |
-| `GOOGLE_CALENDAR_API_KEY`         | `CURRENT_AFFAIRS_V1_ENABLED=true`                      | --                       | Google Calendar API key for India public holidays calendar.                  |
-| `CURRENT_AFFAIRS_V2_ENABLED`      | when richer hints desired                              | `false`                  | Enable Perplexity Sonar Pro daily refresh + per-post triggers (~\$0.30-1/mo/restaurant). |
-| `PERPLEXITY_API_KEY`              | `CURRENT_AFFAIRS_V2_ENABLED=true`                      | --                       | Perplexity Sonar Pro API key.                                                |
-| `CRON_CURRENT_AFFAIRS_REFRESH`    | when V1 or V2 enabled                                  | `0 6 * * *`              | Daily refresh at 06:00 IST.                                                  |
-| `CRON_MEDIA_JOB_POLLER`           | `MEDIA_BACKEND=fal-ai`                                 | `*/30 * * * * *`         | Every 30 seconds; polls in-flight video jobs against fal queue API.          |
+| Variable                          | Required when                                          | Default (no AI)  | Default (AI mode) | Purpose                                                                       |
+|-----------------------------------|--------------------------------------------------------|------------------|-------------------|-------------------------------------------------------------------------------|
+| `CONTENT_GENERATOR_BACKEND`       | always                                                 | `placeholder`    | n/a               | Master switch: `placeholder` (asset catalog) or `ai` (full AI chain).         |
+| `ANTHROPIC_API_KEY`               | `CONTENT_GENERATOR_BACKEND=ai`                         | --               | required          | Anthropic API key for Sonnet 4.6 / Haiku 4.5 via `@ai-sdk/anthropic`.         |
+| `FAL_API_KEY`                     | AI mode + `MEDIA_BACKEND` not overridden               | --               | required          | fal.ai API key for image (sync) and video (queue API) generation.             |
+| `GOOGLE_CALENDAR_API_KEY`         | AI mode + V1 not overridden                            | --               | required          | Google Calendar API key for India public holidays calendar (V1).              |
+| `PERPLEXITY_API_KEY`              | AI mode + V2 not overridden                            | --               | required          | Perplexity Sonar Pro API key (V2 daily refresh + per-post triggers).          |
+| `MEDIA_BACKEND`                   | optional override                                      | `placeholder`    | `fal-ai`          | Override: set to `placeholder` to skip fal.ai under AI mode.                  |
+| `CURRENT_AFFAIRS_V1_ENABLED`      | optional override                                      | `true` (unused)  | `true`            | Override: set to `false` to skip Google Calendar under AI mode.               |
+| `CURRENT_AFFAIRS_V2_ENABLED`      | optional override                                      | `false` (unused) | `true`            | Override: set to `false` to skip Sonar Pro under AI mode.                     |
+| `CRON_CURRENT_AFFAIRS_REFRESH`    | when V1 or V2 enabled                                  | `0 6 * * *`      | `0 6 * * *`       | Daily refresh at 06:00 IST.                                                   |
+| `CRON_MEDIA_JOB_POLLER`           | `MEDIA_BACKEND=fal-ai`                                 | `*/30 * * * * *` | `*/30 * * * * *`  | Every 30 seconds; polls in-flight video jobs against fal queue API.           |
 
 Optional provider-portability keys (no behavior change unless code is changed to switch providers): `OPENAI_API_KEY`, `GOOGLE_API_KEY` -- declared in factory but unused in default chain.
 
