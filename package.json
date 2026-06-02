@@ -28,6 +28,7 @@
     "setup:mcp": "node scripts/setup-mcp.mjs",
     "setup:rtk": "node scripts/setup-rtk.mjs",
     "reindex": "node scripts/reindex-rag.mjs",
+    "playground": "npm run playground --workspace=@restropulse/content-engine --",
     "prepare": "husky"
   },
   "devDependencies": {
