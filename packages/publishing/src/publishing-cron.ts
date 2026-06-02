@@ -12,7 +12,7 @@
  */
 
 import cron from 'node-cron';
-import { getPostsCollection, getRestaurantsCollection, toApiFormat } from '@restropulse/db';
+import { getPostsCollection, getRestaurantsCollection, toApiFormat, toObjectId } from '@restropulse/db';
 import { publishPost, PublishResult } from './publishing-service.js';
 import { Post } from '@restropulse/shared';
 import { createLogger, tracedCronJob, trackEvent } from '@restropulse/telemetry/server';
@@ -65,7 +65,7 @@ export async function getPostsDueForPublishing(): Promise<any[]> {
 export async function getRestaurantCredentials(restaurantId: string): Promise<any | null> {
     const col = getRestaurantsCollection();
     const restaurant = await col.findOne({
-        _id: restaurantId as any,
+        _id: toObjectId(restaurantId) as any,
         'instagramCredentials.accessToken': { $exists: true, $ne: null }
     });
 
