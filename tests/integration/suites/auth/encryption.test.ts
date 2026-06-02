@@ -20,13 +20,13 @@ describe('AES-256-CBC encryption round-trip', () => {
     expect(encrypt(token)).not.toBe(encrypt(token));
   });
 
-  it('throws when decrypting with a wrong key', async () => {
+  it('returns null when decrypting with a wrong key', async () => {
     process.env.ENCRYPTION_KEY = secrets.ENCRYPTION_KEY;
     const { encrypt } = await import('../../../../packages/publishing/src/encryption.js');
     const encrypted = encrypt('test-token');
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     const { decrypt: decryptWrong } = await import('../../../../packages/publishing/src/encryption.js');
-    expect(() => decryptWrong(encrypted)).toThrow();
+    expect(decryptWrong(encrypted)).toBeNull();
     process.env.ENCRYPTION_KEY = secrets.ENCRYPTION_KEY;
   });
 });
