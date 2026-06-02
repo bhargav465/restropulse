@@ -56,8 +56,8 @@ export function buildSystemPromptFragment(ctx: SpecializationContext): string {
     `Dietary focus: ${dietary}.`,
     ``,
     // Block 2 — Brand compliance (FSSAI + honesty)
-    `COMPLIANCE RULES (non-negotiable):`,
-    `- Do NOT make health claims. No "cures", "prevents disease", "weight loss", "boosts immunity", "treats illness", or comparative health language ("healthier than", "better for your gut").`,
+    `COMPLIANCE RULES — FSSAI (non-negotiable):`,
+    `- Do NOT make health claims. FSSAI prohibits: "cures", "prevents disease", "weight loss", "boosts immunity", "treats illness". Also avoid comparative health language ("healthier than", "better for your gut").`,
     `- Never invent menu items, ingredients, prices, or offers not explicitly provided.`,
     `- No dark patterns or false urgency ("only 2 left!" without evidence).`,
     `- No false comparative pricing claims ("cheaper than X restaurant").`,
