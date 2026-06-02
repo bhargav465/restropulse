@@ -1,0 +1,272 @@
+[
+  {
+    "_id": "pg-r1",
+    "id": "pg-r1",
+    "name": "Nihari House",
+    "cuisine": "Hyderabadi Dum Biryani, Nihari, Haleem",
+    "location": {
+      "address": "14-7-148, Pathergatti, Charminar, Hyderabad, Telangana 500002",
+      "lat": 17.3617,
+      "lng": 78.4741,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r1"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": false },
+    "activeOffers": [
+      "20% off on weekday lunch combos",
+      "Family biryani platter at Rs. 999"
+    ],
+    "chefSpecials": [
+      "Mutton Dum Biryani",
+      "Nihari with Sheermal",
+      "Paya Shorba",
+      "Haleem"
+    ],
+    "menuLastUpdated": "2025-11-15"
+  },
+  {
+    "_id": "pg-r2",
+    "id": "pg-r2",
+    "name": "Dakshin Rasam",
+    "cuisine": "South Indian — Andhra, Chettinad",
+    "location": {
+      "address": "3-6-89, Rani Gunj, Secunderabad, Hyderabad, Telangana 500003",
+      "lat": 17.4399,
+      "lng": 78.4983,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r2"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": true },
+    "activeOffers": [
+      "Unlimited thali on Sundays at Rs. 299",
+      "Free filter coffee with any meal above Rs. 400"
+    ],
+    "chefSpecials": [
+      "Andhra Kodi Pulao",
+      "Chettinad Chicken Curry",
+      "Pesarattu with Upma",
+      "Gongura Mutton"
+    ],
+    "menuLastUpdated": "2026-01-20"
+  },
+  {
+    "_id": "pg-r3",
+    "id": "pg-r3",
+    "name": "The Dhaba Collective",
+    "cuisine": "North Indian — Punjabi, Dal Makhani",
+    "location": {
+      "address": "Plot 47, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033",
+      "lat": 17.4239,
+      "lng": 78.4074,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r3"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": false },
+    "activeOffers": [
+      "Buy 2 main course get 1 naan free",
+      "Early dinner deal: 15% off between 6pm and 7:30pm"
+    ],
+    "chefSpecials": [
+      "Slow-Cooked Dal Makhani",
+      "Tandoori Chicken",
+      "Sarson da Saag with Makki Roti",
+      "Amritsari Kulcha"
+    ],
+    "menuLastUpdated": "2025-10-05"
+  },
+  {
+    "_id": "pg-r4",
+    "id": "pg-r4",
+    "name": "Golden Dragon",
+    "cuisine": "Indo-Chinese, Cantonese, Dim Sum",
+    "location": {
+      "address": "Unit 12, Cyber Towers, Hitech City, Hyderabad, Telangana 500081",
+      "lat": 17.4474,
+      "lng": 78.3762,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r4"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": true },
+    "activeOffers": [
+      "Corporate lunch set menu at Rs. 449",
+      "Dim sum basket deal: any 3 for Rs. 599"
+    ],
+    "chefSpecials": [
+      "Har Gow (Steamed Prawn Dumplings)",
+      "Szechuan Kung Pao Chicken",
+      "Wok-Tossed Hakka Noodles",
+      "Chilli Paneer Dry"
+    ],
+    "menuLastUpdated": "2026-03-10"
+  },
+  {
+    "_id": "pg-r5",
+    "id": "pg-r5",
+    "name": "Banjara Brasserie",
+    "cuisine": "Continental, European, Wood-Fired",
+    "location": {
+      "address": "8-2-293, Road No. 82, Banjara Hills, Hyderabad, Telangana 500034",
+      "lat": 17.4126,
+      "lng": 78.4438,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r5"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": true },
+    "activeOffers": [
+      "Date night set menu for two at Rs. 2,499",
+      "Complimentary dessert on anniversary bookings"
+    ],
+    "chefSpecials": [
+      "Wood-Fired Beef Tenderloin",
+      "Truffle Risotto",
+      "Bouillabaisse",
+      "Lemon Tart with Chantilly Cream"
+    ],
+    "menuLastUpdated": "2026-02-28"
+  },
+  {
+    "_id": "pg-r6",
+    "id": "pg-r6",
+    "name": "Gachibowli Grill",
+    "cuisine": "Burgers, Wraps, Loaded Fries",
+    "location": {
+      "address": "Shop 5, DLF Cyber Hub, Gachibowli, Hyderabad, Telangana 500032",
+      "lat": 17.4401,
+      "lng": 78.3489,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r6"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": false },
+    "activeOffers": [
+      "Combo meal: burger + fries + drink at Rs. 349",
+      "Happy hour loaded fries: buy 1 get 1 free 3pm-6pm"
+    ],
+    "chefSpecials": [
+      "Double Smash Cheeseburger",
+      "BBQ Pulled Chicken Wrap",
+      "Peri-Peri Loaded Fries",
+      "Crispy Onion Ring Tower"
+    ],
+    "menuLastUpdated": "2025-09-22"
+  },
+  {
+    "_id": "pg-r7",
+    "id": "pg-r7",
+    "name": "Haze Cafe & Bakery",
+    "cuisine": "Cafe, All-day Breakfast, Artisan Bakes",
+    "location": {
+      "address": "Plot 22, Road No. 45, Jubilee Hills, Hyderabad, Telangana 500033",
+      "lat": 17.4315,
+      "lng": 78.4089,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r7"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": true },
+    "activeOffers": [
+      "Morning ritual: coffee + croissant at Rs. 199",
+      "Weekend brunch buffet Rs. 599 per person"
+    ],
+    "chefSpecials": [
+      "Eggs Benedict with Hollandaise",
+      "Sourdough Avocado Toast",
+      "Kouign-Amann",
+      "Cold Brew Single Origin"
+    ],
+    "menuLastUpdated": "2026-04-01"
+  },
+  {
+    "_id": "pg-r8",
+    "id": "pg-r8",
+    "name": "The Protein Kitchen",
+    "cuisine": "Salads, Power Bowls, Millet Meals",
+    "location": {
+      "address": "Ground Floor, Skyview 10, Hitech City, Hyderabad, Telangana 500081",
+      "lat": 17.4512,
+      "lng": 78.3801,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r8"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": true },
+    "activeOffers": [
+      "Weekly meal prep pack: 5 bowls for Rs. 1,499",
+      "Free protein shake with any bowl above Rs. 350"
+    ],
+    "chefSpecials": [
+      "Jowar and Roasted Veggie Power Bowl",
+      "Grilled Chicken Caesar Salad",
+      "Foxtail Millet Khichdi",
+      "High-Protein Peanut Butter Smoothie"
+    ],
+    "menuLastUpdated": "2026-05-10"
+  },
+  {
+    "_id": "pg-r9",
+    "id": "pg-r9",
+    "name": "Saffron & Smoke",
+    "cuisine": "Modern Indian Fusion, Tasting Menu",
+    "location": {
+      "address": "8-2-120A, Road No. 2, Banjara Hills, Hyderabad, Telangana 500034",
+      "lat": 17.4092,
+      "lng": 78.4392,
+      "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r9"
+    },
+    "accountManager": {
+      "name": "RestroPulse Hyderabad",
+      "phone": "+91 00000 00003",
+      "email": "hyderabad@restropulse.ai",
+      "avatar": "https://picsum.photos/seed/am-hyd/100/100"
+    },
+    "integrations": { "instagram": true },
+    "activeOffers": [
+      "Chef's 7-course tasting menu at Rs. 3,999 per person",
+      "Wine pairing add-on Rs. 1,500 per person"
+    ],
+    "chefSpecials": [
+      "Smoked Raan with Saffron Jus",
+      "Deconstructed Biryani Arancini",
+      "Mango Kokum Ceviche",
+      "Charred Cauliflower with Achaar Emulsion"
+    ],
+    "menuLastUpdated": "2026-05-20"
+  }
+]
