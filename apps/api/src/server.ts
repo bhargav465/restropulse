@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, requestLoggingMiddleware, errorHandlerMiddleware, shutdownServerTelemetry } from '@restropulse/telemetry/server';
+import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
+import { API_SECRET_KEYS } from '../../../config/secrets-manifest.js';
 import { initializeFirebaseAdmin } from './services/firebase-admin.js';
 // NOTE: Cron jobs (publishing + token refresh) are now handled by apps/publisher
 import authRoutes from './routes/auth.js';
@@ -61,6 +63,13 @@ const portConfig = getPortConfig();
 
 const booleanFlag = z.preprocess((v) => v === 'true', z.boolean()).default(false);
 
+if (process.env.SECRETS_BACKEND) {
+    await hydrateEnvFromProvider(
+        createSecretsProvider(process.env.SECRETS_BACKEND),
+        API_SECRET_KEYS,
+    );
+}
+
 const env = loadAndValidateEnv({
     serviceName: 'api',
     envPath: path.resolve(process.cwd(), '.env'),
@@ -72,6 +81,17 @@ const env = loadAndValidateEnv({
         MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
         FRONTEND_URL: z.string().url(),
         BACKEND_URL: z.string().url(),
+        JWT_SECRET: z.string().min(1).default('restropulse-dev-secret-change-in-production'),
+        ENCRYPTION_KEY: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
+        FIREBASE_SERVICE_ACCOUNT_KEY: z.string().optional(),
+        FIREBASE_PROJECT_ID: z.string().optional(),
+        INSTAGRAM_APP_ID: z.string().optional(),
+        INSTAGRAM_APP_SECRET: z.string().optional(),
+        INSTAGRAM_REDIRECT_URI: z.string().optional(),
+        APPLICATIONINSIGHTS_CONNECTION_STRING: z.string().optional(),
+        SECRETS_BACKEND: z.enum(['env', 'azure-kv']).default('env'),
+        AZURE_KEY_VAULT_URL: z.string().url().optional(),
+        AZURE_KEY_VAULT_KEY_PREFIX: z.string().optional(),
         RAZORPAY_KEY_ID: z.string().min(1).optional(),
         RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
         RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),

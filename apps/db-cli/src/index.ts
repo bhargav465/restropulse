@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-import { config } from 'dotenv';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { loadEnv, getResolvedEnv, redactUri } from './lib/env.js';
 import { setupCommand } from './commands/setup.js';
 import { validateCommand } from './commands/validate.js';
 import { seedCommand } from './commands/seed.js';
@@ -11,27 +9,36 @@ import { resetCommand } from './commands/reset.js';
 import { razorpaySetupCommand } from './commands/razorpay-setup.js';
 import { deleteAccountCommand } from './commands/delete-account.js';
 
-// Load .env from api app (single source of truth for MongoDB config)
-const envCandidates = [
-    resolve(process.cwd(), 'apps/api/.env'),
-    resolve(process.cwd(), '../api/.env'),
-    resolve(process.cwd(), 'api/.env')
-];
-const backendEnvPath = envCandidates.find((path) => existsSync(path));
-if (backendEnvPath) {
-    config({ path: backendEnvPath });
-} else {
-    config();
-}
-
 const program = new Command();
 
-console.log(chalk.cyan.bold('\n  RestroPulse Database CLI\n'));
+function printBanner(): void {
+    const env = getResolvedEnv();
+    const uri = process.env.MONGODB_URI;
+    const db = process.env.MONGODB_DB_NAME;
+    const envColor = env === 'production' ? chalk.red.bold
+        : env === 'staging' ? chalk.yellow.bold
+        : chalk.green;
+
+    console.log(chalk.cyan.bold('\n  RestroPulse Database CLI'));
+    console.log(`  Environment : ${envColor(env)}`);
+    console.log(`  Database    : ${chalk.white(db ?? chalk.red('(not set)'))}`);
+    if (uri) {
+        console.log(`  MongoDB     : ${chalk.gray(redactUri(uri))}`);
+    } else {
+        console.log(`  MongoDB     : ${chalk.red('(MONGODB_URI not set)')}`);
+    }
+    console.log('');
+}
 
 program
     .name('rp-db')
     .description('Database setup, schema validation, and test data seeding for RestroPulse')
-    .version('1.0.0');
+    .version('1.0.0')
+    .option('--env <env>', 'Target environment: development | staging | production', 'development')
+    .hook('preAction', async (thisCommand) => {
+        await loadEnv(thisCommand.opts().env as string);
+        printBanner();
+    });
 
 program
     .command('setup')

@@ -20,8 +20,17 @@ import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { startPublishingCron, startTokenRefreshCron } from '@restropulse/publishing';
 import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
+import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
+import { PUBLISHER_SECRET_KEYS } from '../../../config/secrets-manifest.js';
 
 const logger = createLogger('publisher');
+
+if (process.env.SECRETS_BACKEND) {
+  await hydrateEnvFromProvider(
+    createSecretsProvider(process.env.SECRETS_BACKEND),
+    PUBLISHER_SECRET_KEYS,
+  );
+}
 
 loadAndValidateEnv({
   serviceName: 'publisher',
@@ -34,6 +43,9 @@ loadAndValidateEnv({
     INSTAGRAM_APP_SECRET: z.string().min(1),
     ENCRYPTION_KEY: z.string().regex(/^[A-Fa-f0-9]{64}$/),
     INSTAGRAM_REDIRECT_URI: z.string().url().optional(),
+    SECRETS_BACKEND: z.enum(['env', 'azure-kv']).default('env'),
+    AZURE_KEY_VAULT_URL: z.string().url().optional(),
+    AZURE_KEY_VAULT_KEY_PREFIX: z.string().optional(),
   }).passthrough(),
 });
 

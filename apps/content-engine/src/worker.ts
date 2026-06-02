@@ -28,11 +28,20 @@ import cron from 'node-cron';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
+import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
+import { CONTENT_ENGINE_SECRET_KEYS } from '../../../config/secrets-manifest.js';
 import { processAdhocRequests } from './services/adhoc-processor.js';
 import { processApprovedCycles, processStrategyRequests } from './services/strategy-processor.js';
 import { startAssetServer } from './services/asset-server.js';
 
 const logger = createLogger('content-engine');
+
+if (process.env.SECRETS_BACKEND) {
+  await hydrateEnvFromProvider(
+    createSecretsProvider(process.env.SECRETS_BACKEND),
+    CONTENT_ENGINE_SECRET_KEYS,
+  );
+}
 
 const env = loadAndValidateEnv({
   serviceName: 'content-engine',
@@ -43,6 +52,9 @@ const env = loadAndValidateEnv({
     MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
     ASSET_SERVER_PORT: z.coerce.number().int().positive().default(3002),
     ASSET_SERVER_BASE_URL: z.string().url().optional(),
+    SECRETS_BACKEND: z.enum(['env', 'azure-kv']).default('env'),
+    AZURE_KEY_VAULT_URL: z.string().url().optional(),
+    AZURE_KEY_VAULT_KEY_PREFIX: z.string().optional(),
   }).passthrough(),
 });
 

@@ -360,6 +360,15 @@ export interface SubscribeRequest {
 
 export interface FeatureFlags {
   deleteAccount: boolean;
+  topupCredits: boolean;
+  updatesSection: boolean;
+  // Runtime scheduling config -- optional so existing tests don't need updating.
+  // The frontend falls back to compile-time constants when absent.
+  minScheduleAheadMins?: number;
+  postApprovalBufferMins?: number;
+  cycleApprovalBufferMins?: number;
+  // Which social platforms are active. When absent, all platforms are enabled.
+  enabledPlatforms?: Platform[];
 }
 
 // ----- Account Deletion / Archive -----
