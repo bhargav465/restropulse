@@ -57,3 +57,8 @@ restropulse-pwa-database/
 
 # Git worktrees
 .claude/worktrees/
+
+# Integration test secrets
+tests/integration/.env.integration
+tests/integration/.env.integration.*
+!tests/integration/.env.integration.example
