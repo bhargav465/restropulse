@@ -24,6 +24,16 @@ When changing AI-backend code:
 - The `CostEvent` type lives in `@restropulse/shared`; the `MediaJobRecord` type lives there too. Don't duplicate types in app-local files.
 - Adding a new external API surface (e.g. a new media provider): also add per-call pricing in the relevant `pricing.ts` so cost dashboards stay accurate.
 
+## Secrets Management
+
+All secrets flow through `@restropulse/secrets` (`packages/secrets/`). Key conventions when working on this codebase:
+- Never read secrets directly from `process.env` in new code -- add them to the app's Zod schema and `config/secrets-manifest.ts`
+- Per-service scoping: each app only hydrates its own keys via `getAppSecretKeys(appName)`. The manifest is the authoritative list of which app owns which secret
+- `SECRETS_BACKEND=azure-kv` enables Key Vault at startup; application code (Zod schemas, `process.env` reads) is unchanged
+- Integration tests (`tests/integration/`): use `requireSecrets(suiteName, keys)` which throws on any missing secret -- no skip mechanism. Tests are manual-trigger only via `workflow_dispatch`
+- Key Vault naming: `MY_API_KEY` -> `my-api-key` (kebab-case). With `AZURE_KEY_VAULT_KEY_PREFIX=dev`: `dev-my-api-key`
+- See `docs/INTEGRATION_TESTING.md` for how to run and add integration tests
+
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands
 

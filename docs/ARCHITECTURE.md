@@ -213,6 +213,26 @@ Every external API call writes one row to `costEvents` (MongoDB) AND emits a `cu
 
 For full rationale (decision drivers, framework selection, RAG strategy, retry profiles, durability semantics), see [ADR 0001 - Content-Engine AI Framework](adr/0001-content-engine-ai-framework.md).
 
+## Secrets Management
+
+All runtime secrets flow through `packages/secrets` (`@restropulse/secrets`).
+
+```
+ISecretsProvider
+  EnvSecretsProvider            (default -- reads process.env)
+  AzureKeyVaultSecretsProvider  (Azure Key Vault via DefaultAzureCredential)
+    wrapped by CachedSecretsProvider (in-memory cache, avoids repeated KV API calls)
+```
+
+**Startup flow when `SECRETS_BACKEND=azure-kv`:**
+1. `createSecretsProvider('azure-kv')` builds a cached KV provider
+2. `hydrateEnvFromProvider(provider, APP_SECRET_KEYS)` fetches all keys in parallel, writes to `process.env`
+3. `loadAndValidateEnv(...)` runs unchanged -- reads from `process.env` as always
+
+**Per-service scoping:** `config/secrets-manifest.ts` is the single source of truth. Each secret declares `apps[]`. `getAppSecretKeys(app)` returns only that app's keys -- no service fetches a secret it does not own.
+
+**Key Vault naming:** `MY_API_KEY` -> `my-api-key`. With `AZURE_KEY_VAULT_KEY_PREFIX=staging`: `staging-my-api-key`.
+
 ### apps/db-cli -- Database CLI
 
 - **Framework**: Commander + chalk + ora

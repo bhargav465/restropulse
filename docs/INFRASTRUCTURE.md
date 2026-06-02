@@ -55,6 +55,9 @@ Rules:
 | RAZORPAY_WEBHOOK_SECRET          | No*      | --                                               | Razorpay webhook signature secret          |
 | FEATURE_TOPUP_CREDITS            | No       | false                                            | Feature flag: enable credit pack topup purchase UI         |
 | FEATURE_UPDATES_SECTION          | No       | false                                            | Feature flag: enable Updates (Inputs) section in nav       |
+| SECRETS_BACKEND                  | No       | `env`                                            | `env` (process.env) or `azure-kv` (Azure Key Vault)    |
+| AZURE_KEY_VAULT_URL              | Cond.    | --                                               | Full Key Vault URL, e.g. `https://restropulse-prod-kv.vault.azure.net`. Required when `SECRETS_BACKEND=azure-kv` |
+| AZURE_KEY_VAULT_KEY_PREFIX       | No       | (none)                                           | Optional prefix prepended to all KV secret names (e.g. `dev`, `staging`) |
 
 *JWT_SECRET has a dev default but must be changed in production.
 *RAZORPAY_* vars are optional in dev; service throws if called without config.
@@ -99,6 +102,9 @@ Rules:
 | ENCRYPTION_KEY   | Yes      | --            | Must match API's key             |
 | INSTAGRAM_APP_ID | Yes      | --            | For token refresh                |
 | INSTAGRAM_APP_SECRET | Yes  | --            | For token refresh                |
+| SECRETS_BACKEND      | No   | `env`          | `env` (process.env) or `azure-kv` (Azure Key Vault) |
+| AZURE_KEY_VAULT_URL  | Cond.| --            | Full Key Vault URL. Required when `SECRETS_BACKEND=azure-kv` |
+| AZURE_KEY_VAULT_KEY_PREFIX | No | (none)      | Optional prefix for KV secret names (e.g. `dev`, `staging`) |
 
 ### apps/content-engine (.env)
 
@@ -107,6 +113,9 @@ Rules:
 | NODE_ENV         | No       | development   | Environment mode                 |
 | MONGODB_URI      | Yes      | --            | MongoDB connection string        |
 | MONGODB_DB_NAME  | No       | restropulse   | Database name                    |
+| SECRETS_BACKEND  | No       | `env`          | `env` (process.env) or `azure-kv` (Azure Key Vault) |
+| AZURE_KEY_VAULT_URL | Cond. | --            | Full Key Vault URL. Required when `SECRETS_BACKEND=azure-kv` |
+| AZURE_KEY_VAULT_KEY_PREFIX | No | (none)      | Optional prefix for KV secret names (e.g. `dev`, `staging`) |
 
 #### Content Engine AI backend (env additions)
 

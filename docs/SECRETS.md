@@ -8,16 +8,49 @@ For each secret, this guide describes:
 - Format and where to paste it (which `.env` file or Azure App Service setting)
 - How to verify it works
 
-## How secrets are loaded
+## How secrets are managed
 
-The workspace does **not** integrate with any secret manager (Azure Key Vault, AWS Secrets Manager, etc.) at the application code layer. Each app reads `process.env` directly through `loadAndValidateEnv` from `@restropulse/shared`.
+All secrets flow through the `@restropulse/secrets` package (`packages/secrets/`).
 
-| Environment       | Source of truth                                                                                    |
-|-------------------|----------------------------------------------------------------------------------------------------|
-| Local dev         | `apps/<app>/.env` files (gitignored). Operators paste secrets directly.                            |
-| Staging / Prod    | Azure App Service slot-sticky settings (operators set them in Azure Portal).                       |
+| Backend | `SECRETS_BACKEND` value | When to use |
+|---------|------------------------|-------------|
+| Process env (default) | `env` or unset | Local dev, CI unit tests |
+| Azure Key Vault | `azure-kv` | Staging + production |
 
-Azure App Service has a [Key Vault references](https://learn.microsoft.com/en-us/azure/app-service/app-service-key-vault-references) feature where settings can be set to `@Microsoft.KeyVault(SecretUri=...)` strings and Azure resolves them server-side. This is an **operator-side** capability — application code stays unchanged. If you want code-level Key Vault integration (so a single `.env.example` references vault entries), that is a future ADR.
+The provider is selected at service startup via `createSecretsProvider(process.env.SECRETS_BACKEND)`. When `azure-kv` is selected, all secrets for that service are fetched in parallel from Key Vault and written into `process.env` before `loadAndValidateEnv()` runs. Application code is unchanged.
+
+## Per-service secret scope
+
+Each service only loads its own secrets. Source of truth: `config/secrets-manifest.ts`.
+- `getAppSecretKeys('api')` -- JWT, Instagram, Razorpay, Firebase, MongoDB, ENCRYPTION_KEY
+- `getAppSecretKeys('content-engine')` -- Anthropic, Replicate, fal.ai, Google Calendar, Perplexity, MongoDB
+- `getAppSecretKeys('publisher')` -- ENCRYPTION_KEY, Instagram, MongoDB
+- `getAppSecretKeys('db-cli')` -- MongoDB only
+
+## Azure Key Vault naming convention
+
+`UPPER_SNAKE_CASE` env var -> `lower-kebab-case` KV secret name.
+
+| Env var | KV secret name |
+|---|---|
+| `MONGODB_URI` | `mongodb-uri` |
+| `ENCRYPTION_KEY` | `encryption-key` |
+| `JWT_SECRET` | `jwt-secret` |
+| `ANTHROPIC_API_KEY` | `anthropic-api-key` |
+| `REPLICATE_API_TOKEN` | `replicate-api-token` |
+| `INSTAGRAM_APP_SECRET` | `instagram-app-secret` |
+| `RAZORPAY_KEY_SECRET` | `razorpay-key-secret` |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | `firebase-service-account-key` |
+
+With `AZURE_KEY_VAULT_KEY_PREFIX=dev`, all names get a `dev-` prefix.
+
+## Adding a new secret
+
+1. Add entry to `config/secrets-manifest.ts`
+2. Add key to the relevant app's Zod schema
+3. Add key to `tests/integration/.env.integration.example`
+4. Add integration test suite under `tests/integration/suites/` if needed
+5. Provision in Azure Key Vault using kebab-case name
 
 ## .env file layout
 
@@ -426,7 +459,7 @@ If you want secrets stored in Key Vault rather than directly in App Service sett
 2. Grant the App Service's managed identity `Key Vault Secrets User` role on the vault.
 3. In App Service settings, set the value to `@Microsoft.KeyVault(SecretUri=https://<vault-name>.vault.azure.net/secrets/<secret-name>/)`.
 
-Application code stays unchanged — Azure resolves the reference at runtime. There is no code-level Key Vault SDK in this repo.
+Application code stays unchanged — Azure resolves the reference at runtime. For code-level Key Vault integration via `@restropulse/secrets`, set `SECRETS_BACKEND=azure-kv` (see the top of this document).
 
 ### Static Web App (for `apps/web`)
 
