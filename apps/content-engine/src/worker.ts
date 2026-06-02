@@ -83,8 +83,9 @@ const env = loadAndValidateEnv({
     GOOGLE_CALENDAR_API_KEY: z.string().optional(),
     PERPLEXITY_API_KEY: z.string().optional(),
     CRON_CURRENT_AFFAIRS_REFRESH: z.string().default('0 6 * * *'),
-    MEDIA_BACKEND: z.enum(['placeholder', 'fal-ai']).default('placeholder'),
+    MEDIA_BACKEND: z.enum(['placeholder', 'fal-ai', 'replicate']).default('placeholder'),
     FAL_API_KEY: z.string().optional(),
+    REPLICATE_API_TOKEN: z.string().optional(),
     CRON_MEDIA_JOB_POLLER: z.string().default('*/30 * * * * *'),
   }).passthrough(),
 });

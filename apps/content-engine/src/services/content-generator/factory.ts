@@ -35,6 +35,8 @@ import {
   FalAIMediaGenerator,
   FalClient,
   MongoMediaJobStore,
+  ReplicateMediaGenerator,
+  ReplicateClient,
 } from './backends/ai/index.js';
 import type { IMediaGenerator } from './backends/ai/media/types.js';
 import {
@@ -46,7 +48,7 @@ import {
 } from './backends/ai/current-affairs/index.js';
 
 export type ContentGeneratorBackend = 'placeholder' | 'ai';
-type MediaBackend = 'placeholder' | 'fal-ai';
+type MediaBackend = 'placeholder' | 'fal-ai' | 'replicate';
 
 function readBoolEnv(name: string, fallback: boolean): boolean {
   const raw = process.env[name];
@@ -57,8 +59,8 @@ function readBoolEnv(name: string, fallback: boolean): boolean {
 function readMediaBackend(fallback: MediaBackend): MediaBackend {
   const raw = process.env.MEDIA_BACKEND?.trim();
   if (!raw) return fallback;
-  if (raw === 'placeholder' || raw === 'fal-ai') return raw;
-  throw new Error(`Unknown MEDIA_BACKEND value: ${raw}. Expected 'placeholder' or 'fal-ai'.`);
+  if (raw === 'placeholder' || raw === 'fal-ai' || raw === 'replicate') return raw;
+  throw new Error(`Unknown MEDIA_BACKEND value: ${raw}. Expected 'placeholder', 'fal-ai', or 'replicate'.`);
 }
 
 interface AiModeResolution {
@@ -91,6 +93,7 @@ function validateAiKeys(flags: AiModeResolution): void {
   const missing: string[] = [];
   if (!process.env.ANTHROPIC_API_KEY) missing.push('ANTHROPIC_API_KEY');
   if (flags.mediaBackend === 'fal-ai' && !process.env.FAL_API_KEY) missing.push('FAL_API_KEY');
+  if (flags.mediaBackend === 'replicate' && !process.env.REPLICATE_API_TOKEN) missing.push('REPLICATE_API_TOKEN');
   if (flags.v1Enabled && !process.env.GOOGLE_CALENDAR_API_KEY) missing.push('GOOGLE_CALENDAR_API_KEY');
   if (flags.v2Enabled && !process.env.PERPLEXITY_API_KEY) missing.push('PERPLEXITY_API_KEY');
 
@@ -99,6 +102,9 @@ function validateAiKeys(flags: AiModeResolution): void {
   const overrideHints: string[] = [];
   if (flags.mediaBackend === 'fal-ai' && missing.includes('FAL_API_KEY')) {
     overrideHints.push('MEDIA_BACKEND=placeholder to skip fal.ai');
+  }
+  if (flags.mediaBackend === 'replicate' && missing.includes('REPLICATE_API_TOKEN')) {
+    overrideHints.push('MEDIA_BACKEND=placeholder to skip Replicate');
   }
   if (flags.v1Enabled && missing.includes('GOOGLE_CALENDAR_API_KEY')) {
     overrideHints.push('CURRENT_AFFAIRS_V1_ENABLED=false to skip Google Calendar');
@@ -162,10 +168,19 @@ function buildCurrentAffairsForFactory(
 
 function buildMediaGeneratorForFactory(flags: AiModeResolution): IMediaGenerator {
   if (flags.mediaBackend === 'fal-ai') {
-    // Key already validated upfront; non-null assertion is safe here.
     const store = new MongoMediaJobStore();
     const media = new FalAIMediaGenerator({
       client: new FalClient({ apiKey: process.env.FAL_API_KEY! }),
+      store,
+    });
+    lastAiMediaJobStore = store;
+    lastAiMediaGenerator = media;
+    return media;
+  }
+  if (flags.mediaBackend === 'replicate') {
+    const store = new MongoMediaJobStore();
+    const media = new ReplicateMediaGenerator({
+      client: new ReplicateClient({ apiKey: process.env.REPLICATE_API_TOKEN! }),
       store,
     });
     lastAiMediaJobStore = store;

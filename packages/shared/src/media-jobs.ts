@@ -12,7 +12,7 @@
 import type { PostType } from './index.js';
 
 export type MediaJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
-export type MediaJobProvider = 'placeholder-media' | 'fal-ai';
+export type MediaJobProvider = 'placeholder-media' | 'fal-ai' | 'replicate';
 
 export interface MediaJobRecord {
   id?: string;
