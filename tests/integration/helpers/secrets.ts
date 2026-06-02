@@ -17,6 +17,16 @@ config({ path: resolve(ROOT, 'apps/content-engine/.env'), override: false });
 config({ path: resolve(ROOT, 'apps/api/.env'), override: false });
 config({ path: resolve(ROOT, 'apps/publisher/.env'), override: false });
 
+// When SECRETS_BACKEND=azure-kv, fetch all secrets from Key Vault and write
+// them into process.env. This runs once at module load time (top-level await).
+// All keys come from the manifest so individual suites call requireSecrets() unchanged.
+if (process.env.SECRETS_BACKEND === 'azure-kv') {
+  const { createSecretsProvider, hydrateEnvFromProvider } = await import('@restropulse/secrets');
+  const { SECRETS_MANIFEST } = await import('../../../config/secrets-manifest.js');
+  const allKeys = SECRETS_MANIFEST.filter(s => !s.buildTime).map(s => s.key);
+  await hydrateEnvFromProvider(createSecretsProvider('azure-kv'), allKeys);
+}
+
 /**
  * Returns the secrets map or throws if any required key is absent.
  * No skip/ignore mechanism -- integration tests are always a deliberate manual run.
