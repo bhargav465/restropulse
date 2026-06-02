@@ -43,10 +43,11 @@ function pickAspectRatio(postType: PostType, _platforms: Platform[]): string {
   return postType === 'STORY' ? '9:16' : '1:1';
 }
 
-function buildPrompt(input: Pick<ImageGenInput | VideoGenInput, 'concept' | 'themes' | 'caption'>): string {
+function buildPrompt(input: Pick<ImageGenInput | VideoGenInput, 'concept' | 'themes' | 'caption'> & { promptSuffix?: string }): string {
   const themePart = input.themes?.length ? `, themes: ${input.themes.join(', ')}` : '';
   const captionPart = input.caption ? `, alongside the caption "${input.caption.slice(0, 200)}"` : '';
-  return `${input.concept}${themePart}${captionPart}`.slice(0, 1000);
+  const base = `${input.concept}${themePart}${captionPart}`;
+  return (input.promptSuffix ? `${base}\n\n${input.promptSuffix}` : base).slice(0, 1200);
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

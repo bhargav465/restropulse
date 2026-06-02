@@ -41,6 +41,8 @@ export interface ImageGenInput {
   caption?: string;
   /** Optional: edit a user-provided image (img2img) instead of generating from scratch. */
   baseImageUrl?: string;
+  /** Visual direction fragment from the domain specialization (food photography style, angle, surface). Appended to the model prompt to ground the image in the correct aesthetic. */
+  promptSuffix?: string;
   // Phase 4 -- optional, used for cost attribution + audit
   restaurantId?: string;
   postId?: string;

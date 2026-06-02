@@ -29,6 +29,7 @@ import { PostCaptionSchema, type PostCaptionSchemaType } from '../llm/schemas.js
 import { computeCostUsd } from '../llm/pricing.js';
 import { type PipelineDeps, toSpecializationContext, resolveCurrentAffairsHints } from './types.js';
 import type { MediaGenJob } from '../media/types.js';
+import { buildImagePromptFragment } from '../specialization/restaurant/visual-direction.js';
 
 const log = createLogger('ai-generate-post');
 
@@ -95,6 +96,12 @@ async function runMediaForPost(
     model: 'placeholder-media',
   };
 
+  const specCtx = toSpecializationContext(ctx);
+  const visualDirection = buildImagePromptFragment(
+    { postType: input.type, platforms: input.platforms, concept: input.concept, themes: input.themes },
+    specCtx,
+  );
+
   return withRetry(
     () => withCostTracking(
       async () => {
@@ -112,6 +119,7 @@ async function runMediaForPost(
               platforms: input.platforms,
               concept: input.concept,
               themes: input.themes,
+              promptSuffix: visualDirection,
               ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
               ...(input.cycleId ? { cycleId: input.cycleId } : {}),
             });
