@@ -2,24 +2,22 @@ import { config } from 'dotenv';
 import { resolve } from 'path';
 
 const ROOT = resolve(process.cwd());
-export const INTEGRATION_ENV = process.env.INTEGRATION_ENV ?? 'dev';
 
 // Priority order (highest first, override: false means earlier values win):
-// 1. CI environment variables already in process.env
-// 2. tests/integration/.env.integration.{env}  (environment-specific overrides)
-// 3. tests/integration/.env.integration         (shared integration secrets)
-// 4. apps/content-engine/.env                   (AI backend keys)
-// 5. apps/api/.env                              (auth, payments, Meta keys)
-// 6. apps/publisher/.env                        (encryption, Instagram keys)
-config({ path: resolve(ROOT, `tests/integration/.env.integration.${INTEGRATION_ENV}`), override: false });
+// 1. process.env — CI secrets injected by the workflow, or SECRETS_BACKEND=azure-kv hydration below
+// 2. tests/integration/.env.integration — optional local overrides
+// 3. apps/content-engine/.env — AI backend keys
+// 4. apps/api/.env             — auth, payments, Meta keys
+// 5. apps/publisher/.env       — encryption, Instagram keys
 config({ path: resolve(ROOT, 'tests/integration/.env.integration'), override: false });
 config({ path: resolve(ROOT, 'apps/content-engine/.env'), override: false });
 config({ path: resolve(ROOT, 'apps/api/.env'), override: false });
 config({ path: resolve(ROOT, 'apps/publisher/.env'), override: false });
 
-// When SECRETS_BACKEND=azure-kv, fetch all secrets from Key Vault and write
-// them into process.env. This runs once at module load time (top-level await).
-// All keys come from the manifest so individual suites call requireSecrets() unchanged.
+// When SECRETS_BACKEND=azure-kv, fetch all secrets from Key Vault and write into
+// process.env. Runs once at module load (top-level await). The KV prefix
+// (AZURE_KEY_VAULT_KEY_PREFIX) determines which environment's values are used —
+// 'dev', 'staging', or 'prod'. Individual suites call requireSecrets() unchanged.
 if (process.env.SECRETS_BACKEND === 'azure-kv') {
   const { createSecretsProvider, hydrateEnvFromProvider } = await import('@restropulse/secrets');
   const { SECRETS_MANIFEST } = await import('../../../config/secrets-manifest.js');
