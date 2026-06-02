@@ -44,6 +44,26 @@ function validateGeneratedPost(post: GeneratedPost): ValidationIssue[] {
     }
   }
 
+  // Second-pass: comparative health language — catches phrases that slip through the
+  // primary FSSAI regex but are still non-compliant (especially for HEALTH_DIETARY_SIGNAL posts).
+  const HEALTH_COMPARATIVE_PATTERNS: RegExp[] = [
+    /healthier\s+than/i,
+    /better\s+for\s+(your\s+)?(health|body|gut|digestion)/i,
+    /good\s+for\s+(diabetics?|heart|cholesterol)/i,
+    /helps?\s+(you\s+)?(lose\s+weight|digestion|immunity)/i,
+    /improves?\s+(your\s+)?(health|digestion|immunity|energy)/i,
+  ];
+  for (const pattern of HEALTH_COMPARATIVE_PATTERNS) {
+    if (pattern.test(post.caption)) {
+      issues.push({
+        severity: 'error',
+        field: 'caption',
+        message: 'Caption contains a comparative health claim. State dietary properties as facts only (e.g. "made with ragi", "100% vegan") — no benefit or comparison claims.',
+      });
+      break;
+    }
+  }
+
   if (post.caption.length > INSTAGRAM_TOTAL_CHAR_LIMIT) {
     issues.push({
       severity: 'warning',
@@ -66,7 +86,7 @@ function validateGeneratedPost(post: GeneratedPost): ValidationIssue[] {
 
 export class RestaurantSpecialization implements IDomainSpecialization {
   readonly domain = 'restaurant';
-  readonly version = '0.1.0';
+  readonly version = '0.2.0';
 
   getSystemPromptFragment(ctx: SpecializationContext): string {
     return buildSystemPromptFragment(ctx);

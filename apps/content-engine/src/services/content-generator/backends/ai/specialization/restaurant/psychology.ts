@@ -1,6 +1,11 @@
 /**
- * Buyer-psychology hook fragments. Phase 2 caption generation may inject
- * one of these into prompts based on the post archetype.
+ * @deprecated Use hooks.ts instead. This file's exports are unused in the
+ * pipeline. Retained for import compatibility only; will be removed in a
+ * future major version.
+ *
+ * Original note: Buyer-psychology hook fragments. Superseded by the richer
+ * HookTemplate library in hooks.ts which includes reel guidance, demographic
+ * fit, archetype fit, and worked examples.
  */
 
 export const PSYCHOLOGY_HOOKS = {
