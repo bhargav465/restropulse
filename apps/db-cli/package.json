@@ -60,6 +60,7 @@
   "license": "MIT",
   "dependencies": {
     "@restropulse/db": "*",
+    "@restropulse/secrets": "*",
     "@restropulse/shared": "*",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",

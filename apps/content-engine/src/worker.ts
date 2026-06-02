@@ -28,6 +28,8 @@ import cron from 'node-cron';
 import { loadAndValidateEnv, z, ROLLING_WINDOW_HOURS, POST_APPROVAL_BUFFER_HOURS, CYCLE_APPROVAL_BUFFER_HOURS, validateTimingConstraints } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, shutdownServerTelemetry, tracedCronJob } from '@restropulse/telemetry/server';
+import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
+import { CONTENT_ENGINE_SECRET_KEYS } from '../../../config/secrets-manifest.js';
 import {
   createAdhocProcessor,
   createStrategyProcessor,
@@ -51,6 +53,13 @@ import {
 import { runPostResumeOnBoot } from './services/post-resume.js';
 
 const logger = createLogger('content-engine');
+
+if (process.env.SECRETS_BACKEND) {
+  await hydrateEnvFromProvider(
+    createSecretsProvider(process.env.SECRETS_BACKEND),
+    CONTENT_ENGINE_SECRET_KEYS,
+  );
+}
 
 const env = loadAndValidateEnv({
   serviceName: 'content-engine',
@@ -87,6 +96,9 @@ const env = loadAndValidateEnv({
     FAL_API_KEY: z.string().optional(),
     REPLICATE_API_TOKEN: z.string().optional(),
     CRON_MEDIA_JOB_POLLER: z.string().default('*/30 * * * * *'),
+    SECRETS_BACKEND: z.enum(['env', 'azure-kv']).default('env'),
+    AZURE_KEY_VAULT_URL: z.string().url().optional(),
+    AZURE_KEY_VAULT_KEY_PREFIX: z.string().optional(),
   }).passthrough(),
 });
 
