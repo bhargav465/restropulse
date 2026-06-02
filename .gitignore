@@ -48,3 +48,8 @@ restropulse-pwa/
 restropulse-pwa-backend/
 restropulse-pwa-database/
 /.vs
+
+# Integration test secrets
+tests/integration/.env.integration
+tests/integration/.env.integration.*
+!tests/integration/.env.integration.example

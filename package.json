@@ -20,6 +20,7 @@
     "test": "turbo test",
     "test:unit": "turbo run test:unit --filter=@restropulse/api --filter=@restropulse/web --filter=@restropulse/publisher --filter=@restropulse/content-engine",
     "test:coverage": "node scripts/run-coverage-all.mjs",
+    "test:integration": "vitest run --config tests/integration/vitest.config.ts",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
     "clean": "turbo clean && rimraf node_modules",
