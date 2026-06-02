@@ -1,0 +1,307 @@
+[
+  {
+    "_id": "pg-cy1a",
+    "id": "pg-cy1a",
+    "restaurantId": "pg-r1",
+    "period": "Week of April 14-20, 2026",
+    "startDate": "2026-04-14T00:00:00.000Z",
+    "endDate": "2026-04-20T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "Eid special week featuring heritage nihari recipes and family feast promotions. Strong engagement on Sheermal and Paya Shorba posts.",
+    "plannedPosts": [
+      { "category": "Biryani Feature", "count": 2 },
+      { "category": "Heritage Story", "count": 1 },
+      { "category": "Festive Special", "count": 1 }
+    ],
+    "focus": ["eid-special", "heritage-recipes", "family-dining"],
+    "feedback": "Cycle completed successfully"
+  },
+  {
+    "_id": "pg-cy1b",
+    "id": "pg-cy1b",
+    "restaurantId": "pg-r1",
+    "period": "Week of May 31-June 6, 2026",
+    "startDate": "2026-05-31T00:00:00.000Z",
+    "endDate": "2026-06-06T23:59:59.000Z",
+    "status": "ACTIVE",
+    "summary": "Monsoon arrival week — promoting warm nihari and haleem as the perfect rains comfort food for old city families.",
+    "plannedPosts": [
+      { "category": "Biryani Feature", "count": 2 },
+      { "category": "Heritage Story", "count": 1 },
+      { "category": "Weekend Special", "count": 1 }
+    ],
+    "focus": ["monsoon-comfort", "old-city-heritage", "weekend-family"]
+  },
+  {
+    "_id": "pg-cy2a",
+    "id": "pg-cy2a",
+    "restaurantId": "pg-r2",
+    "period": "Week of April 21-27, 2026",
+    "startDate": "2026-04-21T00:00:00.000Z",
+    "endDate": "2026-04-27T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "Summer thali campaign spotlighting cooling curd-based dishes and raw mango specials from the Andhra kitchen.",
+    "plannedPosts": [
+      { "category": "Thali Showcase", "count": 2 },
+      { "category": "Regional Ingredient Story", "count": 1 },
+      { "category": "Sunday Special", "count": 1 }
+    ],
+    "focus": ["summer-menu", "andhra-classics", "curd-dishes"],
+    "feedback": "Cycle completed successfully"
+  },
+  {
+    "_id": "pg-cy2b",
+    "id": "pg-cy2b",
+    "restaurantId": "pg-r2",
+    "period": "Week of May 31-June 6, 2026",
+    "startDate": "2026-05-31T00:00:00.000Z",
+    "endDate": "2026-06-06T23:59:59.000Z",
+    "status": "ACTIVE",
+    "summary": "Pre-monsoon gongura celebration — spotlighting the iconic sorrel leaf and its role in Andhra cuisine before the rains change the harvest.",
+    "plannedPosts": [
+      { "category": "Gongura Spotlight", "count": 2 },
+      { "category": "Chettinad Story", "count": 1 },
+      { "category": "Sunday Unlimited Thali", "count": 1 }
+    ],
+    "focus": ["gongura-season", "andhra-heritage", "sunday-thali"]
+  },
+  {
+    "_id": "pg-cy3a",
+    "id": "pg-cy3a",
+    "restaurantId": "pg-r3",
+    "period": "Week of April 8-14, 2026",
+    "startDate": "2026-04-08T00:00:00.000Z",
+    "endDate": "2026-04-14T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "Baisakhi week celebrating Punjabi harvest culture with tandoor specials and a limited-edition Amritsari thali.",
+    "plannedPosts": [
+      { "category": "Tandoor Feature", "count": 2 },
+      { "category": "Festive Special", "count": 1 },
+      { "category": "Dal Makhani Story", "count": 1 }
+    ],
+    "focus": ["baisakhi", "tandoor", "punjabi-harvest"]
+  },
+  {
+    "_id": "pg-cy3b",
+    "id": "pg-cy3b",
+    "restaurantId": "pg-r3",
+    "period": "Week of May 31-June 6, 2026",
+    "startDate": "2026-05-31T00:00:00.000Z",
+    "endDate": "2026-06-06T23:59:59.000Z",
+    "status": "ACTIVE",
+    "summary": "First week of June comfort food push — dal makhani slow-cook series and naan pairing guide timed to monsoon cravings.",
+    "plannedPosts": [
+      { "category": "Dal Makhani Series", "count": 2 },
+      { "category": "Naan & Bread Pairing", "count": 1 },
+      { "category": "Dhaba Story", "count": 1 }
+    ],
+    "focus": ["monsoon-comfort", "dal-makhani", "punjabi-classics"]
+  },
+  {
+    "_id": "pg-cy4a",
+    "id": "pg-cy4a",
+    "restaurantId": "pg-r4",
+    "period": "Week of April 15-21, 2026",
+    "startDate": "2026-04-15T00:00:00.000Z",
+    "endDate": "2026-04-21T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "Golden Week dim sum launch — four new basket varieties introduced with behind-the-scenes steamer content performing well on Instagram.",
+    "plannedPosts": [
+      { "category": "Dim Sum Spotlight", "count": 2 },
+      { "category": "Chef Process Story", "count": 1 },
+      { "category": "Corporate Lunch Deal", "count": 1 },
+      { "category": "Weekend Dining", "count": 1 }
+    ],
+    "focus": ["dim-sum-launch", "chef-story", "hitech-city-lunch"],
+    "feedback": "Cycle completed successfully"
+  },
+  {
+    "_id": "pg-cy4b",
+    "id": "pg-cy4b",
+    "restaurantId": "pg-r4",
+    "period": "Week of June 10-16, 2026",
+    "startDate": "2026-06-10T00:00:00.000Z",
+    "endDate": "2026-06-16T23:59:59.000Z",
+    "status": "PENDING_APPROVAL",
+    "summary": "Mid-June monsoon noodle week — promoting wok-tossed rain-day specials and a new Hakka noodle build-your-own combo for the tech crowd.",
+    "plannedPosts": [
+      { "category": "Noodle Feature", "count": 2 },
+      { "category": "Monsoon Special", "count": 1 },
+      { "category": "Corporate Lunch Deal", "count": 1 },
+      { "category": "Dim Sum Tasting", "count": 1 }
+    ],
+    "focus": ["monsoon-noodles", "hitech-lunch", "wok-specials"]
+  },
+  {
+    "_id": "pg-cy5a",
+    "id": "pg-cy5a",
+    "restaurantId": "pg-r5",
+    "period": "Week of April 22-28, 2026",
+    "startDate": "2026-04-22T00:00:00.000Z",
+    "endDate": "2026-04-28T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "Spring tasting menu rollout — five-course European dinner with seasonal asparagus. Date night content drove reservation spikes.",
+    "plannedPosts": [
+      { "category": "Tasting Menu Feature", "count": 2 },
+      { "category": "Seasonal Ingredient", "count": 1 },
+      { "category": "Date Night Promo", "count": 1 }
+    ],
+    "focus": ["spring-menu", "date-night", "european-fine-dining"]
+  },
+  {
+    "_id": "pg-cy5b",
+    "id": "pg-cy5b",
+    "restaurantId": "pg-r5",
+    "period": "Week of June 10-16, 2026",
+    "startDate": "2026-06-10T00:00:00.000Z",
+    "endDate": "2026-06-16T23:59:59.000Z",
+    "status": "PENDING_APPROVAL",
+    "summary": "Monsoon wood-fired series — rustic heavy reds and braised cuts promoted as the perfect pairing for rainy Hyderabad evenings.",
+    "plannedPosts": [
+      { "category": "Wood-Fired Feature", "count": 2 },
+      { "category": "Wine Pairing Guide", "count": 1 },
+      { "category": "Date Night Offer", "count": 1 },
+      { "category": "Chef Note", "count": 1 }
+    ],
+    "focus": ["monsoon-dining", "wood-fired", "wine-pairing"]
+  },
+  {
+    "_id": "pg-cy6a",
+    "id": "pg-cy6a",
+    "restaurantId": "pg-r6",
+    "period": "Week of April 8-14, 2026",
+    "startDate": "2026-04-08T00:00:00.000Z",
+    "endDate": "2026-04-14T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "New smash burger launch week — double patty content and customer reaction videos delivered the highest engagement month-to-date.",
+    "plannedPosts": [
+      { "category": "New Item Launch", "count": 2 },
+      { "category": "Happy Hour Promo", "count": 1 },
+      { "category": "Customer Reaction", "count": 1 }
+    ],
+    "focus": ["burger-launch", "happy-hour", "social-proof"]
+  },
+  {
+    "_id": "pg-cy6b",
+    "id": "pg-cy6b",
+    "restaurantId": "pg-r6",
+    "period": "Week of June 5-11, 2026",
+    "startDate": "2026-06-05T00:00:00.000Z",
+    "endDate": "2026-06-11T23:59:59.000Z",
+    "status": "APPROVED",
+    "summary": "Monsoon indulgence week — positioning loaded fries and smash burgers as the ultimate rainy-day guilty pleasure for Gachibowli office-goers.",
+    "plannedPosts": [
+      { "category": "Loaded Fries Feature", "count": 2 },
+      { "category": "Burger of the Week", "count": 1 },
+      { "category": "Happy Hour Reminder", "count": 1 },
+      { "category": "Combo Deal Spotlight", "count": 1 }
+    ],
+    "focus": ["monsoon-comfort", "loaded-fries", "happy-hour"]
+  },
+  {
+    "_id": "pg-cy7a",
+    "id": "pg-cy7a",
+    "restaurantId": "pg-r7",
+    "period": "Week of April 22-28, 2026",
+    "startDate": "2026-04-22T00:00:00.000Z",
+    "endDate": "2026-04-28T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "Earth Day slow-living campaign featuring single-origin coffee origins and natural yeast sourdough. Strong save rates on bake process reels.",
+    "plannedPosts": [
+      { "category": "Coffee Origin Story", "count": 2 },
+      { "category": "Bake Process Reel", "count": 1 },
+      { "category": "Brunch Weekend Promo", "count": 1 },
+      { "category": "Seasonal Pastry", "count": 1 }
+    ],
+    "focus": ["slow-living", "coffee-origins", "artisan-baking"],
+    "feedback": "Cycle completed successfully"
+  },
+  {
+    "_id": "pg-cy7b",
+    "id": "pg-cy7b",
+    "restaurantId": "pg-r7",
+    "period": "Week of June 5-11, 2026",
+    "startDate": "2026-06-05T00:00:00.000Z",
+    "endDate": "2026-06-11T23:59:59.000Z",
+    "status": "APPROVED",
+    "summary": "Monsoon morning ritual series — positioning Haze as the warmest start to a rainy Hyderabad day with fresh bakes and single-origin hot brew.",
+    "plannedPosts": [
+      { "category": "Morning Ritual Feature", "count": 2 },
+      { "category": "Seasonal Bake", "count": 1 },
+      { "category": "Coffee Spotlight", "count": 1 },
+      { "category": "Weekend Brunch Promo", "count": 1 }
+    ],
+    "focus": ["monsoon-mornings", "artisan-bakes", "specialty-coffee"]
+  },
+  {
+    "_id": "pg-cy8a",
+    "id": "pg-cy8a",
+    "restaurantId": "pg-r8",
+    "period": "Week of April 15-21, 2026",
+    "startDate": "2026-04-15T00:00:00.000Z",
+    "endDate": "2026-04-21T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "National Nutrition Week kickoff — millet bowls and macronutrient education content. Highest story views of the year on the foxtail millet breakdown.",
+    "plannedPosts": [
+      { "category": "Millet Education", "count": 2 },
+      { "category": "Power Bowl Spotlight", "count": 2 },
+      { "category": "Community Shoutout", "count": 1 }
+    ],
+    "focus": ["nutrition-week", "millet-education", "health-community"],
+    "feedback": "Cycle completed successfully"
+  },
+  {
+    "_id": "pg-cy8b",
+    "id": "pg-cy8b",
+    "restaurantId": "pg-r8",
+    "period": "Week of June 8-14, 2026",
+    "startDate": "2026-06-08T00:00:00.000Z",
+    "endDate": "2026-06-14T23:59:59.000Z",
+    "status": "CHANGES_REQUESTED",
+    "summary": "Monsoon fitness fuel series — meal prep packs and protein bowls marketed to gym-goers who need reliable nutrition through the wet season.",
+    "plannedPosts": [
+      { "category": "Power Bowl Spotlight", "count": 2 },
+      { "category": "Millet Education", "count": 1 },
+      { "category": "Fitness Community", "count": 1 },
+      { "category": "Seasonal Ingredient", "count": 1 }
+    ],
+    "focus": ["monsoon-fitness", "meal-prep", "millet-meals"],
+    "feedback": "{\"tags\":[\"Caption\"],\"details\":{\"Caption\":\"Wrong tone, Not engaging\"},\"note\":\"Make it more energetic and fitness-focused\"}"
+  },
+  {
+    "_id": "pg-cy9a",
+    "id": "pg-cy9a",
+    "restaurantId": "pg-r9",
+    "period": "Week of April 22-28, 2026",
+    "startDate": "2026-04-22T00:00:00.000Z",
+    "endDate": "2026-04-28T23:59:59.000Z",
+    "status": "HISTORY",
+    "summary": "Spring tasting menu debut — deconstructed biryani arancini and mango kokum ceviche generated strong press coverage and influencer visits.",
+    "plannedPosts": [
+      { "category": "Tasting Menu Course Feature", "count": 2 },
+      { "category": "Chef Story", "count": 1 },
+      { "category": "Plating Art Reel", "count": 1 },
+      { "category": "Reservation Promo", "count": 1 }
+    ],
+    "focus": ["tasting-menu", "chef-creativity", "modern-indian"],
+    "feedback": "Cycle completed successfully"
+  },
+  {
+    "_id": "pg-cy9b",
+    "id": "pg-cy9b",
+    "restaurantId": "pg-r9",
+    "period": "Week of June 7-13, 2026",
+    "startDate": "2026-06-07T00:00:00.000Z",
+    "endDate": "2026-06-13T23:59:59.000Z",
+    "status": "CHANGES_REQUESTED",
+    "summary": "Monsoon tasting menu edition — smoked and slow-cooked courses inspired by the season, paired with curated Indian wine selections.",
+    "plannedPosts": [
+      { "category": "Monsoon Tasting Course", "count": 2 },
+      { "category": "Indian Wine Pairing", "count": 1 },
+      { "category": "Chef Notes", "count": 1 },
+      { "category": "Reservation Reminder", "count": 1 }
+    ],
+    "focus": ["monsoon-menu", "modern-indian", "fine-dining"],
+    "feedback": "{\"tags\":[\"Other\"],\"details\":{\"Other\":\"Check Pricing\"},\"note\":\"Remove specific price mentions\"}"
+  }
+]
