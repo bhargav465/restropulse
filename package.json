@@ -26,6 +26,7 @@
     "test": "turbo test",
     "test:unit": "turbo run test:unit --filter=@restropulse/api --filter=@restropulse/web --filter=@restropulse/publisher --filter=@restropulse/content-engine",
     "test:coverage": "node scripts/run-coverage-all.mjs",
+    "generate": "npm run test:generate --workspace=@restropulse/content-engine --",
     "test:integration": "node scripts/test-integration.mjs",
     "test:integration:kv:dev": "node scripts/test-integration.mjs kv:dev",
     "test:integration:kv:staging": "node scripts/test-integration.mjs kv:staging",
