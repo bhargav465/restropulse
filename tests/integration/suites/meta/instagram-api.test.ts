@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { requireSecrets } from '../../helpers/secrets.js';
+import { optionalSecrets } from '../../helpers/secrets.js';
 
-const secrets = requireSecrets('meta-instagram', [
+// INSTAGRAM_TEST_ACCESS_TOKEN requires a live connected Instagram Business account
+// and cannot be provisioned like a standard API key — skip silently when absent.
+const secrets = optionalSecrets([
   'INSTAGRAM_APP_ID',
   'INSTAGRAM_APP_SECRET',
   'INSTAGRAM_TEST_ACCESS_TOKEN',
 ]);
 
-describe('Instagram Graph API (read-only)', () => {
+describe.skipIf(secrets === null)('Instagram Graph API (read-only)', () => {
   it('validates the test access token', async () => {
     const url = `https://graph.facebook.com/debug_token?input_token=${secrets.INSTAGRAM_TEST_ACCESS_TOKEN}&access_token=${secrets.INSTAGRAM_APP_ID}|${secrets.INSTAGRAM_APP_SECRET}`;
     const res = await fetch(url);

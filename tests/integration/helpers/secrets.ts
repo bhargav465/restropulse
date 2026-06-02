@@ -27,7 +27,8 @@ if (process.env.SECRETS_BACKEND === 'azure-kv') {
 
 /**
  * Returns the secrets map or throws if any required key is absent.
- * No skip/ignore mechanism -- integration tests are always a deliberate manual run.
+ * Use for suites that must run whenever tests are triggered — missing secrets
+ * indicate a configuration problem that should be fixed, not silently hidden.
  */
 export function requireSecrets<K extends string>(
   suiteName: string,
@@ -41,5 +42,19 @@ export function requireSecrets<K extends string>(
       `See tests/integration/.env.integration.example for the full list.`,
     );
   }
+  return Object.fromEntries(keys.map(k => [k, process.env[k]!])) as Record<K, string>;
+}
+
+/**
+ * Returns the secrets map if all keys are present, or null if any are missing.
+ * Use with describe.skipIf(secrets === null) for suites that require credentials
+ * that cannot be provisioned like a normal API key — e.g. a live OAuth token
+ * from a connected third-party account (Instagram, etc.).
+ */
+export function optionalSecrets<K extends string>(
+  keys: K[],
+): Record<K, string> | null {
+  const missing = keys.filter(k => !process.env[k]);
+  if (missing.length > 0) return null;
   return Object.fromEntries(keys.map(k => [k, process.env[k]!])) as Record<K, string>;
 }
