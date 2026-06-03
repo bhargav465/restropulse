@@ -12,7 +12,10 @@ import { createInterface } from 'readline/promises';
 import { stdin, stdout } from 'process';
 import chalk from 'chalk';
 import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
-import { DB_CLI_SECRET_KEYS } from '../../../../config/secrets-manifest.js';
+
+// Inline the db-cli secret keys to avoid cross-package-boundary import issues with tsx.
+// These are the only secrets the db-cli needs.
+const DB_CLI_SECRET_KEYS = ['MONGODB_URI', 'MONGODB_DB_NAME'];
 
 const VALID_ENVS = ['development', 'staging', 'production'] as const;
 type ResolvedEnv = typeof VALID_ENVS[number];
