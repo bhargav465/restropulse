@@ -74,6 +74,43 @@ export const COLLECTIONS: CollectionSchema[] = [
                     activeOffers: { bsonType: 'array', items: { bsonType: 'string' } },
                     chefSpecials: { bsonType: 'array', items: { bsonType: 'string' } },
                     menuLastUpdated: { bsonType: 'string' },
+                    description:    { bsonType: 'string' },
+                    phone:          { bsonType: 'string' },
+                    website:        { bsonType: 'string' },
+                    priceRange:     { enum: ['budget', 'mid-range', 'upscale', 'fine-dining'] },
+                    operatingHours: {
+                        bsonType: 'object',
+                        properties: {
+                            weekday_text: { bsonType: 'array', items: { bsonType: 'string' } },
+                        },
+                    },
+                    serviceOptions: {
+                        bsonType: 'object',
+                        properties: {
+                            delivery: { bsonType: 'bool' },
+                            dineIn:   { bsonType: 'bool' },
+                            takeout:  { bsonType: 'bool' },
+                        },
+                    },
+                    menu: {
+                        bsonType: 'array',
+                        items: {
+                            bsonType: 'object',
+                            required: ['id', 'category', 'name', 'isVeg', 'isAvailable'],
+                            properties: {
+                                id:           { bsonType: 'string' },
+                                category:     { bsonType: 'string' },
+                                name:         { bsonType: 'string' },
+                                description:  { bsonType: 'string' },
+                                price:        { bsonType: ['double', 'int'] },
+                                isVeg:        { bsonType: 'bool' },
+                                isBestSeller: { bsonType: 'bool' },
+                                isAvailable:  { bsonType: 'bool' },
+                            },
+                        },
+                    },
+                    sourceCity:  { bsonType: 'string' },
+                    dataSource:  { enum: ['kaggle-zomato', 'osm', 'merged', 'manual'] },
                     createdAt: { bsonType: 'date' },
                     updatedAt: { bsonType: 'date' },
                 },
