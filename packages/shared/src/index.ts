@@ -131,6 +131,19 @@ export interface User {
   razorpayCustomerId?: string;
 }
 
+export interface MenuItem {
+  /** Client-generated UUID. */
+  id: string;
+  category: string;                   // e.g. "Starters", "Biryani", "Desserts"
+  name: string;
+  description?: string;
+  /** Price in INR. */
+  price?: number;
+  isVeg: boolean;
+  isBestSeller?: boolean;
+  isAvailable: boolean;
+}
+
 export interface Restaurant {
   id: string;
   name: string;
@@ -157,6 +170,24 @@ export interface Restaurant {
   activeOffers?: string[];
   chefSpecials?: string[];
   menuLastUpdated?: string;
+  /** Short restaurant bio used in AI content prompts and profile display. */
+  description?: string;
+  phone?: string;
+  website?: string;
+  priceRange?: 'budget' | 'mid-range' | 'upscale' | 'fine-dining';
+  operatingHours?: {
+    weekday_text: string[];           // e.g. ["Monday: 11:00 AM - 10:00 PM", ...]
+  };
+  serviceOptions?: {
+    delivery: boolean;
+    dineIn: boolean;
+    takeout: boolean;
+  };
+  menu?: MenuItem[];
+  /** City this record was sourced from. Set by the acquire-restaurants script. */
+  sourceCity?: string;
+  /** Source of the data: acquisition script writes this; manual entries leave it absent. */
+  dataSource?: 'kaggle-zomato' | 'osm' | 'merged' | 'manual';
 }
 
 export interface PostStats {
