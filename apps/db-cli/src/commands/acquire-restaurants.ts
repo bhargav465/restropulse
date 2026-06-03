@@ -15,7 +15,7 @@ const DATA_DIR = resolve(__dirname, '../../data/restaurants');
 export interface AcquireOptions {
     city: string;
     csv?: string;
-    limit: number;
+    limit?: number;      // undefined = no limit (fetch all)
     skipOsm: boolean;
     output?: string;
 }
@@ -92,9 +92,11 @@ export async function acquireRestaurantsCommand(options: AcquireOptions): Promis
     const deduped = deduplicate(validRecords);
     spinner.succeed(`Deduplicated: ${validRecords.length.toLocaleString()} → ${deduped.length.toLocaleString()} unique records`);
 
-    const limited = deduped.slice(0, options.limit);
-    if (deduped.length > options.limit) {
+    const limited = options.limit !== undefined ? deduped.slice(0, options.limit) : deduped;
+    if (options.limit !== undefined && deduped.length > options.limit) {
         console.log(chalk.gray(`  Limit applied: keeping ${options.limit} of ${deduped.length.toLocaleString()}`));
+    } else if (options.limit === undefined) {
+        console.log(chalk.gray(`  No limit — keeping all ${deduped.length.toLocaleString()} records`));
     }
 
     // Phase 3: OSM enrichment

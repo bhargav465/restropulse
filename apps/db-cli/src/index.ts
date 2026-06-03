@@ -84,13 +84,14 @@ program
     .description('Download restaurant data from Kaggle CSV + OSM and write fixture JSON files')
     .requiredOption('--city <city>', 'Target city: hyderabad | mumbai | bangalore')
     .option('--csv <path>', 'Path to downloaded Kaggle CSV file (omit to see download instructions)')
-    .option('--limit <n>', 'Maximum records to output', '500')
+    .option('--all', 'Fetch all restaurants with no limit (default behaviour; --limit overrides)')
+    .option('--limit <n>', 'Cap output at N records (omit or use --all for no cap)')
     .option('--skip-osm', 'Skip OpenStreetMap enrichment (faster, less complete)')
     .option('--output <path>', 'Custom output path (default: apps/db-cli/data/restaurants/restaurants-{city}.json)')
     .action((options) => acquireRestaurantsCommand({
         city: options.city,
         csv: options.csv,
-        limit: parseInt(options.limit, 10),
+        limit: options.limit ? parseInt(options.limit, 10) : undefined,
         skipOsm: !!options.skipOsm,
         output: options.output,
     }));
