@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCsvFile } from '../lib/kaggle-ingestor.js';
-import { normalizeRow, deduplicate as deduplicateFields } from '../lib/restaurant-normalizer.js';
+import { normalizeRow, aggregateMenuItemRows, deduplicate as deduplicateFields } from '../lib/restaurant-normalizer.js';
 import { deduplicate } from '../lib/restaurant-deduplicator.js';
 import { enrichWithOsm } from '../lib/osm-enricher.js';
 import type { RestaurantFixture } from '../lib/restaurant-normalizer.js';
@@ -66,26 +66,44 @@ export async function acquireRestaurantsCommand(options: AcquireOptions): Promis
     console.log(chalk.gray(`  Limit:  ${options.limit} records`));
     console.log('');
 
-    // Phase 1: Parse CSV
-    spinner.start('Parsing CSV...');
-    const rawRecords: (RestaurantFixture | null)[] = [];
+    // Phase 1: Parse CSV — detect format from headers
+    spinner.start('Detecting CSV format...');
+    const allRows: Record<string, string>[] = [];
     let parsedTotal = 0;
+    let isMenuItemFormat = false;
 
     try {
         parsedTotal = await parseCsvFile(
             csvPath,
-            (row) => rawRecords.push(normalizeRow(row, city)),
-            (count) => { spinner.text = `Parsing CSV... ${count} rows read`; },
+            (row) => {
+                // Detect metropolitan/menu-item format on first row
+                if (allRows.length === 0) {
+                    isMenuItemFormat = 'Item Name' in row || 'Best Seller' in row;
+                }
+                allRows.push(row);
+            },
+            (count) => { spinner.text = `Parsing CSV... ${count.toLocaleString()} rows read`; },
         );
     } catch (err) {
         spinner.fail(`CSV parse failed: ${(err as Error).message}`);
         process.exit(1);
     }
 
-    const validRecords = rawRecords.filter((r): r is RestaurantFixture => r !== null);
-    spinner.succeed(
-        `Parsed ${parsedTotal.toLocaleString()} rows — ${validRecords.length.toLocaleString()} valid (${(parsedTotal - validRecords.length).toLocaleString()} skipped: missing name or coordinates)`,
-    );
+    let validRecords: RestaurantFixture[];
+
+    if (isMenuItemFormat) {
+        spinner.text = `Aggregating ${parsedTotal.toLocaleString()} menu-item rows into restaurants...`;
+        validRecords = aggregateMenuItemRows(allRows, city);
+        spinner.succeed(
+            `Parsed ${parsedTotal.toLocaleString()} menu-item rows → ${validRecords.length.toLocaleString()} restaurants (${city} only)`,
+        );
+    } else {
+        const rawRecords = allRows.map(row => normalizeRow(row, city));
+        validRecords = rawRecords.filter((r): r is RestaurantFixture => r !== null);
+        spinner.succeed(
+            `Parsed ${parsedTotal.toLocaleString()} rows — ${validRecords.length.toLocaleString()} valid (${(parsedTotal - validRecords.length).toLocaleString()} skipped)`,
+        );
+    }
 
     // Phase 2: Deduplicate
     spinner.start('Deduplicating...');

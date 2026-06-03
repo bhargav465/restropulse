@@ -101,6 +101,98 @@ function costToPriceRange(costForTwo: number): PriceRange {
     return 'fine-dining';
 }
 
+/**
+ * Aggregates menu-item-level rows (one row per dish) into RestaurantFixture objects.
+ * Used for the Zomato metropolitan dataset which has columns:
+ *   Restaurant Name, Dining Rating, Delivery Rating, Cuisine, Place Name, City,
+ *   Item Name, Best Seller, Votes, Prices
+ */
+export function aggregateMenuItemRows(
+    rows: Record<string, string>[],
+    city: string,
+): RestaurantFixture[] {
+    // Group by restaurant key (name + place)
+    const groups = new Map<string, Record<string, string>[]>();
+    for (const row of rows) {
+        const cityCol = (row['City'] ?? '').trim().toLowerCase();
+        if (!cityCol.includes(city.toLowerCase())) continue;
+        const name = (row['Restaurant Name'] ?? '').trim();
+        if (!name) continue;
+        const place = (row['Place Name'] ?? '').trim();
+        const key = `${name}|||${place}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(row);
+    }
+
+    const fixtures: RestaurantFixture[] = [];
+    const am = DEFAULT_ACCOUNT_MANAGER[city as keyof typeof DEFAULT_ACCOUNT_MANAGER]
+        ?? DEFAULT_ACCOUNT_MANAGER.hyderabad;
+
+    for (const [key, itemRows] of groups) {
+        const [name, place] = key.split('|||');
+        const first = itemRows[0];
+
+        const cuisineRaw = (first['Cuisine '] ?? first['Cuisine'] ?? 'Multi-cuisine').trim();
+        const { primary, all } = normalizeCuisine(cuisineRaw);
+
+        const diningRating = parseFloat(first['Dining Rating'] ?? '');
+        const diningVotes = parseInt(first['Dining Votes'] ?? '0', 10);
+        const hasDelivery = parseFloat(first['Delivery Rating'] ?? '0') > 0;
+
+        // Build menu from item rows
+        const menu = itemRows
+            .filter(r => (r['Item Name'] ?? '').trim())
+            .map(r => {
+                const itemName = (r['Item Name'] ?? '').trim();
+                const price = parseFloat(r['Prices'] ?? '');
+                const isBestSeller = (r['Best Seller'] ?? '').toUpperCase() === 'BESTSELLER';
+                // Heuristic veg detection from item name
+                const nonVegKeywords = /chicken|mutton|prawn|fish|egg|keema|beef|pork|lamb|meat|seafood|shrimp|crab|squid|tuna/i;
+                const isVeg = !nonVegKeywords.test(itemName);
+                return {
+                    id: randomUUID().slice(0, 8),
+                    category: primary,
+                    name: itemName,
+                    price: isNaN(price) ? undefined : price,
+                    isVeg,
+                    isAvailable: true,
+                    isBestSeller,
+                };
+            });
+
+        // Derive price range from average menu price
+        const prices = menu.map(m => m.price).filter((p): p is number => p !== undefined);
+        const avgPrice = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
+        const priceRange = avgPrice > 0 ? costToPriceRange(avgPrice * 2) : 'mid-range';
+
+        const address = [place, city, 'India'].filter(Boolean).join(', ');
+        const id = `acq-${city.slice(0, 3)}-${randomUUID().slice(0, 8)}`;
+
+        fixtures.push({
+            _id: id,
+            id,
+            name,
+            cuisine: primary,
+            cuisines: all,
+            location: { address, lat: 0, lng: 0, mapUrl: '' },
+            accountManager: am,
+            integrations: { instagram: false },
+            activeOffers: [],
+            chefSpecials: menu.filter(m => m.isBestSeller).slice(0, 3).map(m => m.name),
+            menuLastUpdated: new Date().toISOString().split('T')[0],
+            priceRange,
+            rating: isNaN(diningRating) ? undefined : diningRating,
+            ratingCount: isNaN(diningVotes) ? undefined : diningVotes,
+            serviceOptions: { delivery: hasDelivery, dineIn: true, takeout: hasDelivery },
+            sourceCity: city,
+            dataSource: 'kaggle-zomato',
+            menu,
+        });
+    }
+
+    return fixtures;
+}
+
 export function normalizeRow(row: Record<string, string>, city: string): RestaurantFixture | null {
     // Support both Zomato standard format AND the metadata-only format
     const name = (row['Restaurant Name'] ?? row['Name'] ?? row['name'] ?? '').trim();
