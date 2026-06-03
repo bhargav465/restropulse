@@ -62,3 +62,6 @@ restropulse-pwa-database/
 tests/integration/.env.integration
 tests/integration/.env.integration.*
 !tests/integration/.env.integration.example
+
+# Acquired restaurant fixture data (large generated files)
+apps/db-cli/data/restaurants/*.json
