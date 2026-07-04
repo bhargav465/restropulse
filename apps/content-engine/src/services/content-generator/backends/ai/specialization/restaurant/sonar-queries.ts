@@ -19,9 +19,9 @@ export function buildSonarQueries(scope: SonarQueryScope, ctx: SpecializationCon
   const region = ctx.region ?? 'India';
   const regionKey = region.toLowerCase().replace(/\s+/g, '');
 
-  // Type-safe regional terms lookup
-  const regionalMap = SONAR_CONTEXT_TERMS.regional as Record<string, string[]>;
-  const regionalTerms: string[] = regionalMap[regionKey] ?? [];
+  // Type-safe regional terms lookup (regional values are readonly tuples from `as const`)
+  const regionalMap = SONAR_CONTEXT_TERMS.regional as Record<string, readonly string[]>;
+  const regionalTerms: readonly string[] = regionalMap[regionKey] ?? [];
   const locationContext = regionalTerms.length
     ? `(focus areas: ${regionalTerms.slice(0, 2).join(', ')})`
     : '';
