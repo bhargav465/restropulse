@@ -19,7 +19,8 @@ export type HookType =
   | 'SOCIAL_PROOF_OPEN'
   | 'PRICE_ANCHOR'
   | 'FESTIVAL_MOMENT'
-  | 'REGIONAL_PRIDE';
+  | 'REGIONAL_PRIDE'
+  | 'ENGAGEMENT_PROMPT';
 
 export type DemographicSignal =
   | 'family-dining'
@@ -53,7 +54,7 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     reelOpenInstruction: 'Open with bold text card: "[Fact]" -- e.g. "This dish takes 8 hours to make." Cut immediately to the dish being plated.',
     loopPointDesign: 'End on the same bold text card, this time with the answer -- creates a satisfying reveal loop.',
     soundOffStrategy: 'Text overlay carries the full fact. Visual is secondary.',
-    fitsByArchetype: ['CUISINE_EDUCATION', 'ORIGIN_STORY', 'CHEFS_PICK'],
+    fitsByArchetype: ['CUISINE_EDUCATION', 'ORIGIN_STORY', 'CHEFS_PICK', 'ANATOMY_OF_A_DISH', 'INGREDIENT_DEEP_DIVE', 'MYTH_BUSTING'],
     fitsByDemographic: ['food-enthusiast', 'young-urban'],
     exampleOpener: 'Most people have never tasted biryani the way it was meant to be eaten -- with the sealed dum crust broken at the table.',
     avoidWhen: 'The fact is too niche or requires insider knowledge. If it needs explanation, it is not a hook.',
@@ -64,7 +65,7 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     reelOpenInstruction: 'Open with a question text card or a dramatic close-up that does not yet reveal what the dish is. Hold 1.5s before showing.',
     loopPointDesign: 'End just before the resolution -- viewer replays to catch what they missed.',
     soundOffStrategy: 'Question text card works completely without sound.',
-    fitsByArchetype: ['CHEFS_PICK', 'BEHIND_THE_SCENES', 'CUISINE_EDUCATION'],
+    fitsByArchetype: ['CHEFS_PICK', 'BEHIND_THE_SCENES', 'CUISINE_EDUCATION', 'THE_GUESSING_GAME', 'OCCASION_SPOTLIGHT'],
     fitsByDemographic: ['young-urban', 'food-enthusiast', 'occasion-dining'],
     exampleOpener: 'We have been asked to keep this recipe secret for 30 years. Today, we are making an exception.',
     avoidWhen: 'The gap is forced or the answer is obvious from the thumbnail. Never tease something you will not deliver in the caption.',
@@ -75,7 +76,7 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     reelOpenInstruction: 'Open on the raw/unfinished state (raw meat, unsliced bread, empty pot). Fast-cut to the finished dish. Total under 3 seconds.',
     loopPointDesign: 'Loop back to the raw state -- the contrast is the entertainment.',
     soundOffStrategy: 'The visual contrast is the entire story. Sound is enhancement, not requirement.',
-    fitsByArchetype: ['BEHIND_THE_SCENES', 'CHEFS_PICK', 'ORIGIN_STORY'],
+    fitsByArchetype: ['BEHIND_THE_SCENES', 'CHEFS_PICK', 'ORIGIN_STORY', 'CRAVING_CUE', 'TIMELAPSE_STORY'],
     fitsByDemographic: ['food-enthusiast', 'young-urban'],
     exampleOpener: 'From whole spices to dum biryani in 6 hours. Watch what patience looks like.',
     avoidWhen: 'The before state is unappealing enough to put viewers off (raw chicken close-ups, etc.). Keep the before state intriguing, not off-putting.',
@@ -86,7 +87,7 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     reelOpenInstruction: 'Open mid-action: rolling pin in motion, tadka sizzle in close-up, hand layering dough. The action should be immediately engaging.',
     loopPointDesign: 'End on the satisfying completion of the action -- sealing a paratha, ladling biryani -- so replay is enjoyable.',
     soundOffStrategy: 'Add text to name the technique. The visual action is primary.',
-    fitsByArchetype: ['BEHIND_THE_SCENES', 'CUISINE_EDUCATION', 'CHEFS_PICK'],
+    fitsByArchetype: ['BEHIND_THE_SCENES', 'CUISINE_EDUCATION', 'CHEFS_PICK', 'RECIPE_REVEAL', 'SOUND_OF_THE_KITCHEN'],
     fitsByDemographic: ['food-enthusiast', 'young-urban', 'office-lunch'],
     exampleOpener: 'The secret is in the tadka. Three spices, one minute, the difference between ordinary and unforgettable.',
     avoidWhen: 'The process looks unhygienic or unsafe on camera. Food safety optics matter more than authenticity here.',
@@ -97,7 +98,7 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     reelOpenInstruction: 'Open in the kitchen, storage room, or supplier visit -- not the dining room. Immediacy of being "backstage" is the hook.',
     loopPointDesign: 'End on the finished dish arriving at a table -- completing the journey from back to front.',
     soundOffStrategy: 'Text overlay names the "backstage" element -- "Our 4am market run" or "Meet the baker".',
-    fitsByArchetype: ['BEHIND_THE_SCENES', 'ORIGIN_STORY', 'STAFF_SPOTLIGHT'],
+    fitsByArchetype: ['BEHIND_THE_SCENES', 'ORIGIN_STORY', 'STAFF_SPOTLIGHT', 'SUSTAINABILITY', 'SUPPLIER_SHOUTOUT', 'WASTE_NOT'],
     fitsByDemographic: ['food-enthusiast', 'young-urban', 'family-dining'],
     exampleOpener: 'Every morning at 4am, before you arrive for breakfast, this is already happening.',
     avoidWhen: 'The kitchen does not look its best. Always ensure hygiene and cleanliness are visually apparent.',
@@ -108,7 +109,7 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     reelOpenInstruction: 'First frame must be unusual -- extreme close-up of texture, an unexpected colour, an action happening in reverse. Anything that does not look like a typical food post.',
     loopPointDesign: 'End on the "normal" payoff -- the beautiful dish -- making the loop jarring in a satisfying way.',
     soundOffStrategy: 'The visual interrupt is primary. Text adds context after the viewer has stopped scrolling.',
-    fitsByArchetype: ['CHEFS_PICK', 'BEHIND_THE_SCENES', 'SOCIAL_PROOF'],
+    fitsByArchetype: ['CHEFS_PICK', 'BEHIND_THE_SCENES', 'SOCIAL_PROOF', 'VIBE_CHECK', 'MEME_CULTURE', 'CHALLENGE_TREND', 'THE_PERFECT_SITUATION', 'THE_REJECTS', 'INSTAGRAMMABLE_MOMENT'],
     fitsByDemographic: ['young-urban'],
     exampleOpener: 'We do not do "fusion". We do something much older than that.',
     avoidWhen: 'The interrupt is confusing to the point where the viewer cannot identify what is being sold. Clarity after 2 seconds is non-negotiable.',
@@ -119,7 +120,7 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     reelOpenInstruction: 'Open on a customer quote (text overlay) or reaction shot. Never open on your own logo or name.',
     loopPointDesign: 'End on the dish that earned the praise -- connecting the emotion to the product.',
     soundOffStrategy: 'Text-on-screen quote carries the full hook.',
-    fitsByArchetype: ['SOCIAL_PROOF', 'OFFER_PROMO'],
+    fitsByArchetype: ['SOCIAL_PROOF', 'OFFER_PROMO', 'CUSTOMER_SPOTLIGHT', 'USER_GENERATED_CONTENT', 'AWARDS_RECOGNITION'],
     fitsByDemographic: ['family-dining', 'office-lunch', 'occasion-dining', 'young-urban', 'food-enthusiast'],
     exampleOpener: '"I have eaten biryani in three cities. This is the only one I drive 40 minutes for." -- a regular.',
     avoidWhen: 'The review is generic ("great food, great service"). Specific details are what create believability.',
@@ -141,7 +142,7 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     reelOpenInstruction: 'Open with the festival atmosphere or a cultural cue (diyas for Diwali, colour for Holi), then reveal the food within 1.5s.',
     loopPointDesign: 'End on the gathering/family moment -- food as occasion, not product.',
     soundOffStrategy: 'Festival name and cultural cue in text overlay. Visual must signal the festival unmistakably.',
-    fitsByArchetype: ['FESTIVAL_TIE_IN'],
+    fitsByArchetype: ['FESTIVAL_TIE_IN', 'EVENT_ANNOUNCEMENT'],
     fitsByDemographic: ['family-dining', 'occasion-dining'],
     exampleOpener: 'Diwali does not taste like mithai everywhere. Ours tastes like the way your grandmother made it.',
     avoidWhen: 'The festival has high promotional sensitivity (Shravan, Pitru Paksha, Navratri for non-veg content). Never use festive framing during mourning periods.',
@@ -156,6 +157,17 @@ export const HOOK_TEMPLATES: HookTemplate[] = [
     fitsByDemographic: ['food-enthusiast', 'young-urban', 'family-dining'],
     exampleOpener: 'Hyderabad did not invent biryani. But it perfected it. And we learnt from the best.',
     avoidWhen: 'The restaurant is not genuinely connected to the region being invoked. Regional pride claims must be earned, not borrowed.',
+  },
+  {
+    type: 'ENGAGEMENT_PROMPT',
+    captionOpener: 'Open with a direct binary question or choice -- the reader should be unable to resist answering.',
+    reelOpenInstruction: 'Open with the question in bold text overlay. The question IS the hook. Show two options side by side if visual.',
+    loopPointDesign: 'End on the two options displayed visually -- replaying to re-read the question is natural.',
+    soundOffStrategy: 'Text question works entirely without sound. Keep the visual simple and text large.',
+    fitsByArchetype: ['COMMUNITY_POLL', 'THIS_OR_THAT'],
+    fitsByDemographic: ['young-urban', 'food-enthusiast', 'family-dining'],
+    exampleOpener: 'The eternal Sunday debate: masala dosa or idli vada? Pick your side.',
+    avoidWhen: 'The question has an obvious correct answer or is not genuinely divisive. Split opinion is the whole mechanism.',
   },
 ];
 

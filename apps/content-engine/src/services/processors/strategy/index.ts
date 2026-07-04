@@ -10,10 +10,13 @@
 
 import {
   getStrategyCyclesCollection,
+  getContentStrategiesCollection,
   findRestaurantById,
 } from '@restropulse/db';
 import { createLogger } from '@restropulse/telemetry/server';
+import type { PlannedSlot } from '@restropulse/shared';
 import { getContentGenerator, ContentGenerationError } from '../../content-generator/index.js';
+import { deriveCycleSlots } from '../rolling-window/slots.js';
 
 const logger = createLogger('content-engine:strategy-processor');
 
@@ -96,8 +99,37 @@ export async function processPendingCycles(): Promise<{ processed: number; faile
           correlationId: cycleId,
           restaurantId: cycleDoc.restaurantId,
           restaurantName: restaurant?.name,
+          restaurantProfile: restaurant ? {
+            cuisine: restaurant.cuisine,
+            description: restaurant.description,
+            menu: restaurant.menu,
+            chefSpecials: restaurant.chefSpecials,
+            activeOffers: restaurant.activeOffers,
+          } : undefined,
         },
       );
+
+      const strategy = cycleDoc.restaurantId
+        ? await getContentStrategiesCollection().findOne({ restaurantId: cycleDoc.restaurantId })
+        : null;
+
+      const slots = deriveCycleSlots({
+        cycle: {
+          startDate: cycleDoc.startDate,
+          endDate: cycleDoc.endDate,
+          plannedPosts: draft.plannedPosts,
+        },
+        strategy: strategy
+          ? { postsPerWeek: strategy.postsPerWeek, bestTime: strategy.bestTime }
+          : null,
+      });
+
+      const plannedSchedule: PlannedSlot[] = slots.map(slot => ({
+        scheduledFor: slot.scheduledFor.toISOString(),
+        category: slot.archetype,
+        postType: slot.type,
+        themes: slot.themes?.length ? slot.themes : draft.focus,
+      }));
 
       const result = await cyclesCol.updateOne(
         { _id: cycleDoc._id, status: 'PENDING_GENERATION' },
@@ -107,6 +139,7 @@ export async function processPendingCycles(): Promise<{ processed: number; faile
             summary: draft.summary,
             plannedPosts: draft.plannedPosts,
             focus: draft.focus,
+            plannedSchedule,
             updatedAt: new Date(),
           },
         },

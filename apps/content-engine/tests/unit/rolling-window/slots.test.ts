@@ -36,7 +36,7 @@ describe('deriveCycleSlots', () => {
     for (let i = 0; i < a.length; i++) {
       expect(a[i].scheduledFor.toISOString()).toBe(b[i].scheduledFor.toISOString());
       expect(a[i].type).toBe(b[i].type);
-      expect(a[i].themes).toEqual(b[i].themes);
+      expect(a[i].archetype).toEqual(b[i].archetype);
     }
   });
 
@@ -119,7 +119,7 @@ describe('deriveCycleSlots', () => {
       strategy: { postsPerWeek: 7, bestTime: '09:00' },
     });
 
-    expect(slots.map((s) => s.themes[0])).toEqual(['Food & Menu', 'Food & Menu', 'Offers']);
+    expect(slots.map((s) => s.archetype)).toEqual(['Food & Menu', 'Food & Menu', 'Offers']);
   });
 
   it('applies bestTime hour/minute to every slot', () => {
@@ -204,6 +204,26 @@ describe('deriveCycleSlots', () => {
     });
 
     expect(slots).toHaveLength(2);
-    expect(slots.every((s) => s.themes[0] === 'Food & Menu')).toBe(true);
+    expect(slots.every((s) => s.archetype === 'Food & Menu')).toBe(true);
+  });
+
+  it('carries themes from PlannedPostEntry into CycleSlot', () => {
+    const slots = deriveCycleSlots({
+      cycle: {
+        startDate: new Date('2026-06-03').toISOString(),
+        endDate: new Date('2026-06-09').toISOString(),
+        plannedPosts: [
+          { category: 'FESTIVAL_TIE_IN', count: 1, themes: ['Eid', 'biryani-tradition'] },
+          { category: 'CRAVING_CUE', count: 1 },
+        ],
+      },
+      strategy: { postsPerWeek: 5, bestTime: '10:00' },
+    });
+
+    expect(slots[0].archetype).toBe('FESTIVAL_TIE_IN');
+    expect(slots[0].themes).toEqual(['Eid', 'biryani-tradition']);
+
+    expect(slots[1].archetype).toBe('CRAVING_CUE');
+    expect(slots[1].themes).toBeUndefined();
   });
 });

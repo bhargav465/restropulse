@@ -70,3 +70,6 @@ docs/superpowers/plans/2026-06-03-restaurant-db-acquisition.md
 tests/integration/.env.integration
 tests/integration/.env.integration.*
 !tests/integration/.env.integration.example
+
+# Acquired restaurant fixture data (large generated files)
+apps/db-cli/data/restaurants/*.json

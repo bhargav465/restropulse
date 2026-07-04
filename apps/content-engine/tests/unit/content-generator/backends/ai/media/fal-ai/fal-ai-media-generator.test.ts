@@ -141,14 +141,13 @@ describe('FalAIMediaGenerator IMAGE happy path', () => {
     expect(arg.imageSize).toBe('portrait_16_9');
   });
 
-  it('CAROUSEL post type generates 3 parallel frames + 3 MediaJobRecords', async () => {
+  it('generateCarousel fans out to 3 parallel frames + 3 MediaJobRecords', async () => {
     const insertCalls: any[] = [];
     const store = makeStore((j) => { insertCalls.push(j); });
     const client = makeClient();
     const gen = new FalAIMediaGenerator({ client: client as any, store: store as any });
 
-    const job = await gen.generateImage({
-      postType: 'CAROUSEL',
+    const job = await gen.generateCarousel({
       platforms: ['INSTAGRAM'],
       concept: 'menu highlights',
       restaurantId: 'r1',

@@ -27,25 +27,10 @@
 
 import type { IContentGenerator } from './types.js';
 import { PlaceholderContentGenerator } from './backends/placeholder/index.js';
-import { AIContentGenerator } from './backends/ai/ai-content-generator.js';
-import { RestaurantSpecialization } from './backends/ai/specialization/index.js';
-import { AnthropicLLMProvider } from './backends/ai/llm/anthropic-provider.js';
-import { PlaceholderMediaGenerator } from './backends/ai/media/placeholder-media-generator.js';
-import {
-  FalAIMediaGenerator,
-  FalClient,
-  MongoMediaJobStore,
-  ReplicateMediaGenerator,
-  ReplicateClient,
-} from './backends/ai/index.js';
+// AI backend imports are dynamic (inside createContentGenerator 'ai' branch) so
+// packages like 'ai' and '@ai-sdk/anthropic' are never loaded when using placeholder.
 import type { IMediaGenerator } from './backends/ai/media/types.js';
-import {
-  buildCurrentAffairsProvider,
-  GoogleCalendarClient,
-  MongoCurrentAffairsCache,
-  SonarClient,
-  type ICurrentAffairsProvider,
-} from './backends/ai/current-affairs/index.js';
+import type { ICurrentAffairsProvider } from './backends/ai/current-affairs/index.js';
 
 export type ContentGeneratorBackend = 'placeholder' | 'ai';
 type MediaBackend = 'placeholder' | 'fal-ai' | 'replicate';
@@ -124,50 +109,47 @@ function validateAiKeys(flags: AiModeResolution): void {
   );
 }
 
-function buildCurrentAffairsForFactory(
-  specialization: RestaurantSpecialization,
+async function buildCurrentAffairsForFactory(
+  specialization: any,
   flags: AiModeResolution,
-): ICurrentAffairsProvider {
+): Promise<ICurrentAffairsProvider> {
   const { v1Enabled, v2Enabled } = flags;
+  const { buildCurrentAffairsProvider, GoogleCalendarClient, MongoCurrentAffairsCache, SonarClient } =
+    await import('./backends/ai/current-affairs/index.js');
 
   if (!v1Enabled && !v2Enabled) {
     return buildCurrentAffairsProvider({ v1Enabled: false, v2Enabled: false }, {
       cache: new MongoCurrentAffairsCache(),
-      // Stub clients -- never called when both flags are off
       calendarClient: { listHolidays: async () => [] } as any,
       sonarClient: { query: async () => ({ text: '', usage: { inputTokens: 0, outputTokens: 0 }, modelId: 'sonar-pro' }) } as any,
       specialization,
     });
   }
 
-  let calendarClient: GoogleCalendarClient | { listHolidays: () => Promise<never[]> };
-  if (v1Enabled) {
-    // Key already validated upfront; non-null assertion is safe here.
-    calendarClient = new GoogleCalendarClient({ apiKey: process.env.GOOGLE_CALENDAR_API_KEY! });
-  } else {
-    calendarClient = { listHolidays: async () => [] };
-  }
+  const calendarClient = v1Enabled
+    ? new GoogleCalendarClient({ apiKey: process.env.GOOGLE_CALENDAR_API_KEY! })
+    : { listHolidays: async () => [] as never[] };
 
-  let sonarClient: SonarClient | { query: () => Promise<{ text: string; usage: { inputTokens: number; outputTokens: number }; modelId: string }> };
-  if (v2Enabled) {
-    sonarClient = new SonarClient({ apiKey: process.env.PERPLEXITY_API_KEY! });
-  } else {
-    sonarClient = { query: async () => ({ text: '', usage: { inputTokens: 0, outputTokens: 0 }, modelId: 'sonar-pro' }) };
-  }
+  const sonarClient = v2Enabled
+    ? new SonarClient({ apiKey: process.env.PERPLEXITY_API_KEY! })
+    : { query: async () => ({ text: '', usage: { inputTokens: 0, outputTokens: 0 }, modelId: 'sonar-pro' }) };
 
   return buildCurrentAffairsProvider(
     { v1Enabled, v2Enabled },
     {
       cache: new MongoCurrentAffairsCache(),
-      calendarClient: calendarClient as GoogleCalendarClient,
-      sonarClient: sonarClient as SonarClient,
+      calendarClient: calendarClient as any,
+      sonarClient: sonarClient as any,
       specialization,
     },
   );
 }
 
-function buildMediaGeneratorForFactory(flags: AiModeResolution): IMediaGenerator {
+async function buildMediaGeneratorForFactory(flags: AiModeResolution): Promise<IMediaGenerator> {
+  const { PlaceholderMediaGenerator } = await import('./backends/ai/media/placeholder-media-generator.js');
+
   if (flags.mediaBackend === 'fal-ai') {
+    const { FalAIMediaGenerator, FalClient, MongoMediaJobStore } = await import('./backends/ai/index.js');
     const store = new MongoMediaJobStore();
     const media = new FalAIMediaGenerator({
       client: new FalClient({ apiKey: process.env.FAL_API_KEY! }),
@@ -178,6 +160,7 @@ function buildMediaGeneratorForFactory(flags: AiModeResolution): IMediaGenerator
     return media;
   }
   if (flags.mediaBackend === 'replicate') {
+    const { ReplicateMediaGenerator, ReplicateClient, MongoMediaJobStore } = await import('./backends/ai/index.js');
     const store = new MongoMediaJobStore();
     const media = new ReplicateMediaGenerator({
       client: new ReplicateClient({ apiKey: process.env.REPLICATE_API_TOKEN! }),
@@ -219,7 +202,7 @@ export function getLastAiCurrentAffairsProvider(): ICurrentAffairsProvider | nul
   return lastAiCurrentAffairs;
 }
 
-export function createContentGenerator(backend: ContentGeneratorBackend): IContentGenerator {
+export async function createContentGenerator(backend: ContentGeneratorBackend): Promise<IContentGenerator> {
   switch (backend) {
     case 'placeholder':
       lastAiCurrentAffairs = null;
@@ -231,15 +214,31 @@ export function createContentGenerator(backend: ContentGeneratorBackend): IConte
       const flags = resolveAiModeFlags();
       validateAiKeys(flags);
 
+      const { AIContentGenerator } = await import('./backends/ai/ai-content-generator.js');
+      const { RestaurantSpecialization } = await import('./backends/ai/specialization/index.js');
+      const { AnthropicLLMProvider } = await import('./backends/ai/llm/anthropic-provider.js');
+
       const specialization = new RestaurantSpecialization();
-      const currentAffairs = buildCurrentAffairsForFactory(specialization, flags);
+      const [currentAffairs, media] = await Promise.all([
+        buildCurrentAffairsForFactory(specialization, flags),
+        buildMediaGeneratorForFactory(flags),
+      ]);
       lastAiCurrentAffairs = currentAffairs;
+
+      // Build a SonarClient for on-demand dish image fetching when PERPLEXITY_API_KEY is present.
+      // This is independent of the V2 current-affairs flag — dish images don't require V2.
+      let sonar: import('./backends/ai/current-affairs/clients/sonar-client.js').SonarClient | undefined;
+      if (process.env.PERPLEXITY_API_KEY) {
+        const { SonarClient } = await import('./backends/ai/current-affairs/clients/sonar-client.js');
+        sonar = new SonarClient({ apiKey: process.env.PERPLEXITY_API_KEY, model: 'sonar' });
+      }
 
       return new AIContentGenerator({
         specialization,
         llm: new AnthropicLLMProvider({ apiKey: process.env.ANTHROPIC_API_KEY! }),
-        media: buildMediaGeneratorForFactory(flags),
+        media,
         currentAffairs,
+        ...(sonar ? { sonar } : {}),
       });
     }
 

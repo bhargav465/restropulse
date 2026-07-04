@@ -33,9 +33,8 @@ describe('PlaceholderMediaGenerator', () => {
     expect(job.metadata?.heightPx).toBeGreaterThan(0);
   });
 
-  it('generateImage returns mediaUrls + thumbnail for CAROUSEL', async () => {
-    const job = await gen.generateImage({
-      postType: 'CAROUSEL',
+  it('generateCarousel returns mediaUrls + thumbnail for CAROUSEL', async () => {
+    const job = await gen.generateCarousel({
       platforms: ['INSTAGRAM'],
       concept: 'menu highlights',
     });

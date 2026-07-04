@@ -41,17 +41,30 @@ export async function processPendingPosts(): Promise<{ processed: number; failed
         ? await findRestaurantById(postDoc.restaurantId)
         : null;
 
+      const themes = Array.isArray(postDoc.themes) ? (postDoc.themes as string[]) : undefined;
+      const archetype = (postDoc as any).archetype as string | undefined
+        ?? themes?.[0];
+
       const content = await generator.generatePost(
         {
           concept: postDoc.caption || postDoc.concept || '',
           type: (postDoc.type as PostType) || 'IMAGE',
           platforms: (postDoc.platforms as Platform[]) || ['INSTAGRAM'],
-          themes: Array.isArray(postDoc.themes) ? (postDoc.themes as string[]) : undefined,
+          themes,
+          archetype,
         },
         {
           correlationId: postId,
           restaurantId: postDoc.restaurantId,
           restaurantName: restaurant?.name,
+          restaurantProfile: restaurant ? {
+            cuisine: restaurant.cuisine,
+            description: restaurant.description,
+            menu: restaurant.menu,
+            chefSpecials: restaurant.chefSpecials,
+            activeOffers: restaurant.activeOffers,
+            priceRange: restaurant.priceRange,
+          } : undefined,
         },
       );
 

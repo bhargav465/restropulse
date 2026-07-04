@@ -152,6 +152,64 @@ describe('processRevisions -> post revision', () => {
     expect(postsCol.updateOne).not.toHaveBeenCalled();
   });
 
+  it('passes archetype from post document to revisePost', async () => {
+    const revisePost = vi.fn().mockResolvedValue({ caption: 'Revised', thumbnail: '' });
+    setContentGenerator(makeStub({ revisePost }));
+
+    const post = {
+      _id: { toString: () => 'p1' },
+      status: 'CHANGES_REQUESTED',
+      type: 'IMAGE',
+      platforms: ['INSTAGRAM'],
+      caption: 'Original caption about a slow-motion food reveal.',
+      themes: ['CRAVING_CUE'],
+      archetype: 'CRAVING_CUE',
+      restaurantId: 'r1',
+      feedback: JSON.stringify({ tags: ['caption'], details: {}, note: 'Not sensory enough', resolution: '' }),
+    };
+
+    mockGetPostsCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([post]) }),
+      updateOne: vi.fn().mockResolvedValue({ matchedCount: 1 }),
+    } as never);
+    mockGetStrategyCyclesCollection.mockReturnValue(emptyCol() as never);
+
+    await processRevisions();
+
+    expect(revisePost).toHaveBeenCalledOnce();
+    const call = revisePost.mock.calls[0][0];
+    expect(call.existingPost.archetype).toBe('CRAVING_CUE');
+  });
+
+  it('falls back to themes[0] when archetype field is absent (old post documents)', async () => {
+    const revisePost = vi.fn().mockResolvedValue({ caption: 'Revised', thumbnail: '' });
+    setContentGenerator(makeStub({ revisePost }));
+
+    const post = {
+      _id: { toString: () => 'p2' },
+      status: 'CHANGES_REQUESTED',
+      type: 'IMAGE',
+      platforms: ['INSTAGRAM'],
+      caption: 'Original caption.',
+      themes: ['SEASONAL_MENU'],
+      // archetype field absent -- pre-fix document
+      restaurantId: 'r1',
+      feedback: JSON.stringify({ tags: ['caption'], details: {}, note: 'Too generic', resolution: '' }),
+    };
+
+    mockGetPostsCollection.mockReturnValue({
+      find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([post]) }),
+      updateOne: vi.fn().mockResolvedValue({ matchedCount: 1 }),
+    } as never);
+    mockGetStrategyCyclesCollection.mockReturnValue(emptyCol() as never);
+
+    await processRevisions();
+
+    expect(revisePost).toHaveBeenCalledOnce();
+    const call = revisePost.mock.calls[0][0];
+    expect(call.existingPost.archetype).toBe('SEASONAL_MENU');
+  });
+
   it('skips advance when concurrent writer already changed post status (race)', async () => {
     const postDoc = {
       _id: { toString: () => 'post-race' },

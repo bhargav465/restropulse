@@ -31,7 +31,7 @@ function pickAngle(postType: string): string {
     case 'VIDEO':
       return 'portrait 9:16 framing; centred subject; macro close-up of texture for the first frame; leave bottom 20% completely clear of food';
     case 'CAROUSEL':
-      return 'consistent 45-degree hero angle across all frames; frame 2 = detail macro; frame 3 = environmental context or process shot; identical lighting and colour grade across frames';
+      return 'consistent lighting and colour grade across all frames — the slides form a visual set, not isolated images. Each frame has its own subject and composition; the per-slide brief drives what is shown, not this fragment.';
     default:
       return '45-degree angle for plated dishes — shows both surface and depth. AVOID overhead (flat-lay) for biryani, curry, and dal: it erases height and makes the dish look flat. Use overhead only for thali, chaat, or dosa spreads where the spatial layout is the visual point.';
   }

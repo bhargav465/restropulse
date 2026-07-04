@@ -156,12 +156,21 @@ export async function runRevisePost(
   // 2. Media: regenerate iff feedback tags request it; otherwise carry existing.
   let mediaSource: { thumbnail?: string; mediaUrls?: string[]; videoUrl?: string; metadata?: MediaMetadata };
   if (feedbackRequestsMedia(input.feedback.tags)) {
+    const isCarousel = input.existingPost.type === 'CAROUSEL';
+    const isVideo = isVideoType(input.existingPost.type);
     const job = await withRetry(
       () => withCostTracking(
         async () => {
-          const result = isVideoType(input.existingPost.type)
+          const result = isVideo
             ? await deps.media.generateVideo({
                 postType: input.existingPost.type as 'REEL' | 'VIDEO' | 'STORY',
+                platforms: input.existingPost.platforms,
+                concept: captionObj.caption,
+                themes: input.existingPost.themes,
+                ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
+              })
+            : isCarousel
+            ? await deps.media.generateCarousel({
                 platforms: input.existingPost.platforms,
                 concept: captionObj.caption,
                 themes: input.existingPost.themes,
@@ -182,12 +191,12 @@ export async function runRevisePost(
         {
           ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
           operation: 'revisePost',
-          surface: isVideoType(input.existingPost.type) ? 'video' : 'image',
-          step: isVideoType(input.existingPost.type) ? 'video' : 'image',
+          surface: isVideo ? 'video' : 'image',
+          step: isVideo ? 'video' : isCarousel ? 'carousel' : 'image',
           model: 'placeholder-media',
         },
       ),
-      isVideoType(input.existingPost.type) ? RETRY_PROFILES.VIDEO_SUBMIT : RETRY_PROFILES.IMAGE_SUBMIT,
+      isVideo ? RETRY_PROFILES.VIDEO_SUBMIT : RETRY_PROFILES.IMAGE_SUBMIT,
     );
 
     const mediaJobMeta = metadataFromMedia(job);

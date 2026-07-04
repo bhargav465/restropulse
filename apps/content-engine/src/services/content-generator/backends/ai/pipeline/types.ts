@@ -10,6 +10,7 @@ import type { ILLMProvider } from '../llm/types.js';
 import type { IMediaGenerator } from '../media/types.js';
 import type { IDomainSpecialization, SpecializationContext } from '../specialization/types.js';
 import type { ICurrentAffairsProvider, CurrentAffairsOperation } from '../current-affairs/types.js';
+import type { SonarClient } from '../current-affairs/clients/sonar-client.js';
 import type { GenerationContext } from '../../../types.js';
 
 export interface PipelineDeps {
@@ -18,13 +19,23 @@ export interface PipelineDeps {
   specialization: IDomainSpecialization;
   /** Optional. When set and caller supplies no hints, the pipeline auto-enriches. */
   currentAffairs?: ICurrentAffairsProvider;
+  /**
+   * Optional. When set, the pipeline fetches reference dish images on-demand from
+   * Perplexity Sonar at media-generation time (img2img for single-image posts).
+   */
+  sonar?: SonarClient;
 }
 
 export function toSpecializationContext(ctx?: GenerationContext): SpecializationContext {
+  const profile = ctx?.restaurantProfile;
   return {
     restaurantId: ctx?.restaurantId,
     restaurantName: ctx?.restaurantName,
     locale: ctx?.locale,
+    cuisine: profile?.cuisine,
+    bio: profile?.description,
+    menu: profile?.menu,
+    chefSpecials: profile?.chefSpecials,
   };
 }
 

@@ -22,6 +22,7 @@ export interface PlannedPostEntry {
   category: string;
   count: number;
   postType?: PostType;
+  themes?: string[];   // ADD
 }
 
 export interface DeriveSlotsInput {
@@ -41,10 +42,11 @@ export interface CycleSlot {
   scheduledFor: Date;
   type: PostType;
   platforms: Platform[];
-  themes: string[];
+  archetype: string;    // was themes[0] -- now explicit
+  themes?: string[];    // additional context, does NOT contain the archetype
 }
 
-const DEFAULT_PLATFORMS: Platform[] = (process.env.ENABLED_PLATFORMS ?? 'INSTAGRAM,FACEBOOK')
+export const DEFAULT_PLATFORMS: Platform[] = (process.env.ENABLED_PLATFORMS ?? 'INSTAGRAM,FACEBOOK')
   .split(',')
   .map(p => p.trim())
   .filter((p): p is Platform => p === 'INSTAGRAM' || p === 'FACEBOOK');
@@ -82,7 +84,6 @@ export function deriveCycleSlots(input: DeriveSlotsInput): CycleSlot[] {
   let slotIndex = 0;
 
   for (const entry of plannedPosts) {
-    const themes = [entry.category];
     const type: PostType = entry.postType ?? DEFAULT_POST_TYPE;
 
     for (let i = 0; i < entry.count; i++) {
@@ -94,7 +95,8 @@ export function deriveCycleSlots(input: DeriveSlotsInput): CycleSlot[] {
         scheduledFor,
         type,
         platforms: defaultPlatforms,
-        themes,
+        archetype: entry.category,
+        themes: entry.themes,
       });
 
       slotIndex++;

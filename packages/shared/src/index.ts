@@ -131,6 +131,19 @@ export interface User {
   razorpayCustomerId?: string;
 }
 
+export interface MenuItem {
+  /** Client-generated UUID. */
+  id: string;
+  category: string;                   // e.g. "Starters", "Biryani", "Desserts"
+  name: string;
+  description?: string;
+  /** Price in INR. */
+  price?: number;
+  isVeg: boolean;
+  isBestSeller?: boolean;
+  isAvailable: boolean;
+}
+
 export interface Restaurant {
   id: string;
   name: string;
@@ -157,6 +170,29 @@ export interface Restaurant {
   activeOffers?: string[];
   chefSpecials?: string[];
   menuLastUpdated?: string;
+  /** Short restaurant bio used in AI content prompts and profile display. */
+  description?: string;
+  phone?: string;
+  website?: string;
+  priceRange?: 'budget' | 'mid-range' | 'upscale' | 'fine-dining';
+  operatingHours?: {
+    weekday_text: string[];           // e.g. ["Monday: 11:00 AM - 10:00 PM", ...]
+  };
+  serviceOptions?: {
+    delivery: boolean;
+    dineIn: boolean;
+    takeout: boolean;
+  };
+  menu?: MenuItem[];
+  /** City this record was sourced from. Set by the acquire-restaurants script. */
+  sourceCity?: string;
+  /** Source of the data: acquisition script writes this; manual entries leave it absent. */
+  dataSource?: 'kaggle-zomato' | 'osm' | 'merged' | 'manual';
+  /**
+   * Reference image URLs keyed by dish name. Populated by the restaurant enricher
+   * via Perplexity Sonar image search. Used as img2img reference in AI media generation.
+   */
+  dishImages?: Record<string, string[]>;
 }
 
 export interface PostStats {
@@ -191,6 +227,8 @@ export interface Post {
   instagramMediaId?: string;
   facebookPostId?: string;
   stats?: PostStats;
+  themes?: string[];
+  archetype?: string;    // archetype ID this post was generated from (e.g. 'CRAVING_CUE')
 }
 
 export interface ContentStrategy {
@@ -206,6 +244,14 @@ export interface ContentStrategy {
 export interface PlannedPost {
   category: string;
   count: number;
+  themes?: string[];   // current-affairs/cultural context keywords (e.g. 'Eid', 'India-cricket-win')
+}
+
+export interface PlannedSlot {
+  scheduledFor: string;  // ISO date string
+  category: string;      // archetype ID e.g. 'CHEFS_PICK'
+  postType: PostType;
+  themes?: string[];   // carries through from PlannedPost
 }
 
 export interface StrategyCycle {
@@ -219,6 +265,7 @@ export interface StrategyCycle {
   plannedPosts: PlannedPost[];
   focus: string[];
   feedback?: string;
+  plannedSchedule?: PlannedSlot[];  // computed at PENDING_APPROVAL, consumed by rolling-window
 }
 
 // ----- Subscription & Billing -----

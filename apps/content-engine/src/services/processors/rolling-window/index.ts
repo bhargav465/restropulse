@@ -24,7 +24,7 @@ import {
 } from '@restropulse/db';
 import { ROLLING_WINDOW_HOURS as DEFAULT_ROLLING_WINDOW_HOURS } from '@restropulse/shared';
 import { createLogger } from '@restropulse/telemetry/server';
-import { deriveCycleSlots, type CycleSlot } from './slots.js';
+import { deriveCycleSlots, DEFAULT_PLATFORMS, type CycleSlot } from './slots.js';
 
 const logger = createLogger('content-engine:rolling-window');
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -108,14 +108,26 @@ export async function processRollingWindow(config: RollingWindowConfig = {}): Pr
         ? await strategiesCol.findOne({ restaurantId: cycle.restaurantId })
         : null;
 
-      const allSlots = deriveCycleSlots({
-        cycle: {
-          startDate: cycle.startDate,
-          endDate: cycle.endDate,
-          plannedPosts: cycle.plannedPosts,
-        },
-        strategy: strategy ? { postsPerWeek: strategy.postsPerWeek, bestTime: strategy.bestTime } : null,
-      });
+      // Use pre-computed schedule stored at PENDING_APPROVAL time when available.
+      // Falls back to live derivation for cycles that pre-date this field.
+      const storedSchedule = (cycle as any).plannedSchedule as Array<{ scheduledFor: string; category: string; postType: string }> | undefined;
+
+      const allSlots: CycleSlot[] = storedSchedule?.length
+        ? storedSchedule.map(s => ({
+            scheduledFor: new Date(s.scheduledFor),
+            type: s.postType as CycleSlot['type'],
+            platforms: DEFAULT_PLATFORMS,
+            archetype: s.category,          // was: themes: [s.category]
+            themes: (s as any).themes,      // carry stored themes if present
+          }))
+        : deriveCycleSlots({
+            cycle: {
+              startDate: cycle.startDate,
+              endDate: cycle.endDate,
+              plannedPosts: cycle.plannedPosts,
+            },
+            strategy: strategy ? { postsPerWeek: strategy.postsPerWeek, bestTime: strategy.bestTime } : null,
+          });
 
       const dueSlots = allSlots.filter((slot: CycleSlot) => slot.scheduledFor <= horizon);
 
@@ -132,7 +144,8 @@ export async function processRollingWindow(config: RollingWindowConfig = {}): Pr
               scheduledFor: scheduledForIso,
               type: slot.type,
               platforms: slot.platforms,
-              themes: slot.themes,
+              themes: slot.themes ?? [],          // additional context only, archetype excluded
+              archetype: slot.archetype,          // was: slot.themes[0] ?? null
               status: 'PENDING_CONTENT',
               restaurantId: cycle.restaurantId ?? null,
               isAdhoc: false,

@@ -17,10 +17,15 @@ export async function bootPlaygroundDB(): Promise<void> {
     `${counts.strategies} strategies, ${counts.cycles} cycles loaded (in-memory)\n`,
   );
 
-  process.on('exit', async () => {
-    await client?.close();
-    await mongod?.stop();
-  });
+  // SIGTERM / SIGINT: await async teardown then exit.
+  // Cannot use process.on('exit') for this — async callbacks are silently ignored there.
+  async function gracefulShutdown() {
+    await client?.close().catch(() => {});
+    await mongod?.stop({ doCleanup: true }).catch(() => {});
+    process.exit(0);
+  }
+  process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', gracefulShutdown);
 }
 
 export async function getRestaurantsFromDB(): Promise<any[]> {

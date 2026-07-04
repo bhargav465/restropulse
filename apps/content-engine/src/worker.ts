@@ -137,7 +137,7 @@ const startWorker = async () => {
     // flip CONTENT_GENERATOR_BACKEND=ai to engage the AI generator (see ADR 0001).
     // Tests swap this via setContentGenerator().
     const backend: ContentGeneratorBackend = env.CONTENT_GENERATOR_BACKEND;
-    setContentGenerator(createContentGenerator(backend));
+    setContentGenerator(await createContentGenerator(backend));
     logger.info({ generator: backend }, 'Content generator registered');
 
     // Start local asset server for placeholder media

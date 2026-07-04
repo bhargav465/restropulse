@@ -50,9 +50,23 @@ function makeDeps() {
     thumbnail: 'http://localhost:3002/images/new.jpg',
     metadata: { widthPx: 1080, heightPx: 1080 },
   });
+  const generateCarousel = vi.fn().mockResolvedValue({
+    jobId: 'jr_car_1',
+    status: 'COMPLETED',
+    mediaUrls: ['http://localhost:3002/images/s1.jpg', 'http://localhost:3002/images/s2.jpg', 'http://localhost:3002/images/s3.jpg'],
+    thumbnail: 'http://localhost:3002/images/s1.jpg',
+    metadata: { widthPx: 1080, heightPx: 1080 },
+  });
+  const generateVideo = vi.fn().mockResolvedValue({
+    jobId: 'jr_vid_1',
+    status: 'COMPLETED',
+    mediaUrl: 'http://localhost:3002/videos/new.mp4',
+    thumbnail: 'http://localhost:3002/videos/new.jpg',
+    metadata: { widthPx: 1080, heightPx: 1920, durationSeconds: 15 },
+  });
   return {
     llm: { name: 'mock-llm', generateObject },
-    media: { name: 'mock-media', generateImage, generateVideo: vi.fn(), pollJob: vi.fn() },
+    media: { name: 'mock-media', generateImage, generateCarousel, generateVideo, pollJob: vi.fn() },
     specialization: new RestaurantSpecialization(),
   };
 }
@@ -94,5 +108,116 @@ describe('runRevisePost', () => {
     const llmEvent = (insertCostEvent as any).mock.calls.find((c: any) => c[0].surface === 'llm');
     expect(llmEvent).toBeDefined();
     expect(llmEvent[0].operation).toBe('revisePost');
+  });
+
+  it('routes CAROUSEL media revision through generateCarousel and returns mediaUrls', async () => {
+    const deps = makeDeps();
+    const out = await runRevisePost(
+      {
+        existingPost: {
+          type: 'CAROUSEL',
+          platforms: ['INSTAGRAM'],
+          caption: 'Original carousel caption.',
+          archetype: 'ANATOMY_OF_A_DISH',
+          mediaUrls: ['http://localhost/old1.jpg', 'http://localhost/old2.jpg'],
+          thumbnail: 'http://localhost/old1.jpg',
+        },
+        feedback: { tags: ['media'], details: {}, note: 'Images not vibrant enough' },
+      },
+      deps,
+      {},
+    );
+    expect(deps.media.generateCarousel).toHaveBeenCalledTimes(1);
+    expect(deps.media.generateImage).not.toHaveBeenCalled();
+    expect(out.mediaUrls).toHaveLength(3);
+    expect(out.thumbnail).toBe(out.mediaUrls![0]);
+    expect(out.videoUrl).toBeUndefined();
+  });
+
+  it('routes VIDEO media revision through generateVideo', async () => {
+    const deps = makeDeps();
+    const out = await runRevisePost(
+      {
+        existingPost: {
+          type: 'VIDEO',
+          platforms: ['INSTAGRAM'],
+          caption: 'Original video caption.',
+          videoUrl: 'http://localhost/old.mp4',
+          thumbnail: 'http://localhost/old.jpg',
+        },
+        feedback: { tags: ['video'], details: {}, note: 'Wrong angle' },
+      },
+      deps,
+      {},
+    );
+    expect(deps.media.generateVideo).toHaveBeenCalledTimes(1);
+    expect(deps.media.generateImage).not.toHaveBeenCalled();
+    expect(deps.media.generateCarousel).not.toHaveBeenCalled();
+    expect(out.videoUrl).toBeDefined();
+  });
+
+  it('routes STORY media revision through generateImage', async () => {
+    const deps = makeDeps();
+    const out = await runRevisePost(
+      {
+        existingPost: {
+          type: 'STORY',
+          platforms: ['INSTAGRAM'],
+          caption: 'Original story caption.',
+          thumbnail: 'http://localhost/old.jpg',
+        },
+        feedback: { tags: ['image'], details: {}, note: 'Needs a brighter shot' },
+      },
+      deps,
+      {},
+    );
+    expect(deps.media.generateImage).toHaveBeenCalledTimes(1);
+    expect(deps.media.generateCarousel).not.toHaveBeenCalled();
+    expect(deps.media.generateVideo).not.toHaveBeenCalled();
+    expect(out.thumbnail).toMatch(/^http:\/\//);
+    expect(out.mediaUrls).toBeUndefined();
+    expect(out.videoUrl).toBeUndefined();
+  });
+
+  it('preserves existing CAROUSEL mediaUrls when feedback does NOT request media changes', async () => {
+    const deps = makeDeps();
+    const out = await runRevisePost(
+      {
+        existingPost: {
+          type: 'CAROUSEL',
+          platforms: ['INSTAGRAM'],
+          caption: 'Old carousel caption.',
+          archetype: 'FOOD_PAIRING',
+          mediaUrls: ['http://localhost/s1.jpg', 'http://localhost/s2.jpg'],
+          thumbnail: 'http://localhost/s1.jpg',
+        },
+        feedback: { tags: ['caption'], details: {}, note: 'Tone too formal' },
+      },
+      deps,
+      {},
+    );
+    expect(deps.media.generateCarousel).not.toHaveBeenCalled();
+    expect(out.mediaUrls).toEqual(['http://localhost/s1.jpg', 'http://localhost/s2.jpg']);
+    expect(out.thumbnail).toBe('http://localhost/s1.jpg');
+  });
+
+  it('injects archetype guidance into the revision prompt when archetype is provided', async () => {
+    const deps = makeDeps();
+    await runRevisePost(
+      {
+        existingPost: {
+          type: 'REEL',
+          platforms: ['INSTAGRAM'],
+          caption: 'Original caption about sensory food.',
+          archetype: 'CRAVING_CUE',
+        },
+        feedback: { tags: ['caption'], details: {}, note: 'Not sensory enough' },
+      },
+      deps,
+    );
+
+    const llmCall = deps.llm.generateObject.mock.calls[0][0];
+    // The prompt should contain the archetype label or description
+    expect(llmCall.prompt).toContain('Craving Cue');
   });
 });
