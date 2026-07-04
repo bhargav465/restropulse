@@ -224,6 +224,54 @@ describe('adhoc-processor integration', () => {
       expect((calls[0] as { correlationId?: string }).correlationId).toBe(postId.toString());
     });
 
+    it('processes a PENDING_CONTENT STORY post and stores a single thumbnail without mediaUrls', async () => {
+      const db = client.db('content-engine-test');
+      const postId = new ObjectId();
+      await db.collection('posts').insertOne({
+        _id: postId,
+        type: 'STORY',
+        status: 'PENDING_CONTENT',
+        platforms: ['INSTAGRAM'],
+        concept: 'Story post concept',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await processPendingPosts();
+      expect(result.processed).toBe(1);
+
+      const updatedPost = await db.collection('posts').findOne({ _id: postId });
+      expect(updatedPost?.status).toBe('PENDING_APPROVAL');
+      expect(typeof updatedPost?.thumbnail).toBe('string');
+      // STORY posts must never have carousel-style mediaUrls; videoUrl is allowed (video story)
+      expect(updatedPost?.mediaUrls).toBeFalsy();
+    });
+
+    it('CAROUSEL post stores mediaUrls with multiple slides (not just one)', async () => {
+      const db = client.db('content-engine-test');
+      const postId = new ObjectId();
+      await db.collection('posts').insertOne({
+        _id: postId,
+        type: 'CAROUSEL',
+        status: 'PENDING_CONTENT',
+        platforms: ['INSTAGRAM'],
+        archetype: 'FOOD_PAIRING',
+        themes: ['FOOD_PAIRING'],
+        concept: '',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      await processPendingPosts();
+
+      const updatedPost = await db.collection('posts').findOne({ _id: postId });
+      expect(updatedPost?.status).toBe('PENDING_APPROVAL');
+      expect(Array.isArray(updatedPost?.mediaUrls)).toBe(true);
+      expect((updatedPost?.mediaUrls as string[]).length).toBeGreaterThan(1);
+      // CAROUSEL posts have no video; processor stores null via $set, so check falsy not undefined
+      expect(updatedPost?.videoUrl).toBeFalsy();
+    });
+
     it('uses caption field as concept when concept is absent', async () => {
       const db = client.db('content-engine-test');
       const postId = new ObjectId();

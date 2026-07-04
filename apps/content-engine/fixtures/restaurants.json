@@ -2,12 +2,12 @@
   {
     "_id": "pg-r1",
     "id": "pg-r1",
-    "name": "Nihari House",
-    "cuisine": "Hyderabadi Dum Biryani, Nihari, Haleem",
+    "name": "Hotel Shadab",
+    "cuisine": "Hyderabadi — Haleem, Biryani, Nihari",
     "location": {
-      "address": "14-7-148, Pathergatti, Charminar, Hyderabad, Telangana 500002",
-      "lat": 17.3617,
-      "lng": 78.4741,
+      "address": "Ghansi Bazaar, High Court Road, Old City, Hyderabad, Telangana 500002",
+      "lat": 17.3592,
+      "lng": 78.4839,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r1"
     },
     "accountManager": {
@@ -17,27 +17,31 @@
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
     "integrations": { "instagram": false },
-    "activeOffers": [
-      "20% off on weekday lunch combos",
-      "Family biryani platter at Rs. 999"
-    ],
     "chefSpecials": [
+      "Haleem",
       "Mutton Dum Biryani",
       "Nihari with Sheermal",
-      "Paya Shorba",
-      "Haleem"
+      "Marag"
     ],
-    "menuLastUpdated": "2025-11-15"
+    "menu": [
+      { "id": "r1-m1", "category": "Haleem", "name": "Haleem", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r1-m2", "category": "Biryani", "name": "Mutton Dum Biryani", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r1-m3", "category": "Biryani", "name": "Chicken Biryani", "isVeg": false, "isAvailable": true },
+      { "id": "r1-m4", "category": "Nihari", "name": "Nihari with Sheermal", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r1-m5", "category": "Soup", "name": "Marag", "isVeg": false, "isAvailable": true },
+      { "id": "r1-m6", "category": "Bread", "name": "Sheermal", "isVeg": false, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   },
   {
     "_id": "pg-r2",
     "id": "pg-r2",
-    "name": "Dakshin Rasam",
-    "cuisine": "South Indian — Andhra, Chettinad",
+    "name": "Chutneys",
+    "cuisine": "South Indian — Telugu breakfast and thali",
     "location": {
-      "address": "3-6-89, Rani Gunj, Secunderabad, Hyderabad, Telangana 500003",
-      "lat": 17.4399,
-      "lng": 78.4983,
+      "address": "Banjara Hills Road No. 12, Hyderabad, Telangana 500034",
+      "lat": 17.4139,
+      "lng": 78.4479,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r2"
     },
     "accountManager": {
@@ -47,27 +51,31 @@
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
     "integrations": { "instagram": true },
-    "activeOffers": [
-      "Unlimited thali on Sundays at Rs. 299",
-      "Free filter coffee with any meal above Rs. 400"
-    ],
     "chefSpecials": [
-      "Andhra Kodi Pulao",
-      "Chettinad Chicken Curry",
       "Pesarattu with Upma",
-      "Gongura Mutton"
+      "Punugulu",
+      "Andhra Thali",
+      "Filter Coffee"
     ],
-    "menuLastUpdated": "2026-01-20"
+    "menu": [
+      { "id": "r2-m1", "category": "Breakfast", "name": "Pesarattu with Upma", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r2-m2", "category": "Snacks", "name": "Punugulu", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r2-m3", "category": "Thali", "name": "Andhra Thali", "isVeg": true, "isAvailable": true },
+      { "id": "r2-m4", "category": "Breakfast", "name": "Idli Vada Sambar", "isVeg": true, "isAvailable": true },
+      { "id": "r2-m5", "category": "Breakfast", "name": "Masala Dosa", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r2-m6", "category": "Beverages", "name": "Filter Coffee", "isVeg": true, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   },
   {
     "_id": "pg-r3",
     "id": "pg-r3",
-    "name": "The Dhaba Collective",
-    "cuisine": "North Indian — Punjabi, Dal Makhani",
+    "name": "Bawarchi Restaurant",
+    "cuisine": "Hyderabadi Biryani, Mughlai",
     "location": {
-      "address": "Plot 47, Road No. 36, Jubilee Hills, Hyderabad, Telangana 500033",
-      "lat": 17.4239,
-      "lng": 78.4074,
+      "address": "RTC X Roads, Hyderabad, Telangana 500020",
+      "lat": 17.3900,
+      "lng": 78.4920,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r3"
     },
     "accountManager": {
@@ -77,27 +85,30 @@
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
     "integrations": { "instagram": false },
-    "activeOffers": [
-      "Buy 2 main course get 1 naan free",
-      "Early dinner deal: 15% off between 6pm and 7:30pm"
-    ],
     "chefSpecials": [
-      "Slow-Cooked Dal Makhani",
-      "Tandoori Chicken",
-      "Sarson da Saag with Makki Roti",
-      "Amritsari Kulcha"
+      "Chicken Biryani",
+      "Mutton Biryani",
+      "Chicken 65",
+      "Seekh Kebab"
     ],
-    "menuLastUpdated": "2025-10-05"
+    "menu": [
+      { "id": "r3-m1", "category": "Biryani", "name": "Chicken Biryani", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r3-m2", "category": "Biryani", "name": "Mutton Biryani", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r3-m3", "category": "Starter", "name": "Chicken 65", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r3-m4", "category": "Kebab", "name": "Seekh Kebab", "isVeg": false, "isAvailable": true },
+      { "id": "r3-m5", "category": "Biryani", "name": "Veg Biryani", "isVeg": true, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   },
   {
     "_id": "pg-r4",
     "id": "pg-r4",
-    "name": "Golden Dragon",
-    "cuisine": "Indo-Chinese, Cantonese, Dim Sum",
+    "name": "Nanking Restaurant",
+    "cuisine": "Chinese — Cantonese, Indo-Chinese",
     "location": {
-      "address": "Unit 12, Cyber Towers, Hitech City, Hyderabad, Telangana 500081",
-      "lat": 17.4474,
-      "lng": 78.3762,
+      "address": "SD Road, Secunderabad, Hyderabad, Telangana 500003",
+      "lat": 17.4399,
+      "lng": 78.4983,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r4"
     },
     "accountManager": {
@@ -107,27 +118,31 @@
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
     "integrations": { "instagram": true },
-    "activeOffers": [
-      "Corporate lunch set menu at Rs. 449",
-      "Dim sum basket deal: any 3 for Rs. 599"
-    ],
     "chefSpecials": [
-      "Har Gow (Steamed Prawn Dumplings)",
-      "Szechuan Kung Pao Chicken",
-      "Wok-Tossed Hakka Noodles",
-      "Chilli Paneer Dry"
+      "Chilli Chicken",
+      "Chicken Fried Rice",
+      "Hakka Noodles",
+      "Chicken Manchurian"
     ],
-    "menuLastUpdated": "2026-03-10"
+    "menu": [
+      { "id": "r4-m1", "category": "Starter", "name": "Chilli Chicken", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r4-m2", "category": "Rice", "name": "Chicken Fried Rice", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r4-m3", "category": "Noodles", "name": "Hakka Noodles", "isVeg": false, "isAvailable": true },
+      { "id": "r4-m4", "category": "Gravy", "name": "Chicken Manchurian", "isVeg": false, "isAvailable": true },
+      { "id": "r4-m5", "category": "Starter", "name": "Chilli Paneer", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r4-m6", "category": "Rice", "name": "Veg Fried Rice", "isVeg": true, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   },
   {
     "_id": "pg-r5",
     "id": "pg-r5",
-    "name": "Banjara Brasserie",
-    "cuisine": "Continental, European, Wood-Fired",
+    "name": "AB's - Absolute Barbecues",
+    "cuisine": "BBQ, Live Grill, Multi-cuisine",
     "location": {
-      "address": "8-2-293, Road No. 82, Banjara Hills, Hyderabad, Telangana 500034",
-      "lat": 17.4126,
-      "lng": 78.4438,
+      "address": "Jubilee Hills, Hyderabad, Telangana 500033",
+      "lat": 17.4229,
+      "lng": 78.4106,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r5"
     },
     "accountManager": {
@@ -137,27 +152,30 @@
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
     "integrations": { "instagram": true },
-    "activeOffers": [
-      "Date night set menu for two at Rs. 2,499",
-      "Complimentary dessert on anniversary bookings"
-    ],
     "chefSpecials": [
-      "Wood-Fired Beef Tenderloin",
-      "Truffle Risotto",
-      "Bouillabaisse",
-      "Lemon Tart with Chantilly Cream"
+      "Live Grill Chicken",
+      "Mutton Seekh Kebab",
+      "Chicken Wings",
+      "Prawns on the Grill"
     ],
-    "menuLastUpdated": "2026-02-28"
+    "menu": [
+      { "id": "r5-m1", "category": "Grill", "name": "Live Grill Chicken", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r5-m2", "category": "Kebab", "name": "Mutton Seekh Kebab", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r5-m3", "category": "Starter", "name": "Chicken Wings", "isVeg": false, "isAvailable": true },
+      { "id": "r5-m4", "category": "Grill", "name": "Prawns on the Grill", "isVeg": false, "isAvailable": true },
+      { "id": "r5-m5", "category": "Grill", "name": "Paneer Tikka", "isVeg": true, "isBestSeller": true, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   },
   {
     "_id": "pg-r6",
     "id": "pg-r6",
-    "name": "Gachibowli Grill",
-    "cuisine": "Burgers, Wraps, Loaded Fries",
+    "name": "Nimrah Cafe & Bakery",
+    "cuisine": "Irani Cafe — Chai, Baked Goods",
     "location": {
-      "address": "Shop 5, DLF Cyber Hub, Gachibowli, Hyderabad, Telangana 500032",
-      "lat": 17.4401,
-      "lng": 78.3489,
+      "address": "Near Charminar, Old City, Hyderabad, Telangana 500002",
+      "lat": 17.3604,
+      "lng": 78.4736,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r6"
     },
     "accountManager": {
@@ -166,28 +184,31 @@
       "email": "hyderabad@restropulse.ai",
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
-    "integrations": { "instagram": false },
-    "activeOffers": [
-      "Combo meal: burger + fries + drink at Rs. 349",
-      "Happy hour loaded fries: buy 1 get 1 free 3pm-6pm"
-    ],
+    "integrations": { "instagram": true },
     "chefSpecials": [
-      "Double Smash Cheeseburger",
-      "BBQ Pulled Chicken Wrap",
-      "Peri-Peri Loaded Fries",
-      "Crispy Onion Ring Tower"
+      "Irani Chai",
+      "Osmania Biscuits",
+      "Bun Maska",
+      "Bakar Khani"
     ],
-    "menuLastUpdated": "2025-09-22"
+    "menu": [
+      { "id": "r6-m1", "category": "Beverages", "name": "Irani Chai", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r6-m2", "category": "Baked Goods", "name": "Osmania Biscuits", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r6-m3", "category": "Bread", "name": "Bun Maska", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r6-m4", "category": "Bread", "name": "Bakar Khani", "isVeg": true, "isAvailable": true },
+      { "id": "r6-m5", "category": "Meals", "name": "Keema Pav", "isVeg": false, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   },
   {
     "_id": "pg-r7",
     "id": "pg-r7",
-    "name": "Haze Cafe & Bakery",
-    "cuisine": "Cafe, All-day Breakfast, Artisan Bakes",
+    "name": "Farzi Cafe",
+    "cuisine": "Modern Indian Fusion",
     "location": {
-      "address": "Plot 22, Road No. 45, Jubilee Hills, Hyderabad, Telangana 500033",
-      "lat": 17.4315,
-      "lng": 78.4089,
+      "address": "HITEC City, Madhapur, Hyderabad, Telangana 500081",
+      "lat": 17.4474,
+      "lng": 78.3762,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r7"
     },
     "accountManager": {
@@ -197,27 +218,29 @@
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
     "integrations": { "instagram": true },
-    "activeOffers": [
-      "Morning ritual: coffee + croissant at Rs. 199",
-      "Weekend brunch buffet Rs. 599 per person"
-    ],
     "chefSpecials": [
-      "Eggs Benedict with Hollandaise",
-      "Sourdough Avocado Toast",
-      "Kouign-Amann",
-      "Cold Brew Single Origin"
+      "Biryani Gol Gappa",
+      "Dal Makhni Fondant",
+      "Chicken Tikka Taco",
+      "Farzi Chai"
     ],
-    "menuLastUpdated": "2026-04-01"
+    "menu": [
+      { "id": "r7-m1", "category": "Signature", "name": "Biryani Gol Gappa", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r7-m2", "category": "Signature", "name": "Dal Makhni Fondant", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r7-m3", "category": "Main Course", "name": "Chicken Tikka Taco", "isVeg": false, "isAvailable": true },
+      { "id": "r7-m4", "category": "Beverages", "name": "Farzi Chai", "isVeg": true, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   },
   {
     "_id": "pg-r8",
     "id": "pg-r8",
-    "name": "The Protein Kitchen",
-    "cuisine": "Salads, Power Bowls, Millet Meals",
+    "name": "Rayalaseema Ruchulu",
+    "cuisine": "Andhra cuisine — Rayalaseema style",
     "location": {
-      "address": "Ground Floor, Skyview 10, Hitech City, Hyderabad, Telangana 500081",
-      "lat": 17.4512,
-      "lng": 78.3801,
+      "address": "Madhapur, Hyderabad, Telangana 500081",
+      "lat": 17.4500,
+      "lng": 78.3800,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r8"
     },
     "accountManager": {
@@ -226,26 +249,29 @@
       "email": "hyderabad@restropulse.ai",
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
-    "integrations": { "instagram": true },
-    "activeOffers": [
-      "Weekly meal prep pack: 5 bowls for Rs. 1,499",
-      "Free protein shake with any bowl above Rs. 350"
-    ],
+    "integrations": { "instagram": false },
     "chefSpecials": [
-      "Jowar and Roasted Veggie Power Bowl",
-      "Grilled Chicken Caesar Salad",
-      "Foxtail Millet Khichdi",
-      "High-Protein Peanut Butter Smoothie"
+      "Natukodi Pulusu",
+      "Gongura Mutton",
+      "Chicken Iguru",
+      "Rayalaseema Ragi Sangati"
     ],
-    "menuLastUpdated": "2026-05-10"
+    "menu": [
+      { "id": "r8-m1", "category": "Curry", "name": "Natukodi Pulusu", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r8-m2", "category": "Curry", "name": "Gongura Mutton", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r8-m3", "category": "Curry", "name": "Chicken Iguru", "isVeg": false, "isAvailable": true },
+      { "id": "r8-m4", "category": "Meals", "name": "Rayalaseema Ragi Sangati", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r8-m5", "category": "Meals", "name": "Andhra Meals", "isVeg": true, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   },
   {
     "_id": "pg-r9",
     "id": "pg-r9",
-    "name": "Saffron & Smoke",
-    "cuisine": "Modern Indian Fusion, Tasting Menu",
+    "name": "Ohri's Cuisine of India",
+    "cuisine": "Multi-cuisine — Mughlai, North Indian, Continental",
     "location": {
-      "address": "8-2-120A, Road No. 2, Banjara Hills, Hyderabad, Telangana 500034",
+      "address": "Banjara Hills, Hyderabad, Telangana 500034",
       "lat": 17.4092,
       "lng": 78.4392,
       "mapUrl": "https://www.google.com/maps/embed?pb=PLACEHOLDER_pg-r9"
@@ -257,16 +283,19 @@
       "avatar": "https://picsum.photos/seed/am-hyd/100/100"
     },
     "integrations": { "instagram": true },
-    "activeOffers": [
-      "Chef's 7-course tasting menu at Rs. 3,999 per person",
-      "Wine pairing add-on Rs. 1,500 per person"
-    ],
     "chefSpecials": [
-      "Smoked Raan with Saffron Jus",
-      "Deconstructed Biryani Arancini",
-      "Mango Kokum Ceviche",
-      "Charred Cauliflower with Achaar Emulsion"
+      "Murgh Makhani",
+      "Raan-e-Ohri",
+      "Dal Bukhara",
+      "Gulab Jamun"
     ],
-    "menuLastUpdated": "2026-05-20"
+    "menu": [
+      { "id": "r9-m1", "category": "Main Course", "name": "Murgh Makhani", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r9-m2", "category": "Signature", "name": "Raan-e-Ohri", "isVeg": false, "isBestSeller": true, "isAvailable": true },
+      { "id": "r9-m3", "category": "Dal", "name": "Dal Bukhara", "isVeg": true, "isBestSeller": true, "isAvailable": true },
+      { "id": "r9-m4", "category": "Tandoor", "name": "Tandoori Platter", "isVeg": false, "isAvailable": true },
+      { "id": "r9-m5", "category": "Dessert", "name": "Gulab Jamun", "isVeg": true, "isAvailable": true }
+    ],
+    "menuLastUpdated": "2026-06-01"
   }
 ]

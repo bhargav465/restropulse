@@ -138,13 +138,16 @@ describe('ReplicateMediaGenerator', () => {
     });
   });
 
-  describe('generateImage (CAROUSEL)', () => {
+  describe('generateCarousel', () => {
     it('fans out to 3 parallel frames', async () => {
       const client = makeClient();
       const store = makeStore({ status: 'COMPLETED', mediaUrl: 'https://replicate.delivery/img.webp' });
       const gen = new ReplicateMediaGenerator({ client, store });
 
-      const job = await gen.generateImage({ ...baseImageInput, postType: 'CAROUSEL' });
+      const job = await gen.generateCarousel({
+        platforms: baseImageInput.platforms,
+        concept: baseImageInput.concept,
+      });
 
       expect(client.createPrediction).toHaveBeenCalledTimes(3);
       expect(job.status).toBe('COMPLETED');

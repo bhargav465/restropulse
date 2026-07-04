@@ -3,6 +3,8 @@ import { selectFromList, ask, confirm, multiSelect, closePrompts } from '../lib/
 import { hr, success } from '../lib/display.js';
 import { findAllPosts, updatePost } from '@restropulse/db';
 import { FEEDBACK_CATEGORIES, QUICK_OPTIONS } from '../lib/feedback-options.js';
+import { createContentGenerator } from '../../../src/services/content-generator/index.js';
+import type { PostType, Platform } from '@restropulse/shared';
 
 export async function runFeedbackCommand(): Promise<void> {
   hr('POST FEEDBACK');
@@ -69,8 +71,59 @@ export async function runFeedbackCommand(): Promise<void> {
       status: 'CHANGES_REQUESTED',
       feedback: JSON.stringify(feedbackPayload),
     });
-    success('Feedback submitted. Revision processor will pick this up on next cron tick.');
-    console.log('  Or run "npm run playground -- post" to generate a revised version manually.');
+    success('Feedback submitted.');
+
+    const reviseNow = await confirm('Revise now using the content generator?', false);
+    if (reviseNow) {
+      const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+      const backendDefault = hasAnthropicKey ? 'ai' : 'placeholder';
+      const backendInput = await ask(`Backend: ai / placeholder [default: ${backendDefault}]: `);
+      const backend = (backendInput.trim() || backendDefault) as 'ai' | 'placeholder';
+
+      const gen = await createContentGenerator(backend);
+      const themes = Array.isArray(post.themes) ? post.themes : undefined;
+      const archetype = (post as any).archetype ?? themes?.[0];
+
+      console.log('\nRevising post...');
+      const revised = await gen.revisePost(
+        {
+          existingPost: {
+            type: post.type as PostType,
+            platforms: (post.platforms as Platform[]) || ['INSTAGRAM'],
+            caption: post.caption || '',
+            themes,
+            archetype,
+            thumbnail: (post as any).thumbnail,
+            mediaUrls: (post as any).mediaUrls ?? undefined,
+            videoUrl: (post as any).videoUrl ?? undefined,
+          },
+          feedback: {
+            tags: feedbackPayload.tags,
+            details: feedbackPayload.details,
+            note: feedbackPayload.note,
+          },
+        },
+        { restaurantId: restaurant._id, restaurantName: restaurant.name },
+      );
+
+      hr('REVISED RESULT');
+      if (archetype) console.log(`\nArchetype: [${archetype}]`);
+      console.log('\nCaption:\n');
+      console.log(revised.caption);
+
+      const saveRevised = await confirm('\nSave revised post?');
+      if (saveRevised) {
+        await updatePost(post.id, {
+          status: 'PENDING_APPROVAL',
+          caption: revised.caption,
+          ...(revised.thumbnail ? { thumbnail: revised.thumbnail } : {}),
+          ...(revised.mediaUrls ? { mediaUrls: revised.mediaUrls } : {}),
+          ...(revised.videoUrl ? { videoUrl: revised.videoUrl } : {}),
+          feedback: JSON.stringify({ ...feedbackPayload, resolution: `Revised via playground: addressed "${feedbackPayload.note}"` }),
+        });
+        success('Revised post saved and set to PENDING_APPROVAL.');
+      }
+    }
   }
 
   closePrompts();

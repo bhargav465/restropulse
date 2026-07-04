@@ -6,17 +6,32 @@
  * without any processor edits.
  */
 
-import type { PlannedPost, Platform, PostType } from '@restropulse/shared';
+import type { PlannedPost, Platform, PostType, MenuItem } from '@restropulse/shared';
 
 // ---------------------------------------------------------------------------
 // Context + error types
 // ---------------------------------------------------------------------------
+
+/** Stable restaurant data passed through the generation pipeline to enrich prompts. */
+export interface RestaurantProfile {
+  cuisine?: string;
+  /** Prose bio synthesised by the restaurant enricher. */
+  description?: string;
+  menu?: MenuItem[];
+  chefSpecials?: string[];
+  activeOffers?: string[];
+  priceRange?: string;
+  /** Reference image URLs keyed by dish name; used as img2img reference in media generation. */
+  dishImages?: Record<string, string[]>;
+}
 
 export interface GenerationContext {
   correlationId?: string;
   restaurantId?: string;
   restaurantName?: string;
   locale?: string;
+  /** Full restaurant profile; populated by processors from the DB document. */
+  restaurantProfile?: RestaurantProfile;
 }
 
 export type ContentGenerationErrorCode =
@@ -50,6 +65,7 @@ export interface DraftCycleInput {
   strategyFocus?: string[];
   strategyThemes?: string[];
   currentAffairsHints?: string[];
+  excludeArchetypes?: string[];   // archetype IDs to exclude from this cycle's plan
 }
 
 export interface CycleFeedback {
@@ -88,9 +104,12 @@ export interface GeneratePostInput {
   type: PostType;
   platforms: Platform[];
   themes?: string[];
+  archetype?: string;
   scheduledFor?: string;
   cycleId?: string;
   currentAffairsHints?: string[];
+  /** Pre-resolved dish name from restaurant menu; injected by pipeline, not by callers. */
+  selectedDish?: string;
 }
 
 export interface PostFeedback {
@@ -109,6 +128,7 @@ export interface RevisePostInput {
     mediaUrls?: string[];
     videoUrl?: string;
     themes?: string[];
+    archetype?: string;
   };
   feedback: PostFeedback;
   currentAffairsHints?: string[];
@@ -131,6 +151,8 @@ export interface GeneratedPost {
   pendingMedia?: boolean;       // true means caller should set post.status=PENDING_MEDIA
   mediaJobId?: string;          // present when pendingMedia=true
   generationStep?: 'CAPTION_DONE' | 'MEDIA_REQUESTED' | 'MEDIA_DONE';
+  /** 1-2 sentence creative rationale explaining why this specific content was generated. */
+  motivation?: string;
 }
 
 // ---------------------------------------------------------------------------

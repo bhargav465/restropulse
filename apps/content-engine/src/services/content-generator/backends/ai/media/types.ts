@@ -61,9 +61,31 @@ export interface VideoGenInput {
   cycleId?: string;
 }
 
+export interface CarouselGenInput {
+  platforms: Platform[];
+  concept: string;
+  themes?: string[];
+  caption?: string;
+  /** Number of slides to generate. Default: 3. */
+  slideCount?: number;
+  /** Visual direction fragment from domain specialization. */
+  promptSuffix?: string;
+  /**
+   * Per-slide visual briefs from the LLM (carouselSlides in PostCaptionSchema).
+   * When provided, drives `slideCount` and overrides the hardcoded fallback directions.
+   * Each string describes a distinct moment/facet/stage to show in that slide.
+   */
+  slideDirections?: string[];
+  // Phase 4 -- optional
+  restaurantId?: string;
+  postId?: string;
+  cycleId?: string;
+}
+
 export interface IMediaGenerator {
   readonly name: string;
   generateImage(input: ImageGenInput): Promise<MediaGenJob>;
+  generateCarousel(input: CarouselGenInput): Promise<MediaGenJob>;
   generateVideo(input: VideoGenInput): Promise<MediaGenJob>;
   /** Phase 5: poll a previously-submitted job. Phase 2 impls return COMPLETED jobs immediately so this is a no-op for them. */
   pollJob(jobId: string): Promise<MediaGenJob>;

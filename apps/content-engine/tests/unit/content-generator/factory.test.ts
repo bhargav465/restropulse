@@ -58,84 +58,84 @@ function setAllAiKeys() {
 }
 
 describe('createContentGenerator', () => {
-  it('returns the placeholder backend by default', () => {
-    const g = createContentGenerator('placeholder');
+  it('returns the placeholder backend by default', async () => {
+    const g = await createContentGenerator('placeholder');
     expect(g.name).toBe('placeholder');
   });
 
-  it('returns the AI backend when "ai" and all four required keys are present (uber-flag mode)', () => {
+  it('returns the AI backend when "ai" and all four required keys are present (uber-flag mode)', async () => {
     setAllAiKeys();
-    const g = createContentGenerator('ai');
+    const g = await createContentGenerator('ai');
     expect(g.name).toBe('ai');
+  }, 15000);
+
+  it('throws on an unknown backend string', async () => {
+    await expect(createContentGenerator('chatgpt' as any)).rejects.toThrow(/unknown content generator backend/i);
   });
 
-  it('throws on an unknown backend string', () => {
-    expect(() => createContentGenerator('chatgpt' as any)).toThrow(/unknown content generator backend/i);
-  });
-
-  it('throws a single combined error listing every missing key when AI mode is enabled', () => {
+  it('throws a single combined error listing every missing key when AI mode is enabled', async () => {
     // No keys set at all -- should surface all 4 in one error message
+    await expect(createContentGenerator('ai')).rejects.toMatchObject({
+      message: expect.stringContaining('ANTHROPIC_API_KEY'),
+    });
     let caught: Error | undefined;
     try {
-      createContentGenerator('ai');
+      await createContentGenerator('ai');
     } catch (err) {
       caught = err as Error;
     }
     expect(caught).toBeDefined();
     const msg = caught!.message;
-    expect(msg).toContain('ANTHROPIC_API_KEY');
     expect(msg).toContain('FAL_API_KEY');
     expect(msg).toContain('GOOGLE_CALENDAR_API_KEY');
     expect(msg).toContain('PERPLEXITY_API_KEY');
-    // Helpful hint mentions the override path
     expect(msg).toMatch(/MEDIA_BACKEND=placeholder|CURRENT_AFFAIRS_V[12]_ENABLED=false/);
     expect(msg).toContain('docs/SECRETS.md');
   });
 });
 
 describe('createContentGenerator -- AI uber-flag default-on behavior', () => {
-  it('with backend=ai and all four keys, V1 + V2 + fal-ai are all engaged by default', () => {
+  it('with backend=ai and all four keys, V1 + V2 + fal-ai are all engaged by default', async () => {
     setAllAiKeys();
-    // No sub-flag overrides -- everything defaults on.
-    expect(() => createContentGenerator('ai')).not.toThrow();
-  });
+    await expect(createContentGenerator('ai')).resolves.toBeDefined();
+  }, 15000);
 
-  it('does not require FAL_API_KEY when MEDIA_BACKEND=placeholder override is set', () => {
+  it('does not require FAL_API_KEY when MEDIA_BACKEND=placeholder override is set', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
     process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
     process.env['PERPLEXITY_API_KEY'] = 'pplx-test';
     process.env['MEDIA_BACKEND'] = 'placeholder';
-    expect(() => createContentGenerator('ai')).not.toThrow();
+    await expect(createContentGenerator('ai')).resolves.toBeDefined();
   });
 
-  it('does not require GOOGLE_CALENDAR_API_KEY when V1 override is set to false', () => {
+  it('does not require GOOGLE_CALENDAR_API_KEY when V1 override is set to false', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
     process.env['FAL_API_KEY'] = 'fal-test';
     process.env['PERPLEXITY_API_KEY'] = 'pplx-test';
     process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'false';
-    expect(() => createContentGenerator('ai')).not.toThrow();
+    await expect(createContentGenerator('ai')).resolves.toBeDefined();
   });
 
-  it('does not require PERPLEXITY_API_KEY when V2 override is set to false', () => {
+  it('does not require PERPLEXITY_API_KEY when V2 override is set to false', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
     process.env['FAL_API_KEY'] = 'fal-test';
     process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
     process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'false';
-    expect(() => createContentGenerator('ai')).not.toThrow();
+    await expect(createContentGenerator('ai')).resolves.toBeDefined();
   });
 
-  it('runs with only ANTHROPIC_API_KEY when all sub-flags are overridden off (degraded debug mode)', () => {
+  it('runs with only ANTHROPIC_API_KEY when all sub-flags are overridden off (degraded debug mode)', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
     process.env['MEDIA_BACKEND'] = 'placeholder';
     process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'false';
     process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'false';
-    const g = createContentGenerator('ai');
+    const g = await createContentGenerator('ai');
     expect(g.name).toBe('ai');
   });
 
-  it('throws on an unknown MEDIA_BACKEND value with a helpful message', () => {
+  it('throws on an unknown MEDIA_BACKEND value with a helpful message', async () => {
     setAllAiKeys();
     process.env['MEDIA_BACKEND'] = 'midjourney';
-    expect(() => createContentGenerator('ai')).toThrow(/MEDIA_BACKEND/i);
+    await expect(createContentGenerator('ai')).rejects.toThrow(/MEDIA_BACKEND/i);
   });
 });

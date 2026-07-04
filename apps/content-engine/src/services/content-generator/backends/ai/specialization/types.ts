@@ -15,7 +15,7 @@ import type {
   ReviseCycleInput,
   RevisePostInput,
 } from '../../../types.js';
-import type { PostType, Platform } from '@restropulse/shared';
+import type { PostType, Platform, MenuItem } from '@restropulse/shared';
 
 export type SpecializationOperation = 'draftCycle' | 'reviseCycle' | 'generatePost' | 'revisePost';
 
@@ -35,6 +35,12 @@ export interface SpecializationContext {
   brandVoice?: string;
   dietaryFocus?: string[];
   locale?: string;
+  /** Prose bio synthesised by the restaurant enricher (stable, prompt-cacheable). */
+  bio?: string;
+  /** Available menu items from the restaurant DB document. */
+  menu?: MenuItem[];
+  /** Chef's special dish names. */
+  chefSpecials?: string[];
 }
 
 export interface ImageGenInput {

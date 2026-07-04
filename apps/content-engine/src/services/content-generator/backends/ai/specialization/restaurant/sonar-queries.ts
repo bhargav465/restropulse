@@ -20,8 +20,8 @@ export function buildSonarQueries(scope: SonarQueryScope, ctx: SpecializationCon
   const regionKey = region.toLowerCase().replace(/\s+/g, '');
 
   // Type-safe regional terms lookup
-  const regionalMap = SONAR_CONTEXT_TERMS.regional as Record<string, string[]>;
-  const regionalTerms: string[] = regionalMap[regionKey] ?? [];
+  const regionalMap = SONAR_CONTEXT_TERMS.regional as Record<string, readonly string[]>;
+  const regionalTerms: readonly string[] = regionalMap[regionKey] ?? [];
   const locationContext = regionalTerms.length
     ? `(focus areas: ${regionalTerms.slice(0, 2).join(', ')})`
     : '';

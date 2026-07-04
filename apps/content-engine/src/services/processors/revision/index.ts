@@ -99,13 +99,21 @@ export async function processRevisions(): Promise<{
         note: feedback.note || '',
       };
 
+      const themes = Array.isArray(postDoc.themes) ? (postDoc.themes as string[]) : undefined;
+      const archetype = (postDoc as any).archetype as string | undefined
+        ?? themes?.[0];
+
       const result = await generator.revisePost(
         {
           existingPost: {
             type: (postDoc.type as PostType) || 'IMAGE',
             platforms: (postDoc.platforms as Platform[]) || ['INSTAGRAM'],
             caption: postDoc.caption || '',
-            themes: Array.isArray(postDoc.themes) ? (postDoc.themes as string[]) : undefined,
+            themes,
+            archetype,
+            thumbnail: (postDoc as any).thumbnail,
+            mediaUrls: (postDoc as any).mediaUrls ?? undefined,
+            videoUrl: (postDoc as any).videoUrl ?? undefined,
           },
           feedback: postFeedback,
         },

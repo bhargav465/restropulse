@@ -21,6 +21,7 @@ import { getMergedConstraints } from '../../../../content-validator/media-constr
 import type {
   IMediaGenerator,
   ImageGenInput,
+  CarouselGenInput,
   MediaGenJob,
   VideoGenInput,
 } from './types.js';
@@ -37,18 +38,6 @@ export class PlaceholderMediaGenerator implements IMediaGenerator {
   async generateImage(input: ImageGenInput): Promise<MediaGenJob> {
     const theme = pickThemeKey(input);
     const constraints = getMergedConstraints(input.postType, input.platforms);
-
-    if (input.postType === 'CAROUSEL') {
-      const { urls, set } = getRandomCarousel(theme);
-      return {
-        jobId: randomUUID(),
-        status: 'COMPLETED',
-        mediaUrls: urls,
-        thumbnail: urls[0],
-        metadata: { widthPx: set.widthPx, heightPx: set.heightPx },
-      };
-    }
-
     const selected = getConstraintCompatibleImage(constraints, theme) ?? getRandomImage(theme);
     return {
       jobId: randomUUID(),
@@ -56,6 +45,18 @@ export class PlaceholderMediaGenerator implements IMediaGenerator {
       mediaUrl: selected.url,
       thumbnail: selected.url,
       metadata: { widthPx: selected.asset.widthPx, heightPx: selected.asset.heightPx },
+    };
+  }
+
+  async generateCarousel(input: CarouselGenInput): Promise<MediaGenJob> {
+    const theme = input.themes?.[0]?.trim() || input.concept || 'default';
+    const { urls, set } = getRandomCarousel(theme);
+    return {
+      jobId: randomUUID(),
+      status: 'COMPLETED',
+      mediaUrls: urls,
+      thumbnail: urls[0],
+      metadata: { widthPx: set.widthPx, heightPx: set.heightPx },
     };
   }
 

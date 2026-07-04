@@ -239,6 +239,43 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                         </div>
                     </div>
 
+                    {/* Planned Schedule */}
+                    {/* plannedSchedule added to StrategyCycle in packages/shared -- type will be available after merge */}
+                    {((cycle as any).plannedSchedule as Array<{ scheduledFor: string; category: string; postType: string }> | undefined)?.length ? (
+                        <div className="bg-slate-100/50 rounded-2xl p-4 border border-slate-100">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                <Calendar size={14} /> Planned Schedule
+                            </h4>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="border-b border-slate-200">
+                                            <th className="text-left pb-2 pr-3 font-bold text-slate-400 w-6">#</th>
+                                            <th className="text-left pb-2 pr-3 font-bold text-slate-400">Archetype</th>
+                                            <th className="text-left pb-2 pr-3 font-bold text-slate-400">Type</th>
+                                            <th className="text-left pb-2 font-bold text-slate-400">Scheduled For</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {((cycle as any).plannedSchedule as Array<{ scheduledFor: string; category: string; postType: string }>).map((slot, idx) => {
+                                            const date = new Date(slot.scheduledFor);
+                                            const datePart = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                                            const timePart = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                                            return (
+                                                <tr key={idx} className="border-b border-slate-100 last:border-0">
+                                                    <td className="py-2 pr-3 text-slate-400 font-medium">{idx + 1}</td>
+                                                    <td className="py-2 pr-3 text-slate-700 font-medium">{slot.category}</td>
+                                                    <td className="py-2 pr-3 text-slate-600">{slot.postType}</td>
+                                                    <td className="py-2 text-slate-600">{datePart} &bull; {timePart}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ) : null}
+
                     {/* Feedback Display if Changes Requested */}
                     {isChangesRequested && cycle.feedback && (
                         <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 text-orange-900 text-xs">

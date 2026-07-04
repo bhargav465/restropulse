@@ -188,6 +188,11 @@ export interface Restaurant {
   sourceCity?: string;
   /** Source of the data: acquisition script writes this; manual entries leave it absent. */
   dataSource?: 'kaggle-zomato' | 'osm' | 'merged' | 'manual';
+  /**
+   * Reference image URLs keyed by dish name. Populated by the restaurant enricher
+   * via Perplexity Sonar image search. Used as img2img reference in AI media generation.
+   */
+  dishImages?: Record<string, string[]>;
 }
 
 export interface PostStats {
@@ -222,6 +227,8 @@ export interface Post {
   instagramMediaId?: string;
   facebookPostId?: string;
   stats?: PostStats;
+  themes?: string[];
+  archetype?: string;    // archetype ID this post was generated from (e.g. 'CRAVING_CUE')
 }
 
 export interface ContentStrategy {
@@ -237,6 +244,14 @@ export interface ContentStrategy {
 export interface PlannedPost {
   category: string;
   count: number;
+  themes?: string[];   // current-affairs/cultural context keywords (e.g. 'Eid', 'India-cricket-win')
+}
+
+export interface PlannedSlot {
+  scheduledFor: string;  // ISO date string
+  category: string;      // archetype ID e.g. 'CHEFS_PICK'
+  postType: PostType;
+  themes?: string[];   // carries through from PlannedPost
 }
 
 export interface StrategyCycle {
@@ -250,6 +265,7 @@ export interface StrategyCycle {
   plannedPosts: PlannedPost[];
   focus: string[];
   feedback?: string;
+  plannedSchedule?: PlannedSlot[];  // computed at PENDING_APPROVAL, consumed by rolling-window
 }
 
 // ----- Subscription & Billing -----

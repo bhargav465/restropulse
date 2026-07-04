@@ -1,7 +1,22 @@
 import * as readline from 'node:readline/promises';
+import { emitKeypressEvents } from 'node:readline';
 import { stdin as input, stdout as output } from 'node:process';
 
 const rl = readline.createInterface({ input, output });
+
+// Esc to quit on interactive terminals
+if (input.isTTY) {
+  emitKeypressEvents(input);
+  input.on('keypress', (_str: string, key: { name?: string } | undefined) => {
+    if (key?.name === 'escape') {
+      console.log('\n  Exiting...');
+      rl.close();
+      // Emit SIGTERM so db-setup's gracefulShutdown handler can stop MongoMemoryServer
+      // before the process exits. process.exit(0) here would skip async cleanup.
+      process.emit('SIGTERM');
+    }
+  });
+}
 
 export async function ask(question: string): Promise<string> {
   return rl.question(question);

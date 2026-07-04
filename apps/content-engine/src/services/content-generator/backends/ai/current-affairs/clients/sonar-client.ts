@@ -27,10 +27,22 @@ export interface SonarUsage {
   outputTokens: number;
 }
 
+export interface SonarImageResult {
+  url: string;
+  description?: string;
+}
+
+export interface SonarQueryOptions {
+  /** When true, passes return_images: true to the Perplexity API. */
+  returnImages?: boolean;
+}
+
 export interface SonarResponse {
   text: string;
   usage: SonarUsage;
   modelId: string;
+  /** Populated when returnImages was true and the API returned image results. */
+  images?: SonarImageResult[];
 }
 
 export class SonarClient {
@@ -45,7 +57,7 @@ export class SonarClient {
     this.model = options.model ?? 'sonar-pro';
   }
 
-  async query(question: string): Promise<SonarResponse> {
+  async query(question: string, options?: SonarQueryOptions): Promise<SonarResponse> {
     let res: Response;
     try {
       res = await fetch(ENDPOINT, {
@@ -57,6 +69,7 @@ export class SonarClient {
         body: JSON.stringify({
           model: this.model,
           messages: [{ role: 'user', content: question }],
+          ...(options?.returnImages ? { return_images: true } : {}),
         }),
       });
     } catch (err) {
@@ -79,6 +92,7 @@ export class SonarClient {
     const body = await res.json() as {
       choices?: Array<{ message?: { content?: string } }>;
       usage?: { prompt_tokens?: number; completion_tokens?: number };
+      images?: Array<{ url?: string; description?: string }>;
     };
 
     const text = body.choices?.[0]?.message?.content ?? '';
@@ -87,7 +101,11 @@ export class SonarClient {
       outputTokens: body.usage?.completion_tokens ?? 0,
     };
 
-    log.debug({ inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, modelId: this.model }, 'Sonar query');
-    return { text, usage, modelId: this.model };
+    const images: SonarImageResult[] | undefined = body.images?.length
+      ? body.images.filter(img => !!img.url).map(img => ({ url: img.url!, description: img.description }))
+      : undefined;
+
+    log.debug({ inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, modelId: this.model, imageCount: images?.length }, 'Sonar query');
+    return { text, usage, modelId: this.model, images };
   }
 }

@@ -24,6 +24,7 @@ import type { IMediaJobStore } from '../jobs/types.js';
 import type {
   IMediaGenerator,
   ImageGenInput,
+  CarouselGenInput,
   MediaGenJob,
   VideoGenInput,
 } from '../types.js';
@@ -66,7 +67,6 @@ export class ReplicateMediaGenerator implements IMediaGenerator {
   }
 
   async generateImage(input: ImageGenInput): Promise<MediaGenJob> {
-    if (input.postType === 'CAROUSEL') return this.generateCarousel(input);
     return this.generateSingleImage(input);
   }
 
@@ -253,12 +253,32 @@ export class ReplicateMediaGenerator implements IMediaGenerator {
     return this.recordToJob(record);
   }
 
-  private async generateCarousel(input: ImageGenInput): Promise<MediaGenJob> {
+  async generateCarousel(input: CarouselGenInput): Promise<MediaGenJob> {
     const carouselId = randomUUID();
-    const frameInputs: ImageGenInput[] = Array.from({ length: CAROUSEL_FRAME_COUNT }, (_, i) => ({
-      ...input,
-      concept: `${input.concept} (frame ${i + 1} of ${CAROUSEL_FRAME_COUNT})`,
+    // When the LLM provided per-slide briefs, they drive both count and content.
+    // Fall back to hardcoded directions only when no per-slide briefs were supplied.
+    const directions = input.slideDirections?.length
+      ? input.slideDirections
+      : [
+          'hero full-frame shot — complete dish presentation, plating as served',
+          'close-up macro detail — texture and ingredient focus',
+          'lifestyle context shot — dining atmosphere, table setting',
+        ];
+    const slideCount = Math.min(input.slideDirections?.length ?? input.slideCount ?? CAROUSEL_FRAME_COUNT, 10);
+
+    const frameInputs: ImageGenInput[] = Array.from({ length: slideCount }, (_, i) => ({
       postType: 'IMAGE' as const,
+      platforms: input.platforms,
+      concept: input.concept,
+      themes: input.themes,
+      caption: input.caption,
+      promptSuffix: [
+        input.promptSuffix,
+        directions[i % directions.length],
+      ].filter(Boolean).join(' — '),
+      restaurantId: input.restaurantId,
+      postId: input.postId,
+      cycleId: input.cycleId,
     }));
 
     const results = await Promise.all(frameInputs.map((f) => this.generateSingleImage(f)));

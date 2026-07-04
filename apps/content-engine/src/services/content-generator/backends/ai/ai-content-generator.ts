@@ -25,6 +25,7 @@ import type { IDomainSpecialization } from './specialization/index.js';
 import type { ILLMProvider } from './llm/types.js';
 import type { IMediaGenerator } from './media/types.js';
 import type { ICurrentAffairsProvider } from './current-affairs/types.js';
+import type { SonarClient } from './current-affairs/clients/sonar-client.js';
 import { runDraftCycle } from './pipeline/draft-cycle.js';
 import { runReviseCycle } from './pipeline/revise-cycle.js';
 import { runGeneratePost } from './pipeline/generate-post.js';
@@ -39,6 +40,8 @@ export interface AIContentGeneratorOptions {
   media: IMediaGenerator;
   /** Optional. When set, pipeline auto-enriches currentAffairsHints. */
   currentAffairs?: ICurrentAffairsProvider;
+  /** Optional. When set, pipeline fetches dish reference images on-demand for img2img. */
+  sonar?: SonarClient;
 }
 
 export class AIContentGenerator extends BaseContentGenerator {
@@ -60,6 +63,7 @@ export class AIContentGenerator extends BaseContentGenerator {
       llm: options.llm,
       media: options.media,
       ...(options.currentAffairs ? { currentAffairs: options.currentAffairs } : {}),
+      ...(options.sonar ? { sonar: options.sonar } : {}),
     };
     log.info(
       {
@@ -68,6 +72,7 @@ export class AIContentGenerator extends BaseContentGenerator {
         llm: options.llm.name,
         media: options.media.name,
         currentAffairs: options.currentAffairs?.name ?? 'none',
+        dishImages: options.sonar ? 'sonar-on-demand' : 'none',
       },
       'AIContentGenerator instantiated',
     );
