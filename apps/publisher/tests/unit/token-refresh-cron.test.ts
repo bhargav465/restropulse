@@ -15,7 +15,8 @@ const mockEncrypt = vi.fn((value: string) => `encrypted_${value}`);
 const mockSchedule = vi.fn();
 
 vi.mock('@restropulse/db', () => ({
-    getRestaurantsCollection: vi.fn(() => mockRestaurantsCollection)
+    getRestaurantsCollection: vi.fn(() => mockRestaurantsCollection),
+    toObjectId: vi.fn((id: string) => id)
 }));
 
 vi.mock('../../../../packages/publishing/dist/meta-api.js', () => ({

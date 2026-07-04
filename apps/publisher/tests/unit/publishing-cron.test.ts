@@ -23,7 +23,8 @@ const mockSchedule = vi.fn();
 vi.mock('@restropulse/db', () => ({
     getPostsCollection: vi.fn(() => mockPostsCollection),
     getRestaurantsCollection: vi.fn(() => mockRestaurantsCollection),
-    toApiFormat: vi.fn((value: unknown) => value)
+    toApiFormat: vi.fn((value: unknown) => value),
+    toObjectId: vi.fn((id: string) => id)
 }));
 
 vi.mock('../../../../packages/publishing/dist/publishing-service.js', () => ({

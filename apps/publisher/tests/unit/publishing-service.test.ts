@@ -560,12 +560,18 @@ describe('Publishing Service', () => {
                 platforms: ['FACEBOOK'] as Platform[]
             };
 
+            // Download video binary
+            mockGet.mockResolvedValueOnce({
+                data: Buffer.from('fake-video-data'),
+                headers: { 'content-type': 'video/mp4' }
+            });
+            // Upload video binary to Facebook
             mockPost.mockResolvedValueOnce({ data: { id: 'fb-vid-123' } });
 
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(mockPost.mock.calls[0][0]).toBe('/page-456/videos');
+            expect(mockPost.mock.calls[0][0]).toContain('/page-456/videos');
         });
 
         it('should publish reel to Facebook page', async () => {
