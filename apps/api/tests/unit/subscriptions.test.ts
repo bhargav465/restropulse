@@ -23,6 +23,7 @@ const mockCreateInvoice = vi.fn();
 const mockFindInvoiceByPaymentId = vi.fn();
 const mockFindInvoicesByRazorpaySubscriptionId = vi.fn().mockResolvedValue([]);
 const mockFindUserById = vi.fn();
+const mockFindUserByRestaurantId = vi.fn();
 
 vi.mock('@restropulse/db', async (importOriginal) => {
     const actual = await importOriginal() as any;
@@ -49,6 +50,7 @@ vi.mock('@restropulse/db', async (importOriginal) => {
         findInvoiceByPaymentId: mockFindInvoiceByPaymentId,
         findInvoicesByRazorpaySubscriptionId: mockFindInvoicesByRazorpaySubscriptionId,
         findUserById: mockFindUserById,
+        findUserByRestaurantId: mockFindUserByRestaurantId,
     };
 });
 
@@ -124,6 +126,7 @@ describe('Subscription Routes', () => {
         vi.clearAllMocks();
         // Default: user lookup succeeds with email, customer creation succeeds
         mockFindUserById.mockResolvedValue(mockUser);
+        mockFindUserByRestaurantId.mockResolvedValue(mockUser);
         mockCreateRazorpayCustomer.mockResolvedValue({ id: 'cust_rzp_u1' });
         mockFetchRazorpayInvoice.mockResolvedValue({ id: 'inv_rzp_123', short_url: 'https://rzp.io/i/test', status: 'paid', amount: 49900, currency: 'INR' });
         mockUpdateRazorpaySubscription.mockResolvedValue({ id: 'sub_test', status: 'active', plan_id: 'plan_test' });
@@ -505,7 +508,7 @@ describe('Subscription Routes', () => {
             expect(mockCreateRazorpaySubscription).toHaveBeenCalledWith(
                 'plan_monthly_growth', 120, 'offer_rzp_1', 'cust_rzp_u1',
                 undefined,
-                expect.objectContaining({ planSlug: 'growth', restaurantId: 'r1', couponCode: 'TESTCODE' }),
+                expect.objectContaining({ planSlug: 'growth', restaurantId: 'r1', couponCode: 'TESTCODE', userId: 'u1' }),
             );
         });
 
@@ -1930,7 +1933,47 @@ describe('Subscription Routes', () => {
             expect(mockUpdateSubscription).not.toHaveBeenCalled();
         });
 
-        test('should handle subscription.activated with coupon redemption', async () => {
+        test('should handle subscription.activated with FLAT coupon redemption, resolving userId from restaurant when notes lack it', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({
+                ...mockSubscription, couponCode: 'TESTCODE',
+            });
+            mockFindCouponByCode.mockResolvedValue({
+                id: 'c1', code: 'TESTCODE', type: 'FLAT', value: 50000,
+            });
+            mockFindUserByRestaurantId.mockResolvedValue(mockUser);
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.activated',
+                    payload: {
+                        subscription: {
+                            entity: {
+                                id: 'sub_rzp_123',
+                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+                                customer_id: 'cust_123',
+                                // no notes.userId -- must fall back to a restaurant lookup
+                            },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockUpdateSubscription).toHaveBeenCalledWith(mockSubscription.id, expect.objectContaining({
+                status: 'ACTIVE',
+                razorpayCustomerId: 'cust_123',
+            }));
+            expect(mockIncrementCouponRedemptions).toHaveBeenCalledWith('c1');
+            expect(mockFindUserByRestaurantId).toHaveBeenCalledWith('r1');
+            expect(mockCreateCouponRedemption).toHaveBeenCalledWith(expect.objectContaining({
+                userId: 'u1',
+                discountAppliedPaise: 50000,
+            }));
+        });
+
+        test('should prefer notes.userId over restaurant lookup when recording coupon redemption', async () => {
             mockVerifyWebhookSignature.mockReturnValue(true);
             mockFindSubscriptionByRazorpayId.mockResolvedValue({
                 ...mockSubscription, couponCode: 'TESTCODE',
@@ -1948,20 +1991,45 @@ describe('Subscription Routes', () => {
                         subscription: {
                             entity: {
                                 id: 'sub_rzp_123',
-                                current_end: Math.floor(Date.now() / 1000) + 30 * 86400,
                                 customer_id: 'cust_123',
+                                notes: { userId: 'u-from-notes' },
                             },
                         },
                     },
                 });
 
             expect(res.status).toBe(200);
-            expect(mockUpdateSubscription).toHaveBeenCalledWith(mockSubscription.id, expect.objectContaining({
-                status: 'ACTIVE',
-                razorpayCustomerId: 'cust_123',
+            expect(mockFindUserByRestaurantId).not.toHaveBeenCalled();
+            expect(mockCreateCouponRedemption).toHaveBeenCalledWith(expect.objectContaining({
+                userId: 'u-from-notes',
             }));
-            expect(mockIncrementCouponRedemptions).toHaveBeenCalledWith('c1');
-            expect(mockCreateCouponRedemption).toHaveBeenCalled();
+        });
+
+        test('should compute proportional discount for PERCENTAGE coupon redemption', async () => {
+            mockVerifyWebhookSignature.mockReturnValue(true);
+            mockFindSubscriptionByRazorpayId.mockResolvedValue({
+                ...mockSubscription, couponCode: 'TESTCODE', // planSnapshot.pricing.monthly = 999900
+            });
+            mockFindCouponByCode.mockResolvedValue({
+                id: 'c1', code: 'TESTCODE', type: 'PERCENTAGE', value: 10,
+            });
+
+            const res = await request(app)
+                .post('/api/subscriptions/webhook')
+                .set('x-razorpay-signature', 'valid_sig')
+                .send({
+                    event: 'subscription.activated',
+                    payload: {
+                        subscription: {
+                            entity: { id: 'sub_rzp_123', customer_id: 'cust_123', notes: { userId: 'u1' } },
+                        },
+                    },
+                });
+
+            expect(res.status).toBe(200);
+            expect(mockCreateCouponRedemption).toHaveBeenCalledWith(expect.objectContaining({
+                discountAppliedPaise: 99990, // 10% of 999900
+            }));
         });
 
         test('should handle subscription.activated without coupon', async () => {

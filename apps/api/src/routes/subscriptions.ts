@@ -21,6 +21,7 @@ import {
     findInvoiceByPaymentId,
     findInvoicesByRazorpaySubscriptionId,
     findUserById,
+    findUserByRestaurantId,
     updateUser,
 } from '@restropulse/db';
 import {
@@ -503,7 +504,7 @@ router.post('/subscribe', requireAuth, handle(async (req: Request, res: Response
         ? Math.floor(new Date(existingCheck.currentPeriodEnd).getTime() / 1000)
         : undefined;
 
-    const notes: Record<string, string> = { planSlug, restaurantId };
+    const notes: Record<string, string> = { planSlug, restaurantId, userId: req.user!.userId };
     if (couponCode) notes.couponCode = couponCode;
 
     log.info(
@@ -736,14 +737,21 @@ router.post('/webhook', async (req: Request, res: Response) => {
                         if (sub.couponCode) {
                             const coupon = await findCouponByCode(sub.couponCode);
                             if (coupon) {
+                                const redeemingUserId = entity.notes?.userId
+                                    || (await findUserByRestaurantId(sub.restaurantId))?.id
+                                    || '';
+                                const planPricePaise = sub.planSnapshot?.pricing?.monthly ?? 0;
+                                const discountAppliedPaise = coupon.type === 'FLAT'
+                                    ? coupon.value
+                                    : Math.round((planPricePaise * coupon.value) / 100);
                                 await incrementCouponRedemptions(coupon.id);
                                 await createCouponRedemption({
                                     couponId: coupon.id,
                                     couponCode: coupon.code,
                                     restaurantId: sub.restaurantId,
-                                    userId: '',
+                                    userId: redeemingUserId,
                                     subscriptionId: sub.id,
-                                    discountAppliedPaise: coupon.type === 'FLAT' ? coupon.value : 0,
+                                    discountAppliedPaise,
                                     redeemedAt: new Date(),
                                 });
                             }

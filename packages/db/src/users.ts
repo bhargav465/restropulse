@@ -29,6 +29,12 @@ export async function findUserByFirebaseUid(firebaseUid: string): Promise<User |
   return toApiFormat(doc) as User | null;
 }
 
+export async function findUserByRestaurantId(restaurantId: string): Promise<User | null> {
+  const col = getUsersCollection();
+  const doc = await col.findOne({ restaurantId });
+  return toApiFormat(doc) as User | null;
+}
+
 export async function createUser(user: Omit<User, 'id'>): Promise<User> {
   const col = getUsersCollection();
   const result = await col.insertOne({
