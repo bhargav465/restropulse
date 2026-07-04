@@ -22,7 +22,7 @@ const mockRestaurantData: Restaurant = {
     cuisine: 'Italian',
     accountManager: { name: 'Manager', phone: '1234567890', email: 'mgr@test.com', avatar: '' },
     integrations: { whatsapp: true, instagram: true, facebook: false },
-} as Restaurant;
+} as unknown as Restaurant;
 
 // Mock window.history
 const mockHistoryPushState = vi.fn();
@@ -36,6 +36,10 @@ describe('Strategy Component', () => {
         nextScheduledDate: '2024-01-15',
         theme: 'Local food enthusiasts',
     };
+
+    // PENDING_APPROVAL cycle needs a future startDate so the deadline window is still open.
+    const pendingStart = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const pendingEnd = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
 
     const mockCycles = [
         {
@@ -71,8 +75,8 @@ describe('Strategy Component', () => {
             period: 'March 2024',
             goals: ['Spring menu launch'],
             status: 'PENDING_APPROVAL' as const,
-            startDate: new Date('2024-03-01').toISOString(),
-            endDate: new Date('2024-03-31').toISOString(),
+            startDate: pendingStart,
+            endDate: pendingEnd,
             summary: 'Spring menu promotions',
             plannedPosts: [
                 { category: 'Food', count: 4 },
@@ -113,7 +117,7 @@ describe('Strategy Component', () => {
             render(<Strategy restaurantData={mockRestaurantData} instagramConnected={true} />);
 
             await waitFor(() => {
-                expect(consoleSpy).toHaveBeenCalledWith('Failed to load cycles:', expect.any(Error));
+                expect(consoleSpy).toHaveBeenCalledWith('Failed to load strategy data:', expect.any(Error));
             });
 
             consoleSpy.mockRestore();

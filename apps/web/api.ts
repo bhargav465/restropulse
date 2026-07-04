@@ -1,4 +1,4 @@
-import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags } from '@restropulse/shared';
+import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags, Platform } from '@restropulse/shared';
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { getApiUrl } from './utils/env';
 
@@ -239,6 +239,7 @@ export const postsAPI = {
         type: Post['type'];
         platforms: Post['platforms'];
         scheduledFor?: string;
+        asap?: boolean;
     }): Promise<Post> => {
         const response = await fetchAPI<ApiResponse<Post>>('/posts/generate', {
             method: 'POST',
@@ -262,8 +263,8 @@ export const postsAPI = {
 
 // Strategy API
 export const strategyAPI = {
-    getStrategy: async (): Promise<ContentStrategy> => {
-        const response = await fetchAPI<ApiResponse<ContentStrategy>>('/strategy');
+    getStrategy: async (): Promise<ContentStrategy & { suggestCreateCycle?: boolean }> => {
+        const response = await fetchAPI<ApiResponse<ContentStrategy & { suggestCreateCycle?: boolean }>>('/strategy');
         return response.data!;
     },
 
@@ -542,7 +543,7 @@ export const configAPI = {
         // Fallback: if the endpoint returns no data, default every flag to false.
         // The shape MUST match FeatureFlags exactly so downstream consumers can
         // safely read every flag without optional-chains or undefined checks.
-        return res.data ?? { deleteAccount: false, topupCredits: false, updatesSection: false };
+        return res.data ?? { deleteAccount: false, topupCredits: false, updatesSection: false, minScheduleAheadMins: 150, postApprovalBufferMins: 120, cycleApprovalBufferMins: 4320, enabledPlatforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[] };
     },
 };
 

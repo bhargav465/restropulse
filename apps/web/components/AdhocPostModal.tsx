@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Calendar, Image as ImageIcon, Video, Sparkles, Clock, Send, AlertCircle, Loader2 } from 'lucide-react';
-import { Post, Platform, PLATFORM_POST_TYPES } from '@restropulse/shared';
+import { Post, Platform, PLATFORM_POST_TYPES, MIN_SCHEDULE_AHEAD_HOURS } from '@restropulse/shared';
+
+const DEFAULT_MIN_SCHEDULE_AHEAD_MINS = MIN_SCHEDULE_AHEAD_HOURS * 60;
 import { postsAPI } from '../api';
 import { FacebookIcon, InstagramIcon } from './BrandIcons';
 
@@ -25,6 +27,9 @@ interface AdhocPostModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    minScheduleAheadMins?: number;
+    instagramEnabled?: boolean;
+    facebookEnabled?: boolean;
 }
 
 interface FormData {
@@ -37,9 +42,10 @@ interface FormData {
     mediaUrl: string;
 }
 
-/** Returns scheduledDate and scheduledTime strings for 10 minutes from now in local time. */
-function getDefaultSchedule(): { scheduledDate: string; scheduledTime: string } {
-    const d = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+function getDefaultSchedule(minScheduleAheadMins: number): { scheduledDate: string; scheduledTime: string } {
+    // Ceil to the next full minute so the stored "HH:MM" string is always >= the threshold.
+    const rawMs = Date.now() + minScheduleAheadMins * 60 * 1000;
+    const d = new Date(Math.ceil(rawMs / 60_000) * 60_000);
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -51,12 +57,12 @@ function getDefaultSchedule(): { scheduledDate: string; scheduledTime: string } 
     };
 }
 
-function getDefaultFormData(): FormData {
-    const { scheduledDate, scheduledTime } = getDefaultSchedule();
+function getDefaultFormData(minScheduleAheadMins: number, defaultPlatforms: Platform[]): FormData {
+    const { scheduledDate, scheduledTime } = getDefaultSchedule(minScheduleAheadMins);
     return {
         concept: '',
         postType: 'IMAGE',
-        platforms: ['INSTAGRAM'],
+        platforms: defaultPlatforms,
         scheduleType: 'later',
         scheduledDate,
         scheduledTime,
@@ -64,12 +70,29 @@ function getDefaultFormData(): FormData {
     };
 }
 
-const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSuccess }) => {
-    const [formData, setFormData] = useState<FormData>(getDefaultFormData);
+const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSuccess, minScheduleAheadMins, instagramEnabled = true, facebookEnabled = true }) => {
+    const minMins = minScheduleAheadMins ?? DEFAULT_MIN_SCHEDULE_AHEAD_MINS;
+
+    const AVAILABLE_PLATFORMS = [
+        instagramEnabled && { id: 'INSTAGRAM' as const, label: 'Instagram', icon: InstagramIcon },
+        facebookEnabled  && { id: 'FACEBOOK'  as const, label: 'Facebook',  icon: FacebookIcon  },
+    ].filter(Boolean) as Array<{ id: Platform; label: string; icon: React.ComponentType<any> }>;
+
+    const defaultPlatforms: Platform[] = instagramEnabled ? ['INSTAGRAM'] : facebookEnabled ? ['FACEBOOK'] : [];
+
+    const [formData, setFormData] = useState<FormData>(() => getDefaultFormData(minMins, defaultPlatforms));
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Refresh default scheduled time and platforms when the modal opens, when minMins changes,
+    // or when platform availability changes (featureFlags arrives async).
+    useEffect(() => {
+        if (isOpen) {
+            setFormData(getDefaultFormData(minMins, defaultPlatforms));
+        }
+    }, [isOpen, minMins, instagramEnabled, facebookEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Touch handling for swipe-to-close
     const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -143,35 +166,50 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
         setError(null);
 
         try {
-            // Build the scheduled time -- default to 10 min from now for ASAP posts
-            const scheduledFor = formData.scheduleType === 'later'
-                ? new Date(`${formData.scheduledDate}T${formData.scheduledTime}`).toISOString()
-                : new Date(Date.now() + 10 * 60 * 1000).toISOString();
+            let scheduledFor: string | undefined;
+            let asap: boolean | undefined;
 
-            // Use the generate endpoint which will create the post with AI-generated content
+            if (formData.scheduleType === 'later') {
+                const provided = new Date(`${formData.scheduledDate}T${formData.scheduledTime}`);
+                if (isNaN(provided.getTime()) || provided <= new Date()) {
+                    setError('Please select a future date and time');
+                    setIsSubmitting(false);
+                    return;
+                }
+                scheduledFor = provided.toISOString();
+            } else {
+                // API uses its own clock for ASAP — eliminates client/server time skew entirely
+                asap = true;
+            }
+
             await postsAPI.generate({
                 concept: formData.concept,
                 type: formData.postType,
                 platforms: formData.platforms,
-                scheduledFor
+                scheduledFor,
+                asap,
             });
 
             // Reset form
-            setFormData(getDefaultFormData());
+            setFormData(getDefaultFormData(minMins, defaultPlatforms));
             setPreviewUrl(null);
 
             onSuccess();
             onClose();
         } catch (err) {
             console.error('Failed to create post:', err);
-            setError('Something went wrong. Please try again.');
+            const msg = err instanceof Error ? err.message : null;
+            // Show API validation messages (e.g. scheduling constraint) directly.
+            // HTTP status strings ("HTTP 4xx") and network errors fall back to generic.
+            const isUserFacing = msg && !msg.match(/^(HTTP \d+|network error|failed to fetch)/i);
+            setError(isUserFacing ? msg : 'Something went wrong. Please try again.');
         } finally {
             setIsSubmitting(false);
         }
     };
 
     const resetForm = () => {
-        setFormData(getDefaultFormData());
+        setFormData(getDefaultFormData(minMins, defaultPlatforms));
         setPreviewUrl(null);
         setError(null);
     };
@@ -193,6 +231,13 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
 
     // Get minimum date (today) for date picker
     const today = new Date().toISOString().split('T')[0];
+
+    // Compute ASAP label: minMins from now, formatted as "Today at HH:MM" or "Tomorrow at HH:MM"
+    const asapDate = new Date(Date.now() + minMins * 60 * 1000);
+    const asapHours = String(asapDate.getHours()).padStart(2, '0');
+    const asapMinutes = String(asapDate.getMinutes()).padStart(2, '0');
+    const asapDateStr = asapDate.toISOString().split('T')[0];
+    const asapLabel = asapDateStr === today ? `Today at ${asapHours}:${asapMinutes}` : `Tomorrow at ${asapHours}:${asapMinutes}`;
 
     const validPostTypes = getValidPostTypes(formData.platforms);
 
@@ -262,16 +307,14 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                         </p>
                     </div>
 
-                    {/* Platform Selection (multi-select checkboxes) */}
+                    {/* Platform Selection (multi-select checkboxes) — hidden when only one platform available */}
+                    {AVAILABLE_PLATFORMS.length > 1 && (
                     <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">
                             Platforms
                         </label>
                         <div className="flex gap-2">
-                            {([
-                                { id: 'INSTAGRAM' as const, label: 'Instagram', icon: InstagramIcon },
-                                { id: 'FACEBOOK' as const, label: 'Facebook', icon: FacebookIcon },
-                            ]).map((platform) => {
+                            {AVAILABLE_PLATFORMS.map((platform) => {
                                 const selected = formData.platforms.includes(platform.id);
                                 return (
                                     <button
@@ -290,6 +333,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                             })}
                         </div>
                     </div>
+                    )}
 
                     {/* Post Type Selection */}
                     <div>
@@ -393,7 +437,7 @@ const AdhocPostModal: React.FC<AdhocPostModalProps> = ({ isOpen, onClose, onSucc
                                 data-testid="schedule-now"
                             >
                                 <Send size={16} />
-                                <span className="text-sm font-medium">ASAP</span>
+                                <span className="text-sm font-medium">{asapLabel}</span>
                             </button>
                             <button
                                 onClick={() => setFormData(prev => ({ ...prev, scheduleType: 'later' }))}

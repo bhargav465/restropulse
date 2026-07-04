@@ -11,6 +11,7 @@ import { resolve } from 'path';
 import { createInterface } from 'readline/promises';
 import { stdin, stdout } from 'process';
 import chalk from 'chalk';
+import { createSecretsProvider, hydrateEnvFromProvider, DB_CLI_SECRET_KEYS } from '@restropulse/secrets';
 
 const VALID_ENVS = ['development', 'staging', 'production'] as const;
 type ResolvedEnv = typeof VALID_ENVS[number];
@@ -57,7 +58,14 @@ function getDbCliDirCandidates(): string[] {
  *
  * Uses override: false so shell env vars take precedence (CI-safe).
  */
-export function loadEnv(env: string): void {
+export async function loadEnv(env: string): Promise<void> {
+    if (process.env.SECRETS_BACKEND) {
+        await hydrateEnvFromProvider(
+            createSecretsProvider(process.env.SECRETS_BACKEND),
+            DB_CLI_SECRET_KEYS,
+        );
+    }
+
     const normalized = env.trim().toLowerCase() as ResolvedEnv;
 
     if (!VALID_ENVS.includes(normalized)) {

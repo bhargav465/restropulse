@@ -143,6 +143,18 @@ export function getArchivedAccountsCollection(): Collection {
   return getDB().collection('archivedAccounts');
 }
 
+export function getCostEventsCollection(): Collection {
+  return getDB().collection('costEvents');
+}
+
+export function getCurrentAffairsCacheCollection(): Collection {
+  return getDB().collection('currentAffairsCache');
+}
+
+export function getMediaJobsCollection(): Collection {
+  return getDB().collection('mediaJobs');
+}
+
 // ----- Helpers -----
 
 /**

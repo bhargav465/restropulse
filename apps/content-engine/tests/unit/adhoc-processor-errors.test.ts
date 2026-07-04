@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock telemetry
 vi.mock('@restropulse/telemetry/server', () => {
@@ -14,29 +14,44 @@ vi.mock('@restropulse/telemetry/server', () => {
   return { createLogger: vi.fn(() => noopLogger) };
 });
 
-// Mock content-generator to throw on demand
-vi.mock('../../src/services/content-generator.js', () => ({
-  generateContent: vi.fn(),
-}));
-
 // Mock @restropulse/db so no real DB connection is needed
 vi.mock('@restropulse/db', () => ({
   getPostsCollection: vi.fn(),
+  findRestaurantById: vi.fn().mockResolvedValue(null),
 }));
 
 import { getPostsCollection } from '@restropulse/db';
-import { generateContent } from '../../src/services/content-generator.js';
-import { processAdhocRequests } from '../../src/services/adhoc-processor.js';
+import { processPendingPosts } from '../../src/services/processors/adhoc/index.js';
+import {
+  setContentGenerator,
+  resetContentGenerator,
+  ContentGenerationError,
+  type IContentGenerator,
+} from '../../src/services/content-generator/index.js';
 
 const mockGetPostsCollection = vi.mocked(getPostsCollection);
-const mockGenerateContent = vi.mocked(generateContent);
+
+function makeStub(overrides: Partial<IContentGenerator> = {}): IContentGenerator {
+  return {
+    name: 'stub',
+    draftCycle: async () => ({ summary: '', plannedPosts: [], focus: [] }),
+    reviseCycle: async () => ({ summary: '', plannedPosts: [], focus: [] }),
+    generatePost: async () => ({ caption: 'Generated', thumbnail: 'http://x/y.jpg' }),
+    revisePost: async () => ({ caption: 'Revised', thumbnail: 'http://x/y.jpg' }),
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
+afterEach(() => {
+  resetContentGenerator();
+});
+
 describe('adhoc-processor error paths', () => {
-  it('increments failed counter when generateContent throws', async () => {
+  it('increments failed counter when generator throws a plain Error', async () => {
     const fakePost = {
       _id: { toString: () => 'post-id-1' },
       caption: 'test',
@@ -51,13 +66,50 @@ describe('adhoc-processor error paths', () => {
           toArray: vi.fn().mockResolvedValue([fakePost]),
         }),
       }),
-      updateOne: vi.fn().mockResolvedValue({ modifiedCount: 1 }),
+      updateOne: vi.fn().mockResolvedValue({ matchedCount: 1, modifiedCount: 1 }),
     };
 
     mockGetPostsCollection.mockReturnValue(mockCollection as never);
-    mockGenerateContent.mockRejectedValue(new Error('AI service unavailable'));
+    setContentGenerator(
+      makeStub({
+        generatePost: async () => {
+          throw new Error('AI service unavailable');
+        },
+      }),
+    );
 
-    const result = await processAdhocRequests();
+    const result = await processPendingPosts();
+
+    expect(result).toEqual({ processed: 0, failed: 1 });
+  });
+
+  it('increments failed counter when generator throws ContentGenerationError(RATE_LIMITED)', async () => {
+    const fakePost = {
+      _id: { toString: () => 'post-id-rl' },
+      caption: 'test',
+      type: 'IMAGE',
+      platforms: ['INSTAGRAM'],
+    };
+
+    const mockCollection = {
+      find: vi.fn().mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          toArray: vi.fn().mockResolvedValue([fakePost]),
+        }),
+      }),
+      updateOne: vi.fn().mockResolvedValue({ matchedCount: 1, modifiedCount: 1 }),
+    };
+
+    mockGetPostsCollection.mockReturnValue(mockCollection as never);
+    setContentGenerator(
+      makeStub({
+        generatePost: async () => {
+          throw new ContentGenerationError('RATE_LIMITED', 'slow down');
+        },
+      }),
+    );
+
+    const result = await processPendingPosts();
 
     expect(result).toEqual({ processed: 0, failed: 1 });
   });
@@ -81,12 +133,9 @@ describe('adhoc-processor error paths', () => {
     };
 
     mockGetPostsCollection.mockReturnValue(mockCollection as never);
-    mockGenerateContent.mockResolvedValue({
-      caption: 'Generated caption',
-      thumbnail: 'http://localhost:3002/images/food-01.jpg',
-    });
+    setContentGenerator(makeStub());
 
-    const result = await processAdhocRequests();
+    const result = await processPendingPosts();
 
     expect(result).toEqual({ processed: 0, failed: 1 });
   });
@@ -109,19 +158,47 @@ describe('adhoc-processor error paths', () => {
           toArray: vi.fn().mockResolvedValue([goodPost, badPost]),
         }),
       }),
-      updateOne: vi.fn().mockResolvedValue({ modifiedCount: 1 }),
+      updateOne: vi.fn().mockResolvedValue({ matchedCount: 1, modifiedCount: 1 }),
     };
 
     mockGetPostsCollection.mockReturnValue(mockCollection as never);
-    mockGenerateContent
-      .mockResolvedValueOnce({
-        caption: 'Good caption',
-        thumbnail: 'http://localhost:3002/images/food-01.jpg',
-      })
-      .mockRejectedValueOnce(new Error('fail'));
 
-    const result = await processAdhocRequests();
+    const generatePost = vi
+      .fn()
+      .mockResolvedValueOnce({ caption: 'Good', thumbnail: 'http://x/a.jpg' })
+      .mockRejectedValueOnce(new Error('fail'));
+    setContentGenerator(makeStub({ generatePost }));
+
+    const result = await processPendingPosts();
 
     expect(result).toEqual({ processed: 1, failed: 1 });
+  });
+
+  it('skips advance when a concurrent writer already moved the post out of PENDING_CONTENT', async () => {
+    const fakePost = {
+      _id: { toString: () => 'post-race' },
+      type: 'IMAGE',
+      platforms: ['INSTAGRAM'],
+    };
+
+    const mockCollection = {
+      find: vi.fn().mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          toArray: vi.fn().mockResolvedValue([fakePost]),
+        }),
+      }),
+      updateOne: vi.fn().mockResolvedValue({ matchedCount: 0, modifiedCount: 0 }),
+    };
+
+    mockGetPostsCollection.mockReturnValue(mockCollection as never);
+    setContentGenerator(makeStub());
+
+    const result = await processPendingPosts();
+
+    expect(result).toEqual({ processed: 0, failed: 0 });
+    expect(mockCollection.updateOne).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'PENDING_CONTENT' }),
+      expect.anything(),
+    );
   });
 });

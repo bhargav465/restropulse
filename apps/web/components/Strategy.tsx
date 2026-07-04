@@ -1,19 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Clock, CalendarCheck, Zap, ChevronRight, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar } from 'lucide-react';
+import { Target, Clock, CalendarCheck, Zap, ChevronRight, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar, Lock } from 'lucide-react';
 import { strategyAPI } from '../api';
-import { StrategyCycle, Restaurant } from '@restropulse/shared';
+import {
+    StrategyCycle,
+    Restaurant,
+    computeCycleApprovalDeadline,
+    isCyclePastApprovalDeadline,
+} from '@restropulse/shared';
 import { ActionNotice } from './ActionNotice';
+
+function formatBillingRange(startDate?: string, endDate?: string): string | null {
+    if (!startDate || !endDate) return null;
+    const s = new Date(startDate);
+    const e = new Date(endDate);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+    const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) =>
+        d.toLocaleDateString('en-US', opts);
+    return `${fmt(s, { month: 'short', day: 'numeric' })} – ${fmt(e, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
+function formatCountdown(deadline: Date, now: Date): string {
+    const diffMs = deadline.getTime() - now.getTime();
+    if (diffMs <= 0) return 'Feedback window closed';
+    const totalMinutes = Math.floor(diffMs / (60 * 1000));
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return `Feedback closes in ${days}d ${hours}h`;
+    if (hours > 0) return `Feedback closes in ${hours}h ${minutes}m`;
+    return `Feedback closes in ${minutes}m`;
+}
 
 interface StrategyProps {
     restaurantData: Restaurant;
     instagramConnected?: boolean;
     onConnectInstagram?: () => void;
+    cycleApprovalBufferMins?: number;
+    instagramEnabled?: boolean;
 }
 
-const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected = false, onConnectInstagram }) => {
+const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected = false, onConnectInstagram, cycleApprovalBufferMins, instagramEnabled = true }) => {
     const [cycles, setCycles] = useState<StrategyCycle[]>([]);
     const [loading, setLoading] = useState(true);
+    const [suggestCreateCycle, setSuggestCreateCycle] = useState(false);
     const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+    const [now, setNow] = useState(() => new Date());
+
+    // Tick proportionally to the buffer: 1/12 of buffer, capped 10 s–60 s.
+    useEffect(() => {
+        const bufferMs = (cycleApprovalBufferMins ?? 4320) * 60 * 1000;
+        const tickMs = Math.min(60_000, Math.max(10_000, bufferMs / 12));
+        const interval = setInterval(() => setNow(new Date()), tickMs);
+        return () => clearInterval(interval);
+    }, [cycleApprovalBufferMins]);
 
     // Auto-dismiss notice
     useEffect(() => {
@@ -23,17 +62,21 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     }, [notice]);
 
     useEffect(() => {
-        const loadCycles = async () => {
+        const loadData = async () => {
             try {
-                const data = await strategyAPI.getAllCycles();
-                setCycles(data);
+                const [cycleData, strategyData] = await Promise.all([
+                    strategyAPI.getAllCycles(),
+                    strategyAPI.getStrategy(),
+                ]);
+                setCycles(cycleData);
+                setSuggestCreateCycle(strategyData.suggestCreateCycle ?? false);
             } catch (error) {
-                console.error('Failed to load cycles:', error);
+                console.error('Failed to load strategy data:', error);
             } finally {
                 setLoading(false);
             }
         };
-        loadCycles();
+        loadData();
     }, []);
 
     // Feedback Modal State
@@ -128,6 +171,10 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
 
     const StrategyCard = ({ cycle, isActionable }: { cycle: StrategyCycle, isActionable: boolean }) => {
         const isChangesRequested = cycle.status === 'CHANGES_REQUESTED';
+        const isPendingReview = cycle.status === 'PENDING_APPROVAL' || isChangesRequested;
+        const cycleBufferHours = (cycleApprovalBufferMins ?? 4320) / 60;
+        const deadline = isPendingReview ? computeCycleApprovalDeadline(cycle, cycleBufferHours) : null;
+        const feedbackLocked = isPendingReview && isCyclePastApprovalDeadline(cycle, now, cycleBufferHours);
 
         return (
             <div className={`rounded-3xl p-6 shadow-sm border relative overflow-hidden ${isActionable ? 'bg-white border-orange-100 shadow-md' : 'bg-slate-50 border-slate-200'}`}>
@@ -135,8 +182,13 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 {/* Status Badge */}
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Cycle Period</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Billing Period</span>
                         <h3 className="text-lg font-bold text-slate-800">{cycle.period}</h3>
+                        {formatBillingRange(cycle.startDate, cycle.endDate) && (
+                            <span className="text-[11px] text-slate-500 mt-0.5">
+                                {formatBillingRange(cycle.startDate, cycle.endDate)}
+                            </span>
+                        )}
                     </div>
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide flex items-center gap-1.5 ${cycle.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
                         cycle.status === 'PENDING_APPROVAL' ? 'bg-orange-100 text-orange-700' :
@@ -194,6 +246,17 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                             <p className="opacity-80 line-clamp-2">{JSON.parse(cycle.feedback).note || "Details sent to account manager."}</p>
                         </div>
                     )}
+
+                    {/* Approval deadline countdown */}
+                    {isPendingReview && deadline && (
+                        <div
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold ${feedbackLocked ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}
+                            aria-label={feedbackLocked ? 'Feedback window closed' : 'Time remaining to request changes'}
+                        >
+                            {feedbackLocked ? <Lock size={12} /> : <Clock size={12} />}
+                            <span>{formatCountdown(deadline, now)}</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Actions */}
@@ -203,19 +266,25 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                             <div className="col-span-2 bg-slate-100 text-slate-500 py-3 rounded-xl text-center text-xs font-bold">
                                 Awaiting Revision from Team
                             </div>
-                        ) : !instagramConnected ? (
+                        ) : instagramEnabled && !instagramConnected ? (
                             <div className="col-span-2 bg-amber-50 text-amber-700 py-3 rounded-xl text-center text-xs font-bold border border-amber-200">
                                 Connect Instagram to approve
                             </div>
                         ) : (
                             <>
-                                <button
-                                    onClick={() => openFeedbackModal(cycle.id)}
-                                    aria-label="Request changes to strategy"
-                                    className="py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                                >
-                                    <RefreshCw size={16} /> Request Changes
-                                </button>
+                                {feedbackLocked ? (
+                                    <div className="py-3.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 font-bold text-xs flex items-center justify-center gap-2">
+                                        <Lock size={16} /> Feedback Closed
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => openFeedbackModal(cycle.id)}
+                                        aria-label="Request changes to strategy"
+                                        className="py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <RefreshCw size={16} /> Request Changes
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => handleApprove(cycle.id)}
                                     aria-label="Approve strategy"
@@ -241,7 +310,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
 
     return (
         <div className="p-4 space-y-8">
-            {!instagramConnected && (
+            {instagramEnabled && !instagramConnected && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
                     <p className="text-xs text-amber-800 font-medium">Connect Instagram to approve strategies and start publishing.</p>
                     {onConnectInstagram && (
@@ -281,14 +350,24 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 </div>
             )}
 
-            {!pendingCycle && !approvedCycle && (
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-3xl border border-green-100 text-center">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-green-600">
-                        <CheckCircle size={24} />
+            {!pendingCycle && !approvedCycle && !activeCycle && (
+                suggestCreateCycle ? (
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-3xl border border-blue-100 text-center">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-blue-600">
+                            <Zap size={24} />
+                        </div>
+                        <h3 className="font-bold text-blue-900">Setting Up Your Strategy</h3>
+                        <p className="text-xs text-blue-700 mt-1">Your first content strategy is being prepared. It will appear here shortly.</p>
                     </div>
-                    <h3 className="font-bold text-green-900">All Caught Up!</h3>
-                    <p className="text-xs text-green-700 mt-1">Next strategy cycle will be generated on {new Date().getDate() < 15 ? '15th' : '1st'}.</p>
-                </div>
+                ) : (
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-3xl border border-green-100 text-center">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-green-600">
+                            <CheckCircle size={24} />
+                        </div>
+                        <h3 className="font-bold text-green-900">All Caught Up!</h3>
+                        <p className="text-xs text-green-700 mt-1">Your next strategy cycle will be created when your billing period begins.</p>
+                    </div>
+                )
             )}
 
             {/* Active Strategy Section */}

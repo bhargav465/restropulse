@@ -10,7 +10,7 @@ import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
-import { ViewState, Restaurant, User, Post, FeatureFlags } from '@restropulse/shared';
+import { ViewState, Restaurant, User, Post, FeatureFlags, Platform } from '@restropulse/shared';
 import { authAPI, restaurantAPI, postsAPI, configAPI } from './api';
 import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
 
@@ -34,15 +34,35 @@ const App: React.FC = () => {
 
     // Pending count for bell badge
     const [pendingCount, setPendingCount] = useState(0);
-    const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(null);
+    // Bootstrap from localStorage cache so platform flags are available instantly on
+    // every visit — no flash of Facebook UI before the API responds.
+    const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(() => {
+        try {
+            const cached = localStorage.getItem('rp_feature_flags');
+            return cached ? JSON.parse(cached) as FeatureFlags : null;
+        } catch { return null; }
+    });
+
+    const updateFeatureFlags = (flags: FeatureFlags) => {
+        try { localStorage.setItem('rp_feature_flags', JSON.stringify(flags)); } catch { /* quota */ }
+        setFeatureFlags(flags);
+    };
+
+    // Derived platform availability — defaults to all enabled when featureFlags not yet loaded
+    const enabledPlatforms: Platform[] = featureFlags?.enabledPlatforms ?? ['INSTAGRAM', 'FACEBOOK'];
+    const instagramEnabled = enabledPlatforms.includes('INSTAGRAM');
+    const facebookEnabled = enabledPlatforms.includes('FACEBOOK');
 
     // Check if this is an Instagram OAuth callback
     useEffect(() => {
         const path = window.location.pathname;
         const searchParams = new URLSearchParams(window.location.search);
 
-        // Check for Instagram callback path or OAuth parameters
-        if (path === '/instagram/callback' ||
+        // Check for Instagram callback path or OAuth parameters.
+        // The API redirects to /auth/instagram/callback (redirect flow) or the
+        // popup flow lands with ?code=&state= query params on any path.
+        if (path === '/auth/instagram/callback' ||
+            path === '/instagram/callback' ||
             searchParams.has('code') && searchParams.has('state')) {
             setIsInstagramCallback(true);
             setLoading(false);
@@ -83,7 +103,7 @@ const App: React.FC = () => {
                         } catch { /* ignore */ }
 
                         setIsLoggedIn(true);
-                        configAPI.getFeatures().then(setFeatureFlags).catch(() => {});
+                        configAPI.getFeatures().then(updateFeatureFlags).catch(() => {});
                         if (!window.history.state) {
                             window.history.replaceState({ view: 'DASHBOARD' }, '');
                         }
@@ -199,20 +219,25 @@ const App: React.FC = () => {
     const renderView = () => {
         if (!restaurantData) return <div>Loading...</div>;
 
-        const instagramConnected = restaurantData.integrations?.instagram || false;
+        // Raw Meta credentials connection state — used to enable publishing actions
+        // (approve buttons, create post) regardless of which platform is toggled on.
+        const metaConnected = restaurantData.integrations?.instagram || false;
+        // instagramConnected = Meta connected AND Instagram specifically enabled.
+        // Used only for the "Connect Instagram" banner visibility.
+        const instagramConnected = instagramEnabled && metaConnected;
 
         switch (currentView) {
             case 'DASHBOARD':
                 return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
             case 'STUDIO':
-                return <ContentStudio onCreatePost={instagramConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} />;
+                return <ContentStudio onCreatePost={metaConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={metaConnected} onConnectInstagram={handleConnectInstagram} postApprovalBufferMins={featureFlags?.postApprovalBufferMins} instagramEnabled={instagramEnabled} facebookEnabled={facebookEnabled} />;
             case 'INPUTS':
                 if (featureFlags?.updatesSection === false) {
                     return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
                 }
                 return <Inputs restaurantData={restaurantData} onRefresh={refreshRestaurantData} />;
             case 'STRATEGY':
-                return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} />;
+                return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} cycleApprovalBufferMins={featureFlags?.cycleApprovalBufferMins} instagramEnabled={instagramEnabled} />;
             default:
                 return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
         }
@@ -236,9 +261,33 @@ const App: React.FC = () => {
 
     // Render Instagram callback handler if this is an OAuth callback
     if (isInstagramCallback) {
+        const handleInstagramComplete = async (success: boolean) => {
+            if (success) {
+                // Re-initialise the app so fresh restaurant data (with instagram connected) is loaded.
+                const token = localStorage.getItem('rp_token');
+                const restaurantId = localStorage.getItem('rp_restaurant_id');
+                if (token && restaurantId) {
+                    try {
+                        const restaurant = await restaurantAPI.get(restaurantId);
+                        setRestaurantData(restaurant);
+                        const sessionData = await authAPI.checkSession();
+                        setUserData(sessionData.user ?? null);
+                        setIsLoggedIn(true);
+                        setIsInstagramCallback(false);
+                        window.history.replaceState({ view: 'DASHBOARD' }, '', '/');
+                        setCurrentView('DASHBOARD');
+                        return;
+                    } catch { /* fall through to manual navigation */ }
+                }
+            }
+            // On error or missing session: clear callback state so user can retry
+            setIsInstagramCallback(false);
+            window.history.replaceState({}, '', '/');
+        };
+
         return (
             <ErrorBoundary>
-                <InstagramCallback />
+                <InstagramCallback onComplete={handleInstagramComplete} />
             </ErrorBoundary>
         );
     }
@@ -300,6 +349,8 @@ const App: React.FC = () => {
                     autoOpenInstagramSetup={autoOpenInstagramSetup}
                     onAutoOpenHandled={() => setAutoOpenInstagramSetup(false)}
                     featureFlags={featureFlags}
+                    instagramEnabled={instagramEnabled}
+                    facebookEnabled={facebookEnabled}
                 />
             )}
 
@@ -308,6 +359,9 @@ const App: React.FC = () => {
                 isOpen={isAdhocModalOpen}
                 onClose={() => setIsAdhocModalOpen(false)}
                 onSuccess={handleAdhocPostSuccess}
+                minScheduleAheadMins={featureFlags?.minScheduleAheadMins}
+                instagramEnabled={instagramEnabled}
+                facebookEnabled={facebookEnabled}
             />
         </ErrorBoundary>
     );

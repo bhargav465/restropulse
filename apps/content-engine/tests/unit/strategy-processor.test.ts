@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseBestTime, parseDateOrFallback } from '../../src/services/strategy-processor.js';
+import { parseBestTime, parseDateOrFallback } from '../../src/services/processors/strategy/index.js';
 
 describe('strategy-processor parsing helpers', () => {
   describe('parseDateOrFallback', () => {

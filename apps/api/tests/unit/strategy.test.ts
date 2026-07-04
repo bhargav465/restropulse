@@ -454,6 +454,67 @@ describe('Strategy Routes - Unit Tests', () => {
                 error: 'Internal server error'
             });
         });
+
+        it('should return 409 when marking CHANGES_REQUESTED past the approval deadline', async () => {
+            // startDate 1h from now; buffer 48h -> deadline was 47h ago.
+            const startDate = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
+            mockFindCycleById.mockResolvedValueOnce({
+                id: 'past-deadline-cycle',
+                startDate,
+                status: 'PENDING_APPROVAL',
+                restaurantId: 'r1',
+            } as any);
+
+            const response = await request(app)
+                .put('/api/strategy/cycles/past-deadline-cycle')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ status: 'CHANGES_REQUESTED' });
+
+            expect(response.status).toBe(409);
+            expect(response.body.success).toBe(false);
+            expect(response.body.error).toMatch(/deadline/i);
+        });
+
+        it('should allow CHANGES_REQUESTED when still within the approval window', async () => {
+            // startDate 60 days out -> deadline is 58 days from now (still open).
+            const startDate = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+            mockFindCycleById.mockResolvedValueOnce({
+                id: 'open-cycle',
+                startDate,
+                status: 'PENDING_APPROVAL',
+                restaurantId: 'r1',
+            } as any);
+            mockUpdateCycle.mockResolvedValueOnce({
+                id: 'open-cycle',
+                status: 'CHANGES_REQUESTED',
+                startDate,
+            } as any);
+
+            const response = await request(app)
+                .put('/api/strategy/cycles/open-cycle')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ status: 'CHANGES_REQUESTED' });
+
+            expect(response.status).toBe(200);
+            expect(response.body.data.status).toBe('CHANGES_REQUESTED');
+        });
+
+        it('should allow APPROVED transition past the deadline (no 409)', async () => {
+            const startDate = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
+            mockUpdateCycle.mockResolvedValueOnce({
+                id: 'past-approve',
+                status: 'APPROVED',
+                startDate,
+            } as any);
+
+            const response = await request(app)
+                .put('/api/strategy/cycles/past-approve')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({ status: 'APPROVED' });
+
+            expect(response.status).toBe(200);
+            expect(response.body.data.status).toBe('APPROVED');
+        });
     });
 
     describe('Edge Cases', () => {

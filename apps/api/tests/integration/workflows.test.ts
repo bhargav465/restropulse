@@ -311,14 +311,20 @@ describe('Integration Tests - Complete Workflows', () => {
         });
 
         it('should handle cycle approval workflow', async () => {
+            // Use a future startDate so the deadline-enforcement guard in PUT
+            // /api/strategy/cycles/:id does not reject the CHANGES_REQUESTED
+            // transition (cycle buffer is 48h before startDate).
+            const futureStart = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+            const futureEnd = new Date(futureStart.getTime() + 30 * 24 * 60 * 60 * 1000);
+
             // Create cycle
             const createResponse = await request(app)
                 .post('/api/strategy/cycles')
                 .set('Authorization', `Bearer ${authToken}`)
                 .send({
                     period: 'Approval Test',
-                    startDate: '2024-07-01',
-                    endDate: '2024-07-31',
+                    startDate: futureStart.toISOString(),
+                    endDate: futureEnd.toISOString(),
                     status: 'PENDING_APPROVAL',
                     summary: 'Needs approval',
                     plannedPosts: [],

@@ -18,6 +18,7 @@ import { connect, getConfig, disconnect } from '../config/database.js';
 export async function migrateCommand(options: { migration: string }): Promise<void> {
     const migrations: Record<string, () => Promise<void>> = {
         'subscription-history': migrateSubscriptionHistory,
+        'rename-strategy-id-to-cycle-id': migrateRenameStrategyIdToCycleId,
     };
 
     const run = migrations[options.migration];
@@ -31,6 +32,42 @@ export async function migrateCommand(options: { migration: string }): Promise<vo
     }
 
     await run();
+}
+
+async function migrateRenameStrategyIdToCycleId(): Promise<void> {
+    const config = getConfig();
+    const spinner = ora();
+
+    try {
+        spinner.start('Connecting to MongoDB...');
+        const client = await connect();
+        spinner.succeed('Connected to MongoDB');
+
+        const db = client.db(config.database);
+        const col = db.collection('posts');
+
+        spinner.start('Renaming posts.strategyId -> posts.cycleId...');
+        const rename = await col.updateMany(
+            { strategyId: { $exists: true } },
+            [{ $set: { cycleId: '$strategyId' } }, { $unset: 'strategyId' }],
+        );
+        spinner.succeed(`Renamed on ${rename.modifiedCount} document(s)`);
+
+        spinner.start('Creating compound index { cycleId: 1, scheduledFor: 1 }...');
+        await col.createIndex(
+            { cycleId: 1, scheduledFor: 1 },
+            { name: 'cycleId_1_scheduledFor_1' },
+        );
+        spinner.succeed('Created compound index: cycleId_1_scheduledFor_1');
+
+        console.log(chalk.green('\nMigration rename-strategy-id-to-cycle-id complete!'));
+    } catch (err: any) {
+        spinner.fail('Migration failed');
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+    } finally {
+        await disconnect();
+    }
 }
 
 async function migrateSubscriptionHistory(): Promise<void> {

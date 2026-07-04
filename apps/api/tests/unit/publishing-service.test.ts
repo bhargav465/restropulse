@@ -51,7 +51,9 @@ const { publishToInstagram, publishToFacebook, publishPost } = await import('@re
 
 describe('Publishing Service', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
+        // resetAllMocks clears queued mockResolvedValueOnce values too;
+        // clearAllMocks only clears call history, not the implementation queue.
+        vi.resetAllMocks();
         mockDecrypt.mockReturnValue('decrypted-access-token');
     });
 
@@ -560,12 +562,16 @@ describe('Publishing Service', () => {
                 platforms: ['FACEBOOK'] as Platform[]
             };
 
+            // downloadVideoBuffer: fetch video binary
+            mockGet.mockResolvedValueOnce({ data: Buffer.from('fake-video-data'), headers: { 'content-type': 'video/mp4' } });
+            // uploadVideoToFacebookPage: binary upload to /videos
             mockPost.mockResolvedValueOnce({ data: { id: 'fb-vid-123' } });
 
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(mockPost.mock.calls[0][0]).toBe('/page-456/videos');
+            expect(result.facebookPostId).toBe('fb-vid-123');
+            expect(mockPost.mock.calls[0][0]).toBe('https://graph.facebook.com/v18.0/page-456/videos');
         });
 
         it('should publish reel to Facebook page', async () => {
@@ -574,20 +580,20 @@ describe('Publishing Service', () => {
                 type: 'REEL' as const,
                 caption: 'FB reel',
                 thumbnail: 'https://example.com/thumb.jpg',
-                videoUrl: 'https://example.com/reel.mp4',
+                videoUrl: 'https://example.com/reel.mp4',  // already public — no rewrite
                 platforms: ['FACEBOOK'] as Platform[]
             };
 
-            // Step 1: start upload returns video_id
+            // Phase 1: start upload → returns video_id
             mockPost.mockResolvedValueOnce({ data: { video_id: 'reel-vid-1' } });
-            // Step 2: finish upload
+            // Phase 2: finish upload
             mockPost.mockResolvedValueOnce({ data: {} });
 
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
             expect(result.facebookPostId).toBe('reel-vid-1');
-            expect(mockPost.mock.calls[0][0]).toContain('/video_reels');
+            expect(mockPost.mock.calls[0][0]).toBe('/page-456/video_reels');
         });
 
         it('should fallback reel to image post when videoUrl is missing but thumbnail exists', async () => {
@@ -670,17 +676,18 @@ describe('Publishing Service', () => {
                 type: 'STORY' as const,
                 caption: 'Video story',
                 thumbnail: 'https://example.com/story-thumb.jpg',
-                videoUrl: 'https://example.com/story.mp4',
+                videoUrl: 'https://example.com/story.mp4',  // already public — no rewrite
                 platforms: ['FACEBOOK'] as Platform[]
             };
 
+            // video_stories endpoint: POST with file_url (no binary download needed)
             mockPost.mockResolvedValueOnce({ data: { id: 'story-video-fb-1' } });
 
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
             expect(result.facebookPostId).toBe('story-video-fb-1');
-            expect(mockPost.mock.calls[0][0]).toContain('/video_stories');
+            expect(mockPost.mock.calls[0][0]).toBe('/page-456/video_stories');
         });
 
         it('should fail when pageId is missing', async () => {

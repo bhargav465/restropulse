@@ -21,7 +21,7 @@ const log = createLogger('publishing-cron');
 
 // Constants
 const MAX_PUBLISH_ATTEMPTS = 3;
-const CRON_SCHEDULE = '*/5 * * * *'; // Every 5 minutes
+const CRON_SCHEDULE = process.env.CRON_PUBLISHER ?? '*/5 * * * *';
 
 // Track publishing attempts for monitoring
 interface PublishAttempt {

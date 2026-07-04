@@ -1,13 +1,21 @@
 import express, { Request, Response } from 'express';
 import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
 import { publishPost, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
-import { ApiResponse, Post } from '@restropulse/shared';
+import { ApiResponse, Post, isPostPastApprovalDeadline, Platform } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { enforcePlanLimits } from '../middleware/enforce-plan-limits.js';
 import { createLogger } from '@restropulse/telemetry/server';
 
 const log = createLogger('posts');
+
+/** Default platforms derived from ENABLED_PLATFORMS env var (same logic as content-engine). */
+function getDefaultPlatforms(): Platform[] {
+    return (process.env.ENABLED_PLATFORMS ?? 'INSTAGRAM,FACEBOOK')
+        .split(',')
+        .map(p => p.trim())
+        .filter((p): p is Platform => p === 'INSTAGRAM' || p === 'FACEBOOK');
+}
 
 const router = express.Router();
 
@@ -80,11 +88,11 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
         thumbnail: postData.thumbnail || placeholderImage,
         ...postData,
         // Ensure platforms is always an array
-        platforms: postData.platforms || ['INSTAGRAM'],
+        platforms: postData.platforms || getDefaultPlatforms(),
         // Ensure restaurantId is always set from auth context
         restaurantId: req.user!.restaurantId,
-        // Mark as adhoc if no strategyId
-        isAdhoc: !postData.strategyId,
+        // Mark as adhoc if no cycleId
+        isAdhoc: !postData.cycleId,
     };
 
     const newPost = await createPost(postWithDefaults);
@@ -104,78 +112,58 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
     });
 }));
 
-// Generate post with AI-created content (for adhoc posts)
+// Create an adhoc post stub for content generation by the content-engine.
+// The post is stored as PENDING_CONTENT; the content-engine picks it up and
+// calls generator.generatePost(concept, type, platforms) to fill caption + media,
+// then advances the post to PENDING_APPROVAL for user review.
 router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
-    const { concept, type, platforms, scheduledFor } = req.body;
+    const { concept, type, platforms, scheduledFor, asap } = req.body;
 
-    // Validate required fields
     if (!concept || concept.trim().length === 0) {
-        return res.status(400).json({
-            success: false,
-            error: 'Concept/description is required'
-        });
+        return res.status(400).json({ success: false, error: 'Concept/description is required' });
     }
 
     if (!type) {
-        return res.status(400).json({
-            success: false,
-            error: 'Post type is required'
-        });
+        return res.status(400).json({ success: false, error: 'Post type is required' });
     }
 
-    log.info({ type, concept: concept.substring(0, 50) }, 'Creating post for content generation');
+    const minAheadMins = parseInt(process.env.MIN_SCHEDULE_AHEAD_MINS ?? '150', 10);
 
-    // TODO: Replace with actual AI content generation service
-    // For now, generate placeholder media based on type
-    const seed = Date.now();
-    const placeholderImage = `https://picsum.photos/seed/${seed}/1080/1080`;
-    const placeholderVideo = `https://sample-videos.com/video321/mp4/720/big_buck_bunny_720p_1mb.mp4`;
+    let resolvedScheduledFor: string;
 
-    let thumbnail: string;
-    let videoUrl: string | undefined;
-    let mediaUrls: string[] | undefined;
-
-    switch (type) {
-        case 'REEL':
-        case 'STORY':
-        case 'VIDEO':
-            // Video content types - use actual video URL
-            thumbnail = placeholderImage;
-            videoUrl = placeholderVideo;
-            log.info({ videoUrl }, 'Generated video content');
-            break;
-
-        case 'CAROUSEL':
-            // Multiple images for carousel
-            thumbnail = placeholderImage;
-            mediaUrls = [
-                `https://picsum.photos/seed/${seed}/1080/1080`,
-                `https://picsum.photos/seed/${seed + 1}/1080/1080`,
-                `https://picsum.photos/seed/${seed + 2}/1080/1080`
-            ];
-            log.info({ imageCount: mediaUrls.length }, 'Generated carousel content');
-            break;
-
-        case 'IMAGE':
-        default:
-            // Single image
-            thumbnail = placeholderImage;
-            log.info('Generated image content');
-            break;
+    if (asap || !scheduledFor) {
+        // API computes the time from its own clock — immune to client/server clock skew and
+        // network latency. Used for all ASAP posts and as the fallback when no time is given.
+        resolvedScheduledFor = new Date(Date.now() + minAheadMins * 60 * 1000).toISOString();
+    } else {
+        const provided = new Date(scheduledFor);
+        const minScheduledFor = new Date(Date.now() + minAheadMins * 60 * 1000);
+        if (isNaN(provided.getTime()) || provided < minScheduledFor) {
+            const minDisplay = minAheadMins % 60 === 0
+                ? `${minAheadMins / 60} hour${minAheadMins / 60 === 1 ? '' : 's'}`
+                : minAheadMins >= 60
+                    ? `${minAheadMins / 60} hours`
+                    : `${minAheadMins} minute${minAheadMins === 1 ? '' : 's'}`;
+            return res.status(400).json({
+                success: false,
+                error: `Posts must be scheduled at least ${minDisplay} from now`,
+            });
+        }
+        resolvedScheduledFor = provided.toISOString();
     }
 
-    // Create the post with generated content
+    log.info({ type, concept: concept.substring(0, 50) }, 'Queueing adhoc post for content generation');
+
     const postData = {
         type: type as Post['type'],
-        status: 'PENDING_APPROVAL' as const,
-        platforms: platforms || ['INSTAGRAM'],
-        caption: concept,
-        thumbnail,
-        videoUrl,
-        mediaUrls,
+        status: 'PENDING_CONTENT' as const,
+        platforms: platforms || getDefaultPlatforms(),
+        concept: concept.trim(),
+        caption: '',
+        thumbnail: '',
         restaurantId: req.user!.restaurantId,
-        scheduledFor: scheduledFor || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        isAdhoc: true
+        scheduledFor: resolvedScheduledFor,
+        isAdhoc: true,
     };
 
     const newPost = await createPost(postData);
@@ -188,18 +176,33 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         }
     }
 
-    log.info({ postId: newPost.id }, 'Post created successfully');
+    log.info({ postId: newPost.id }, 'Adhoc post stub created, queued for content-engine');
 
     res.status(201).json({
         success: true,
         data: newPost,
-        message: 'Post generated with content successfully'
+        message: 'Post queued for content generation',
     });
 }));
 
 // Update post
 router.put('/:id', requireAuth, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
     const { id } = req.params;
+
+    // Block CHANGES_REQUESTED transitions past the approval deadline.
+    // Approval transitions (APPROVED/SCHEDULED) remain allowed so the
+    // content-engine's auto-advance can proceed without racing the UI.
+    if (req.body?.status === 'CHANGES_REQUESTED') {
+        const existing = await findPostById(id);
+        const postBufferHours = parseInt(process.env.POST_APPROVAL_BUFFER_MINS ?? '120', 10) / 60;
+        if (existing && isPostPastApprovalDeadline(existing, new Date(), postBufferHours)) {
+            return res.status(409).json({
+                success: false,
+                error: 'Post is past the approval deadline'
+            });
+        }
+    }
+
     const post = await updatePost(id, req.body);
 
     if (post) {
@@ -233,7 +236,7 @@ router.post('/:id/test-publish', async (req: Request, res: Response) => {
         }
 
         const restaurantsCol = getRestaurantsCollection();
-        const restaurant = await restaurantsCol.findOne({ _id: restaurantId as any });
+        const restaurant = await restaurantsCol.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant?.instagramCredentials) {
             return res.status(400).json({ success: false, error: 'Instagram not connected' });
@@ -374,7 +377,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
         }
 
         const restaurantsCol = getRestaurantsCollection();
-        const restaurant = await restaurantsCol.findOne({ _id: restaurantId as any });
+        const restaurant = await restaurantsCol.findOne({ _id: toObjectId(restaurantId) as any });
 
         if (!restaurant?.instagramCredentials) {
             // Update DB with error before returning

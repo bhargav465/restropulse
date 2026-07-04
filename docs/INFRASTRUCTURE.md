@@ -55,6 +55,9 @@ Rules:
 | RAZORPAY_WEBHOOK_SECRET          | No*      | --                                               | Razorpay webhook signature secret          |
 | FEATURE_TOPUP_CREDITS            | No       | false                                            | Feature flag: enable credit pack topup purchase UI         |
 | FEATURE_UPDATES_SECTION          | No       | false                                            | Feature flag: enable Updates (Inputs) section in nav       |
+| SECRETS_BACKEND                  | No       | `env`                                            | `env` (process.env) or `azure-kv` (Azure Key Vault)    |
+| AZURE_KEY_VAULT_URL              | Cond.    | --                                               | Full Key Vault URL, e.g. `https://restropulse-prod-kv.vault.azure.net`. Required when `SECRETS_BACKEND=azure-kv` |
+| AZURE_KEY_VAULT_KEY_PREFIX       | No       | (none)                                           | Optional prefix prepended to all KV secret names (e.g. `dev`, `staging`) |
 
 *JWT_SECRET has a dev default but must be changed in production.
 *RAZORPAY_* vars are optional in dev; service throws if called without config.
@@ -99,6 +102,9 @@ Rules:
 | ENCRYPTION_KEY   | Yes      | --            | Must match API's key             |
 | INSTAGRAM_APP_ID | Yes      | --            | For token refresh                |
 | INSTAGRAM_APP_SECRET | Yes  | --            | For token refresh                |
+| SECRETS_BACKEND      | No   | `env`          | `env` (process.env) or `azure-kv` (Azure Key Vault) |
+| AZURE_KEY_VAULT_URL  | Cond.| --            | Full Key Vault URL. Required when `SECRETS_BACKEND=azure-kv` |
+| AZURE_KEY_VAULT_KEY_PREFIX | No | (none)      | Optional prefix for KV secret names (e.g. `dev`, `staging`) |
 
 ### apps/content-engine (.env)
 
@@ -107,6 +113,63 @@ Rules:
 | NODE_ENV         | No       | development   | Environment mode                 |
 | MONGODB_URI      | Yes      | --            | MongoDB connection string        |
 | MONGODB_DB_NAME  | No       | restropulse   | Database name                    |
+| SECRETS_BACKEND  | No       | `env`          | `env` (process.env) or `azure-kv` (Azure Key Vault) |
+| AZURE_KEY_VAULT_URL | Cond. | --            | Full Key Vault URL. Required when `SECRETS_BACKEND=azure-kv` |
+| AZURE_KEY_VAULT_KEY_PREFIX | No | (none)      | Optional prefix for KV secret names (e.g. `dev`, `staging`) |
+
+#### Content Engine AI backend (env additions)
+
+Default behavior unchanged unless `CONTENT_GENERATOR_BACKEND=ai` is set. The flag is an "uber" master switch: when set, every AI sub-feature defaults on. All four required keys (`ANTHROPIC_API_KEY`, `FAL_API_KEY`, `GOOGLE_CALENDAR_API_KEY`, `PERPLEXITY_API_KEY`) must be present or the factory throws a single combined error listing every missing key. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the supported rollout path and `docs/SECRETS.md` for how to obtain each key.
+
+| Variable                          | Required when                                          | Default (no AI)  | Default (AI mode) | Purpose                                                                       |
+|-----------------------------------|--------------------------------------------------------|------------------|-------------------|-------------------------------------------------------------------------------|
+| `CONTENT_GENERATOR_BACKEND`       | always                                                 | `placeholder`    | n/a               | Master switch: `placeholder` (asset catalog) or `ai` (full AI chain).         |
+| `ANTHROPIC_API_KEY`               | `CONTENT_GENERATOR_BACKEND=ai`                         | --               | required          | Anthropic API key for Sonnet 4.6 / Haiku 4.5 via `@ai-sdk/anthropic`.         |
+| `FAL_API_KEY`                     | AI mode + `MEDIA_BACKEND` not overridden               | --               | required          | fal.ai API key for image (sync) and video (queue API) generation.             |
+| `GOOGLE_CALENDAR_API_KEY`         | AI mode + V1 not overridden                            | --               | required          | Google Calendar API key for India public holidays calendar (V1).              |
+| `PERPLEXITY_API_KEY`              | AI mode + V2 not overridden                            | --               | required          | Perplexity Sonar Pro API key (V2 daily refresh + per-post triggers).          |
+| `MEDIA_BACKEND`                   | optional override                                      | `placeholder`    | `fal-ai`          | Override: set to `placeholder` to skip fal.ai under AI mode.                  |
+| `CURRENT_AFFAIRS_V1_ENABLED`      | optional override                                      | `true` (unused)  | `true`            | Override: set to `false` to skip Google Calendar under AI mode.               |
+| `CURRENT_AFFAIRS_V2_ENABLED`      | optional override                                      | `false` (unused) | `true`            | Override: set to `false` to skip Sonar Pro under AI mode.                     |
+| `CRON_CURRENT_AFFAIRS_REFRESH`    | when V1 or V2 enabled                                  | `0 6 * * *`      | `0 6 * * *`       | Daily refresh at 06:00 IST.                                                   |
+| `CRON_MEDIA_JOB_POLLER`           | `MEDIA_BACKEND=fal-ai`                                 | `*/30 * * * * *` | `*/30 * * * * *`  | Every 30 seconds; polls in-flight video jobs against fal queue API.           |
+
+Optional provider-portability keys (no behavior change unless code is changed to switch providers): `OPENAI_API_KEY`, `GOOGLE_API_KEY` -- declared in factory but unused in default chain.
+
+##### Cron schedules added by AI backend
+
+| Schedule                          | Default        | Timezone     | Purpose                                                          |
+|-----------------------------------|----------------|--------------|------------------------------------------------------------------|
+| `CRON_CURRENT_AFFAIRS_REFRESH`    | `0 6 * * *`    | Asia/Kolkata | Refresh calendar holidays + (if V2) daily Sonar platform answer. |
+| `CRON_MEDIA_JOB_POLLER`           | `*/30 * * * * *` | Asia/Kolkata | Poll RUNNING video media jobs against fal.ai queue.              |
+
+##### Collections added by AI backend
+
+| Collection              | Purpose                                                                                                        |
+|-------------------------|----------------------------------------------------------------------------------------------------------------|
+| `costEvents`            | One row per AI/external API call (LLM, image, video, Sonar, calendar). Powers per-restaurant cost dashboards.  |
+| `currentAffairsCache`   | 24h-TTL cache of calendar holidays and daily Sonar platform refresh.                                           |
+| `mediaJobs`             | One row per media generation job. Image jobs land COMPLETED immediately; video jobs cycle PENDING -> RUNNING -> COMPLETED/FAILED via the poller. |
+
+##### Cost expectations (per active restaurant per month)
+
+Estimates for 30 posts/month with V1 calendar enabled and V2 Sonar disabled:
+
+| Component       | Cost                  | Notes                                                                  |
+|-----------------|-----------------------|------------------------------------------------------------------------|
+| LLM (captions)  | ~\$0.10-0.30          | Haiku 4.5 per post; Sonnet for cycle planning is amortized across posts. |
+| LLM (cycle)     | ~\$0.05-0.10          | Sonnet, ~1-2 calls per cycle.                                          |
+| Calendar (V1)   | \$0                   | Free; daily refresh shared across all restaurants.                     |
+| Image (fal.ai)  | ~\$0.75               | 30 IMAGE/STORY posts at \$0.025/call.                                  |
+| Image carousel  | additional ~\$0.05/CAROUSEL | 3x per CAROUSEL post.                                            |
+| Video (fal.ai)  | ~\$0.30 per REEL      | Default: Kling 1.6 standard. MiniMax is \$0.40/clip.                   |
+
+When `CURRENT_AFFAIRS_V2_ENABLED=true`:
+
+| Component         | Cost                       | Notes                                                                |
+|-------------------|----------------------------|----------------------------------------------------------------------|
+| Sonar daily refresh | ~\$0.10/day platform-wide | One call per day, shared across all restaurants.                     |
+| Sonar per-post triggers | ~\$0.30-0.90/restaurant/month | Fires only when post concept matches an allowlist keyword (~20% rate). |
 
 ## Cron Schedules
 
@@ -234,8 +297,17 @@ from previous deployments before extracting the new zip.
    npm run dev --filter=@restropulse/api   # API only
    npm run dev --filter=@restropulse/web   # Frontend only
    ```
-5. For database seeding: `npm run seed --filter=@restropulse/db-cli`
-6. For a fresh empty database: `npm run reset --workspace=@restropulse/db-cli` (prompts for URI + DB name, 10s safety delay)
+5. **Set up collections and indexes**: `npm run setup --workspace=@restropulse/db-cli`
+   This creates all collections with the correct schema and indexes, including the
+   partial unique index on subscriptions (`restaurantId` unique where `endedAt IS NULL`)
+   that is required for subscription renewals to work.
+6. For database seeding: `npm run seed --workspace=@restropulse/db-cli`
+7. Verify schema: `npm run validate --workspace=@restropulse/db-cli`
+8. For a fresh empty database: `npm run reset --workspace=@restropulse/db-cli` (prompts for URI + DB name, 10s safety delay)
+
+> **Migrations** (`npm run migrate ...`) are only needed for **existing databases** that
+> were created before the correct index definitions were added. They are not required
+> for new environments where `setup` is run first.
 
 ## Build and Deploy
 

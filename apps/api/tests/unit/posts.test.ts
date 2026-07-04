@@ -598,6 +598,69 @@ describe('Posts Module', () => {
                     error: 'Internal server error'
                 });
             });
+
+            it('should return 409 when marking CHANGES_REQUESTED past the approval deadline', async () => {
+                // scheduledFor 1h from now; buffer 2h -> deadline was 1h ago.
+                const scheduledFor = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
+                mockFindPostById.mockResolvedValueOnce({
+                    id: 'past-deadline-post',
+                    scheduledFor,
+                    status: 'PENDING_APPROVAL',
+                    restaurantId: 'r1',
+                } as any);
+
+                const response = await request(app)
+                    .put('/api/posts/past-deadline-post')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ status: 'CHANGES_REQUESTED' });
+
+                expect(response.status).toBe(409);
+                expect(response.body.success).toBe(false);
+                expect(response.body.error).toMatch(/deadline/i);
+            });
+
+            it('should allow CHANGES_REQUESTED when still within the approval window', async () => {
+                // scheduledFor 10h from now; buffer 2h -> deadline is 8h from now (still open).
+                const scheduledFor = new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString();
+                mockFindPostById.mockResolvedValueOnce({
+                    id: 'open-deadline-post',
+                    scheduledFor,
+                    status: 'PENDING_APPROVAL',
+                    restaurantId: 'r1',
+                } as any);
+                mockUpdatePost.mockResolvedValueOnce({
+                    id: 'open-deadline-post',
+                    status: 'CHANGES_REQUESTED',
+                    scheduledFor,
+                } as any);
+
+                const response = await request(app)
+                    .put('/api/posts/open-deadline-post')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ status: 'CHANGES_REQUESTED' });
+
+                expect(response.status).toBe(200);
+                expect(response.body.data.status).toBe('CHANGES_REQUESTED');
+            });
+
+            it('should allow approval transitions past the deadline (no 409)', async () => {
+                // Route only hits the deadline-check branch for CHANGES_REQUESTED,
+                // so findPostById is not called for APPROVED transitions.
+                const scheduledFor = new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString();
+                mockUpdatePost.mockResolvedValueOnce({
+                    id: 'past-deadline-approve',
+                    status: 'APPROVED',
+                    scheduledFor,
+                } as any);
+
+                const response = await request(app)
+                    .put('/api/posts/past-deadline-approve')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ status: 'APPROVED' });
+
+                expect(response.status).toBe(200);
+                expect(response.body.data.status).toBe('APPROVED');
+            });
         });
 
         describe('DELETE /api/posts/:id', () => {
@@ -698,7 +761,7 @@ describe('Posts Module', () => {
         });
 
         describe('Adhoc Post Creation', () => {
-            it('should create adhoc post without strategyId', async () => {
+            it('should create adhoc post without cycleId', async () => {
                 const adhocPost = {
                     caption: 'Flash sale announcement - 50% off all pizzas today!',
                     type: 'IMAGE',
@@ -715,7 +778,7 @@ describe('Posts Module', () => {
                 expect(response.body.data).toHaveProperty('id');
                 expect(response.body.data.caption).toBe(adhocPost.caption);
                 expect(response.body.data.isAdhoc).toBe(true);
-                expect(response.body.data.strategyId).toBeUndefined();
+                expect(response.body.data.cycleId).toBeUndefined();
             });
 
             it('should set default status to PENDING_APPROVAL for adhoc posts', async () => {
@@ -853,22 +916,22 @@ describe('Posts Module', () => {
                 expect(dbDoc!.restaurantId).toBe('r1');
             });
 
-            it('should mark strategy posts as non-adhoc', async () => {
-                const strategyPost = {
-                    caption: 'Generated from strategy',
+            it('should mark cycle-linked posts as non-adhoc', async () => {
+                const cyclePost = {
+                    caption: 'Generated from cycle',
                     type: 'IMAGE',
                     platforms: ['INSTAGRAM'],
-                    strategyId: 'strategy-123'
+                    cycleId: 'cycle-123'
                 };
 
                 const response = await request(app)
                     .post('/api/posts')
                     .set('Authorization', `Bearer ${authToken}`)
-                    .send(strategyPost);
+                    .send(cyclePost);
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.isAdhoc).toBe(false);
-                expect(response.body.data.strategyId).toBe('strategy-123');
+                expect(response.body.data.cycleId).toBe('cycle-123');
             });
 
             it('should allow scheduled adhoc posts', async () => {
@@ -1051,7 +1114,7 @@ describe('Posts Module', () => {
                 expect(response.body.error).toBe('Post type is required');
             });
 
-            it('should generate IMAGE post with defaults', async () => {
+            it('should create PENDING_CONTENT stub for IMAGE post', async () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
                     .set('Authorization', `Bearer ${authToken}`)
@@ -1061,14 +1124,13 @@ describe('Posts Module', () => {
                 expect(response.body.success).toBe(true);
                 expect(response.body.data.type).toBe('IMAGE');
                 expect(response.body.data.platforms).toEqual(['INSTAGRAM']);
-                expect(response.body.data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\//);
-                expect(response.body.data.videoUrl).toBeUndefined();
-                expect(response.body.data.mediaUrls).toBeUndefined();
-                expect(response.body.data.status).toBe('PENDING_APPROVAL');
+                // Route now creates a PENDING_CONTENT stub; content-engine fills in media
+                expect(response.body.data.status).toBe('PENDING_CONTENT');
+                expect(response.body.data.concept).toBe('New lunch combo launch');
                 expect(response.body.data.isAdhoc).toBe(true);
             });
 
-            it('should generate VIDEO post with videoUrl', async () => {
+            it('should create PENDING_CONTENT stub for VIDEO post', async () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
                     .set('Authorization', `Bearer ${authToken}`)
@@ -1078,11 +1140,10 @@ describe('Posts Module', () => {
                 expect(response.body.success).toBe(true);
                 expect(response.body.data.type).toBe('VIDEO');
                 expect(response.body.data.platforms).toEqual(['INSTAGRAM', 'FACEBOOK']);
-                expect(response.body.data.videoUrl).toMatch(/^https:\/\/sample-videos\.com\//);
-                expect(response.body.data.mediaUrls).toBeUndefined();
+                expect(response.body.data.status).toBe('PENDING_CONTENT');
             });
 
-            it('should generate CAROUSEL post with mediaUrls', async () => {
+            it('should create PENDING_CONTENT stub for CAROUSEL post', async () => {
                 const response = await request(app)
                     .post('/api/posts/generate')
                     .set('Authorization', `Bearer ${authToken}`)
@@ -1091,9 +1152,7 @@ describe('Posts Module', () => {
                 expect(response.status).toBe(201);
                 expect(response.body.success).toBe(true);
                 expect(response.body.data.type).toBe('CAROUSEL');
-                expect(response.body.data.mediaUrls).toHaveLength(3);
-                expect(Array.isArray(response.body.data.mediaUrls)).toBe(true);
-                expect(response.body.data.videoUrl).toBeUndefined();
+                expect(response.body.data.status).toBe('PENDING_CONTENT');
             });
 
             it('should handle internal error while generating', async () => {
@@ -1107,6 +1166,49 @@ describe('Posts Module', () => {
                 expect(response.status).toBe(500);
                 expect(response.body.success).toBe(false);
                 expect(response.body.error).toBe('Internal server error');
+            });
+        });
+
+        describe('POST /generate scheduling validation', () => {
+            beforeEach(() => {
+                vi.useFakeTimers();
+                vi.setSystemTime(new Date('2026-05-01T10:00:00.000Z'));
+            });
+            afterEach(() => vi.useRealTimers());
+
+            it('rejects scheduledFor less than 2.5h from now', async () => {
+                const scheduledFor = new Date(Date.now() + 1 * 3600 * 1000).toISOString();
+                const res = await request(app).post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ concept: 'test', type: 'IMAGE', platforms: ['INSTAGRAM'], scheduledFor });
+                expect(res.status).toBe(400);
+                expect(res.body.error).toMatch(/2.5 hours/);
+            });
+
+            it('accepts scheduledFor exactly 2.5h from now', async () => {
+                const scheduledFor = new Date(Date.now() + 2.5 * 3600 * 1000).toISOString();
+                const res = await request(app).post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ concept: 'test', type: 'IMAGE', platforms: ['INSTAGRAM'], scheduledFor });
+                expect(res.status).toBe(201);
+            });
+
+            it('accepts scheduledFor 3h from now', async () => {
+                const scheduledFor = new Date(Date.now() + 3 * 3600 * 1000).toISOString();
+                const res = await request(app).post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ concept: 'test', type: 'IMAGE', platforms: ['INSTAGRAM'], scheduledFor });
+                expect(res.status).toBe(201);
+            });
+
+            it('defaults ASAP to exactly 2.5h from now when no scheduledFor provided', async () => {
+                const res = await request(app).post('/api/posts/generate')
+                    .set('Authorization', `Bearer ${authToken}`)
+                    .send({ concept: 'test', type: 'IMAGE', platforms: ['INSTAGRAM'] });
+                expect(res.status).toBe(201);
+                const scheduled = new Date(res.body.data.scheduledFor);
+                const expected = new Date(Date.now() + 2.5 * 3600 * 1000);
+                expect(Math.abs(scheduled.getTime() - expected.getTime())).toBeLessThan(5000);
             });
         });
 

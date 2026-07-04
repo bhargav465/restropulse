@@ -170,6 +170,69 @@ already done correctly throughout the codebase.
   - Strategy cycle processing: generates posts for `APPROVED` cycles
   - Strategy generation: creates strategies for `PENDING_GENERATION` requests
 
+### Content Engine AI backend
+
+When `CONTENT_GENERATOR_BACKEND=ai`, the content-engine swaps the placeholder generator for `AIContentGenerator` -- a thin orchestrator over four pluggable seams. Default chain:
+
+```text
+IContentGenerator               (existing public contract)
+  AIContentGenerator            (Vercel AI SDK orchestrator)
+    ILLMProvider                  AnthropicLLMProvider (Sonnet for cycles, Haiku for posts)
+    IMediaGenerator               PlaceholderMediaGenerator (default) | FalAIMediaGenerator (when MEDIA_BACKEND=fal-ai)
+    ICurrentAffairsProvider       Noop | CalendarOnly (V1) | SonarAugmented(CalendarOnly) (V1+V2)
+    IDomainSpecialization         RestaurantSpecialization
+```
+
+Each seam is a separately swappable interface. Adding a second domain (salon, fitness) is an `IDomainSpecialization` impl. Adding a new LLM provider is a one-import swap inside `AnthropicLLMProvider`. Adding a new media provider (Replicate, Runway) is an `IMediaGenerator` impl.
+
+#### Async media flow (REEL/VIDEO with `MEDIA_BACKEND=fal-ai`)
+
+```text
+adhoc-processor finds PENDING_CONTENT post
+  -> AIContentGenerator.generatePost
+    -> caption (Anthropic, sync)
+    -> media (FalAIMediaGenerator.generateVideo)
+      -> queue submit -> mediaJobs row inserted (status=RUNNING)
+      -> returns immediately
+  -> processor writes post.status=PENDING_MEDIA + mediaJobId
+
+media-job-poller (every 30s)
+  -> finds PENDING_MEDIA posts
+  -> per post: live-poll fal queue, transition COMPLETED -> applyMediaJobResultToPost (status=PENDING_APPROVAL)
+                                            FAILED   -> markPostFailedWithMedia (status=MISSED_DEADLINE)
+                                            stale > 10min -> reap as FAILED
+
+post-resume scan (worker boot, when MEDIA_BACKEND=fal-ai)
+  -> finds posts with PENDING_MEDIA + lastStepAt > 5min ago
+  -> triggers one poll cycle each (idempotent, matches cron path)
+```
+
+#### Cost attribution
+
+Every external API call writes one row to `costEvents` (MongoDB) AND emits a `customEvents` row to Application Insights (via `trackAIUsage`), tagged with `restaurantId`, `postId`, `cycleId`, `surface`, `step`, `model`. The two Azure Monitor Workbooks under `infra/workbooks/` consume the App Insights events.
+
+For full rationale (decision drivers, framework selection, RAG strategy, retry profiles, durability semantics), see [ADR 0001 - Content-Engine AI Framework](adr/0001-content-engine-ai-framework.md).
+
+## Secrets Management
+
+All runtime secrets flow through `packages/secrets` (`@restropulse/secrets`).
+
+```
+ISecretsProvider
+  EnvSecretsProvider            (default -- reads process.env)
+  AzureKeyVaultSecretsProvider  (Azure Key Vault via DefaultAzureCredential)
+    wrapped by CachedSecretsProvider (in-memory cache, avoids repeated KV API calls)
+```
+
+**Startup flow when `SECRETS_BACKEND=azure-kv`:**
+1. `createSecretsProvider('azure-kv')` builds a cached KV provider
+2. `hydrateEnvFromProvider(provider, APP_SECRET_KEYS)` fetches all keys in parallel, writes to `process.env`
+3. `loadAndValidateEnv(...)` runs unchanged -- reads from `process.env` as always
+
+**Per-service scoping:** `config/secrets-manifest.ts` is the single source of truth. Each secret declares `apps[]`. `getAppSecretKeys(app)` returns only that app's keys -- no service fetches a secret it does not own.
+
+**Key Vault naming:** `MY_API_KEY` -> `my-api-key`. With `AZURE_KEY_VAULT_KEY_PREFIX=staging`: `staging-my-api-key`.
+
 ### apps/db-cli -- Database CLI
 
 - **Framework**: Commander + chalk + ora

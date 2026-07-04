@@ -368,7 +368,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                             {otp.map((digit, index) => (
                                 <input
                                     key={index}
-                                    ref={(el) => (otpRefs.current[index] = el)}
+                                    ref={(el) => { otpRefs.current[index] = el; }}
                                     type="text"
                                     inputMode="numeric"
                                     maxLength={1}

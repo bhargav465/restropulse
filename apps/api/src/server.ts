@@ -3,10 +3,12 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import http from 'node:http';
 import { fileURLToPath } from 'url';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, requestLoggingMiddleware, errorHandlerMiddleware, shutdownServerTelemetry } from '@restropulse/telemetry/server';
+import { createSecretsProvider, hydrateEnvFromProvider, API_SECRET_KEYS } from '@restropulse/secrets';
 import { initializeFirebaseAdmin } from './services/firebase-admin.js';
 // NOTE: Cron jobs (publishing + token refresh) are now handled by apps/publisher
 import authRoutes from './routes/auth.js';
@@ -61,6 +63,13 @@ const portConfig = getPortConfig();
 
 const booleanFlag = z.preprocess((v) => v === 'true', z.boolean()).default(false);
 
+if (process.env.SECRETS_BACKEND) {
+    await hydrateEnvFromProvider(
+        createSecretsProvider(process.env.SECRETS_BACKEND),
+        API_SECRET_KEYS,
+    );
+}
+
 const env = loadAndValidateEnv({
     serviceName: 'api',
     envPath: path.resolve(process.cwd(), '.env'),
@@ -72,10 +81,26 @@ const env = loadAndValidateEnv({
         MONGODB_DB_NAME: z.string().min(1).default('restropulse'),
         FRONTEND_URL: z.string().url(),
         BACKEND_URL: z.string().url(),
+        JWT_SECRET: z.string().min(1).default('restropulse-dev-secret-change-in-production'),
+        ENCRYPTION_KEY: z.string().regex(/^[A-Fa-f0-9]{64}$/).optional(),
+        FIREBASE_SERVICE_ACCOUNT_KEY: z.string().optional(),
+        FIREBASE_PROJECT_ID: z.string().optional(),
+        INSTAGRAM_APP_ID: z.string().optional(),
+        INSTAGRAM_APP_SECRET: z.string().optional(),
+        INSTAGRAM_REDIRECT_URI: z.string().optional(),
+        APPLICATIONINSIGHTS_CONNECTION_STRING: z.string().optional(),
+        SECRETS_BACKEND: z.enum(['env', 'azure-kv']).default('env'),
+        AZURE_KEY_VAULT_URL: z.string().url().optional(),
+        AZURE_KEY_VAULT_KEY_PREFIX: z.string().optional(),
         RAZORPAY_KEY_ID: z.string().min(1).optional(),
         RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
         RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
         FEATURE_DELETE_ACCOUNT: booleanFlag,
+        ENABLED_PLATFORMS: z.string().default('INSTAGRAM,FACEBOOK'),
+        // Adhoc post scheduling: minimum minutes ahead a post must be scheduled.
+        // ASAP defaults to exactly this value. Must be > POST_APPROVAL_BUFFER (120 min)
+        // to leave a review window. Default = 150 min (2h approval buffer + 30min review).
+        MIN_SCHEDULE_AHEAD_MINS: z.coerce.number().positive().default(150),
     }).passthrough(),
 });
 
@@ -124,6 +149,24 @@ app.use('/api/credit-packs', creditPackRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/account', accountRoutes);
+
+// Dev-only: proxy /dev-assets/* to the content-engine asset server (port 3002).
+// Allows the single ngrok tunnel to serve both API routes and placeholder media
+// URLs that Facebook CDN can reach during local publishing tests.
+if (env.NODE_ENV === 'development') {
+    const assetPort = parseInt(process.env.ASSET_SERVER_PORT ?? '3002', 10);
+    app.use('/dev-assets', (req: Request, res: Response) => {
+        const proxy = http.request(
+            { hostname: 'localhost', port: assetPort, path: req.url, method: req.method, headers: req.headers },
+            (proxyRes) => {
+                res.writeHead(proxyRes.statusCode ?? 200, proxyRes.headers);
+                proxyRes.pipe(res, { end: true });
+            },
+        );
+        proxy.on('error', () => res.status(502).json({ error: 'Asset server unavailable' }));
+        req.pipe(proxy, { end: true });
+    });
+}
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

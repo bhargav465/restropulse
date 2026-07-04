@@ -26,12 +26,19 @@ export type PostType = 'IMAGE' | 'VIDEO' | 'CAROUSEL' | 'STORY' | 'REEL';
 
 export type PostStatus =
   | 'PENDING_CONTENT'        // Awaiting content generation by content-engine
+  | 'PENDING_MEDIA'          // Caption ready; media generation in flight (phase 5)
   | 'PENDING_APPROVAL'       // Content created, awaiting user review
   | 'CHANGES_REQUESTED'      // User requested changes
   | 'SCHEDULED'              // Approved and scheduled for publishing
   | 'PUBLISHING'             // Currently being published by publisher worker
   | 'POSTED'                 // Successfully published
   | 'MISSED_DEADLINE';       // Failed after max retries
+
+export type GenerationStep =
+  | 'SEARCHING_TRENDS'   // currentAffairsHints being fetched (rare; sync)
+  | 'CAPTION_DONE'       // LLM caption produced
+  | 'MEDIA_REQUESTED'    // media job submitted (fal queue request_id captured)
+  | 'MEDIA_DONE';        // media URL retrieved and applied to post
 
 export type Platform = 'INSTAGRAM' | 'FACEBOOK';
 
@@ -175,7 +182,11 @@ export interface Post {
   publishError?: string;
   publishAttempts?: number;
   duration?: string;
-  strategyId?: string;
+  cycleId?: string;
+  // Phase 5 -- async media generation lifecycle
+  mediaJobId?: string;          // FK to mediaJobs.jobId when status=PENDING_MEDIA
+  generationStep?: GenerationStep;
+  lastStepAt?: string;          // ISO; updated when generationStep advances
   isAdhoc?: boolean;
   instagramMediaId?: string;
   facebookPostId?: string;
@@ -368,6 +379,13 @@ export interface FeatureFlags {
   deleteAccount: boolean;
   topupCredits: boolean;
   updatesSection: boolean;
+  // Runtime scheduling config — optional so existing tests don't need updating.
+  // The frontend falls back to compile-time constants when absent.
+  minScheduleAheadMins?: number;
+  postApprovalBufferMins?: number;
+  cycleApprovalBufferMins?: number;
+  // Which social platforms are active. When absent, all platforms are enabled.
+  enabledPlatforms?: Platform[];
 }
 
 // ----- Account Deletion / Archive -----
@@ -448,3 +466,19 @@ export interface GeneratePostResponse {
 }
 
 export { loadEnvFile, validateEnv, loadAndValidateEnv, z } from './env.js';
+
+export {
+  POST_APPROVAL_BUFFER_HOURS,
+  CYCLE_APPROVAL_BUFFER_HOURS,
+  ROLLING_WINDOW_HOURS,
+  MIN_SCHEDULE_AHEAD_HOURS,
+  computePostApprovalDeadline,
+  computeCycleApprovalDeadline,
+  isPostPastApprovalDeadline,
+  isCyclePastApprovalDeadline,
+  validateTimingConstraints,
+} from './approval-deadlines.js';
+export type { TimingConstraintConfig } from './approval-deadlines.js';
+
+export * from './cost-events.js';
+export * from './media-jobs.js';

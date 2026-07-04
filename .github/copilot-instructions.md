@@ -177,3 +177,31 @@ Full setup details: `docs/MCP-SETUP.md`
 - `docs/INFRASTRUCTURE.md` -- Env vars, ports, cron schedules, external services, CI/CD pipeline
 - `docs/TESTING.md` -- Testing stack, conventions, examples
 - `docs/MCP-SETUP.md` -- MCP server configuration, tool-routing rules, troubleshooting
+
+## Content Engine AI Backend
+
+The content-engine has two pluggable backends behind a feature flag:
+
+- `CONTENT_GENERATOR_BACKEND=placeholder` (default, production): asset catalog at `apps/content-engine/src/services/content-generator/backends/placeholder/`
+- `CONTENT_GENERATOR_BACKEND=ai`: AI orchestration at `apps/content-engine/src/services/content-generator/backends/ai/`
+
+The AI backend composes four pluggable seams (`ILLMProvider`, `IMediaGenerator`, `ICurrentAffairsProvider`, `IDomainSpecialization`). `CONTENT_GENERATOR_BACKEND=ai` is an "uber" master flag -- when set, all four sub-features default-on (Anthropic + fal.ai + V1 calendar + V2 Sonar) and all four required keys must be present. The factory throws a single combined error listing every missing key. Sub-flag overrides (`MEDIA_BACKEND=placeholder`, `CURRENT_AFFAIRS_V1_ENABLED=false`, `CURRENT_AFFAIRS_V2_ENABLED=false`) exist for debug/staged rollout but are advanced operator opt-outs, not the supported normal mode.
+
+See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the rollout runbook, `docs/SECRETS.md` for how to obtain the four required keys, and `docs/adr/0001-content-engine-ai-framework.md` for design rationale.
+
+Per-call cost events flow into both `costEvents` (MongoDB) and Application Insights `customEvents` (queryable from the workbooks at `infra/workbooks/`).
+
+When changing AI-backend code:
+- Tests use mocked external APIs (`vi.mock('ai', ...)` for Vercel AI SDK; mocked `fetch` for fal.ai/Sonar/Calendar). Do not introduce real network calls.
+- The `CostEvent` type lives in `@restropulse/shared`; the `MediaJobRecord` type lives there too. Don't duplicate types in app-local files.
+- Adding a new external API surface (e.g. a new media provider): also add per-call pricing in the relevant `pricing.ts` so cost dashboards stay accurate.
+
+## Secrets Management
+
+All secrets flow through `@restropulse/secrets` (`packages/secrets/`). Key conventions when working on this codebase:
+- Never read secrets directly from `process.env` in new code -- add them to the app's Zod schema and `config/secrets-manifest.ts`
+- Per-service scoping: each app only hydrates its own keys via `getAppSecretKeys(appName)`. The manifest is the authoritative list of which app owns which secret
+- `SECRETS_BACKEND=azure-kv` enables Key Vault at startup; application code (Zod schemas, `process.env` reads) is unchanged
+- Integration tests (`tests/integration/`): use `requireSecrets(suiteName, keys)` which throws on any missing secret -- no skip mechanism. Tests are manual-trigger only via `workflow_dispatch`
+- Key Vault naming: `MY_API_KEY` -> `my-api-key` (kebab-case). With `AZURE_KEY_VAULT_KEY_PREFIX=dev`: `dev-my-api-key`
+- See `docs/INTEGRATION_TESTING.md` for how to run and add integration tests

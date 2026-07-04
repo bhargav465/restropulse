@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Platform } from '@restropulse/shared';
 import { render, screen, waitFor, fireEvent } from './utils/test-utils';
 import Dashboard from '../components/Dashboard';
 
@@ -34,7 +35,7 @@ describe('Dashboard Component', () => {
             type: 'IMAGE' as const,
             status: 'PENDING_APPROVAL' as const,
             thumbnail: '/pasta.jpg',
-            platforms: ['INSTAGRAM'] as const,
+            platforms: ['INSTAGRAM'] as Platform[],
         },
         {
             id: 'p2',
@@ -42,7 +43,7 @@ describe('Dashboard Component', () => {
             type: 'VIDEO' as const,
             status: 'CHANGES_REQUESTED' as const,
             thumbnail: '/ingredients.jpg',
-            platforms: ['FACEBOOK'] as const,
+            platforms: ['FACEBOOK'] as Platform[],
         },
         {
             id: 'p3',
@@ -50,7 +51,7 @@ describe('Dashboard Component', () => {
             type: 'IMAGE' as const,
             status: 'SCHEDULED' as const,
             thumbnail: '/special.jpg',
-            platforms: ['INSTAGRAM', 'FACEBOOK'] as const,
+            platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[],
             scheduledFor: '2024-12-25',
         },
     ];
@@ -174,7 +175,7 @@ describe('Dashboard Component', () => {
         it('should display single-platform label for a scheduled post with one platform', async () => {
             const singlePlatformPost = {
                 ...mockPosts[2],
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([singlePlatformPost]);
             render(<Dashboard restaurantData={mockRestaurant} />);
@@ -287,6 +288,7 @@ describe('Dashboard Component', () => {
                     { type: 'IMAGE', count: 8 },
                     { type: 'REEL', count: 3 },
                 ],
+                platformMix: [],
             });
 
             render(<Dashboard restaurantData={mockRestaurant} />);
@@ -307,6 +309,7 @@ describe('Dashboard Component', () => {
                     { type: 'VIDEO', count: 1 },
                     { type: 'STORY', count: 4 },
                 ],
+                platformMix: [],
             });
 
             render(<Dashboard restaurantData={mockRestaurant} />);
@@ -333,6 +336,7 @@ describe('Dashboard Component', () => {
             vi.mocked(restaurantAPI.getAnalytics).mockResolvedValue({
                 postsPerWeek: [{ week: 1, posts: 2 }],
                 contentMix: undefined as any,
+                platformMix: [],
             });
 
             render(<Dashboard restaurantData={mockRestaurant} />);
@@ -356,6 +360,7 @@ describe('Dashboard Component', () => {
             vi.mocked(restaurantAPI.getAnalytics).mockResolvedValue({
                 postsPerWeek: [],
                 contentMix: [{ type: 'UNKNOWN_TYPE', count: 7 }],
+                platformMix: [],
             });
 
             render(<Dashboard restaurantData={mockRestaurant} />);

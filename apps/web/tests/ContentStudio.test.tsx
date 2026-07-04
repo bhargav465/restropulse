@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Platform } from '@restropulse/shared';
 import { render, screen, fireEvent, waitFor } from './utils/test-utils';
 import ContentStudio from '../components/ContentStudio';
 
@@ -52,7 +53,7 @@ describe('ContentStudio Component', () => {
             type: 'IMAGE' as const,
             status: 'PENDING_APPROVAL' as const,
             thumbnail: '/mock.jpg',
-            platforms: ['INSTAGRAM'] as const,
+            platforms: ['INSTAGRAM'] as Platform[],
             createdAt: new Date().toISOString(),
         },
         {
@@ -61,7 +62,7 @@ describe('ContentStudio Component', () => {
             type: 'VIDEO' as const,
             status: 'PENDING_APPROVAL' as const,
             thumbnail: '/mock.jpg',
-            platforms: ['INSTAGRAM'] as const,
+            platforms: ['INSTAGRAM'] as Platform[],
             createdAt: new Date().toISOString(),
         },
         {
@@ -70,7 +71,7 @@ describe('ContentStudio Component', () => {
             type: 'IMAGE' as const,
             status: 'SCHEDULED' as const,
             thumbnail: '/special.jpg',
-            platforms: ['INSTAGRAM', 'FACEBOOK'] as const,
+            platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[],
             scheduledFor: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
         },
         {
@@ -79,7 +80,7 @@ describe('ContentStudio Component', () => {
             type: 'IMAGE' as const,
             status: 'POSTED' as const,
             thumbnail: '/posted.jpg',
-            platforms: ['FACEBOOK'] as const,
+            platforms: ['FACEBOOK'] as Platform[],
             postedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
         },
     ];
@@ -190,6 +191,82 @@ describe('ContentStudio Component', () => {
         });
     });
 
+    describe('In-flight generation states', () => {
+        it('shows PENDING_CONTENT posts in the Review tab with a "Generating" badge', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([
+                {
+                    id: 'p_gen',
+                    caption: '',
+                    type: 'IMAGE' as const,
+                    status: 'PENDING_CONTENT' as const,
+                    thumbnail: '/mock.jpg',
+                    platforms: ['INSTAGRAM'] as Platform[],
+                    createdAt: new Date().toISOString(),
+                },
+            ]);
+
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => {
+                // The "Generating" badge text should be rendered
+                expect(screen.getByText('Generating')).toBeInTheDocument();
+                // And the placeholder caption hint
+                expect(screen.getByText(/Caption will appear here/i)).toBeInTheDocument();
+            });
+        });
+
+        it('shows PENDING_MEDIA posts in the Review tab with a "Generating media" badge and the real caption', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([
+                {
+                    id: 'p_media',
+                    caption: 'A warm kitchen reel',
+                    type: 'REEL' as const,
+                    status: 'PENDING_MEDIA' as const,
+                    thumbnail: '',
+                    platforms: ['INSTAGRAM'] as Platform[],
+                    mediaJobId: 'job_v1',
+                    generationStep: 'MEDIA_REQUESTED' as const,
+                    createdAt: new Date().toISOString(),
+                },
+            ]);
+
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => {
+                // The "Generating media" badge appears for PENDING_MEDIA posts
+                expect(screen.getByText('Generating media')).toBeInTheDocument();
+                // The caption is the real LLM-produced one (not the placeholder hint)
+                expect(screen.getByText('A warm kitchen reel')).toBeInTheDocument();
+                expect(screen.queryByText(/Caption will appear here/i)).not.toBeInTheDocument();
+            });
+        });
+
+        it('does NOT render Approve button for PENDING_MEDIA posts (action gated until poller completes)', async () => {
+            vi.mocked(postsAPI.getAll).mockResolvedValue([
+                {
+                    id: 'p_media2',
+                    caption: 'Another reel',
+                    type: 'REEL' as const,
+                    status: 'PENDING_MEDIA' as const,
+                    thumbnail: '',
+                    platforms: ['INSTAGRAM'] as Platform[],
+                    mediaJobId: 'job_v2',
+                    createdAt: new Date().toISOString(),
+                },
+            ]);
+
+            render(<ContentStudio instagramConnected={true} />);
+
+            await waitFor(() => {
+                // Post is rendered (badge visible) but the Approve button is not
+                expect(screen.getByText('Generating media')).toBeInTheDocument();
+                const buttons = screen.getAllByRole('button');
+                const approveButton = buttons.find(btn => btn.textContent?.trim() === 'Approve');
+                expect(approveButton).toBeUndefined();
+            });
+        });
+    });
+
     describe('Empty States', () => {
         it('should render when posts list is empty for review', async () => {
             vi.mocked(postsAPI.getAll).mockResolvedValue([
@@ -199,7 +276,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'SCHEDULED' as const,
                     thumbnail: '/mock.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     scheduledFor: new Date().toISOString(),
                 },
             ]);
@@ -220,7 +297,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/mock.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                 },
             ]);
 
@@ -343,7 +420,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/carousel1.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/carousel1.jpg', '/carousel2.jpg', '/carousel3.jpg'],
             };
@@ -363,7 +440,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/carousel1.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/carousel1.jpg', '/carousel2.jpg'],
             };
@@ -387,7 +464,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/video-thumb.jpg',
                 videoUrl: '/video.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 duration: '0:30',
             };
@@ -408,7 +485,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/story-thumb.jpg',
                 videoUrl: '/story.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
 
@@ -451,7 +528,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/feedback.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption', 'Media'],
@@ -477,7 +554,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/multi.jpg',
-                platforms: ['INSTAGRAM', 'FACEBOOK'] as const,
+                platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
 
@@ -573,7 +650,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/adhoc.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 // No scheduledFor set
             };
@@ -638,7 +715,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/missed.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
 
@@ -660,7 +737,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/video-thumb.jpg',
                 videoUrl: '/video.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 duration: '0:45',
             };
@@ -684,7 +761,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/video-thumb.jpg',
                 videoUrl: '/video.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 duration: '1:30',
             };
@@ -706,7 +783,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg', '/car3.jpg'],
             };
@@ -726,7 +803,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg'],
             };
@@ -753,7 +830,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/future.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             };
 
@@ -775,7 +852,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'POSTED' as const,
                 thumbnail: '/past.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 postedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
             };
 
@@ -799,7 +876,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/fb.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption', 'Timing'],
@@ -823,7 +900,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/fb2.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 feedback: 'Simple text feedback',
             };
@@ -846,7 +923,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p1.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     createdAt: new Date().toISOString(),
                 },
                 {
@@ -855,7 +932,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p2.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     createdAt: new Date().toISOString(),
                 },
             ];
@@ -876,7 +953,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p1.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     createdAt: new Date().toISOString(),
                 },
                 {
@@ -885,7 +962,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'SCHEDULED' as const,
                     thumbnail: '/s1.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     scheduledFor: new Date().toISOString(),
                 },
             ];
@@ -919,7 +996,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/fb.jpg',
-                platforms: ['FACEBOOK'] as const,
+                platforms: ['FACEBOOK'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
 
@@ -938,7 +1015,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/both.jpg',
-                platforms: ['INSTAGRAM', 'FACEBOOK'] as const,
+                platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
 
@@ -970,7 +1047,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'POSTED' as const,
                     thumbnail: '/p1.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     postedAt: new Date().toISOString(),
                 },
             ]);
@@ -996,7 +1073,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'CHANGES_REQUESTED' as const,
                     thumbnail: '/img.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     createdAt: new Date().toISOString(),
                     feedback: '{"broken": json',
                 },
@@ -1006,7 +1083,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'CHANGES_REQUESTED' as const,
                     thumbnail: '/img.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     createdAt: new Date().toISOString(),
                     feedback: '{}',
                 }
@@ -1035,7 +1112,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
@@ -1063,7 +1140,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 // Scheduled 1 hour from now
                 scheduledFor: new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(),
             };
@@ -1088,7 +1165,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 // Scheduled 5 hours from now
                 scheduledFor: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
             };
@@ -1121,7 +1198,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
@@ -1170,7 +1247,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
@@ -1202,7 +1279,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([scheduledPost]);
@@ -1248,7 +1325,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1279,7 +1356,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
             render(<ContentStudio instagramConnected={true} />);
@@ -1310,7 +1387,7 @@ describe('ContentStudio Component', () => {
                 type: 'REEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
 
@@ -1331,7 +1408,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'MISSED_DEADLINE' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 postedAt: new Date().toISOString(),
                 publishError: 'Media upload failed'
             };
@@ -1356,7 +1433,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 scheduledFor: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1397,7 +1474,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
 
@@ -1426,7 +1503,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg', '/car3.jpg'],
             };
@@ -1462,7 +1539,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg'],
             };
@@ -1503,7 +1580,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg'],
             };
@@ -1540,7 +1617,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
@@ -1576,7 +1653,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1610,7 +1687,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1649,7 +1726,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/img.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     createdAt: new Date().toISOString(),
                 },
             ];
@@ -1661,7 +1738,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/img2.jpg',
-                    platforms: ['INSTAGRAM'] as const,
+                    platforms: ['INSTAGRAM'] as Platform[],
                     createdAt: new Date().toISOString(),
                 },
             ];
@@ -1692,7 +1769,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
@@ -1730,7 +1807,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1767,7 +1844,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption', 'Media'],
@@ -1807,7 +1884,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Other'],
@@ -1856,7 +1933,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
@@ -1888,7 +1965,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
@@ -1922,7 +1999,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Other'],
@@ -1974,7 +2051,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([freshPost]);
@@ -2103,7 +2180,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 scheduledFor: futureDate,
                 createdAt: new Date().toISOString(),
             };
@@ -2127,7 +2204,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
@@ -2150,7 +2227,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
@@ -2174,7 +2251,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg'],
             };
@@ -2194,7 +2271,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([imagePost]);
@@ -2215,7 +2292,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([initialPost]);
@@ -2245,7 +2322,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([freshPost]);
@@ -2300,7 +2377,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
                 // feedback with a tag that has empty detail - unusual state but tests the guard
                 feedback: JSON.stringify({
@@ -2343,7 +2420,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as const,
+                platforms: ['INSTAGRAM'] as Platform[],
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([freshPost]);
