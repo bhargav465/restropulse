@@ -58,6 +58,14 @@ restropulse-pwa-database/
 # Git worktrees
 .claude/worktrees/
 
+# Scratch/scraper data (not part of the shipped app)
+/tmp/
+
+# Plan docs from other feature worktrees that ended up here by mistake
+docs/superpowers/plans/2026-06-03-digital-marketing-corpus.md
+docs/superpowers/plans/2026-06-03-playground-setup.md
+docs/superpowers/plans/2026-06-03-restaurant-db-acquisition.md
+
 # Integration test secrets
 tests/integration/.env.integration
 tests/integration/.env.integration.*
