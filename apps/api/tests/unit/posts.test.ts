@@ -812,7 +812,7 @@ describe('Posts Module', () => {
                 expect(response.body.data.type).toBe('IMAGE');
             });
 
-            it('should set default platform to INSTAGRAM if not provided', async () => {
+            it('should set default platforms from ENABLED_PLATFORMS if not provided', async () => {
                 const adhocPost = {
                     caption: 'Quick announcement'
                 };
@@ -823,7 +823,8 @@ describe('Posts Module', () => {
                     .send(adhocPost);
 
                 expect(response.status).toBe(201);
-                expect(response.body.data.platforms).toEqual(['INSTAGRAM']);
+                // Default derives from ENABLED_PLATFORMS (unset in tests -> both platforms)
+                expect(response.body.data.platforms).toEqual(['INSTAGRAM', 'FACEBOOK']);
             });
 
             it('should set default thumbnail if not provided', async () => {
@@ -890,7 +891,8 @@ describe('Posts Module', () => {
                 expect(data.restaurantId).toBe('r1');
                 expect(data.type).toBe('IMAGE');
                 expect(data.status).toBe('PENDING_APPROVAL');
-                expect(data.platforms).toEqual(['INSTAGRAM']);
+                // Default derives from ENABLED_PLATFORMS (unset in tests -> both platforms)
+                expect(data.platforms).toEqual(['INSTAGRAM', 'FACEBOOK']);
                 expect(data.caption).toBe('Bare minimum post');
                 expect(data.thumbnail).toMatch(/^https:\/\/picsum\.photos\/seed\/\d+\/400\/400$/);
                 expect(data.isAdhoc).toBe(true);
@@ -1123,7 +1125,8 @@ describe('Posts Module', () => {
                 expect(response.status).toBe(201);
                 expect(response.body.success).toBe(true);
                 expect(response.body.data.type).toBe('IMAGE');
-                expect(response.body.data.platforms).toEqual(['INSTAGRAM']);
+                // Default derives from ENABLED_PLATFORMS (unset in tests -> both platforms)
+                expect(response.body.data.platforms).toEqual(['INSTAGRAM', 'FACEBOOK']);
                 // Route now creates a PENDING_CONTENT stub; content-engine fills in media
                 expect(response.body.data.status).toBe('PENDING_CONTENT');
                 expect(response.body.data.concept).toBe('New lunch combo launch');
