@@ -109,6 +109,53 @@ export async function getWeeklyPostCounts(
   return result;
 }
 
+/**
+ * Get today's adhoc post counts for a restaurant, grouped by platform and post type.
+ * Counts only isAdhoc posts created since local midnight (mirrors getWeeklyPostCounts).
+ */
+export async function getDailyAdhocPostCounts(
+  restaurantId: string,
+): Promise<Record<Platform, Record<PostType, number>>> {
+  const postsCol = getPostsCollection();
+
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+
+  const counts = await postsCol
+    .aggregate([
+      {
+        $match: {
+          restaurantId,
+          isAdhoc: true,
+          createdAt: { $gte: dayStart },
+          status: { $nin: ['MISSED_DEADLINE'] },
+        },
+      },
+      { $unwind: '$platforms' },
+      { $group: { _id: { type: '$type', platform: '$platforms' }, count: { $sum: 1 } } },
+    ])
+    .toArray();
+
+  const emptyPostTypeCounts = (): Record<PostType, number> => ({
+    IMAGE: 0, VIDEO: 0, STORY: 0, CAROUSEL: 0, REEL: 0,
+  });
+
+  const result: Record<Platform, Record<PostType, number>> = {
+    INSTAGRAM: emptyPostTypeCounts(),
+    FACEBOOK: emptyPostTypeCounts(),
+  };
+
+  for (const item of counts) {
+    const platform = item._id.platform as Platform;
+    const postType = item._id.type as PostType;
+    if (platform in result && postType in result[platform]) {
+      result[platform][postType] = item.count;
+    }
+  }
+
+  return result;
+}
+
 export async function deductCredits(subscriptionId: string, amount: number): Promise<boolean> {
   const col = getSubscriptionsCollection();
   const result = await col.updateOne(

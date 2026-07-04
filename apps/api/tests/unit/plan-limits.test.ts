@@ -4,6 +4,7 @@ import request from 'supertest';
 // Define Mocks
 const mockFindActiveSubscription = vi.fn();
 const mockGetWeeklyPostCounts = vi.fn();
+const mockGetDailyAdhocPostCounts = vi.fn();
 const mockDeductCredits = vi.fn();
 const mockCreatePost = vi.fn();
 const mockFindAllPosts = vi.fn();
@@ -19,6 +20,7 @@ vi.mock('@restropulse/db', async (importOriginal) => {
         ...actual,
         findActiveSubscription: mockFindActiveSubscription,
         getWeeklyPostCounts: mockGetWeeklyPostCounts,
+        getDailyAdhocPostCounts: mockGetDailyAdhocPostCounts,
         deductCredits: mockDeductCredits,
         createPost: mockCreatePost,
         findAllPosts: mockFindAllPosts,
@@ -69,6 +71,7 @@ const growthLimits = {
 describe('enforcePlanLimits Middleware', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockGetDailyAdhocPostCounts.mockResolvedValue(emptyCounts());
         mockCreatePost.mockResolvedValue({
             id: 'p-new', type: 'IMAGE', status: 'PENDING_APPROVAL',
             caption: 'Test', thumbnail: '/test.jpg', platforms: ['INSTAGRAM'],
@@ -387,6 +390,102 @@ describe('enforcePlanLimits Middleware', () => {
                 });
 
             expect(res.status).toBe(201);
+            expect(mockDeductCredits).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Daily adhoc post limit', () => {
+        const growthLimitsWithDailyAdhoc = {
+            weekly: growthLimits.weekly,
+            dailyAdhoc: {
+                INSTAGRAM: { IMAGE: 2, STORY: 2, CAROUSEL: 1, REEL: 1, VIDEO: 1 },
+            },
+        };
+
+        test('should allow adhoc post when within both weekly and daily adhoc limits', async () => {
+            mockFindActiveSubscription.mockResolvedValue({
+                id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
+                planSnapshot: { limits: growthLimitsWithDailyAdhoc },
+            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts());
+            const dailyCounts = emptyCounts();
+            dailyCounts.INSTAGRAM.IMAGE = 1; // below dailyAdhoc limit of 2
+            mockGetDailyAdhocPostCounts.mockResolvedValue(dailyCounts);
+
+            const res = await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['INSTAGRAM'],
+                });
+
+            expect(res.status).toBe(201);
+            expect(mockDeductCredits).not.toHaveBeenCalled();
+        });
+
+        test('should fall back to credits when within weekly limit but at daily adhoc limit', async () => {
+            mockFindActiveSubscription.mockResolvedValue({
+                id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
+                planSnapshot: { limits: growthLimitsWithDailyAdhoc },
+            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts()); // plenty of weekly room
+            const dailyCounts = emptyCounts();
+            dailyCounts.INSTAGRAM.IMAGE = 2; // at dailyAdhoc limit
+            mockGetDailyAdhocPostCounts.mockResolvedValue(dailyCounts);
+
+            const res = await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['INSTAGRAM'],
+                });
+
+            expect(res.status).toBe(201);
+            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 1);
+        });
+
+        test('should not apply daily adhoc limit to strategy-generated posts', async () => {
+            mockFindActiveSubscription.mockResolvedValue({
+                id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
+                planSnapshot: { limits: growthLimitsWithDailyAdhoc },
+            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts());
+            const dailyCounts = emptyCounts();
+            dailyCounts.INSTAGRAM.IMAGE = 2; // at dailyAdhoc limit -- should not matter here
+            mockGetDailyAdhocPostCounts.mockResolvedValue(dailyCounts);
+
+            const res = await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['INSTAGRAM'], strategyId: 'cycle-1',
+                });
+
+            expect(res.status).toBe(201);
+            expect(mockGetDailyAdhocPostCounts).not.toHaveBeenCalled();
+            expect(mockDeductCredits).not.toHaveBeenCalled();
+        });
+
+        test('should skip daily adhoc check entirely when plan has no dailyAdhoc limits configured', async () => {
+            mockFindActiveSubscription.mockResolvedValue({
+                id: 'sub-1', restaurantId: 'r1', status: 'ACTIVE', credits: 10,
+                planSnapshot: { limits: growthLimits }, // no dailyAdhoc key
+            });
+            mockGetWeeklyPostCounts.mockResolvedValue(emptyCounts());
+
+            const res = await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['INSTAGRAM'],
+                });
+
+            expect(res.status).toBe(201);
+            expect(mockGetDailyAdhocPostCounts).not.toHaveBeenCalled();
             expect(mockDeductCredits).not.toHaveBeenCalled();
         });
     });

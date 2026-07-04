@@ -230,6 +230,7 @@ export const FREE_SIGNUP_CREDITS = 20;
 export type PostTypeLimits = Partial<Record<PostType, number>>;
 export interface PlanLimits {
   weekly: Partial<Record<Platform, PostTypeLimits>>;
+  dailyAdhoc?: Partial<Record<Platform, PostTypeLimits>>;
 }
 
 export interface PlanPricing {
