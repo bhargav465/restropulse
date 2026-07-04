@@ -19,8 +19,7 @@ config({ path: resolve(ROOT, 'apps/publisher/.env'), override: false });
 // (AZURE_KEY_VAULT_KEY_PREFIX) determines which environment's values are used —
 // 'dev', 'staging', or 'prod'. Individual suites call requireSecrets() unchanged.
 if (process.env.SECRETS_BACKEND === 'azure-kv') {
-  const { createSecretsProvider, hydrateEnvFromProvider } = await import('@restropulse/secrets');
-  const { SECRETS_MANIFEST } = await import('../../../config/secrets-manifest.js');
+  const { createSecretsProvider, hydrateEnvFromProvider, SECRETS_MANIFEST } = await import('@restropulse/secrets');
   const allKeys = SECRETS_MANIFEST.filter(s => !s.buildTime).map(s => s.key);
   await hydrateEnvFromProvider(createSecretsProvider('azure-kv'), allKeys);
 }

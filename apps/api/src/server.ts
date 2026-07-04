@@ -8,8 +8,7 @@ import { fileURLToPath } from 'url';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, requestLoggingMiddleware, errorHandlerMiddleware, shutdownServerTelemetry } from '@restropulse/telemetry/server';
-import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
-import { API_SECRET_KEYS } from '../../../config/secrets-manifest.js';
+import { createSecretsProvider, hydrateEnvFromProvider, API_SECRET_KEYS } from '@restropulse/secrets';
 import { initializeFirebaseAdmin } from './services/firebase-admin.js';
 // NOTE: Cron jobs (publishing + token refresh) are now handled by apps/publisher
 import authRoutes from './routes/auth.js';

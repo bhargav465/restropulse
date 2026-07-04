@@ -11,8 +11,7 @@ import { resolve } from 'path';
 import { createInterface } from 'readline/promises';
 import { stdin, stdout } from 'process';
 import chalk from 'chalk';
-import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
-import { DB_CLI_SECRET_KEYS } from '../../../../config/secrets-manifest.js';
+import { createSecretsProvider, hydrateEnvFromProvider, DB_CLI_SECRET_KEYS } from '@restropulse/secrets';
 
 const VALID_ENVS = ['development', 'staging', 'production'] as const;
 type ResolvedEnv = typeof VALID_ENVS[number];

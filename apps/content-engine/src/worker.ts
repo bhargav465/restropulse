@@ -28,8 +28,7 @@ import cron from 'node-cron';
 import { loadAndValidateEnv, z, ROLLING_WINDOW_HOURS, POST_APPROVAL_BUFFER_HOURS, CYCLE_APPROVAL_BUFFER_HOURS, validateTimingConstraints } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, shutdownServerTelemetry, tracedCronJob } from '@restropulse/telemetry/server';
-import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
-import { CONTENT_ENGINE_SECRET_KEYS } from '../../../config/secrets-manifest.js';
+import { createSecretsProvider, hydrateEnvFromProvider, CONTENT_ENGINE_SECRET_KEYS } from '@restropulse/secrets';
 import {
   createAdhocProcessor,
   createStrategyProcessor,

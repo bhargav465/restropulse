@@ -20,8 +20,7 @@ import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { startPublishingCron, startTokenRefreshCron } from '@restropulse/publishing';
 import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
-import { createSecretsProvider, hydrateEnvFromProvider } from '@restropulse/secrets';
-import { PUBLISHER_SECRET_KEYS } from '../../../config/secrets-manifest.js';
+import { createSecretsProvider, hydrateEnvFromProvider, PUBLISHER_SECRET_KEYS } from '@restropulse/secrets';
 
 const logger = createLogger('publisher');
 
