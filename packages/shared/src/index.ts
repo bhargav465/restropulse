@@ -37,7 +37,7 @@ export type PostStatus =
 export type GenerationStep =
   | 'SEARCHING_TRENDS'   // currentAffairsHints being fetched (rare; sync)
   | 'CAPTION_DONE'       // LLM caption produced
-  | 'MEDIA_REQUESTED'    // media job submitted (fal queue request_id captured)
+  | 'MEDIA_REQUESTED'    // media job submitted (provider queue request id captured)
   | 'MEDIA_DONE';        // media URL retrieved and applied to post
 
 export type Platform = 'INSTAGRAM' | 'FACEBOOK';
