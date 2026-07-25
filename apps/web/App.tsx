@@ -59,6 +59,14 @@ const App: React.FC = () => {
         document.documentElement.dataset.theme = activeWebTheme;
     }, [activeWebTheme]);
 
+    // Load public config (feature flags incl. web theme) on boot, independent of
+    // auth. These come from a public endpoint, so fetching them here — rather than
+    // only after login — ensures the configured theme and platform flags apply on
+    // pre-auth screens (login, onboarding) too, and refreshes any stale localStorage cache.
+    useEffect(() => {
+        configAPI.getFeatures().then(updateFeatureFlags).catch(() => {});
+    }, []);
+
     // Check if this is an Instagram OAuth callback
     useEffect(() => {
         const path = window.location.pathname;
@@ -109,7 +117,6 @@ const App: React.FC = () => {
                         } catch { /* ignore */ }
 
                         setIsLoggedIn(true);
-                        configAPI.getFeatures().then(updateFeatureFlags).catch(() => {});
                         if (!window.history.state) {
                             window.history.replaceState({ view: 'DASHBOARD' }, '');
                         }
