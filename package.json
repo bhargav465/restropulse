@@ -42,7 +42,8 @@
     "reindex": "node scripts/reindex-rag.mjs",
     "playground": "npm run playground --workspace=@restropulse/content-engine --",
     "prepare": "husky",
-    "env:edit": "node scripts/env-editor.mjs"
+    "env:edit": "node scripts/env-editor.mjs",
+    "secrets:pull": "node scripts/secrets-pull.mjs"
   },
   "devDependencies": {
     "@clack/prompts": "^0.9.1",

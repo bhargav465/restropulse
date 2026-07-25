@@ -39,17 +39,17 @@ export const SECRETS_MANIFEST: SecretDefinition[] = [
   { key: 'AZURE_KEY_VAULT_URL', kvName: '', description: 'Key Vault URL when SECRETS_BACKEND=azure-kv', apps: ['api', 'publisher', 'content-engine'], required: false, category: 'azure' },
   { key: 'AZURE_KEY_VAULT_KEY_PREFIX', kvName: '', description: 'Optional prefix for KV secret names', apps: ['api', 'publisher', 'content-engine'], required: false, category: 'azure' },
   // Web build-time (VITE_* -- cannot come from KV at runtime)
-  { key: 'VITE_API_URL', kvName: 'vite-api-url', description: 'Backend API base URL', apps: ['web'], required: true, category: 'config', buildTime: true },
-  { key: 'VITE_APP_URL', kvName: 'vite-app-url', description: 'Frontend public URL', apps: ['web'], required: true, category: 'config', buildTime: true },
-  { key: 'VITE_FIREBASE_API_KEY', kvName: 'vite-firebase-api-key', description: 'Firebase Web API key', apps: ['web'], required: true, category: 'auth', buildTime: true },
-  { key: 'VITE_FIREBASE_AUTH_DOMAIN', kvName: 'vite-firebase-auth-domain', description: 'Firebase auth domain', apps: ['web'], required: true, category: 'auth', buildTime: true },
-  { key: 'VITE_FIREBASE_PROJECT_ID', kvName: 'vite-firebase-project-id', description: 'Firebase project ID', apps: ['web'], required: true, category: 'auth', buildTime: true },
-  { key: 'VITE_FIREBASE_STORAGE_BUCKET', kvName: 'vite-firebase-storage-bucket', description: 'Firebase storage bucket', apps: ['web'], required: false, category: 'auth', buildTime: true },
-  { key: 'VITE_FIREBASE_MESSAGING_SENDER_ID', kvName: 'vite-firebase-messaging-sender-id', description: 'Firebase messaging sender ID', apps: ['web'], required: false, category: 'auth', buildTime: true },
-  { key: 'VITE_FIREBASE_APP_ID', kvName: 'vite-firebase-app-id', description: 'Firebase app ID', apps: ['web'], required: false, category: 'auth', buildTime: true },
-  { key: 'VITE_APPINSIGHTS_CONNECTION_STRING', kvName: 'vite-appinsights-connection-string', description: 'App Insights connection string for browser SDK', apps: ['web'], required: false, category: 'azure', buildTime: true },
-  { key: 'VITE_GOOGLE_MAPS_API_KEY', kvName: 'vite-google-maps-api-key', description: 'Google Maps Places API key', apps: ['web'], required: false, category: 'config', buildTime: true },
-  { key: 'VITE_RAZORPAY_KEY_ID', kvName: 'vite-razorpay-key-id', description: 'Razorpay public key for checkout SDK', apps: ['web'], required: false, category: 'payment', buildTime: true },
+  { key: 'VITE_API_URL', kvName: '', description: 'Backend API base URL', apps: ['web'], required: true, category: 'config', buildTime: true }, // not in KV; supplied by CI vars
+  { key: 'VITE_APP_URL', kvName: '', description: 'Frontend public URL', apps: ['web'], required: true, category: 'config', buildTime: true }, // not in KV; supplied by CI vars
+  { key: 'VITE_FIREBASE_API_KEY', kvName: 'firebase-api-key', description: 'Firebase Web API key', apps: ['web'], required: true, category: 'auth', buildTime: true },
+  { key: 'VITE_FIREBASE_AUTH_DOMAIN', kvName: 'firebase-auth-domain', description: 'Firebase auth domain', apps: ['web'], required: true, category: 'auth', buildTime: true },
+  { key: 'VITE_FIREBASE_PROJECT_ID', kvName: 'firebase-project-id', description: 'Firebase project ID', apps: ['web'], required: true, category: 'auth', buildTime: true },
+  { key: 'VITE_FIREBASE_STORAGE_BUCKET', kvName: 'firebase-storage-bucket', description: 'Firebase storage bucket', apps: ['web'], required: false, category: 'auth', buildTime: true },
+  { key: 'VITE_FIREBASE_MESSAGING_SENDER_ID', kvName: 'firebase-messaging-sender-id', description: 'Firebase messaging sender ID', apps: ['web'], required: false, category: 'auth', buildTime: true },
+  { key: 'VITE_FIREBASE_APP_ID', kvName: 'firebase-app-id', description: 'Firebase app ID', apps: ['web'], required: false, category: 'auth', buildTime: true },
+  { key: 'VITE_APPINSIGHTS_CONNECTION_STRING', kvName: 'web-appinsights-connection-string', description: 'App Insights connection string for browser SDK', apps: ['web'], required: false, category: 'azure', buildTime: true },
+  { key: 'VITE_GOOGLE_MAPS_API_KEY', kvName: 'web-google-maps-api-key', description: 'Google Maps Places API key', apps: ['web'], required: false, category: 'config', buildTime: true },
+  { key: 'VITE_RAZORPAY_KEY_ID', kvName: 'razorpay-key-id', description: 'Razorpay public key for checkout SDK', apps: ['web'], required: false, category: 'payment', buildTime: true },
 ];
 
 export function getAppSecretKeys(app: AppName): string[] {
