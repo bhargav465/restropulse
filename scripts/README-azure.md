@@ -136,34 +136,36 @@ Add `settings.job` in each folder:
 
 ### 1. Replace placeholder Key Vault secrets
 
-The script seeds secret placeholders for both groups:
+The script seeds secret placeholders using the canonical `{env}-{kebab}`
+naming scheme (lowercase, single shared vault, env in `dev`/`staging`/`prod`):
 
-- `PROD-*`
-- `STAGING-*`
+- `prod-*`
+- `staging-*`
+- `dev-*` (no App Service target; used only by local `npm run secrets:pull`)
 
 Example updates:
 
 ```bash
-az keyvault secret set --vault-name restropulse-prod-kv --name PROD-MONGODB-URI --value "mongodb+srv://..."
-az keyvault secret set --vault-name restropulse-prod-kv --name STAGING-MONGODB-URI --value "mongodb+srv://..."
+az keyvault secret set --vault-name restropulse-prod-kv --name prod-mongodb-uri --value "mongodb+srv://..."
+az keyvault secret set --vault-name restropulse-prod-kv --name staging-mongodb-uri --value "mongodb+srv://..."
 ```
 
 Repeat for:
 
-- `JWT-SECRET`
-- `ENCRYPTION-KEY`
-- `META-APP-ID`
-- `META-APP-SECRET`
-- `RAZORPAY-KEY-ID`
-- `RAZORPAY-KEY-SECRET`
-- `RAZORPAY-WEBHOOK-SECRET`
-- `FIREBASE-SERVICE-ACCOUNT`
+- `jwt-secret`
+- `encryption-key`
+- `instagram-app-id`
+- `instagram-app-secret`
+- `razorpay-key-id`
+- `razorpay-key-secret`
+- `razorpay-webhook-secret`
+- `firebase-service-account-key`
 
 ### 2. App settings already automated by the script
 
 The script automatically configures:
 
-- Key Vault references for app secrets (separate `PROD-*` and `STAGING-*`)
+- Key Vault references for app secrets (separate `prod-*` and `staging-*`)
 - Managed identity on production app and staging slot
 - Key Vault policies for both identities
 - `CORS_ORIGIN` based on created SWA hostname
@@ -241,7 +243,7 @@ az webapp webjob continuous list \
 # Check a Key Vault secret
 az keyvault secret show \
   --vault-name restropulse-prod-kv \
-  --name PROD-MONGODB-URI \
+  --name prod-mongodb-uri \
   --query "value" --output tsv
 
 # App Insights portal URL

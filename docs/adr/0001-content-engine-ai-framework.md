@@ -1,5 +1,7 @@
 # ADR 0001: Content-Engine AI Framework + Current-Affairs RAG
 
+> Update (2026-07): the fal.ai media generator has been removed; Replicate is the canonical media backend. References to fal.ai below are historical and describe the original design.
+
 ## 1. Status
 
 **Accepted** — 2026-05-03

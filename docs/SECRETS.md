@@ -1,6 +1,6 @@
 # RestroPulse Secrets Setup Guide
 
-This document is the single reference for every secret, API key, and credential the RestroPulse workspace needs. It covers both the long-standing services (Firebase, Razorpay, Meta, Azure) and the AI-backend keys added during the content-engine AI rollout (Anthropic, fal.ai, Perplexity, Google Calendar).
+This document is the single reference for every secret, API key, and credential the RestroPulse workspace needs. It covers both the long-standing services (Firebase, Razorpay, Meta, Azure) and the AI-backend keys added during the content-engine AI rollout (Anthropic, Replicate, Perplexity, Google Calendar).
 
 For each secret, this guide describes:
 - What it is used for and which app(s) need it
@@ -23,7 +23,7 @@ The provider is selected at service startup via `createSecretsProvider(process.e
 
 Each service only loads its own secrets. Source of truth: `config/secrets-manifest.ts`.
 - `getAppSecretKeys('api')` -- JWT, Instagram, Razorpay, Firebase, MongoDB, ENCRYPTION_KEY
-- `getAppSecretKeys('content-engine')` -- Anthropic, Replicate, fal.ai, Google Calendar, Perplexity, MongoDB
+- `getAppSecretKeys('content-engine')` -- Anthropic, Replicate, Google Calendar, Perplexity, MongoDB
 - `getAppSecretKeys('publisher')` -- ENCRYPTION_KEY, Instagram, MongoDB
 - `getAppSecretKeys('db-cli')` -- MongoDB only
 
@@ -338,34 +338,34 @@ ANTHROPIC_API_KEY=sk-ant-api03-xxxxxxxxxx
 
 ---
 
-### `FAL_API_KEY` — fal.ai (image + video)
+### `REPLICATE_API_TOKEN` — Replicate (image + video)
 
-**Used for:** image generation (Flux dev), image edits (Flux dev image-to-image), video generation (Kling 1.6 standard via queue API).
+**Used for:** image generation (Flux dev), image edits (Flux dev image-to-image), video generation (Kling 1.6 standard via the async prediction/queue API). Replicate is the canonical media backend (fal.ai has been removed).
 
 **Steps:**
-1. Go to **https://fal.ai/**.
+1. Go to **https://replicate.com/**.
 2. Sign up with GitHub or Google.
-3. Navigate to **Dashboard → API Keys** (direct: https://fal.ai/dashboard/keys).
-4. Click **Create new key**. Copy the value.
-5. Add **payment method**: **Dashboard → Billing**. fal.ai gives **~$1 free credit on signup**, which is enough to test image generation but not video.
+3. Navigate to **Account → API tokens** (direct: https://replicate.com/account/api-tokens).
+4. Copy the default token or **Create token**. Copy the value.
+5. Add **billing**: **Account → Billing**. Replicate bills per-second of model runtime; add a payment method before running video.
 
-**Format:** typically a long random string like `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:yyyyyyyyyyyyyyyyy`.
+**Format:** a token prefixed with `r8_`, e.g. `r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`.
 
 **Save:**
 ```
-FAL_API_KEY=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx:yyyyyyyyyyyyyyyyy
+REPLICATE_API_TOKEN=r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-**Cost expectation:** Flux dev is $0.025/image; Kling 1.6 video is ~$0.30/clip; MiniMax video is ~$0.40/clip. At ~30 posts/month with 25 images + 5 videos: **~$2.50/month/restaurant**.
+**Cost expectation:** Flux dev is ~$0.025/image; Kling 1.6 standard video is ~$0.28/clip. At ~30 posts/month with 25 images + 5 videos: **~$2/month/restaurant**. See `docs/INFRASTRUCTURE.md` for the authoritative per-post cost table.
 
-**Test (real $0.025 call):**
+**Test (real image call):**
 ```bash
-curl https://fal.run/fal-ai/flux/dev \
-  -H "Authorization: Key $FAL_API_KEY" \
+curl -s https://api.replicate.com/v1/predictions \
+  -H "Authorization: Bearer $REPLICATE_API_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"prompt":"a paneer tikka platter","image_size":"square_hd","num_images":1}'
+  -d '{"version":"black-forest-labs/flux-dev","input":{"prompt":"a paneer tikka platter","aspect_ratio":"1:1"}}'
 ```
-Expected: JSON with `images: [{url: "https://fal.media/files/..."}]`.
+Expected: JSON with a prediction `id` and `status` (`starting`/`processing`); poll the returned `urls.get` for the completed `output` image URL(s).
 
 ---
 
@@ -448,7 +448,7 @@ The full required-settings list mirrors the local `.env` files but with environm
 | `APPLICATIONINSIGHTS_CONNECTION_STRING`    | per-slot              | One App Insights resource per slot or shared.                      |
 | `CONTENT_GENERATOR_BACKEND`                | per-slot              | `placeholder` until promoted; `ai` once rolled out.                |
 | `ANTHROPIC_API_KEY`                        | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
-| `FAL_API_KEY`                              | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
+| `REPLICATE_API_TOKEN`                      | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
 | `GOOGLE_CALENDAR_API_KEY`                  | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
 | `PERPLEXITY_API_KEY`                       | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
 
@@ -538,7 +538,7 @@ In order, get every secret you need locally:
 
 ### Required only when flipping the AI master flag
 - [ ] `ANTHROPIC_API_KEY` → `apps/content-engine/.env`
-- [ ] `FAL_API_KEY` → `apps/content-engine/.env`
+- [ ] `REPLICATE_API_TOKEN` → `apps/content-engine/.env`
 - [ ] `GOOGLE_CALENDAR_API_KEY` → `apps/content-engine/.env`
 - [ ] `PERPLEXITY_API_KEY` → `apps/content-engine/.env`
 - [ ] Set `CONTENT_GENERATOR_BACKEND=ai` in `apps/content-engine/.env`
@@ -550,5 +550,5 @@ In order, get every secret you need locally:
 - **Never commit `.env` files**: every `apps/*/.env` is gitignored. The repo's `.gitignore` enforces this; do not bypass.
 - **`VITE_*` is public**: anything prefixed `VITE_` is baked into the browser bundle. Do not put server-only secrets there.
 - **Rotate on suspicion**: if any key leaks (committed by accident, shared in chat, etc.) — rotate it via the provider dashboard immediately. The local `.env` is the easiest mitigation; production rotation requires App Service config update + worker redeploy.
-- **Separate dev/staging/prod credentials**: Anthropic, Perplexity, fal.ai, Razorpay, Meta — every external service should have separate keys per environment so a leaked dev key can't impact production cost or data.
+- **Separate dev/staging/prod credentials**: Anthropic, Perplexity, Replicate, Razorpay, Meta — every external service should have separate keys per environment so a leaked dev key can't impact production cost or data.
 - **Azure App Service settings are NOT versioned**: changes are immediate and don't go through PR review. Treat them as production deploys.

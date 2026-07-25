@@ -178,31 +178,31 @@ When `CONTENT_GENERATOR_BACKEND=ai`, the content-engine swaps the placeholder ge
 IContentGenerator               (existing public contract)
   AIContentGenerator            (Vercel AI SDK orchestrator)
     ILLMProvider                  AnthropicLLMProvider (Sonnet for cycles, Haiku for posts)
-    IMediaGenerator               PlaceholderMediaGenerator (default) | FalAIMediaGenerator (when MEDIA_BACKEND=fal-ai)
+    IMediaGenerator               PlaceholderMediaGenerator (default) | ReplicateMediaGenerator (when MEDIA_BACKEND=replicate)
     ICurrentAffairsProvider       Noop | CalendarOnly (V1) | SonarAugmented(CalendarOnly) (V1+V2)
     IDomainSpecialization         RestaurantSpecialization
 ```
 
-Each seam is a separately swappable interface. Adding a second domain (salon, fitness) is an `IDomainSpecialization` impl. Adding a new LLM provider is a one-import swap inside `AnthropicLLMProvider`. Adding a new media provider (Replicate, Runway) is an `IMediaGenerator` impl.
+Each seam is a separately swappable interface. Adding a second domain (salon, fitness) is an `IDomainSpecialization` impl. Adding a new LLM provider is a one-import swap inside `AnthropicLLMProvider`. Adding a new media provider (Runway, etc.) is an `IMediaGenerator` impl.
 
-#### Async media flow (REEL/VIDEO with `MEDIA_BACKEND=fal-ai`)
+#### Async media flow (REEL/VIDEO with `MEDIA_BACKEND=replicate`)
 
 ```text
 adhoc-processor finds PENDING_CONTENT post
   -> AIContentGenerator.generatePost
     -> caption (Anthropic, sync)
-    -> media (FalAIMediaGenerator.generateVideo)
+    -> media (ReplicateMediaGenerator.generateVideo)
       -> queue submit -> mediaJobs row inserted (status=RUNNING)
       -> returns immediately
   -> processor writes post.status=PENDING_MEDIA + mediaJobId
 
 media-job-poller (every 30s)
   -> finds PENDING_MEDIA posts
-  -> per post: live-poll fal queue, transition COMPLETED -> applyMediaJobResultToPost (status=PENDING_APPROVAL)
+  -> per post: live-poll Replicate prediction status, transition COMPLETED -> applyMediaJobResultToPost (status=PENDING_APPROVAL)
                                             FAILED   -> markPostFailedWithMedia (status=MISSED_DEADLINE)
                                             stale > 10min -> reap as FAILED
 
-post-resume scan (worker boot, when MEDIA_BACKEND=fal-ai)
+post-resume scan (worker boot, when MEDIA_BACKEND=replicate)
   -> finds posts with PENDING_MEDIA + lastStepAt > 5min ago
   -> triggers one poll cycle each (idempotent, matches cron path)
 ```
@@ -215,7 +215,23 @@ For full rationale (decision drivers, framework selection, RAG strategy, retry p
 
 ## Secrets Management
 
-All runtime secrets flow through `packages/secrets` (`@restropulse/secrets`).
+**Deployed mechanism (staging + production):** Azure App Service Key Vault
+References. Each App Service setting is configured as
+`@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=...)`; the
+slot's system-assigned managed identity resolves the reference into a plain
+`process.env` value at startup. Application code never talks to Key Vault
+directly, and `loadAndValidateEnv(...)` runs unchanged -- it just reads
+`process.env` as always. `SECRETS_BACKEND` stays `env` (the default) on
+running slots.
+
+**`packages/secrets` (`@restropulse/secrets`) is a manifest-driven fetch
+utility**, not the app-boot mechanism. It is used only by:
+- `npm run secrets:pull` (`scripts/secrets-pull.mjs`) -- hydrates `dev-*`
+  secrets from the shared vault into each app's local `.env` for local
+  development (opt-in; `.env` is the local default)
+- The web `config.json` generator run by the deploy workflows -- fetches
+  `{env}-web-*` / `{env}-firebase-*` secrets and writes a same-origin
+  `config.json` sidecar for the zero-secret web bundle
 
 ```
 ISecretsProvider
@@ -224,14 +240,20 @@ ISecretsProvider
     wrapped by CachedSecretsProvider (in-memory cache, avoids repeated KV API calls)
 ```
 
-**Startup flow when `SECRETS_BACKEND=azure-kv`:**
-1. `createSecretsProvider('azure-kv')` builds a cached KV provider
-2. `hydrateEnvFromProvider(provider, APP_SECRET_KEYS)` fetches all keys in parallel, writes to `process.env`
-3. `loadAndValidateEnv(...)` runs unchanged -- reads from `process.env` as always
+`AzureKeyVaultSecretsProvider` + `SECRETS_BACKEND=azure-kv` (in-app
+hydrate-on-boot via `createSecretsProvider('azure-kv')` +
+`hydrateEnvFromProvider(...)`) exists as a capability in the codebase but is
+not set on the deployed slots -- do not describe it as the production
+mechanism.
 
-**Per-service scoping:** `config/secrets-manifest.ts` is the single source of truth. Each secret declares `apps[]`. `getAppSecretKeys(app)` returns only that app's keys -- no service fetches a secret it does not own.
+**Naming convention:** single shared vault (`restropulse-prod-kv`); secret
+names use the canonical `{env}-{kebab}` scheme (lowercase, env in `dev`,
+`staging`, `prod`), e.g. `prod-mongodb-uri`, `dev-jwt-secret`.
 
-**Key Vault naming:** `MY_API_KEY` -> `my-api-key`. With `AZURE_KEY_VAULT_KEY_PREFIX=staging`: `staging-my-api-key`.
+**Per-service scoping:** `packages/secrets/src/manifest.ts`
+(`SECRETS_MANIFEST`) is the single source of truth. Each secret declares
+`apps[]`. `getAppSecretKeys(app)` returns only that app's keys -- no service
+fetches a secret it does not own.
 
 ### apps/db-cli -- Database CLI
 

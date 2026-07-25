@@ -544,25 +544,31 @@ else
   log_skip "Could not determine current user ID -- skipping Key Vault access policy"
 fi
 
-# Populate placeholder secrets for both production app and staging slot.
-# Secret names use hyphens as required by Key Vault naming rules.
-log_info "Seeding Key Vault placeholder secrets for PROD and STAGING groups..."
+# Populate placeholder secrets for prod, staging, and dev.
+# Secret names use the canonical {env}-{kebab} scheme (lowercase, hyphens),
+# with env in {dev, staging, prod}. This is a single shared vault
+# (restropulse-prod-kv) -- the "prod" resource name segment is unrelated to
+# the "prod" secret-name prefix used here. dev-* placeholders exist so local
+# dev machines can opt in via `npm run secrets:pull`; there is no dev App
+# Service target, so dev secrets are seeded here but never wired to app
+# settings below.
+log_info "Seeding Key Vault placeholder secrets for prod, staging, and dev prefixes..."
 
 declare -a KV_SECRET_BASENAMES=(
-  "MONGODB-URI"
-  "MONGODB-DB-NAME"
-  "JWT-SECRET"
-  "ENCRYPTION-KEY"
-  "INSTAGRAM-APP-ID"
-  "INSTAGRAM-APP-SECRET"
-  "INSTAGRAM-REDIRECT-URI"
-  "RAZORPAY-KEY-ID"
-  "RAZORPAY-KEY-SECRET"
-  "RAZORPAY-WEBHOOK-SECRET"
-  "FIREBASE-SERVICE-ACCOUNT-KEY"
+  "mongodb-uri"
+  "mongodb-db-name"
+  "jwt-secret"
+  "encryption-key"
+  "instagram-app-id"
+  "instagram-app-secret"
+  "instagram-redirect-uri"
+  "razorpay-key-id"
+  "razorpay-key-secret"
+  "razorpay-webhook-secret"
+  "firebase-service-account-key"
 )
 
-for GROUP_PREFIX in PROD STAGING; do
+for GROUP_PREFIX in prod staging dev; do
   for SECRET_BASENAME in "${KV_SECRET_BASENAMES[@]}"; do
     SECRET_NAME="${GROUP_PREFIX}-${SECRET_BASENAME}"
     EXISTING_SECRET=$(az keyvault secret show \
@@ -682,17 +688,17 @@ configure_app_target() {
   run_az_with_retry az webapp config appsettings set \
     "${target_args[@]}" \
     --settings \
-      MONGODB_URI="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-MONGODB-URI)" \
-      MONGODB_DB_NAME="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-MONGODB-DB-NAME)" \
-      JWT_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-JWT-SECRET)" \
-      ENCRYPTION_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-ENCRYPTION-KEY)" \
-      INSTAGRAM_APP_ID="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-INSTAGRAM-APP-ID)" \
-      INSTAGRAM_APP_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-INSTAGRAM-APP-SECRET)" \
-      INSTAGRAM_REDIRECT_URI="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-INSTAGRAM-REDIRECT-URI)" \
-      RAZORPAY_KEY_ID="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-RAZORPAY-KEY-ID)" \
-      RAZORPAY_KEY_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-RAZORPAY-KEY-SECRET)" \
-      RAZORPAY_WEBHOOK_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-RAZORPAY-WEBHOOK-SECRET)" \
-      FIREBASE_SERVICE_ACCOUNT_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-FIREBASE-SERVICE-ACCOUNT-KEY)" \
+      MONGODB_URI="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-mongodb-uri)" \
+      MONGODB_DB_NAME="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-mongodb-db-name)" \
+      JWT_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-jwt-secret)" \
+      ENCRYPTION_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-encryption-key)" \
+      INSTAGRAM_APP_ID="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-instagram-app-id)" \
+      INSTAGRAM_APP_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-instagram-app-secret)" \
+      INSTAGRAM_REDIRECT_URI="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-instagram-redirect-uri)" \
+      RAZORPAY_KEY_ID="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-razorpay-key-id)" \
+      RAZORPAY_KEY_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-razorpay-key-secret)" \
+      RAZORPAY_WEBHOOK_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-razorpay-webhook-secret)" \
+      FIREBASE_SERVICE_ACCOUNT_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-firebase-service-account-key)" \
     --output none
 
   log_ok "App Service settings configured for $target_env"
@@ -702,12 +708,12 @@ PROD_TARGET_ARGS=(--resource-group "$RG_NAME" --name "$API_APP_NAME")
 STAGING_TARGET_ARGS=(--resource-group "$RG_NAME" --name "$API_APP_NAME" --slot "$APP_SLOT_NAME")
 
 if [[ "$ENV" == "production" ]]; then
-  configure_app_target "production" "PROD" "${PROD_TARGET_ARGS[@]}"
+  configure_app_target "production" "prod" "${PROD_TARGET_ARGS[@]}"
 elif [[ "$ENV" == "staging" ]]; then
-  configure_app_target "staging" "STAGING" "${STAGING_TARGET_ARGS[@]}"
+  configure_app_target "staging" "staging" "${STAGING_TARGET_ARGS[@]}"
 else
-  configure_app_target "production" "PROD" "${PROD_TARGET_ARGS[@]}"
-  configure_app_target "staging" "STAGING" "${STAGING_TARGET_ARGS[@]}"
+  configure_app_target "production" "prod" "${PROD_TARGET_ARGS[@]}"
+  configure_app_target "staging" "staging" "${STAGING_TARGET_ARGS[@]}"
 fi
 
 # Grant App Service managed identity access to Key Vault

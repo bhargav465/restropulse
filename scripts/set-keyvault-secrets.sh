@@ -29,11 +29,10 @@
 #   --dry-run     Print commands without executing.
 #   --help        Show this message.
 #
-# Env variable names stored in Key Vault match exactly what the application
-# code reads via process.env (INSTAGRAM_APP_ID, FIREBASE_SERVICE_ACCOUNT_KEY,
-# etc.). The provision-azure.sh script uses different names (META_APP_ID,
-# FIREBASE_SERVICE_ACCOUNT) -- see docs/INFRASTRUCTURE.md for the known
-# naming gaps.
+# Key Vault secret names use the canonical {env}-{kebab} scheme (lowercase,
+# hyphens, env in dev/staging/prod), matching provision-azure.sh exactly.
+# The App Service setting names match what the application code reads via
+# process.env (INSTAGRAM_APP_ID, FIREBASE_SERVICE_ACCOUNT_KEY, etc.).
 # =============================================================================
 
 set -euo pipefail
@@ -121,8 +120,13 @@ if [[ "$ENV" != "staging" && "$ENV" != "production" ]]; then
   exit 1
 fi
 
-# KV secret name prefix (STAGING-* or PROD-*)
-KV_PREFIX="${ENV^^}"
+# KV secret name prefix using the canonical {env}-{kebab} scheme
+# (lowercase, env in dev/staging/prod). "production" maps to the "prod"
+# prefix -- there is no "PRODUCTION-" prefix in the vault.
+case "$ENV" in
+  staging)    KV_PREFIX="staging" ;;
+  production) KV_PREFIX="prod" ;;
+esac
 
 # App Service target args
 APP_TARGET_ARGS=(--resource-group "$RG_NAME" --name "$APP_NAME")
@@ -214,60 +218,54 @@ echo ""
 # ---------------------------------------------------------------------------
 # KV Secrets + matching App Service settings
 #
-# Note on naming: The env var names used here (INSTAGRAM_APP_ID,
-# FIREBASE_SERVICE_ACCOUNT_KEY, etc.) match exactly what the application code
-# reads. The original provision-azure.sh used META_APP_ID and
-# FIREBASE_SERVICE_ACCOUNT, which do NOT match the code. This script corrects
-# that by using the right names for both the KV secret and the App setting.
+# KV secret names use the canonical {env}-{kebab} scheme (lowercase). The
+# App setting names match exactly what the application code reads via
+# process.env (INSTAGRAM_APP_ID, FIREBASE_SERVICE_ACCOUNT_KEY, etc.).
 # ---------------------------------------------------------------------------
 log_info "--- Key Vault secrets ---"
 
 [[ -n "$MONGODB_URI" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-MONGODB-URI" "MONGODB_URI" "$MONGODB_URI" \
+  && kv_and_appsetting "${KV_PREFIX}-mongodb-uri" "MONGODB_URI" "$MONGODB_URI" \
   || log_skip "MONGODB_URI (not provided)"
 
 [[ -n "$MONGODB_DB_NAME" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-MONGODB-DB-NAME" "MONGODB_DB_NAME" "$MONGODB_DB_NAME" \
+  && kv_and_appsetting "${KV_PREFIX}-mongodb-db-name" "MONGODB_DB_NAME" "$MONGODB_DB_NAME" \
   || log_skip "MONGODB_DB_NAME (not provided)"
 
 [[ -n "$JWT_SECRET" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-JWT-SECRET" "JWT_SECRET" "$JWT_SECRET" \
+  && kv_and_appsetting "${KV_PREFIX}-jwt-secret" "JWT_SECRET" "$JWT_SECRET" \
   || log_skip "JWT_SECRET (not provided)"
 
 [[ -n "$ENCRYPTION_KEY" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-ENCRYPTION-KEY" "ENCRYPTION_KEY" "$ENCRYPTION_KEY" \
+  && kv_and_appsetting "${KV_PREFIX}-encryption-key" "ENCRYPTION_KEY" "$ENCRYPTION_KEY" \
   || log_skip "ENCRYPTION_KEY (not provided)"
 
-# INSTAGRAM_APP_ID / SECRET: KV name uses INSTAGRAM- prefix to match code.
-# provision-azure.sh incorrectly used META-APP-ID -- this script corrects it.
 [[ -n "$INSTAGRAM_APP_ID" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-INSTAGRAM-APP-ID" "INSTAGRAM_APP_ID" "$INSTAGRAM_APP_ID" \
+  && kv_and_appsetting "${KV_PREFIX}-instagram-app-id" "INSTAGRAM_APP_ID" "$INSTAGRAM_APP_ID" \
   || log_skip "INSTAGRAM_APP_ID (not provided)"
 
 [[ -n "$INSTAGRAM_APP_SECRET" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-INSTAGRAM-APP-SECRET" "INSTAGRAM_APP_SECRET" "$INSTAGRAM_APP_SECRET" \
+  && kv_and_appsetting "${KV_PREFIX}-instagram-app-secret" "INSTAGRAM_APP_SECRET" "$INSTAGRAM_APP_SECRET" \
   || log_skip "INSTAGRAM_APP_SECRET (not provided)"
 
 [[ -n "$INSTAGRAM_REDIRECT_URI" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-INSTAGRAM-REDIRECT-URI" "INSTAGRAM_REDIRECT_URI" "$INSTAGRAM_REDIRECT_URI" \
+  && kv_and_appsetting "${KV_PREFIX}-instagram-redirect-uri" "INSTAGRAM_REDIRECT_URI" "$INSTAGRAM_REDIRECT_URI" \
   || log_skip "INSTAGRAM_REDIRECT_URI (not provided)"
 
-# FIREBASE_SERVICE_ACCOUNT_KEY: KV name uses _KEY suffix to match code.
-# provision-azure.sh incorrectly used FIREBASE-SERVICE-ACCOUNT -- corrected here.
 [[ -n "$FIREBASE_SERVICE_ACCOUNT_KEY" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-FIREBASE-SERVICE-ACCOUNT-KEY" "FIREBASE_SERVICE_ACCOUNT_KEY" "$FIREBASE_SERVICE_ACCOUNT_KEY" \
+  && kv_and_appsetting "${KV_PREFIX}-firebase-service-account-key" "FIREBASE_SERVICE_ACCOUNT_KEY" "$FIREBASE_SERVICE_ACCOUNT_KEY" \
   || log_skip "FIREBASE_SERVICE_ACCOUNT_KEY (not provided)"
 
 [[ -n "$RAZORPAY_KEY_ID" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-RAZORPAY-KEY-ID" "RAZORPAY_KEY_ID" "$RAZORPAY_KEY_ID" \
+  && kv_and_appsetting "${KV_PREFIX}-razorpay-key-id" "RAZORPAY_KEY_ID" "$RAZORPAY_KEY_ID" \
   || log_skip "RAZORPAY_KEY_ID (not provided)"
 
 [[ -n "$RAZORPAY_KEY_SECRET" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-RAZORPAY-KEY-SECRET" "RAZORPAY_KEY_SECRET" "$RAZORPAY_KEY_SECRET" \
+  && kv_and_appsetting "${KV_PREFIX}-razorpay-key-secret" "RAZORPAY_KEY_SECRET" "$RAZORPAY_KEY_SECRET" \
   || log_skip "RAZORPAY_KEY_SECRET (not provided)"
 
 [[ -n "$RAZORPAY_WEBHOOK_SECRET" ]] \
-  && kv_and_appsetting "${KV_PREFIX}-RAZORPAY-WEBHOOK-SECRET" "RAZORPAY_WEBHOOK_SECRET" "$RAZORPAY_WEBHOOK_SECRET" \
+  && kv_and_appsetting "${KV_PREFIX}-razorpay-webhook-secret" "RAZORPAY_WEBHOOK_SECRET" "$RAZORPAY_WEBHOOK_SECRET" \
   || log_skip "RAZORPAY_WEBHOOK_SECRET (not provided)"
 
 # ---------------------------------------------------------------------------

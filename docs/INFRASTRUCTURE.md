@@ -47,8 +47,8 @@ Rules:
 | INSTAGRAM_REDIRECT_URI           | No       | http://localhost:3001/api/.../callback            | OAuth redirect URI                         |
 | INSTAGRAM_REDIRECT_FRONTEND_URL  | No       | http://localhost:3000                             | Frontend URL for OAuth redirects           |
 | BACKEND_URL                      | No       | http://localhost:3001                             | Backend URL for GDPR status links          |
-| FIREBASE_SERVICE_ACCOUNT         | Cond.    | --                                               | Firebase service account JSON              |
-| FIREBASE_SERVICE_ACCOUNT_PATH    | Cond.    | --                                               | Path to Firebase service account file      |
+| FIREBASE_SERVICE_ACCOUNT_KEY     | Cond.    | --                                               | Firebase service account JSON (single line) |
+| GOOGLE_APPLICATION_CREDENTIALS   | Cond.    | --                                               | Path to Firebase service account file (alternative to the JSON var) |
 | FIREBASE_PROJECT_ID              | Cond.    | --                                               | Firebase project ID (limited)              |
 | RAZORPAY_KEY_ID                  | No*      | --                                               | Razorpay API key ID                        |
 | RAZORPAY_KEY_SECRET              | No*      | --                                               | Razorpay API key secret                    |
@@ -119,20 +119,20 @@ Rules:
 
 #### Content Engine AI backend (env additions)
 
-Default behavior unchanged unless `CONTENT_GENERATOR_BACKEND=ai` is set. The flag is an "uber" master switch: when set, every AI sub-feature defaults on. All four required keys (`ANTHROPIC_API_KEY`, `FAL_API_KEY`, `GOOGLE_CALENDAR_API_KEY`, `PERPLEXITY_API_KEY`) must be present or the factory throws a single combined error listing every missing key. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the supported rollout path and `docs/SECRETS.md` for how to obtain each key.
+Default behavior unchanged unless `CONTENT_GENERATOR_BACKEND=ai` is set. The flag is an "uber" master switch: when set, every AI sub-feature defaults on. All four required keys (`ANTHROPIC_API_KEY`, `REPLICATE_API_TOKEN`, `GOOGLE_CALENDAR_API_KEY`, `PERPLEXITY_API_KEY`) must be present or the factory throws a single combined error listing every missing key. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the supported rollout path and `docs/SECRETS.md` for how to obtain each key.
 
 | Variable                          | Required when                                          | Default (no AI)  | Default (AI mode) | Purpose                                                                       |
 |-----------------------------------|--------------------------------------------------------|------------------|-------------------|-------------------------------------------------------------------------------|
 | `CONTENT_GENERATOR_BACKEND`       | always                                                 | `placeholder`    | n/a               | Master switch: `placeholder` (asset catalog) or `ai` (full AI chain).         |
 | `ANTHROPIC_API_KEY`               | `CONTENT_GENERATOR_BACKEND=ai`                         | --               | required          | Anthropic API key for Sonnet 4.6 / Haiku 4.5 via `@ai-sdk/anthropic`.         |
-| `FAL_API_KEY`                     | AI mode + `MEDIA_BACKEND` not overridden               | --               | required          | fal.ai API key for image (sync) and video (queue API) generation.             |
+| `REPLICATE_API_TOKEN`             | AI mode + `MEDIA_BACKEND` not overridden               | --               | required          | Replicate API token for image (sync) and video (queue) generation.            |
 | `GOOGLE_CALENDAR_API_KEY`         | AI mode + V1 not overridden                            | --               | required          | Google Calendar API key for India public holidays calendar (V1).              |
 | `PERPLEXITY_API_KEY`              | AI mode + V2 not overridden                            | --               | required          | Perplexity Sonar Pro API key (V2 daily refresh + per-post triggers).          |
-| `MEDIA_BACKEND`                   | optional override                                      | `placeholder`    | `fal-ai`          | Override: set to `placeholder` to skip fal.ai under AI mode.                  |
+| `MEDIA_BACKEND`                   | optional override                                      | `placeholder`    | `replicate`       | Override: set to `placeholder` to skip Replicate under AI mode.               |
 | `CURRENT_AFFAIRS_V1_ENABLED`      | optional override                                      | `true` (unused)  | `true`            | Override: set to `false` to skip Google Calendar under AI mode.               |
 | `CURRENT_AFFAIRS_V2_ENABLED`      | optional override                                      | `false` (unused) | `true`            | Override: set to `false` to skip Sonar Pro under AI mode.                     |
 | `CRON_CURRENT_AFFAIRS_REFRESH`    | when V1 or V2 enabled                                  | `0 6 * * *`      | `0 6 * * *`       | Daily refresh at 06:00 IST.                                                   |
-| `CRON_MEDIA_JOB_POLLER`           | `MEDIA_BACKEND=fal-ai`                                 | `*/30 * * * * *` | `*/30 * * * * *`  | Every 30 seconds; polls in-flight video jobs against fal queue API.           |
+| `CRON_MEDIA_JOB_POLLER`           | `MEDIA_BACKEND=replicate`                              | `*/30 * * * * *` | `*/30 * * * * *`  | Every 30 seconds; polls in-flight video jobs against Replicate.               |
 
 Optional provider-portability keys (no behavior change unless code is changed to switch providers): `OPENAI_API_KEY`, `GOOGLE_API_KEY` -- declared in factory but unused in default chain.
 
@@ -141,7 +141,7 @@ Optional provider-portability keys (no behavior change unless code is changed to
 | Schedule                          | Default        | Timezone     | Purpose                                                          |
 |-----------------------------------|----------------|--------------|------------------------------------------------------------------|
 | `CRON_CURRENT_AFFAIRS_REFRESH`    | `0 6 * * *`    | Asia/Kolkata | Refresh calendar holidays + (if V2) daily Sonar platform answer. |
-| `CRON_MEDIA_JOB_POLLER`           | `*/30 * * * * *` | Asia/Kolkata | Poll RUNNING video media jobs against fal.ai queue.              |
+| `CRON_MEDIA_JOB_POLLER`           | `*/30 * * * * *` | Asia/Kolkata | Poll RUNNING video media jobs against Replicate.                 |
 
 ##### Collections added by AI backend
 
@@ -160,9 +160,9 @@ Estimates for 30 posts/month with V1 calendar enabled and V2 Sonar disabled:
 | LLM (captions)  | ~\$0.10-0.30          | Haiku 4.5 per post; Sonnet for cycle planning is amortized across posts. |
 | LLM (cycle)     | ~\$0.05-0.10          | Sonnet, ~1-2 calls per cycle.                                          |
 | Calendar (V1)   | \$0                   | Free; daily refresh shared across all restaurants.                     |
-| Image (fal.ai)  | ~\$0.75               | 30 IMAGE/STORY posts at \$0.025/call.                                  |
+| Image (Replicate) | ~\$0.75             | 30 IMAGE/STORY posts at \$0.025/call (`black-forest-labs/flux-dev`).   |
 | Image carousel  | additional ~\$0.05/CAROUSEL | 3x per CAROUSEL post.                                            |
-| Video (fal.ai)  | ~\$0.30 per REEL      | Default: Kling 1.6 standard. MiniMax is \$0.40/clip.                   |
+| Video (Replicate) | ~\$0.28 per REEL    | `kwaivgi/kling-v1.6-standard`.                                         |
 
 When `CURRENT_AFFAIRS_V2_ENABLED=true`:
 

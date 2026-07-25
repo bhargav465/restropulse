@@ -6,12 +6,12 @@ This runbook describes the rollout of the AI content generator behind a single m
 
 ```
 CONTENT_GENERATOR_BACKEND=placeholder   # default -- asset-catalog generator (current production)
-CONTENT_GENERATOR_BACKEND=ai            # uber flag -- enables LLM + fal.ai + V1 calendar + V2 Sonar
+CONTENT_GENERATOR_BACKEND=ai            # uber flag -- enables LLM + Replicate + V1 calendar + V2 Sonar
 ```
 
 When `CONTENT_GENERATOR_BACKEND=ai` is set, all four sub-features default-on:
 - Anthropic Claude for cycle planning + caption generation
-- fal.ai for image (Flux dev) + video (Kling 1.6) generation
+- Replicate for image (Flux dev) + video (Kling 1.6) generation
 - Google Calendar for India holiday hint injection (V1)
 - Perplexity Sonar Pro for current-affairs hints (V2 -- daily refresh + per-post triggers)
 
@@ -43,7 +43,7 @@ Set the master flag and all four required keys on the staging deployment first; 
 ```
 CONTENT_GENERATOR_BACKEND=ai
 ANTHROPIC_API_KEY=<key>
-FAL_API_KEY=<key>
+REPLICATE_API_TOKEN=<key>
 GOOGLE_CALENDAR_API_KEY=<key>
 PERPLEXITY_API_KEY=<key>
 ```
@@ -52,8 +52,8 @@ PERPLEXITY_API_KEY=<key>
 - Cycles + captions via Anthropic Claude (Sonnet for cycles, Haiku for posts)
 - Calendar V1 auto-injects holiday hints (free)
 - Sonar V2 daily refresh + per-post triggers run (~$0.30-1/restaurant/month)
-- IMAGE/STORY/CAROUSEL routes through fal.ai Flux dev (~$0.025/image)
-- REEL/VIDEO submits to fal.ai queue (Kling 1.6, ~$0.30/clip); posts go to `PENDING_MEDIA` while the queue runs; the `media-job-poller` cron advances them to `PENDING_APPROVAL` on completion
+- IMAGE/STORY/CAROUSEL routes through Replicate Flux dev (~$0.025/image)
+- REEL/VIDEO submits to Replicate queue (Kling 1.6, ~$0.30/clip); posts go to `PENDING_MEDIA` while the queue runs; the `media-job-poller` cron advances them to `PENDING_APPROVAL` on completion
 - Per-call cost events written to MongoDB `costEvents` and Application Insights `customEvents` (queryable from the workbooks)
 
 **Smoke check at boot:**
@@ -62,12 +62,12 @@ PERPLEXITY_API_KEY=<key>
 cd apps/content-engine && \
   CONTENT_GENERATOR_BACKEND=ai \
   ANTHROPIC_API_KEY=<key> \
-  FAL_API_KEY=<key> \
+  REPLICATE_API_TOKEN=<key> \
   GOOGLE_CALENDAR_API_KEY=<key> \
   PERPLEXITY_API_KEY=<key> \
   npx tsx --eval "import('./src/services/content-generator/factory.js').then(m => { const g = m.createContentGenerator('ai'); console.log('ai:', g.name, 'media:', m.getLastAiMediaGenerator()?.name, 'currentAffairs:', m.getLastAiCurrentAffairsProvider()?.name); })"
 
-# Expected: ai: ai media: fal-ai currentAffairs: sonar-augmented
+# Expected: ai: ai media: replicate currentAffairs: sonar-augmented
 ```
 
 If any key is missing, the factory throws a single combined error listing every missing key plus override hints. Operators see the entire setup gap at once instead of fixing one key per boot.
@@ -91,13 +91,13 @@ For staged rollouts, debug deployments, or cost control, individual sub-features
 
 | Override                              | Effect                                                                                  |
 |---------------------------------------|-----------------------------------------------------------------------------------------|
-| `MEDIA_BACKEND=placeholder`           | Skip fal.ai. IMAGE posts use the asset catalog. REEL/VIDEO posts use placeholder media. |
+| `MEDIA_BACKEND=placeholder`           | Skip Replicate. IMAGE posts use the asset catalog. REEL/VIDEO posts use placeholder media. |
 | `CURRENT_AFFAIRS_V1_ENABLED=false`    | Skip Google Calendar. Captions get no holiday hints injected.                           |
 | `CURRENT_AFFAIRS_V2_ENABLED=false`    | Skip Perplexity Sonar Pro. No daily refresh, no per-post triggers.                      |
 
 These are explicit operator opt-outs; the supported normal mode is "all on". Documented for completeness, not for routine rollouts.
 
-### Example -- LLM only, no fal.ai (validation deployment)
+### Example -- LLM only, no Replicate (validation deployment)
 
 ```
 CONTENT_GENERATOR_BACKEND=ai
