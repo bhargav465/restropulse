@@ -4,7 +4,7 @@
 
 **Accepted** — 2026-05-03
 
-This ADR is the first formal architecture decision record for the RestroPulse codebase. It is informed by the brainstorm spec at `docs/superpowers/specs/2026-05-03-content-engine-ai-framework-adr-design.md`.
+This ADR is the first formal architecture decision record for the RestroPulse codebase. It is informed by earlier architecture exploration done during initial content-engine design.
 
 ## 2. Context
 
@@ -310,7 +310,6 @@ The following are explicitly NOT decided by this ADR and require their own ADRs 
 
 ## 10. References
 
-- Brainstorm spec: `docs/superpowers/specs/2026-05-03-content-engine-ai-framework-adr-design.md`
 - Existing `IContentGenerator` contract: `apps/content-engine/src/services/content-generator/types.ts`
 - Existing `PlaceholderContentGenerator`: `apps/content-engine/src/services/content-generator/placeholder-generator.ts`
 - Worker boot wiring point: `apps/content-engine/src/worker.ts:114`

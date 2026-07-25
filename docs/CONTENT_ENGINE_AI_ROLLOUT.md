@@ -141,7 +141,6 @@ Forces every operation back to the asset-catalog generator. AI keys can stay in 
 ## Reference
 
 - ADR 0001: `docs/adr/0001-content-engine-ai-framework.md` (full rationale, decision drivers, alternatives)
-- Phase plans: `docs/superpowers/plans/2026-05-03-content-engine-ai-phase-{1..6}.md`
 - Workbooks: `infra/workbooks/cost-by-restaurant.workbook.json`, `per-post-audit.workbook.json`
 - Secrets setup: `docs/SECRETS.md`
 - Architecture: `docs/ARCHITECTURE.md` (AI backend section)

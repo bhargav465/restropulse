@@ -182,8 +182,8 @@ async function main() {
     const version = spawnSync('rtk', ['--version'], { encoding: 'utf8' }).stdout.trim();
     ok('RTK is installed: ' + version);
     log('');
-    log('Hook is already configured in .claude/settings.local.json.');
-    log('Restart Claude Code if it is running for the hook to take effect.');
+    log('RTK is ready to use.');
+    log('Restart Claude Code if it is running so environment changes are picked up.');
     log('');
     log('Run "rtk gain" to see token savings.');
     return;
@@ -207,7 +207,7 @@ async function main() {
 
   await installRtk();
   log('');
-  log('Done. Restart Claude Code for the PreToolUse hook to take effect.');
+  log('Done. Restart Claude Code if it is running.');
   log('Run "rtk gain" to track token savings over time.');
   log('');
 }

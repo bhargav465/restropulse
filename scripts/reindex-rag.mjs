@@ -5,10 +5,9 @@
  *
  * Usage:
  *   node scripts/reindex-rag.mjs          # full re-index
- *   node scripts/reindex-rag.mjs --quiet  # suppress progress output (for git hooks)
+ *   node scripts/reindex-rag.mjs --quiet  # suppress progress output
  *
- * Called automatically by git hooks (post-merge, post-checkout) and
- * available manually via:  npm run reindex
+ * Available manually via: npm run reindex
  */
 
 import { execSync } from 'node:child_process';
@@ -32,7 +31,7 @@ function log(msg) {
 if (!existsSync(CLI_PATH)) {
     log(`codebase-rag not found at ${CODEBASE_RAG_DIR}`);
     log('Run "npm run setup:mcp" to install it first.');
-    process.exit(quiet ? 0 : 1); // silent exit in hook mode so git isn't blocked
+    process.exit(quiet ? 0 : 1);
 }
 
 let bunCmd = 'bun';
