@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { authAPI, restaurantAPI, postsAPI, strategyAPI, instagramAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, citiesAPI, accountManagerAPI } from '../api';
+import { authAPI, restaurantAPI, postsAPI, strategyAPI, instagramAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, citiesAPI, accountManagerAPI, configAPI } from '../api';
 
 // api.ts reads the API base URL through utils/env's getApiUrl(), which now
 // reads from the runtime client config sidecar. Mock it so fetchAPI() has a
@@ -999,6 +999,40 @@ describe('API Service', () => {
 
             expect(result.success).toBe(true);
             expect(result.user).toBeDefined();
+        });
+    });
+
+    describe('configAPI', () => {
+        it('should return configured web theme from features endpoint', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    success: true,
+                    data: {
+                        deleteAccount: false,
+                        topupCredits: false,
+                        updatesSection: true,
+                        minScheduleAheadMins: 150,
+                        postApprovalBufferMins: 120,
+                        cycleApprovalBufferMins: 4320,
+                        enabledPlatforms: ['INSTAGRAM', 'FACEBOOK'],
+                        webTheme: 'orchid-admin',
+                    },
+                }),
+            });
+
+            const result = await configAPI.getFeatures();
+            expect(result.webTheme).toBe('orchid-admin');
+        });
+
+        it('should fallback to orchid-admin web theme when API returns no data', async () => {
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ success: true, data: null }),
+            });
+
+            const result = await configAPI.getFeatures();
+            expect(result.webTheme).toBe('orchid-admin');
         });
     });
 });

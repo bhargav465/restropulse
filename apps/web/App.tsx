@@ -10,7 +10,7 @@ import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
-import { ViewState, Restaurant, User, Post, FeatureFlags, Platform } from '@restropulse/shared';
+import { ViewState, Restaurant, User, Post, FeatureFlags, Platform, WebThemeName } from '@restropulse/shared';
 import { authAPI, restaurantAPI, postsAPI, configAPI } from './api';
 import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
 
@@ -48,10 +48,16 @@ const App: React.FC = () => {
         setFeatureFlags(flags);
     };
 
+    const activeWebTheme: WebThemeName = featureFlags?.webTheme === 'legacy' ? 'legacy' : 'orchid-admin';
+
     // Derived platform availability — defaults to all enabled when featureFlags not yet loaded
     const enabledPlatforms: Platform[] = featureFlags?.enabledPlatforms ?? ['INSTAGRAM', 'FACEBOOK'];
     const instagramEnabled = enabledPlatforms.includes('INSTAGRAM');
     const facebookEnabled = enabledPlatforms.includes('FACEBOOK');
+
+    useEffect(() => {
+        document.documentElement.dataset.theme = activeWebTheme;
+    }, [activeWebTheme]);
 
     // Check if this is an Instagram OAuth callback
     useEffect(() => {

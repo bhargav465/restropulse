@@ -998,15 +998,15 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-xs font-bold transition-all relative ${isActive ? 'text-slate-800' : 'text-slate-400 hover:text-slate-500'}`}
                             >
-                                <tab.icon size={15} className={isActive ? tab.color : ''} />
+                                <tab.icon size={15} className={isActive ? 'text-orange-600' : ''} />
                                 <span>{tab.label}</span>
                                 {tab.count > 0 && (
-                                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${isActive ? (tab.id === 'REVIEW' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700') : 'bg-slate-200 text-slate-500'}`}>
+                                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${isActive ? 'bg-orange-100 text-orange-700' : 'bg-slate-200 text-slate-500'}`}>
                                         {tab.count}
                                     </span>
                                 )}
                                 {isActive && (
-                                    <div className={`absolute bottom-0 left-3 right-3 h-0.5 rounded-full ${tab.id === 'REVIEW' ? 'bg-orange-500' : tab.id === 'SCHEDULED' ? 'bg-green-500' : 'bg-slate-500'}`}></div>
+                                    <div className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-orange-500"></div>
                                 )}
                             </button>
                         );

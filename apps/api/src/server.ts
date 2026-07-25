@@ -96,6 +96,7 @@ const env = loadAndValidateEnv({
         RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
         RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
         FEATURE_DELETE_ACCOUNT: booleanFlag,
+        FEATURE_WEB_THEME: z.enum(['legacy', 'orchid-admin']).default('orchid-admin'),
         ENABLED_PLATFORMS: z.string().default('INSTAGRAM,FACEBOOK'),
         // Adhoc post scheduling: minimum minutes ahead a post must be scheduled.
         // ASAP defaults to exactly this value. Must be > POST_APPROVAL_BUFFER (120 min)

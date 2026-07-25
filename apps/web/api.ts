@@ -545,7 +545,16 @@ export const configAPI = {
         // Fallback: if the endpoint returns no data, default every flag to false.
         // The shape MUST match FeatureFlags exactly so downstream consumers can
         // safely read every flag without optional-chains or undefined checks.
-        return res.data ?? { deleteAccount: false, topupCredits: false, updatesSection: false, minScheduleAheadMins: 150, postApprovalBufferMins: 120, cycleApprovalBufferMins: 4320, enabledPlatforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[] };
+        return res.data ?? {
+            deleteAccount: false,
+            topupCredits: false,
+            updatesSection: false,
+            minScheduleAheadMins: 150,
+            postApprovalBufferMins: 120,
+            cycleApprovalBufferMins: 4320,
+            enabledPlatforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[],
+            webTheme: 'orchid-admin',
+        };
     },
 };
 

@@ -55,6 +55,7 @@ Rules:
 | RAZORPAY_WEBHOOK_SECRET          | No*      | --                                               | Razorpay webhook signature secret          |
 | FEATURE_TOPUP_CREDITS            | No       | false                                            | Feature flag: enable credit pack topup purchase UI         |
 | FEATURE_UPDATES_SECTION          | No       | false                                            | Feature flag: enable Updates (Inputs) section in nav       |
+| FEATURE_WEB_THEME                | No       | orchid-admin                                     | Web theme served via `/api/config/features` (`legacy` or `orchid-admin`) |
 | SECRETS_BACKEND                  | No       | `env`                                            | `env` (process.env) or `azure-kv` (Azure Key Vault)    |
 | AZURE_KEY_VAULT_URL              | Cond.    | --                                               | Full Key Vault URL, e.g. `https://restropulse-prod-kv.vault.azure.net`. Required when `SECRETS_BACKEND=azure-kv` |
 | AZURE_KEY_VAULT_KEY_PREFIX       | No       | (none)                                           | Optional prefix prepended to all KV secret names (e.g. `dev`, `staging`) |

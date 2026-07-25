@@ -120,6 +120,7 @@ packages/
 - See `docs/INFRASTRUCTURE.md` for the full list of environment variables per app
 - Critical shared vars: MONGODB_URI, ENCRYPTION_KEY, INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET
 - Payment vars (optional in dev): RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_WEBHOOK_SECRET
+- Theme config var (API): `FEATURE_WEB_THEME` with allowed values `legacy` or `orchid-admin` (returned via `/api/config/features`)
 - Frontend required vars (all environments): `VITE_API_URL` (backend API base URL, no hardcoded fallback), `VITE_APP_URL` (frontend public URL baked into Firebase email verification continueUrl at build time; supplied via .env in dev and via workflow env block in CI)
 
 ## Common Commands

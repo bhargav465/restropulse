@@ -414,6 +414,7 @@ export interface Invoice {
 
 export type PostTypeUsage = Partial<Record<PostType, { used: number; limit: number }>>;
 export type PlanUsage = Partial<Record<Platform, PostTypeUsage>>;
+export type WebThemeName = 'legacy' | 'orchid-admin';
 
 export interface SubscribeRequest {
   planSlug: string;
@@ -433,6 +434,8 @@ export interface FeatureFlags {
   cycleApprovalBufferMins?: number;
   // Which social platforms are active. When absent, all platforms are enabled.
   enabledPlatforms?: Platform[];
+  // Active web theme. When absent, the frontend must fall back to orchid-admin.
+  webTheme?: WebThemeName;
 }
 
 // ----- Account Deletion / Archive -----
