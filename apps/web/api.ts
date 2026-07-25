@@ -2,7 +2,9 @@ import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, A
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { getApiUrl } from './utils/env';
 
-const API_BASE_URL = getApiUrl();
+// Resolved lazily (not at module load) since getApiUrl() now reads from the
+// runtime client config, which is only populated after initClientConfig()
+// resolves in index.tsx's boot sequence.
 
 // Helper function for API calls with auto token refresh
 async function fetchAPI<T>(endpoint: string, options?: RequestInit, retry = true): Promise<T> {
@@ -15,7 +17,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit, retry = true
         ...options?.headers,
     };
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(`${getApiUrl()}${endpoint}`, {
         ...options,
         headers,
     });
@@ -107,7 +109,7 @@ export const authAPI = {
 
     refreshToken: async (refreshToken: string): Promise<boolean> => {
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+            const response = await fetch(`${getApiUrl()}/auth/refresh`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ refreshToken }),

@@ -512,6 +512,23 @@ export interface GeneratePostResponse {
   post: Post;
 }
 
+export interface ClientConfig {
+  apiUrl: string;
+  appUrl: string;
+  googleMapsApiKey: string;
+  razorpayKeyId: string;
+  appInsightsConnectionString: string;
+  telemetrySampleRate: number;
+  firebase: {
+    apiKey: string;
+    authDomain: string;
+    projectId: string;
+    storageBucket: string;
+    messagingSenderId: string;
+    appId: string;
+  };
+}
+
 export { loadEnvFile, validateEnv, loadAndValidateEnv, z } from './env.js';
 
 export {

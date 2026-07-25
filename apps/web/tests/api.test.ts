@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { authAPI, restaurantAPI, postsAPI, strategyAPI, instagramAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, citiesAPI, accountManagerAPI } from '../api';
 
+// api.ts reads the API base URL through utils/env's getApiUrl(), which now
+// reads from the runtime client config sidecar. Mock it so fetchAPI() has a
+// resolved base URL without requiring initClientConfig() to have run.
+vi.mock('../utils/client-config', () => ({
+    getClientConfig: vi.fn(() => ({ apiUrl: 'http://localhost:3001/api' })),
+}));
+
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;

@@ -11,6 +11,11 @@ vi.mock('../utils/env', () => ({
     getApiUrl: vi.fn(() => 'http://localhost:3001/api'),
 }));
 
+// Mock the runtime client config sidecar (Login reads apiUrl through it now)
+vi.mock('../utils/client-config', () => ({
+    getClientConfig: vi.fn(() => ({ apiUrl: 'http://localhost:3001/api' })),
+}));
+
 // Mock fetch for OTP API calls
 const mockFetch = vi.fn();
 global.fetch = mockFetch;

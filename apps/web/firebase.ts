@@ -9,7 +9,7 @@
  */
 
 import { getAppUrl } from './utils/env';
-import { initializeApp } from 'firebase/app';
+import { initializeApp, FirebaseApp } from 'firebase/app';
 import {
     getAuth,
     Auth,
@@ -20,24 +20,28 @@ import {
     isSignInWithEmailLink,
     signInWithEmailLink,
 } from 'firebase/auth';
+import type { ClientConfig } from '@restropulse/shared';
 
-// Firebase configuration - replace with your actual config
-// These values should be in environment variables for production
-const firebaseConfig = {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'your-api-key',
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'your-project.firebaseapp.com',
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'your-project-id',
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'your-project.appspot.com',
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '123456789',
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:123456789:web:abc123',
-};
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+/**
+ * Initialize Firebase using the resolved runtime client config.
+ * Must be called once (after `initClientConfig()` resolves) before any
+ * other function in this module is used.
+ */
+export function initFirebase(cfg: ClientConfig): void {
+    app = initializeApp(cfg.firebase);
+    auth = getAuth(app);
+    auth.useDeviceLanguage();
+}
 
-// Configure auth settings
-auth.useDeviceLanguage();
+function requireAuth(): Auth {
+    if (!auth) {
+        throw new Error('Firebase not initialized: call initFirebase() first');
+    }
+    return auth;
+}
 
 // Store confirmation result for OTP verification
 let confirmationResult: ConfirmationResult | null = null;
@@ -52,7 +56,7 @@ export function initRecaptcha(buttonId: string): RecaptchaVerifier {
         (window as any).recaptchaVerifier.clear();
     }
 
-    const verifier = new RecaptchaVerifier(auth, buttonId, {
+    const verifier = new RecaptchaVerifier(requireAuth(), buttonId, {
         size: 'invisible',
         callback: () => {
             // reCAPTCHA solved - will proceed with phone auth
@@ -73,7 +77,7 @@ export function initRecaptcha(buttonId: string): RecaptchaVerifier {
  */
 export async function sendOTP(phoneNumber: string, recaptchaVerifier: RecaptchaVerifier): Promise<void> {
     try {
-        confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
+        confirmationResult = await signInWithPhoneNumber(requireAuth(), phoneNumber, recaptchaVerifier);
         console.log('OTP sent successfully');
     } catch (error: any) {
         console.error('Error sending OTP:', error);
@@ -109,7 +113,7 @@ export async function verifyOTP(otp: string): Promise<string> {
  * Get current user's ID token (refreshes if expired)
  */
 export async function getIdToken(): Promise<string | null> {
-    const user = auth.currentUser;
+    const user = requireAuth().currentUser;
     if (!user) return null;
     return user.getIdToken(true);
 }
@@ -118,7 +122,7 @@ export async function getIdToken(): Promise<string | null> {
  * Sign out from Firebase
  */
 export async function signOut(): Promise<void> {
-    await auth.signOut();
+    await requireAuth().signOut();
     confirmationResult = null;
 }
 
@@ -126,7 +130,7 @@ export async function signOut(): Promise<void> {
  * Get Firebase auth instance
  */
 export function getFirebaseAuth(): Auth {
-    return auth;
+    return requireAuth();
 }
 
 const EMAIL_STORAGE_KEY = 'rp_email_for_verification';
@@ -136,13 +140,13 @@ export async function sendEmailVerificationLink(email: string): Promise<void> {
         url: `${getAppUrl()}?emailVerified=true`,
         handleCodeInApp: true,
     };
-    await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+    await sendSignInLinkToEmail(requireAuth(), email, actionCodeSettings);
     localStorage.setItem(EMAIL_STORAGE_KEY, email);
 }
 
 export async function completeEmailVerification(): Promise<{ email: string; idToken: string } | null> {
     const currentUrl = window.location.href;
-    if (!isSignInWithEmailLink(auth, currentUrl)) {
+    if (!isSignInWithEmailLink(requireAuth(), currentUrl)) {
         return null;
     }
     // Strip the oobCode from the URL immediately so back-navigation or remounts
@@ -153,18 +157,16 @@ export async function completeEmailVerification(): Promise<{ email: string; idTo
         email = window.prompt('Please enter your email to confirm verification');
     }
     if (!email) return null;
-    const credential = await signInWithEmailLink(auth, email, currentUrl);
+    const credential = await signInWithEmailLink(requireAuth(), email, currentUrl);
     localStorage.removeItem(EMAIL_STORAGE_KEY);
     const idToken = await credential.user.getIdToken();
     return { email, idToken };
 }
 
 export function isEmailSignInLink(): boolean {
-    return isSignInWithEmailLink(auth, window.location.href);
+    return isSignInWithEmailLink(requireAuth(), window.location.href);
 }
 
 export function getStoredVerificationEmail(): string | null {
     return localStorage.getItem(EMAIL_STORAGE_KEY);
 }
-
-export { auth };

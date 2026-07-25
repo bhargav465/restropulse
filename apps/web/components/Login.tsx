@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Smartphone, ShieldCheck, ArrowRight, KeyRound } from 'lucide-react';
-import { initRecaptcha, sendOTP, verifyOTP, auth } from '../firebase';
+import { initRecaptcha, sendOTP, verifyOTP } from '../firebase';
 import { RecaptchaVerifier } from 'firebase/auth';
 import { getFirebaseApiKey } from '../utils/env';
+import { getClientConfig } from '../utils/client-config';
 
 interface LoginProps {
     onLogin: (firebaseIdToken: string) => Promise<void>;
@@ -92,7 +93,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                 // Fallback: Backend OTP (for development)
                 setUseFirebase(false); // Ensure we use fallback mode for verification
                 const response = await fetch(
-                    `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/send-otp`,
+                    `${getClientConfig().apiUrl}/auth/send-otp`,
                     {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -130,7 +131,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                 // Fall back to development OTP
                 try {
                     const response = await fetch(
-                        `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/send-otp`,
+                        `${getClientConfig().apiUrl}/auth/send-otp`,
                         {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },

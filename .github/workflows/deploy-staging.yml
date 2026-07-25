@@ -57,22 +57,6 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Fetch sensitive web vars from Key Vault
-        run: |
-          MAPS_KEY=$(az keyvault secret show \
-            --vault-name restropulse-prod-kv \
-            --name STAGING-WEB-GOOGLE-MAPS-API-KEY \
-            --query "value" -o tsv)
-          echo "::add-mask::$MAPS_KEY"
-          echo "VITE_GOOGLE_MAPS_API_KEY=$MAPS_KEY" >> $GITHUB_ENV
-
-          APPINSIGHTS=$(az keyvault secret show \
-            --vault-name restropulse-prod-kv \
-            --name STAGING-WEB-APPINSIGHTS-CONNECTION-STRING \
-            --query "value" -o tsv)
-          echo "::add-mask::$APPINSIGHTS"
-          echo "VITE_APPINSIGHTS_CONNECTION_STRING=$APPINSIGHTS" >> $GITHUB_ENV
-
       # Build everything in the full monorepo so turbo's cache works correctly
       # across all packages. Splitting the build (e.g. web-only then pruned) causes
       # cache misses inside the pruned dir because the cache keys differ.
@@ -80,18 +64,71 @@ jobs:
         run: npx turbo build --filter=!@restropulse/db-cli
         env:
           NODE_ENV: production
-          VITE_API_URL: ${{ vars.STAGING_API_URL }}/api
-          VITE_APP_URL: ${{ vars.STAGING_WEB_URL }}
-          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
-          VITE_RAZORPAY_KEY_ID: ${{ vars.VITE_RAZORPAY_KEY_ID }}
-          VITE_TELEMETRY_SAMPLE_RATE: ${{ vars.VITE_TELEMETRY_SAMPLE_RATE }}
-          # VITE_GOOGLE_MAPS_API_KEY and VITE_APPINSIGHTS_CONNECTION_STRING
-          # are injected via $GITHUB_ENV by the KV fetch step above
+
+      # Zero-secret web bundle: the build above no longer bakes VITE_FIREBASE_*,
+      # VITE_GOOGLE_MAPS_API_KEY, VITE_APPINSIGHTS_CONNECTION_STRING, or
+      # VITE_RAZORPAY_KEY_ID into the compiled JS. Instead a same-origin
+      # config.json sidecar is written into the build output and fetched at
+      # runtime by apps/web/utils/client-config.ts. This file only ever
+      # contains public web-facing config -- never fetch/emit
+      # FIREBASE-SERVICE-ACCOUNT-KEY (server-only admin secret).
+      - name: Generate config.json sidecar from Key Vault
+        run: |
+          get_secret() {
+            az keyvault secret show \
+              --vault-name restropulse-prod-kv \
+              --name "STAGING-$1" \
+              --query "value" -o tsv
+          }
+
+          FIREBASE_API_KEY=$(get_secret FIREBASE-API-KEY)
+          echo "::add-mask::$FIREBASE_API_KEY"
+          FIREBASE_AUTH_DOMAIN=$(get_secret FIREBASE-AUTH-DOMAIN)
+          echo "::add-mask::$FIREBASE_AUTH_DOMAIN"
+          FIREBASE_PROJECT_ID=$(get_secret FIREBASE-PROJECT-ID)
+          echo "::add-mask::$FIREBASE_PROJECT_ID"
+          FIREBASE_STORAGE_BUCKET=$(get_secret FIREBASE-STORAGE-BUCKET)
+          echo "::add-mask::$FIREBASE_STORAGE_BUCKET"
+          FIREBASE_MESSAGING_SENDER_ID=$(get_secret FIREBASE-MESSAGING-SENDER-ID)
+          echo "::add-mask::$FIREBASE_MESSAGING_SENDER_ID"
+          FIREBASE_APP_ID=$(get_secret FIREBASE-APP-ID)
+          echo "::add-mask::$FIREBASE_APP_ID"
+          MAPS_KEY=$(get_secret WEB-GOOGLE-MAPS-API-KEY)
+          echo "::add-mask::$MAPS_KEY"
+          APPINSIGHTS=$(get_secret WEB-APPINSIGHTS-CONNECTION-STRING)
+          echo "::add-mask::$APPINSIGHTS"
+          RAZORPAY_KEY_ID=$(get_secret RAZORPAY-KEY-ID)
+          echo "::add-mask::$RAZORPAY_KEY_ID"
+
+          jq -n \
+            --arg apiUrl "${{ vars.STAGING_API_URL }}/api" \
+            --arg appUrl "${{ vars.STAGING_WEB_URL }}" \
+            --arg googleMapsApiKey "$MAPS_KEY" \
+            --arg razorpayKeyId "$RAZORPAY_KEY_ID" \
+            --arg appInsightsConnectionString "$APPINSIGHTS" \
+            --argjson telemetrySampleRate 100 \
+            --arg firebaseApiKey "$FIREBASE_API_KEY" \
+            --arg firebaseAuthDomain "$FIREBASE_AUTH_DOMAIN" \
+            --arg firebaseProjectId "$FIREBASE_PROJECT_ID" \
+            --arg firebaseStorageBucket "$FIREBASE_STORAGE_BUCKET" \
+            --arg firebaseMessagingSenderId "$FIREBASE_MESSAGING_SENDER_ID" \
+            --arg firebaseAppId "$FIREBASE_APP_ID" \
+            '{
+              apiUrl: $apiUrl,
+              appUrl: $appUrl,
+              googleMapsApiKey: $googleMapsApiKey,
+              razorpayKeyId: $razorpayKeyId,
+              appInsightsConnectionString: $appInsightsConnectionString,
+              telemetrySampleRate: $telemetrySampleRate,
+              firebase: {
+                apiKey: $firebaseApiKey,
+                authDomain: $firebaseAuthDomain,
+                projectId: $firebaseProjectId,
+                storageBucket: $firebaseStorageBucket,
+                messagingSenderId: $firebaseMessagingSenderId,
+                appId: $firebaseAppId
+              }
+            }' > apps/web/dist/config.json
 
       - name: Upload web artifact
         if: inputs.force || needs.detect-changes.outputs.web == 'true'
