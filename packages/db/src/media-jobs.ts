@@ -1,7 +1,7 @@
 /**
  * @restropulse/db - mediaJobs collection helpers.
  *
- * Each fal.ai (or other media-provider) call writes a MediaJobRecord. Phase 4
+ * Each media-provider call writes a MediaJobRecord. Phase 4
  * writes COMPLETED rows synchronously; phase 5 will write PENDING -> RUNNING
  * -> COMPLETED for slow video generation and add the media-job-poller cron.
  */

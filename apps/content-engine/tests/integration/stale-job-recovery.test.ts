@@ -22,7 +22,7 @@ vi.mock('@restropulse/telemetry/server', () => {
 const { processMediaJobs } = await import(
   '../../src/services/processors/media-job-poller/index.js'
 );
-const { FalAIMediaGenerator, MongoMediaJobStore } = await import(
+const { ReplicateMediaGenerator, MongoMediaJobStore } = await import(
   '../../src/services/content-generator/backends/ai/index.js'
 );
 
@@ -59,8 +59,8 @@ describe('Stale-job recovery', () => {
     await insertMediaJob({
       jobId: 'job_stale',
       providerJobId: 'req_stale',
-      provider: 'fal-ai',
-      modelId: 'fal-ai/kling-video/v1.6/standard/text-to-video',
+      provider: 'replicate',
+      modelId: 'kwaivgi/kling-v1.6-standard',
       postType: 'REEL',
       status: 'RUNNING',
       attempts: 1,
@@ -69,10 +69,10 @@ describe('Stale-job recovery', () => {
       startedAt: new Date(Date.now() - 11 * 60 * 1000),
     });
 
-    // Run the poller -- the runner should reap stale jobs WITHOUT calling fal
-    const noFetchClient = { generateImage: vi.fn(), editImage: vi.fn(), submitToQueue: vi.fn(), getQueueStatus: vi.fn(), getQueueResult: vi.fn() };
+    // Run the poller -- the runner should reap stale jobs WITHOUT calling Replicate
+    const noFetchClient = { createPrediction: vi.fn(), getPrediction: vi.fn() };
     const store = new MongoMediaJobStore();
-    const media = new FalAIMediaGenerator({ client: noFetchClient as any, store });
+    const media = new ReplicateMediaGenerator({ client: noFetchClient as any, store });
 
     await processMediaJobs({ store, media });
 
@@ -84,6 +84,6 @@ describe('Stale-job recovery', () => {
     expect(updatedPost!.status).toBe('MISSED_DEADLINE');
     expect(updatedPost!.publishError).toContain('media-generation');
 
-    expect(noFetchClient.getQueueStatus).not.toHaveBeenCalled();
+    expect(noFetchClient.getPrediction).not.toHaveBeenCalled();
   });
 });

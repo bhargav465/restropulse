@@ -5,18 +5,18 @@
  * behavior unless the flag is explicitly flipped.
  *
  * The 'ai' branch is an "uber" master flag: when set, every AI sub-feature
- * defaults to enabled (fal.ai media + V1 calendar + V2 Sonar) and every
+ * defaults to enabled (Replicate media + V1 calendar + V2 Sonar) and every
  * required key must be present. Operators set ONE flag and four keys; that
  * is the supported normal mode.
  *
  * Required when CONTENT_GENERATOR_BACKEND=ai (defaults shown):
  *   ANTHROPIC_API_KEY                  -- Anthropic Claude
- *   FAL_API_KEY                        -- fal.ai (image + video)
+ *   REPLICATE_API_TOKEN                -- Replicate (image + video)
  *   GOOGLE_CALENDAR_API_KEY            -- India holidays (V1)
  *   PERPLEXITY_API_KEY                 -- Sonar Pro current affairs (V2)
  *
  * Advanced sub-flag overrides (for debug / cost-control / staged rollouts):
- *   MEDIA_BACKEND=placeholder          -- skip fal.ai; use asset catalog
+ *   MEDIA_BACKEND=placeholder          -- skip Replicate; use asset catalog
  *   CURRENT_AFFAIRS_V1_ENABLED=false   -- skip Google Calendar
  *   CURRENT_AFFAIRS_V2_ENABLED=false   -- skip Perplexity Sonar
  *
@@ -33,7 +33,7 @@ import type { IMediaGenerator } from './backends/ai/media/types.js';
 import type { ICurrentAffairsProvider } from './backends/ai/current-affairs/index.js';
 
 export type ContentGeneratorBackend = 'placeholder' | 'ai';
-type MediaBackend = 'placeholder' | 'fal-ai' | 'replicate';
+type MediaBackend = 'placeholder' | 'replicate';
 
 function readBoolEnv(name: string, fallback: boolean): boolean {
   const raw = process.env[name];
@@ -44,8 +44,8 @@ function readBoolEnv(name: string, fallback: boolean): boolean {
 function readMediaBackend(fallback: MediaBackend): MediaBackend {
   const raw = process.env.MEDIA_BACKEND?.trim();
   if (!raw) return fallback;
-  if (raw === 'placeholder' || raw === 'fal-ai' || raw === 'replicate') return raw;
-  throw new Error(`Unknown MEDIA_BACKEND value: ${raw}. Expected 'placeholder', 'fal-ai', or 'replicate'.`);
+  if (raw === 'placeholder' || raw === 'replicate') return raw;
+  throw new Error(`Unknown MEDIA_BACKEND value: ${raw}. Expected 'placeholder' or 'replicate'.`);
 }
 
 interface AiModeResolution {
@@ -64,8 +64,8 @@ function resolveAiModeFlags(): AiModeResolution {
     v1Enabled: readBoolEnv('CURRENT_AFFAIRS_V1_ENABLED', true),
     // V2 default flips from false to true under AI mode.
     v2Enabled: readBoolEnv('CURRENT_AFFAIRS_V2_ENABLED', true),
-    // Media backend default flips from placeholder to fal-ai under AI mode.
-    mediaBackend: readMediaBackend('fal-ai'),
+    // Media backend default flips from placeholder to replicate under AI mode.
+    mediaBackend: readMediaBackend('replicate'),
   };
 }
 
@@ -77,7 +77,6 @@ function resolveAiModeFlags(): AiModeResolution {
 function validateAiKeys(flags: AiModeResolution): void {
   const missing: string[] = [];
   if (!process.env.ANTHROPIC_API_KEY) missing.push('ANTHROPIC_API_KEY');
-  if (flags.mediaBackend === 'fal-ai' && !process.env.FAL_API_KEY) missing.push('FAL_API_KEY');
   if (flags.mediaBackend === 'replicate' && !process.env.REPLICATE_API_TOKEN) missing.push('REPLICATE_API_TOKEN');
   if (flags.v1Enabled && !process.env.GOOGLE_CALENDAR_API_KEY) missing.push('GOOGLE_CALENDAR_API_KEY');
   if (flags.v2Enabled && !process.env.PERPLEXITY_API_KEY) missing.push('PERPLEXITY_API_KEY');
@@ -85,9 +84,6 @@ function validateAiKeys(flags: AiModeResolution): void {
   if (missing.length === 0) return;
 
   const overrideHints: string[] = [];
-  if (flags.mediaBackend === 'fal-ai' && missing.includes('FAL_API_KEY')) {
-    overrideHints.push('MEDIA_BACKEND=placeholder to skip fal.ai');
-  }
   if (flags.mediaBackend === 'replicate' && missing.includes('REPLICATE_API_TOKEN')) {
     overrideHints.push('MEDIA_BACKEND=placeholder to skip Replicate');
   }
@@ -148,17 +144,6 @@ async function buildCurrentAffairsForFactory(
 async function buildMediaGeneratorForFactory(flags: AiModeResolution): Promise<IMediaGenerator> {
   const { PlaceholderMediaGenerator } = await import('./backends/ai/media/placeholder-media-generator.js');
 
-  if (flags.mediaBackend === 'fal-ai') {
-    const { FalAIMediaGenerator, FalClient, MongoMediaJobStore } = await import('./backends/ai/index.js');
-    const store = new MongoMediaJobStore();
-    const media = new FalAIMediaGenerator({
-      client: new FalClient({ apiKey: process.env.FAL_API_KEY! }),
-      store,
-    });
-    lastAiMediaJobStore = store;
-    lastAiMediaGenerator = media;
-    return media;
-  }
   if (flags.mediaBackend === 'replicate') {
     const { ReplicateMediaGenerator, ReplicateClient, MongoMediaJobStore } = await import('./backends/ai/index.js');
     const store = new MongoMediaJobStore();

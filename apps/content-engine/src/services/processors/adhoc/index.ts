@@ -86,7 +86,7 @@ export async function processPendingPosts(): Promise<{ processed: number; failed
           logger.warn({ postId }, 'Post no longer in PENDING_CONTENT; skipping advance');
           continue;
         }
-        logger.info({ postId, mediaJobId: content.mediaJobId }, 'Post advanced to PENDING_MEDIA awaiting fal.ai queue');
+        logger.info({ postId, mediaJobId: content.mediaJobId }, 'Post advanced to PENDING_MEDIA awaiting media provider');
         stats.processed++;
         continue;
       }

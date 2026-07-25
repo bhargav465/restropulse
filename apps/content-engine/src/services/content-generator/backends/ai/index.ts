@@ -22,5 +22,4 @@ export { PlaceholderMediaGenerator } from './media/placeholder-media-generator.j
 
 export type { IMediaJobStore, MediaJobUpdatable } from './media/jobs/types.js';
 export { MongoMediaJobStore } from './media/jobs/mongo-media-job-store.js';
-export * from './media/fal-ai/index.js';
 export * from './media/replicate/index.js';

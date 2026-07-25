@@ -25,7 +25,7 @@ const { AIContentGenerator } = await import(
 const { RestaurantSpecialization } = await import(
   '../../src/services/content-generator/backends/ai/specialization/index.js'
 );
-const { FalClient, FalAIMediaGenerator, MongoMediaJobStore } = await import(
+const { ReplicateClient, ReplicateMediaGenerator, MongoMediaJobStore } = await import(
   '../../src/services/content-generator/backends/ai/index.js'
 );
 const { processMediaJobs } = await import(
@@ -71,32 +71,32 @@ describe('Video flow end-to-end (submit -> poll -> COMPLETED)', () => {
       modelId: 'claude-haiku-4-5-20251001',
     });
 
-    // fetch mock: queue submit then status (IN_PROGRESS -> COMPLETED) then result
-    let stage: 'submit' | 'status1' | 'status2' | 'result' = 'submit';
-    fetchMock.mockImplementation(async (url: string, _init?: any) => {
-      if (typeof url === 'string' && url.endsWith('/text-to-video') && stage === 'submit') {
-        stage = 'status1';
-        return { ok: true, status: 200, json: async () => ({ request_id: 'req_e2e' }) };
+    // fetch mock: prediction submit then poll (processing -> succeeded)
+    let stage: 'submit' | 'processing' | 'succeeded' = 'submit';
+    fetchMock.mockImplementation(async (url: string, init?: any) => {
+      if (typeof url === 'string' && url.endsWith('/predictions') && init?.method === 'POST' && stage === 'submit') {
+        stage = 'processing';
+        return { ok: true, status: 200, json: async () => ({ id: 'pred_e2e', status: 'starting', output: null }) };
       }
-      if (typeof url === 'string' && url.endsWith('/status')) {
-        if (stage === 'status1') {
-          stage = 'status2';
-          return { ok: true, status: 200, json: async () => ({ status: 'IN_PROGRESS' }) };
+      if (typeof url === 'string' && url.endsWith('/predictions/pred_e2e')) {
+        if (stage === 'processing') {
+          stage = 'succeeded';
+          return { ok: true, status: 200, json: async () => ({ id: 'pred_e2e', status: 'processing', output: null }) };
         }
-        if (stage === 'status2') {
-          stage = 'result';
-          return { ok: true, status: 200, json: async () => ({ status: 'COMPLETED' }) };
+        if (stage === 'succeeded') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ id: 'pred_e2e', status: 'succeeded', output: 'https://replicate.delivery/video.mp4' }),
+          };
         }
-      }
-      if (typeof url === 'string' && url.includes('/requests/req_e2e') && !url.endsWith('/status') && stage === 'result') {
-        return { ok: true, status: 200, json: async () => ({ video: { url: 'https://fal.media/done.mp4' } }) };
       }
       throw new Error(`Unexpected fetch in stage ${stage} for ${url}`);
     });
 
-    const falClient = new FalClient({ apiKey: 'fal-fake' });
+    const replicateClient = new ReplicateClient({ apiKey: 'replicate-fake' });
     const store = new MongoMediaJobStore();
-    const media = new FalAIMediaGenerator({ client: falClient, store });
+    const media = new ReplicateMediaGenerator({ client: replicateClient, store });
     const gen = new AIContentGenerator({
       specialization: new RestaurantSpecialization(),
       llm: { name: 'mock-llm', generateObject },
@@ -124,7 +124,7 @@ describe('Video flow end-to-end (submit -> poll -> COMPLETED)', () => {
       },
     );
 
-    // 3. First poller tick -- still IN_PROGRESS
+    // 3. First poller tick -- still processing
     await processMediaJobs({ store, media });
     let updated = await findPostById(seeded.id);
     expect(updated!.status).toBe('PENDING_MEDIA');
@@ -133,7 +133,7 @@ describe('Video flow end-to-end (submit -> poll -> COMPLETED)', () => {
     await processMediaJobs({ store, media });
     updated = await findPostById(seeded.id);
     expect(updated!.status).toBe('PENDING_APPROVAL');
-    expect(updated!.videoUrl).toBe('https://fal.media/done.mp4');
+    expect(updated!.videoUrl).toBe('https://replicate.delivery/video.mp4');
     expect(updated!.generationStep).toBe('MEDIA_DONE');
   });
 });

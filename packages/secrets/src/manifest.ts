@@ -26,7 +26,6 @@ export const SECRETS_MANIFEST: SecretDefinition[] = [
   { key: 'INSTAGRAM_REDIRECT_URI', kvName: 'instagram-redirect-uri', description: 'OAuth callback URL', apps: ['api', 'publisher'], required: false, category: 'meta' },
   // AI backends
   { key: 'ANTHROPIC_API_KEY', kvName: 'anthropic-api-key', description: 'Anthropic Claude API key', apps: ['content-engine'], required: false, category: 'ai' },
-  { key: 'FAL_API_KEY', kvName: 'fal-api-key', description: 'fal.ai API key', apps: ['content-engine'], required: false, category: 'ai' },
   { key: 'REPLICATE_API_TOKEN', kvName: 'replicate-api-token', description: 'Replicate API token', apps: ['content-engine'], required: false, category: 'ai' },
   { key: 'GOOGLE_CALENDAR_API_KEY', kvName: 'google-calendar-api-key', description: 'Google Calendar API key for India holidays', apps: ['content-engine'], required: false, category: 'ai' },
   { key: 'PERPLEXITY_API_KEY', kvName: 'perplexity-api-key', description: 'Perplexity Sonar Pro API key', apps: ['content-engine'], required: false, category: 'ai' },

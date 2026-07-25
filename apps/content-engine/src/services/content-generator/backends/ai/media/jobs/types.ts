@@ -1,7 +1,7 @@
 /**
  * IMediaJobStore -- thin abstraction over the mediaJobs persistence backend.
  * Phase 4 ships MongoMediaJobStore. Future backends (Redis for ephemeral,
- * Postgres for analytics) plug in here without changing FalAIMediaGenerator.
+ * Postgres for analytics) plug in here without changing ReplicateMediaGenerator.
  */
 
 import type { MediaJobRecord } from '@restropulse/shared';

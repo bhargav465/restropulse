@@ -8,7 +8,7 @@ vi.mock('@restropulse/telemetry/server', () => ({
 const ORIGINAL_KEYS = {
   anthropic: process.env['ANTHROPIC_API_KEY'],
   cal: process.env['GOOGLE_CALENDAR_API_KEY'],
-  fal: process.env['FAL_API_KEY'],
+  replicate: process.env['REPLICATE_API_TOKEN'],
   pplx: process.env['PERPLEXITY_API_KEY'],
   v1: process.env['CURRENT_AFFAIRS_V1_ENABLED'],
   v2: process.env['CURRENT_AFFAIRS_V2_ENABLED'],
@@ -25,7 +25,7 @@ afterAll(() => {
   for (const [name, value] of Object.entries({
     ANTHROPIC_API_KEY: ORIGINAL_KEYS.anthropic,
     GOOGLE_CALENDAR_API_KEY: ORIGINAL_KEYS.cal,
-    FAL_API_KEY: ORIGINAL_KEYS.fal,
+    REPLICATE_API_TOKEN: ORIGINAL_KEYS.replicate,
     PERPLEXITY_API_KEY: ORIGINAL_KEYS.pplx,
     CURRENT_AFFAIRS_V1_ENABLED: ORIGINAL_KEYS.v1,
     CURRENT_AFFAIRS_V2_ENABLED: ORIGINAL_KEYS.v2,
@@ -40,7 +40,7 @@ beforeEach(() => {
   // Each test starts from a clean slate. Tests that need keys / flags set them explicitly.
   delete process.env['ANTHROPIC_API_KEY'];
   delete process.env['GOOGLE_CALENDAR_API_KEY'];
-  delete process.env['FAL_API_KEY'];
+  delete process.env['REPLICATE_API_TOKEN'];
   delete process.env['PERPLEXITY_API_KEY'];
   delete process.env['CURRENT_AFFAIRS_V1_ENABLED'];
   delete process.env['CURRENT_AFFAIRS_V2_ENABLED'];
@@ -53,7 +53,7 @@ const { createContentGenerator } = await import('../../../src/services/content-g
 function setAllAiKeys() {
   process.env['ANTHROPIC_API_KEY'] = 'sk-test';
   process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
-  process.env['FAL_API_KEY'] = 'fal-test';
+  process.env['REPLICATE_API_TOKEN'] = 'replicate-test';
   process.env['PERPLEXITY_API_KEY'] = 'pplx-test';
 }
 
@@ -86,7 +86,7 @@ describe('createContentGenerator', () => {
     }
     expect(caught).toBeDefined();
     const msg = caught!.message;
-    expect(msg).toContain('FAL_API_KEY');
+    expect(msg).toContain('REPLICATE_API_TOKEN');
     expect(msg).toContain('GOOGLE_CALENDAR_API_KEY');
     expect(msg).toContain('PERPLEXITY_API_KEY');
     expect(msg).toMatch(/MEDIA_BACKEND=placeholder|CURRENT_AFFAIRS_V[12]_ENABLED=false/);
@@ -95,12 +95,12 @@ describe('createContentGenerator', () => {
 });
 
 describe('createContentGenerator -- AI uber-flag default-on behavior', () => {
-  it('with backend=ai and all four keys, V1 + V2 + fal-ai are all engaged by default', async () => {
+  it('with backend=ai and all four keys, V1 + V2 + replicate are all engaged by default', async () => {
     setAllAiKeys();
     await expect(createContentGenerator('ai')).resolves.toBeDefined();
   }, 15000);
 
-  it('does not require FAL_API_KEY when MEDIA_BACKEND=placeholder override is set', async () => {
+  it('does not require REPLICATE_API_TOKEN when MEDIA_BACKEND=placeholder override is set', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
     process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
     process.env['PERPLEXITY_API_KEY'] = 'pplx-test';
@@ -110,7 +110,7 @@ describe('createContentGenerator -- AI uber-flag default-on behavior', () => {
 
   it('does not require GOOGLE_CALENDAR_API_KEY when V1 override is set to false', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
-    process.env['FAL_API_KEY'] = 'fal-test';
+    process.env['REPLICATE_API_TOKEN'] = 'replicate-test';
     process.env['PERPLEXITY_API_KEY'] = 'pplx-test';
     process.env['CURRENT_AFFAIRS_V1_ENABLED'] = 'false';
     await expect(createContentGenerator('ai')).resolves.toBeDefined();
@@ -118,7 +118,7 @@ describe('createContentGenerator -- AI uber-flag default-on behavior', () => {
 
   it('does not require PERPLEXITY_API_KEY when V2 override is set to false', async () => {
     process.env['ANTHROPIC_API_KEY'] = 'sk-test';
-    process.env['FAL_API_KEY'] = 'fal-test';
+    process.env['REPLICATE_API_TOKEN'] = 'replicate-test';
     process.env['GOOGLE_CALENDAR_API_KEY'] = 'cal-test';
     process.env['CURRENT_AFFAIRS_V2_ENABLED'] = 'false';
     await expect(createContentGenerator('ai')).resolves.toBeDefined();

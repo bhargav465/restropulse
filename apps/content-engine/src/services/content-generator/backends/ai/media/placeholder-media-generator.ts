@@ -2,7 +2,7 @@
  * PlaceholderMediaGenerator -- IMediaGenerator that wraps the existing
  * asset-manager catalog. Used by AIContentGenerator in phase 2 so the AI
  * pipeline runs end-to-end with real-looking media URLs without calling
- * fal.ai. Replaced by FalAIMediaGenerator in phase 4.
+ * an external media provider. Replaced by ReplicateMediaGenerator in phase 4.
  *
  * Synchronous: every job resolves to COMPLETED immediately. pollJob() is a
  * no-op (returns COMPLETED) so callers that always poll still work.

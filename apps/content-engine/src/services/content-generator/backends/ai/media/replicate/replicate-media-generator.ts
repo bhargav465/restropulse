@@ -8,8 +8,8 @@
  *   Submit prediction, store RUNNING, return immediately.
  *   The media-job-poller cron advances the job to COMPLETED/FAILED via pollJob().
  *
- * Mirrors FalAIMediaGenerator structure so the worker gate
- * (getLastAiMediaJobStore / getLastAiMediaGenerator) works identically.
+ * Uses the shared worker gate (getLastAiMediaJobStore / getLastAiMediaGenerator)
+ * for the async media-job flow.
  */
 
 import { randomUUID } from 'node:crypto';

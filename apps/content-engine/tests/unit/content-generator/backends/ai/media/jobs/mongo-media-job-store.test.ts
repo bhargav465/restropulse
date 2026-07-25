@@ -32,12 +32,12 @@ beforeEach(async () => {
 
 const baseJob = {
   jobId: 'job_abc',
-  provider: 'fal-ai' as const,
-  modelId: 'fal-ai/flux/dev',
+  provider: 'replicate' as const,
+  modelId: 'black-forest-labs/flux-dev',
   postType: 'IMAGE' as const,
   status: 'COMPLETED' as const,
-  mediaUrl: 'https://fal.media/files/x.jpg',
-  thumbnail: 'https://fal.media/files/x.jpg',
+  mediaUrl: 'https://replicate.delivery/files/x.jpg',
+  thumbnail: 'https://replicate.delivery/files/x.jpg',
   metadata: { widthPx: 1024, heightPx: 1024 },
   attempts: 1,
   restaurantId: 'r1',
@@ -54,7 +54,7 @@ describe('MongoMediaJobStore', () => {
 
     const found = await store.findById('job_abc');
     expect(found).not.toBeNull();
-    expect(found!.mediaUrl).toBe('https://fal.media/files/x.jpg');
+    expect(found!.mediaUrl).toBe('https://replicate.delivery/files/x.jpg');
     expect(found!.attempts).toBe(1);
   });
 
@@ -67,12 +67,12 @@ describe('MongoMediaJobStore', () => {
     const before = await store.findById('job_upd');
     const updated = await store.updateStatus('job_upd', {
       status: 'COMPLETED',
-      mediaUrl: 'https://fal.media/done.jpg',
+      mediaUrl: 'https://replicate.delivery/done.jpg',
       completedAt: new Date('2026-05-13T10:00:05Z'),
     });
     expect(updated).not.toBeNull();
     expect(updated!.status).toBe('COMPLETED');
-    expect(updated!.mediaUrl).toBe('https://fal.media/done.jpg');
+    expect(updated!.mediaUrl).toBe('https://replicate.delivery/done.jpg');
     expect(updated!.updatedAt.getTime()).toBeGreaterThan(before!.updatedAt.getTime());
   });
 

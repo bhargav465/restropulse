@@ -142,7 +142,7 @@ export async function processRevisions(): Promise<{
           logger.warn({ postId }, 'Post no longer CHANGES_REQUESTED; skipping advance');
           continue;
         }
-        logger.info({ postId, mediaJobId: result.mediaJobId }, 'Revised post advanced to PENDING_MEDIA awaiting fal.ai queue');
+        logger.info({ postId, mediaJobId: result.mediaJobId }, 'Revised post advanced to PENDING_MEDIA awaiting media provider');
         stats.postsRevised++;
         continue;
       }

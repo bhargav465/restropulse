@@ -71,12 +71,12 @@ describe('Phase-5 posts.ts helpers', () => {
     const created = await createPost({ ...basePost, status: 'PENDING_MEDIA' });
     const job = {
       jobId: 'j1',
-      provider: 'fal-ai' as const,
-      modelId: 'fal-ai/kling-video/v1.6/standard/text-to-video',
+      provider: 'replicate' as const,
+      modelId: 'kwaivgi/kling-v1.6-standard',
       postType: 'REEL' as const,
       status: 'COMPLETED' as const,
-      mediaUrl: 'https://fal.media/video.mp4',
-      thumbnail: 'https://fal.media/thumb.jpg',
+      mediaUrl: 'https://replicate.delivery/video.mp4',
+      thumbnail: 'https://replicate.delivery/thumb.jpg',
       metadata: { widthPx: 1080, heightPx: 1920, durationSeconds: 5 },
       attempts: 1,
       startedAt: new Date(),
@@ -85,18 +85,18 @@ describe('Phase-5 posts.ts helpers', () => {
     };
     const updated = await applyMediaJobResultToPost(created.id, job);
     expect(updated!.status).toBe('PENDING_APPROVAL');
-    expect(updated!.videoUrl).toBe('https://fal.media/video.mp4');
-    expect(updated!.thumbnail).toBe('https://fal.media/thumb.jpg');
+    expect(updated!.videoUrl).toBe('https://replicate.delivery/video.mp4');
+    expect(updated!.thumbnail).toBe('https://replicate.delivery/thumb.jpg');
     expect(updated!.duration).toBe('5s');
     expect(updated!.generationStep).toBe('MEDIA_DONE');
   });
 
   it('markPostFailedWithMedia surfaces the error on publishError', async () => {
     const created = await createPost({ ...basePost, status: 'PENDING_MEDIA' });
-    const updated = await markPostFailedWithMedia(created.id, 'fal queue timeout');
+    const updated = await markPostFailedWithMedia(created.id, 'replicate queue timeout');
     expect(updated!.status).toBe('MISSED_DEADLINE');
     expect(updated!.publishError).toContain('media-generation');
-    expect(updated!.publishError).toContain('fal queue timeout');
+    expect(updated!.publishError).toContain('replicate queue timeout');
   });
 
   it('findStalePendingMediaPosts surfaces posts with old lastStepAt', async () => {

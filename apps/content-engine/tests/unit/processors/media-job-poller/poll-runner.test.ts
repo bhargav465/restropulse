@@ -19,8 +19,8 @@ beforeEach(() => {
 });
 
 const baseRunningJob = {
-  id: 'mj1', jobId: 'job_v1', provider: 'fal-ai' as const,
-  modelId: 'fal-ai/kling-video/v1.6/standard/text-to-video',
+  id: 'mj1', jobId: 'job_v1', provider: 'replicate' as const,
+  modelId: 'kwaivgi/kling-v1.6-standard',
   postType: 'REEL' as const, status: 'RUNNING' as const,
   providerJobId: 'req_xyz', attempts: 1,
   startedAt: new Date(),
@@ -51,12 +51,12 @@ describe('pollMediaJob', () => {
     const store = {
       findById: vi.fn()
         .mockResolvedValueOnce(fresh)               // first lookup
-        .mockResolvedValueOnce({ ...fresh, status: 'COMPLETED', mediaUrl: 'https://fal.media/v.mp4' }), // after pollJob
+        .mockResolvedValueOnce({ ...fresh, status: 'COMPLETED', mediaUrl: 'https://replicate.delivery/v.mp4' }), // after pollJob
       updateStatus: vi.fn(), insert: vi.fn(), incrementAttempts: vi.fn(),
     };
     const media = {
       name: 'm', generateImage: vi.fn(), generateVideo: vi.fn(),
-      pollJob: vi.fn(async () => ({ jobId: 'job_v1', status: 'COMPLETED', mediaUrl: 'https://fal.media/v.mp4' })),
+      pollJob: vi.fn(async () => ({ jobId: 'job_v1', status: 'COMPLETED', mediaUrl: 'https://replicate.delivery/v.mp4' })),
     };
     await pollMediaJob(post as any, { store: store as any, media: media as any });
     expect(media.pollJob).toHaveBeenCalledWith('job_v1');
@@ -83,15 +83,15 @@ describe('pollMediaJob', () => {
     const store = {
       findById: vi.fn()
         .mockResolvedValueOnce(fresh)
-        .mockResolvedValueOnce({ ...fresh, status: 'FAILED', error: 'fal queue FAILED' }),
+        .mockResolvedValueOnce({ ...fresh, status: 'FAILED', error: 'replicate queue FAILED' }),
       updateStatus: vi.fn(), insert: vi.fn(), incrementAttempts: vi.fn(),
     };
     const media = {
       name: 'm', generateImage: vi.fn(), generateVideo: vi.fn(),
-      pollJob: vi.fn(async () => ({ jobId: 'job_v1', status: 'FAILED', error: 'fal queue FAILED' })),
+      pollJob: vi.fn(async () => ({ jobId: 'job_v1', status: 'FAILED', error: 'replicate queue FAILED' })),
     };
     await pollMediaJob(post as any, { store: store as any, media: media as any });
-    expect(dbMocks.markPostFailedWithMedia).toHaveBeenCalledWith('p1', expect.stringContaining('fal queue FAILED'));
+    expect(dbMocks.markPostFailedWithMedia).toHaveBeenCalledWith('p1', expect.stringContaining('replicate queue FAILED'));
   });
 
   it('skips silently when post.mediaJobId is unset', async () => {

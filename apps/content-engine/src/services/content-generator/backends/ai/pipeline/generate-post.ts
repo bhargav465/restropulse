@@ -49,7 +49,7 @@ function isVideoType(t: PostType): boolean {
 
 function isStoryVideoCandidate(_t: PostType, _platforms: Platform[]): boolean {
   // Phase 2 keeps STORY on the image path (matches placeholder behavior).
-  // FalAIMediaGenerator in phase 4 may revisit.
+  // ReplicateMediaGenerator in phase 4 may revisit.
   return false;
 }
 

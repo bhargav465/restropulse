@@ -1,7 +1,7 @@
 /**
  * IMediaGenerator -- the seam between AIContentGenerator orchestration and
  * media providers (image/video). Phase 2 ships PlaceholderMediaGenerator as
- * the only impl. Phase 4 introduces FalAIMediaGenerator and the MongoDB-backed
+ * the only impl. Phase 4 introduces ReplicateMediaGenerator and the MongoDB-backed
  * mediaJobs durable polling pattern. Phase 5 extends to long-running video.
  *
  * Phase 2's contract is intentionally synchronous (Promise<MediaGenJob with

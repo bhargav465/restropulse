@@ -1,9 +1,10 @@
 /**
  * Per-media-generation job record persisted in the mediaJobs collection.
  *
- * Phase 4 writes one row per fal.ai image call (always status=COMPLETED).
- * Phase 5 introduces PENDING/RUNNING transitions for slow video generation
- * (Kling/MiniMax) and a media-job-poller cron that watches RUNNING rows.
+ * Phase 4 writes one row per external media-provider image call (always
+ * status=COMPLETED). Phase 5 introduces PENDING/RUNNING transitions for slow
+ * video generation (Kling/MiniMax) and a media-job-poller cron that watches
+ * RUNNING rows.
  *
  * The schema ships now so phase 5 only needs to layer the polling cron
  * without changing the document shape.
@@ -12,16 +13,16 @@
 import type { PostType } from './index.js';
 
 export type MediaJobStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
-export type MediaJobProvider = 'placeholder-media' | 'fal-ai' | 'replicate';
+export type MediaJobProvider = 'placeholder-media' | 'replicate';
 
 export interface MediaJobRecord {
   id?: string;
   /** Stable client-side id (UUID). */
   jobId: string;
-  /** Provider-side request id (e.g. fal.ai request_id). Empty for synchronous providers. */
+  /** Provider-side request id (e.g. Replicate prediction id). Empty for synchronous providers. */
   providerJobId?: string;
   provider: MediaJobProvider;
-  /** Concrete model that produced this job (e.g. 'fal-ai/flux/dev'). */
+  /** Concrete model that produced this job (e.g. 'black-forest-labs/flux-dev'). */
   modelId: string;
   /** Post type this job is intended for. */
   postType: PostType;
