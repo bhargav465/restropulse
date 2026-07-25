@@ -93,10 +93,10 @@ describe('InvoiceHistoryPanel', () => {
         expect(screen.queryByTitle('Download Invoice')).not.toBeInTheDocument();
     });
 
-    it('calls onClose when back button is clicked', () => {
+    it('calls onClose when the backdrop is clicked', () => {
         const onClose = vi.fn();
         render(<InvoiceHistoryPanel invoices={[sub1]} onClose={onClose} />);
-        fireEvent.click(screen.getByRole('button', { name: '' }));
+        fireEvent.click(screen.getByTestId('invoice-backdrop'));
         expect(onClose).toHaveBeenCalledOnce();
     });
 

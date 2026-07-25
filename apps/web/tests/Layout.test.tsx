@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from './utils/test-utils';
+import { render, screen, fireEvent, within } from './utils/test-utils';
 import Layout from '../components/Layout';
 import { ViewState } from '@restropulse/shared';
 
@@ -37,7 +37,9 @@ describe('Layout Component', () => {
 
     it('should display the current title', () => {
         render(<Layout {...defaultProps} currentView="STUDIO" title="Content Studio">{mockChildren}</Layout>);
-        const titleElement = screen.getByText((content, element) => {
+        // Scope to the header: the desktop sidebar also renders a "Content Studio" nav label.
+        const header = screen.getByRole('banner');
+        const titleElement = within(header).getByText((content, element) => {
             return element?.textContent === 'Content Studio';
         });
         expect(titleElement).toBeInTheDocument();
@@ -45,16 +47,19 @@ describe('Layout Component', () => {
 
     it('should render all navigation items', () => {
         render(<Layout {...defaultProps}>{mockChildren}</Layout>);
-        expect(screen.getByText('Home')).toBeInTheDocument();
-        expect(screen.getByText('Studio')).toBeInTheDocument();
-        expect(screen.getByText('Updates')).toBeInTheDocument();
-        expect(screen.getByText('Strategy')).toBeInTheDocument();
+        // Scope to the bottom (Primary) nav; the desktop sidebar duplicates some labels.
+        const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
+        expect(within(primaryNav).getByText('Home')).toBeInTheDocument();
+        expect(within(primaryNav).getByText('Studio')).toBeInTheDocument();
+        expect(within(primaryNav).getByText('Updates')).toBeInTheDocument();
+        expect(within(primaryNav).getByText('Strategy')).toBeInTheDocument();
     });
 
     it('should highlight the active navigation item', () => {
         render(<Layout {...defaultProps}>{mockChildren}</Layout>);
-        const homeButton = screen.getByText('Home').closest('button');
-        const studioButton = screen.getByText('Studio').closest('button');
+        const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
+        const homeButton = within(primaryNav).getByText('Home').closest('button');
+        const studioButton = within(primaryNav).getByText('Studio').closest('button');
 
         expect(homeButton).toHaveClass('text-orange-600');
         expect(studioButton).toHaveClass('text-slate-400');
@@ -62,37 +67,42 @@ describe('Layout Component', () => {
 
     it('should call setView when Home nav item is clicked', () => {
         render(<Layout {...defaultProps} currentView="STUDIO" title="Studio">{mockChildren}</Layout>);
-        const homeButton = screen.getByText('Home').closest('button');
+        const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
+        const homeButton = within(primaryNav).getByText('Home').closest('button');
         fireEvent.click(homeButton!);
         expect(mockSetView).toHaveBeenCalledWith('DASHBOARD');
     });
 
     it('should call setView when Studio nav item is clicked', () => {
         render(<Layout {...defaultProps}>{mockChildren}</Layout>);
-        const studioButton = screen.getByText('Studio').closest('button');
+        const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
+        const studioButton = within(primaryNav).getByText('Studio').closest('button');
         fireEvent.click(studioButton!);
         expect(mockSetView).toHaveBeenCalledWith('STUDIO');
     });
 
     it('should call setView when Strategy nav item is clicked', () => {
         render(<Layout {...defaultProps}>{mockChildren}</Layout>);
-        const strategyButton = screen.getByText('Strategy').closest('button');
+        const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
+        const strategyButton = within(primaryNav).getByText('Strategy').closest('button');
         fireEvent.click(strategyButton!);
         expect(mockSetView).toHaveBeenCalledWith('STRATEGY');
     });
 
     it('should call setView when Updates nav item is clicked (updatesSection enabled)', () => {
         render(<Layout {...defaultProps} featureFlags={{ updatesSection: true, deleteAccount: false, topupCredits: false }}>{mockChildren}</Layout>);
-        const updatesButton = screen.getByText('Updates').closest('button');
+        const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
+        const updatesButton = within(primaryNav).getByText('Updates').closest('button');
         fireEvent.click(updatesButton!);
         expect(mockSetView).toHaveBeenCalledWith('INPUTS');
     });
 
     it('should show Updates as disabled when featureFlags.updatesSection is falsy', () => {
         render(<Layout {...defaultProps}>{mockChildren}</Layout>);
-        const updatesButton = screen.getByText('Updates').closest('button');
+        const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
+        const updatesButton = within(primaryNav).getByText('Updates').closest('button');
         expect(updatesButton).toBeNull();
-        expect(screen.getByText('Soon')).toBeInTheDocument();
+        expect(within(primaryNav).getByText('Soon')).toBeInTheDocument();
     });
 
     it('should show [+] button only on STUDIO view', () => {
@@ -155,7 +165,8 @@ describe('Layout Component', () => {
 
     it('should have proper navigation structure', () => {
         render(<Layout {...defaultProps}>{mockChildren}</Layout>);
-        const nav = screen.getByRole('navigation');
+        // Desktop sidebar adds a second nav; target the bottom (Primary) nav.
+        const nav = screen.getByRole('navigation', { name: 'Primary' });
         expect(nav).toBeInTheDocument();
         expect(nav).toHaveClass('fixed', 'bottom-0');
     });

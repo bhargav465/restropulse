@@ -1,6 +1,7 @@
 import React from 'react';
 import { Home, PenTool, Lightbulb, Megaphone, Plus, Bell } from 'lucide-react';
 import { ViewState, FeatureFlags } from '@restropulse/shared';
+import Sidebar from './Sidebar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,10 +13,11 @@ interface LayoutProps {
   pendingCount: number;
   onCreatePost?: () => void;
   onProfileOpen: () => void;
+  profileOpen?: boolean;
   featureFlags?: FeatureFlags | null;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, restaurantName, userInitials, pendingCount, onCreatePost, onProfileOpen, featureFlags }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, restaurantName, userInitials, pendingCount, onCreatePost, onProfileOpen, profileOpen, featureFlags }) => {
 
   const NavItem = ({ view, icon: Icon, label }: { view: ViewState, icon: any, label: string }) => {
     const isActive = currentView === view;
@@ -33,7 +35,19 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, 
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-50">
+    <div className="flex flex-col lg:flex-row h-screen bg-slate-50">
+      {/* Desktop-only left navigation rail */}
+      <Sidebar
+        currentView={currentView}
+        setView={setView}
+        onProfileOpen={onProfileOpen}
+        profileOpen={profileOpen}
+        featureFlags={featureFlags}
+        className="hidden lg:flex"
+      />
+
+      {/* Header + main + bottom nav column */}
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
       {/* Sticky Header */}
       <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -64,7 +78,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, 
           </button>
           <button
             onClick={onProfileOpen}
-            className="w-9 h-9 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity active:scale-95"
+            className="w-9 h-9 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity active:scale-95 lg:hidden"
             aria-label="Profile"
           >
             <span className="text-white font-bold text-xs">{userInitials}</span>
@@ -73,12 +87,17 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, 
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 no-scrollbar">
-        {children}
+      <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0 no-scrollbar">
+        {/* Full-width content with desktop gutters. The shell does NOT cap width;
+            each page owns its own max-width (e.g. Dashboard/Profile stay narrow,
+            Studio/Strategy fill), so content pages never sit in a narrow island. */}
+        <div className="w-full lg:px-6">
+          {children}
+        </div>
       </main>
 
-      {/* Sticky Bottom Navigation - 4 flat items */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.25rem)' }}>
+      {/* Sticky Bottom Navigation - 4 flat items (mobile only) */}
+      <nav aria-label="Primary" className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 lg:hidden" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.25rem)' }}>
         <div className="flex justify-around items-center px-2 pt-1 pb-1">
           <NavItem view="DASHBOARD" icon={Home} label="Home" />
           <NavItem view="STUDIO" icon={PenTool} label="Studio" />
@@ -94,6 +113,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, 
           <NavItem view="STRATEGY" icon={Lightbulb} label="Strategy" />
         </div>
       </nav>
+      </div>
     </div>
   );
 };

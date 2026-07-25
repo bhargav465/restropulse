@@ -1360,9 +1360,20 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
 
     return (
         <>
-            {/* Full-page profile */}
+            {/* Desktop-only dim backdrop over the main content (not the sidebar,
+                which starts at left-0 and stays clickable). Click to close. */}
             <div
-                className="fixed inset-0 z-40 bg-white animate-in slide-in-from-right duration-300 overflow-y-auto no-scrollbar"
+                className="hidden lg:block fixed inset-0 lg:left-64 z-40 bg-slate-900/40 backdrop-blur-sm animate-in fade-in"
+                aria-hidden="true"
+                onClick={onClose}
+            />
+
+            {/* Full-page on mobile; right-side slide-over drawer on desktop */}
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Account"
+                className="fixed inset-0 z-50 bg-white animate-in slide-in-from-right duration-300 overflow-y-auto no-scrollbar lg:inset-y-0 lg:right-0 lg:left-auto lg:w-[34rem] lg:shadow-2xl lg:border-l lg:border-slate-200"
                 onTouchStart={(e) => {
                     if (!isEditingProfile && !isSubscriptionOpen && !showInstagramErrorModal && !showAccountPicker && !showSetupGuide) {
                         setSwipeStartX(e.touches[0].clientX);
@@ -1384,10 +1395,13 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
 
                 {/* Top bar */}
                 <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-3 flex items-center gap-3">
-                    <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors" aria-label="Go back">
+                    <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors lg:hidden" aria-label="Go back">
                         <ArrowLeft size={18} className="text-slate-600" />
                     </button>
                     <h1 className="text-base font-bold text-slate-800">Profile</h1>
+                    <button onClick={onClose} className="hidden lg:flex ml-auto w-9 h-9 rounded-full bg-slate-100 items-center justify-center hover:bg-slate-200 transition-colors" aria-label="Close">
+                        <X size={18} className="text-slate-600" />
+                    </button>
                 </div>
 
                 <div className="p-6 space-y-6">

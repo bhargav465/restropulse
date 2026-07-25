@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, FileText, Zap, Download } from 'lucide-react';
+import { FileText, Zap, Download } from 'lucide-react';
 import type { Invoice } from '@restropulse/shared';
 
 export function formatPaise(paise: number): string {
@@ -92,33 +92,38 @@ const InvoiceHistoryPanel: React.FC<InvoiceHistoryPanelProps> = ({ invoices, onC
     );
 
     return (
-        <div className="fixed inset-0 bg-slate-50 z-50 flex flex-col">
-            {/* Header */}
-            <div className="flex items-center gap-3 px-4 py-4 bg-white border-b border-slate-100 shrink-0">
-                <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 active:bg-slate-200 transition-colors">
-                    <ArrowLeft size={20} className="text-slate-600" />
-                </button>
-                <h2 className="text-base font-bold text-slate-800 flex-1">Billing History</h2>
-                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
-                    {filtered.length}
-                </span>
-            </div>
+        // Modal dialogue -- consistent with the Subscription and Edit Restaurant
+        // Profile modals: dim backdrop, bottom-sheet on mobile, centered on desktop.
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
+            {/* Backdrop -- click to close, consistent with the other modals (no X button) */}
+            <div className="absolute inset-0" onClick={onClose} data-testid="invoice-backdrop"></div>
+            <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] flex flex-col overflow-hidden relative z-10">
+                {/* Mobile grab handle */}
+                <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0 sm:hidden"></div>
 
-            {/* Filter tabs */}
-            <div className="flex gap-1 px-4 py-3 bg-white border-b border-slate-100 shrink-0">
-                {([['all', 'All'], ['subscription', 'Plans'], ['credit', 'Credits']] as [Filter, string][]).map(([val, label]) => (
-                    <button
-                        key={val}
-                        onClick={() => handleFilterChange(val)}
-                        className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-colors ${filter === val ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
+                {/* Header */}
+                <div className="flex items-center gap-3 px-5 py-3 shrink-0">
+                    <h2 className="text-lg font-bold text-slate-800 flex-1">Billing History</h2>
+                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-full">
+                        {filtered.length}
+                    </span>
+                </div>
 
-            {/* List */}
-            <div className="flex-1 overflow-y-auto">
+                {/* Filter tabs */}
+                <div className="flex gap-1 px-5 pb-3 border-b border-slate-100 shrink-0">
+                    {([['all', 'All'], ['subscription', 'Plans'], ['credit', 'Credits']] as [Filter, string][]).map(([val, label]) => (
+                        <button
+                            key={val}
+                            onClick={() => handleFilterChange(val)}
+                            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-colors ${filter === val ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* List */}
+                <div className="flex-1 overflow-y-auto no-scrollbar">
                 {filtered.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-40 gap-2">
                         <FileText size={32} className="text-slate-200" />
@@ -157,6 +162,7 @@ const InvoiceHistoryPanel: React.FC<InvoiceHistoryPanelProps> = ({ invoices, onC
                         </button>
                     </div>
                 )}
+                </div>
             </div>
         </div>
     );

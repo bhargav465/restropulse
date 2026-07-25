@@ -360,7 +360,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
     };
 
     return (
-        <div className={`bg-white rounded-3xl overflow-hidden shadow-sm border mb-6 group transition-all hover:shadow-md active:scale-[0.99] ${post.status === 'MISSED_DEADLINE' ? 'border-red-100 opacity-90' : 'border-slate-100'}`}>
+        <div className={`bg-white rounded-3xl overflow-hidden shadow-sm border mb-6 lg:mb-0 group transition-all hover:shadow-md active:scale-[0.99] ${post.status === 'MISSED_DEADLINE' ? 'border-red-100 opacity-90' : 'border-slate-100'}`}>
 
             {/* Media Rendering */}
             <div className="relative">
@@ -1045,8 +1045,8 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
                 </div>
             )}
 
-            {/* Content List */}
-            <div className="space-y-4">
+            {/* Content List -- single column on mobile, 2-col card grid on desktop */}
+            <div className={displayPosts.length > 0 ? 'space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 xl:grid-cols-3 lg:gap-5 lg:items-start' : 'space-y-4'}>
                 {displayPosts.length > 0 ? (
                     displayPosts.map(post => (
                         <PostCard

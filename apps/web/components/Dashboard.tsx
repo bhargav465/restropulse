@@ -97,7 +97,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setView, restaurantData, userName
     const chefSpecials = restaurantData.chefSpecials || [];
 
     return (
-        <div className="p-4 space-y-6 relative">
+        <div className="p-4 space-y-6 relative lg:max-w-4xl lg:mx-auto">
 
             {/* Pull-to-Refresh Indicator */}
             {pullDistance > 0 && (

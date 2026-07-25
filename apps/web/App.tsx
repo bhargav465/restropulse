@@ -149,6 +149,9 @@ const App: React.FC = () => {
     }, [isLoggedIn]);
 
     const navigateTo = (view: ViewState) => {
+        // Close the profile panel if open, so desktop sidebar navigation (which
+        // renders beside the profile overlay) actually reveals the target view.
+        setIsProfileOpen(false);
         setCurrentView(view);
         trackPageView(view);
         window.history.pushState({ view }, '', `?view=${view.toLowerCase()}`);
@@ -342,7 +345,8 @@ const App: React.FC = () => {
                 userInitials={getUserInitials(userData?.name || '')}
                 pendingCount={pendingCount}
                 onCreatePost={restaurantData?.integrations?.instagram ? () => setIsAdhocModalOpen(true) : undefined}
-                onProfileOpen={() => setIsProfileOpen(true)}
+                onProfileOpen={() => setIsProfileOpen(v => !v)}
+                profileOpen={isProfileOpen}
                 featureFlags={featureFlags}
             >
                 {renderView()}
