@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, User, Mail, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Check, Loader2, ChevronDown, User, Mail, RefreshCw, CheckCircle2, MapPin } from 'lucide-react';
 import { getGoogleMapsApiKey } from '../utils/env';
 
 interface CustomSelectProps {
@@ -373,7 +373,12 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 email: email.trim(),
                 name: restaurantName.trim(),
                 cuisine: cuisine.trim(),
+                sourceCity: city || undefined,
                 location: {
+                    // Precise coordinates come only from a Google Places selection.
+                    // A manually-typed address stays (0,0) -- we never fabricate
+                    // coordinates (e.g. city center), since wrong coords are worse
+                    // than none for location-based features.
                     address: address.trim(),
                     lat,
                     lng,
@@ -612,6 +617,23 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                     <div>
                         <label className="block text-slate-500 text-sm mb-2">Restaurant address</label>
                         <PlacesAutocompleteInput onSelect={handlePlaceSelect} city={city} cityNames={cities.map(c => c.name)} initialValue={address} />
+                        {/* Nudge users to SELECT a suggestion so we capture exact
+                            coordinates -- pinned location powers competitor scans etc. */}
+                        {locationConfirmed && (lat !== 0 || lng !== 0) ? (
+                            <p className="flex items-center gap-1.5 text-green-600 text-xs mt-2 font-medium">
+                                <MapPin size={13} className="shrink-0" />
+                                Location pinned. We found you on the map.
+                            </p>
+                        ) : address.trim().length > 0 ? (
+                            <p className="flex items-center gap-1.5 text-amber-600 text-xs mt-2">
+                                <MapPin size={13} className="shrink-0" />
+                                Pick your restaurant from the dropdown so we can pin your exact spot.
+                            </p>
+                        ) : (
+                            <p className="text-slate-500 text-xs mt-2">
+                                Start typing and choose your restaurant from the suggestions.
+                            </p>
+                        )}
                     </div>
 
                     <div>

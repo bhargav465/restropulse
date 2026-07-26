@@ -43,7 +43,7 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
         return res.status(400).json({ success: false, error: 'User already has a restaurant' });
     }
 
-    const { name, cuisine, location, accountManager, userName, email } = req.body;
+    const { name, cuisine, location, sourceCity, accountManager, userName, email } = req.body;
 
     if (!name || !cuisine) {
         return res.status(400).json({ success: false, error: 'Restaurant name and cuisine are required' });
@@ -61,6 +61,7 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
         name,
         cuisine,
         location: location || { address: '', lat: 0, lng: 0, mapUrl: '' },
+        ...(typeof sourceCity === 'string' && sourceCity.trim() ? { sourceCity: sourceCity.trim() } : {}),
         accountManager: accountManager || { name: '', phone: '', email: '', avatar: '' },
         integrations: { instagram: false },
     });

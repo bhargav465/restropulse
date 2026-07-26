@@ -368,6 +368,7 @@ describe('Onboarding Component', () => {
                 email: 'john@test.com',
                 name: 'Test Restaurant',
                 cuisine: 'Italian',
+                sourceCity: 'Bangalore',
                 location: { address: '1 Main St', lat: 0, lng: 0, mapUrl: '' },
                 accountManager: {
                     name: 'Manager Alpha',

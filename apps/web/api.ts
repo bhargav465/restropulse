@@ -162,6 +162,7 @@ export const restaurantAPI = {
         userName?: string;
         email?: string;
         location?: Restaurant['location'];
+        sourceCity?: string;
         accountManager?: Restaurant['accountManager'];
     }): Promise<{ restaurant: Restaurant; token: string; refreshToken: string }> => {
         const response = await fetchAPI<ApiResponse<{ restaurant: Restaurant; token: string; refreshToken: string }>>('/restaurant', {
