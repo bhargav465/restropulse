@@ -93,12 +93,12 @@ export const CompareView: React.FC<{
 
             {/* Matrix */}
             <Card>
-                <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-1 pb-2 text-[11px] font-semibold text-muted uppercase tracking-wider border-b border-line">
+                <div className="grid grid-cols-[2fr_1fr_1fr] sm:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-1 pb-2 text-[11px] font-semibold text-muted uppercase tracking-wider border-b border-line">
                     <span>Restaurant</span>
                     <span className="text-right">Rating</span>
                     <span className="text-right">Reviews</span>
-                    <span className="text-right">New</span>
-                    <span className="text-right">Photos</span>
+                    <span className="text-right hidden sm:block">New</span>
+                    <span className="text-right hidden sm:block">Photos</span>
                 </div>
                 {rows.map((row) => (
                     <div key={row.placeId} className="border-b border-line last:border-b-0">
@@ -106,15 +106,15 @@ export const CompareView: React.FC<{
                             type="button"
                             onClick={() => setExpanded((e) => (e === row.placeId ? null : row.placeId))}
                             aria-expanded={expanded === row.placeId}
-                            className="w-full grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 py-3 px-1 text-left hover:bg-canvas/60 rounded-lg items-center"
+                            className="w-full grid grid-cols-[2fr_1fr_1fr] sm:grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 py-3 px-1 text-left hover:bg-canvas/60 rounded-lg items-center"
                         >
                             <span className={`text-sm truncate ${row.isSelf ? 'font-semibold text-primary-strong' : 'text-ink'}`}>
                                 {row.isSelf ? `${row.name} (you)` : row.name}
                             </span>
                             <span className="text-right text-sm"><SourceValue row={row} mode={mode} pick={(d) => d.rating.toFixed(1)} /></span>
                             <span className="text-right text-sm"><SourceValue row={row} mode={mode} pick={(d) => d.reviewCount.toLocaleString('en-IN')} /></span>
-                            <span className="text-right text-sm"><SourceValue row={row} mode={mode} pick={(d) => `+${d.newReviews}`} /></span>
-                            <span className="text-right text-sm"><SourceValue row={row} mode={mode} pick={(d) => d.photoCount.toLocaleString('en-IN')} /></span>
+                            <span className="text-right text-sm hidden sm:block"><SourceValue row={row} mode={mode} pick={(d) => `+${d.newReviews}`} /></span>
+                            <span className="text-right text-sm hidden sm:block"><SourceValue row={row} mode={mode} pick={(d) => d.photoCount.toLocaleString('en-IN')} /></span>
                         </button>
                         {expanded === row.placeId && (
                             <div className="px-1 pb-3">

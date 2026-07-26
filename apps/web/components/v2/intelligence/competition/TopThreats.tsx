@@ -116,16 +116,16 @@ export const TopThreatsView: React.FC<{
             ) : (
                 <Card>
                     <div className="overflow-x-auto no-scrollbar">
-                        <table className="w-full min-w-[720px] text-sm">
+                        <table className="w-full sm:min-w-[720px] text-sm">
                             <thead>
                                 <tr className="text-left text-[11px] uppercase tracking-wider text-muted">
                                     <th className="font-semibold py-2 pr-2 w-8">#</th>
                                     <th className="font-semibold py-2 pr-3">Restaurant</th>
-                                    <th className="font-semibold py-2 pr-3">Cuisine</th>
-                                    <th className="font-semibold py-2 pr-3">AOV</th>
+                                    <th className="font-semibold py-2 pr-3 hidden sm:table-cell">Cuisine</th>
+                                    <th className="font-semibold py-2 pr-3 hidden sm:table-cell">AOV</th>
                                     <th className="font-semibold py-2 pr-3 text-right">Rating</th>
                                     <th className="font-semibold py-2 pr-3 text-right">Reviews</th>
-                                    <th className="font-semibold py-2 pr-3 text-right">Distance</th>
+                                    <th className="font-semibold py-2 pr-3 text-right hidden sm:table-cell">Distance</th>
                                     <th className="font-semibold py-2 pr-3">Threat</th>
                                     <th className="font-semibold py-2" />
                                 </tr>
@@ -139,11 +139,11 @@ export const TopThreatsView: React.FC<{
                                             <tr className="border-t border-line">
                                                 <td className="py-2.5 pr-2 text-muted tabular-nums">{i + 1}</td>
                                                 <td className="py-2.5 pr-3 font-medium text-ink">{c.name}</td>
-                                                <td className="py-2.5 pr-3 text-muted">{c.cuisine}</td>
-                                                <td className="py-2.5 pr-3 text-muted">{aovBandLabel(c.priceLevel)}</td>
+                                                <td className="py-2.5 pr-3 text-muted hidden sm:table-cell">{c.cuisine}</td>
+                                                <td className="py-2.5 pr-3 text-muted hidden sm:table-cell">{aovBandLabel(c.priceLevel)}</td>
                                                 <td className="py-2.5 pr-3 text-right text-ink tabular-nums">★ {c.rating.toFixed(1)}</td>
                                                 <td className="py-2.5 pr-3 text-right text-muted tabular-nums">{c.totalRatings.toLocaleString('en-IN')}</td>
-                                                <td className="py-2.5 pr-3 text-right text-muted tabular-nums">{c.distanceKm.toFixed(1)} km</td>
+                                                <td className="py-2.5 pr-3 text-right text-muted tabular-nums hidden sm:table-cell">{c.distanceKm.toFixed(1)} km</td>
                                                 <td className="py-2.5 pr-3"><ThreatBar value={c.threatScore} /></td>
                                                 <td className="py-2.5 text-right whitespace-nowrap">
                                                     <button

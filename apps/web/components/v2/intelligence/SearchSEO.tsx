@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { IntelligenceReport, PillarScore } from '@restropulse/shared';
 import { CheckRow, KeywordChips } from './primitives';
 import { ProvenanceChip } from './provenance';
@@ -48,6 +48,11 @@ const SearchSEO: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLink
 
     const draft = (keyword: string) => onNavigate(resolveDeepLink({ bucket: 'content', params: { keyword } }));
 
+    // Rankings + keyword clusters are dense secondary detail. On mobile they sit
+    // behind a "Show details" toggle; on sm+ they are always shown (the wrapper
+    // drops the `hidden` once expanded, and `sm:block` keeps desktop unchanged).
+    const [showDetail, setShowDetail] = useState(false);
+
     return (
         <div className="space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
@@ -55,6 +60,17 @@ const SearchSEO: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLink
                 <ChecklistCard title="Website & SEO" pillar={website} onNavigate={onNavigate} />
             </div>
 
+            {/* Mobile-only toggle for the secondary detail below. */}
+            <button
+                type="button"
+                onClick={() => setShowDetail((s) => !s)}
+                className="sm:hidden w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-primary-strong"
+                aria-expanded={showDetail}
+            >
+                {showDetail ? 'Hide search rankings & keywords' : 'Show search rankings & keywords'}
+            </button>
+
+            <div className={showDetail ? 'space-y-6' : 'space-y-6 hidden sm:block'}>
             {/* Simulated search rankings */}
             <Card>
                 <div className="flex items-center justify-between gap-2 mb-3">
@@ -95,6 +111,7 @@ const SearchSEO: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLink
                     <KeywordChips title="Negative — monitor" keywords={keywords.negativeToMonitor} tone="negative" />
                 </div>
             </Card>
+            </div>
         </div>
     );
 };

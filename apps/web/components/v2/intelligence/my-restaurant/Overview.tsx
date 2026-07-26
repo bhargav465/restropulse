@@ -29,22 +29,26 @@ const OpsStrip: React.FC<{ metrics: IntelligenceSelfMetrics }> = ({ metrics }) =
                 <Stat label="Orders" value={metrics.orderCount.toLocaleString('en-IN')} />
                 <Stat label="Customers" value={metrics.totalCustomers.toLocaleString('en-IN')} />
             </div>
-            <p className="text-xs text-muted mb-2 font-semibold uppercase tracking-wider">Peak hours</p>
-            <div className="overflow-x-auto no-scrollbar">
-                <div className="min-w-[560px]">
-                    {metrics.peakHours.map((row, d) => (
-                        <div key={d} className="flex gap-1 items-center mb-1">
-                            <span className="w-7 text-[10px] text-muted font-semibold">{DAYS[d]}</span>
-                            {row.map((count, h) => (
-                                <span
-                                    key={h}
-                                    className="w-4 h-4 rounded-sm"
-                                    style={{ background: count === 0 ? 'var(--color-canvas)' : intensity(count / peakMax) }}
-                                    title={`${DAYS[d]} ${h}:00 — ${count} orders`}
-                                />
-                            ))}
-                        </div>
-                    ))}
+            {/* Peak-hours heatmap: hidden on mobile (24x7 grid forces 560px scroll);
+                the stat tiles above carry the headline numbers. */}
+            <div className="hidden sm:block">
+                <p className="text-xs text-muted mb-2 font-semibold uppercase tracking-wider">Peak hours</p>
+                <div className="overflow-x-auto no-scrollbar">
+                    <div className="min-w-[560px]">
+                        {metrics.peakHours.map((row, d) => (
+                            <div key={d} className="flex gap-1 items-center mb-1">
+                                <span className="w-7 text-[10px] text-muted font-semibold">{DAYS[d]}</span>
+                                {row.map((count, h) => (
+                                    <span
+                                        key={h}
+                                        className="w-4 h-4 rounded-sm"
+                                        style={{ background: count === 0 ? 'var(--color-canvas)' : intensity(count / peakMax) }}
+                                        title={`${DAYS[d]} ${h}:00 — ${count} orders`}
+                                    />
+                                ))}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>

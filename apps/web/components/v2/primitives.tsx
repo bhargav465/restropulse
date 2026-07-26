@@ -268,7 +268,7 @@ interface SubNavProps<T extends string> {
 /** Quiet underline tab bar (design.md §3.2) — secondary nav inside a bucket. */
 export function SubNav<T extends string>({ tabs, active, onChange, label }: SubNavProps<T>) {
     return (
-        <div className="flex gap-6 flex-wrap border-b border-line mb-6" role="tablist" aria-label={label}>
+        <div className="flex gap-6 flex-nowrap overflow-x-auto no-scrollbar sm:flex-wrap sm:overflow-visible border-b border-line mb-6" role="tablist" aria-label={label}>
             {tabs.map((t) => {
                 const isActive = active === t.id;
                 return (

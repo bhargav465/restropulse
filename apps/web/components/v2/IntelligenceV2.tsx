@@ -81,7 +81,7 @@ const HeaderBand: React.FC<{
 
     return (
         <div className="bg-surface rounded-2xl p-6 border border-line">
-            <div className="grid gap-6 lg:grid-cols-[auto_1fr_auto] lg:items-center">
+            <div className="grid gap-6 md:grid-cols-[auto_1fr_auto] md:items-center">
                 {/* Dial */}
                 <div className="flex justify-center lg:justify-start">
                     <ScoreDial score={report.restroScore} grade={grade} delta={report.deltas?.restroScoreDelta} />
@@ -112,8 +112,8 @@ const HeaderBand: React.FC<{
                 </div>
             </div>
 
-            {/* Provenance legend */}
-            <div className="mt-5 pt-4 border-t border-line">
+            {/* Provenance legend -- educational "how we know" row; hidden on mobile to reduce density. */}
+            <div className="mt-5 pt-4 border-t border-line hidden sm:block">
                 <ProvenanceLegend />
             </div>
 
@@ -269,8 +269,9 @@ const IntelligenceV2: React.FC<IntelligenceV2Props> = ({ restaurantData, onNavig
                 onNavigate={nav}
             />
 
-            {/* Bucket switch + bucket-scoped period filter */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Bucket switch + bucket-scoped period filter. Stacks full-width on
+                mobile so the two control groups don't wrap mid-row. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <BucketSwitch value={bucket} onChange={setBucket} />
                 {bucket === 'MINE' ? (
                     <PeriodFilter bucket="MINE" selection={mineSel} onChange={setMineSel} />

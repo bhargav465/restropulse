@@ -86,8 +86,10 @@ export const WhereTheyBeatYouView: React.FC<{
 
     return (
         <div className="space-y-6">
+            {/* Threat radar: hidden on mobile (visual-only; the gap cards below carry
+                the same comparison as text). */}
             {radar && (
-                <div className="bg-surface rounded-2xl p-6 border border-line flex flex-col items-center">
+                <div className="hidden sm:flex bg-surface rounded-2xl p-6 border border-line flex-col items-center">
                     <h3 className="text-base font-semibold text-ink self-start">Threat radar</h3>
                     <p className="text-xs text-muted self-start mb-2">Closer to the centre = a bigger threat to you.</p>
                     <ThreatRadar base={radar.base} competitors={radar.competitors} />
