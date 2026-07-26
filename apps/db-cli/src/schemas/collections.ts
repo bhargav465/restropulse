@@ -525,4 +525,12 @@ export const COLLECTIONS: CollectionSchema[] = [
             { spec: { restaurantId: 1, targetPlaceId: 1, date: -1 } },
         ],
     },
+    {
+        // Best-effort internal analytics signals (intelligence worker scan/alert events).
+        name: 'events',
+        indexes: [
+            { spec: { restaurantId: 1, ts: -1 } },
+            { spec: { name: 1, ts: -1 } },
+        ],
+    },
 ];

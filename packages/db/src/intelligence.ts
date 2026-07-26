@@ -71,3 +71,31 @@ export function assertWatchlistSize(watchlist: readonly unknown[]): void {
     );
   }
 }
+
+// ----- Analytics events (best-effort internal signals) -----
+// The intelligence worker emits scan/alert signals into a shared `events`
+// collection. (v2 kept this in ordering.ts; this app has no ordering system,
+// so the minimal seam lives here alongside the other intelligence helpers.)
+
+export interface AnalyticsEvent {
+  id?: string;
+  name: string;
+  sessionId: string;
+  restaurantId: string;
+  customerId?: string;
+  payload?: Record<string, unknown>;
+  ts: string | Date;
+}
+
+export function getEventsCollection(): Collection {
+  return getDB().collection('events');
+}
+
+/** Insert one analytics event. Best-effort -- write failures are swallowed. */
+export async function insertAnalyticsEvent(event: Omit<AnalyticsEvent, 'id'>): Promise<void> {
+  try {
+    await getEventsCollection().insertOne({ ...event, ts: new Date(event.ts) });
+  } catch {
+    // Swallow -- analytics writes are best-effort.
+  }
+}
