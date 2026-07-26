@@ -201,9 +201,9 @@ When changing AI-backend code:
 
 ## Restaurant Intelligence
 
-Competitor + self analytics feature. Frontend section (`apps/web/components/v2/IntelligenceV2.tsx` + `components/intelligence/**`) is the app's home view, replacing the old Dashboard. Runs on the in-memory demo twin when `VITE_DEMO_MODE=true`, otherwise the real client hits `/api/admin/intelligence/*`.
+Competitor + self analytics feature. Frontend section (`apps/web/components/v2/IntelligenceV2.tsx` + `components/intelligence/**`) is the app's home view, replacing the old Dashboard. Runs on the in-memory demo twin when `VITE_DEMO_MODE=true`, otherwise the real client hits `/api/intelligence/*`.
 
-- Backend: `apps/api/src/services/intelligence/*` (scan pipeline: Google Places New + Anthropic Haiku/Sonnet analysis; snapshots/compare/scoring) behind `apps/api/src/routes/admin/intelligence.ts` (mounted `/api/admin/intelligence`, `requireAuth` + `requireRole('OWNER')`, scoped to `req.user.restaurantId`).
+- Backend: `apps/api/src/services/intelligence/*` (scan pipeline: Google Places New + Anthropic Haiku/Sonnet analysis; snapshots/compare/scoring) behind `apps/api/src/routes/intelligence.ts` (mounted `/api/intelligence`, `requireAuth` + `requireRole('OWNER')`, scoped to `req.user.restaurantId`).
 - Worker: `apps/intelligence-worker` (weekly re-scan `CRON_INTELLIGENCE`; daily snapshots `CRON_INTELLIGENCE_DAILY`, kill-switch `INTELLIGENCE_DAILY_ENABLED`). Mongo-only by default.
 - Keys (optional, 503 gracefully): `GOOGLE_MAPS_API_KEY`, `ANTHROPIC_API_KEY` (Anthropic model ids are cost-optimized: haiku-4-5 classify + sonnet-4-6 analysis -- don't upgrade to Opus). `ZOMATO_ADAPTER=manual|stub`.
 - Intelligence types live in `@restropulse/shared` (`packages/shared/src/intelligence.ts`). `self-metrics` is stubbed (no Ordering system in this app). Full detail: `docs/INTELLIGENCE_BACKEND_CHANGES.md`.

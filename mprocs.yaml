@@ -19,6 +19,10 @@ procs:
     cmd: ["cmd", "/c", "npm run dev"]
     cwd: apps/content-engine
 
+  intelligence-worker:
+    cmd: ["cmd", "/c", "npm run dev"]
+    cwd: apps/intelligence-worker
+
   webhook-tunnel:
     cmd: ["cmd", "/c", "node scripts/start-ngrok.mjs"]
     cwd: .

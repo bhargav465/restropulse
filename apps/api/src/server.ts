@@ -22,7 +22,7 @@ import creditPackRoutes from './routes/credit-packs.js';
 import invoiceRoutes from './routes/invoices.js';
 import configRoutes from './routes/config.js';
 import accountRoutes from './routes/account.js';
-import adminIntelligenceRoutes from './routes/admin/intelligence.js';
+import intelligenceRoutes from './routes/intelligence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -157,7 +157,7 @@ app.use('/api/credit-packs', creditPackRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/account', accountRoutes);
-app.use('/api/admin/intelligence', adminIntelligenceRoutes);
+app.use('/api/intelligence', intelligenceRoutes);
 
 // Dev-only: proxy /dev-assets/* to the content-engine asset server (port 3002).
 // Allows the single ngrok tunnel to serve both API routes and placeholder media

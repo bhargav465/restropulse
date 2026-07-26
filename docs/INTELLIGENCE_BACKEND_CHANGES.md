@@ -55,9 +55,9 @@ External-facing (**degrade gracefully** when their key is absent):
 
 ---
 
-## 3. Admin API route — `apps/api/src/routes/admin/intelligence.ts`
+## 3. Admin API route — `apps/api/src/routes/intelligence.ts`
 
-Mounted at **`/api/admin/intelligence`** in `apps/api/src/server.ts`.
+Mounted at **`/api/intelligence`** in `apps/api/src/server.ts`.
 Guarded by `requireAuth` + **`requireRole('OWNER')`** (our `users.role` enum
 already has `OWNER` — no remap needed), every operation scoped to
 `req.user.restaurantId`.
@@ -128,7 +128,7 @@ Worker crons: `CRON_INTELLIGENCE`, `CRON_INTELLIGENCE_DAILY`,
 
 ## 7. What is NOT done (remaining backend work)
 
-1. **Runtime verification** — run `db-cli setup` to create the 6+1 collections, start the API, and exercise `/api/admin/intelligence/*` with an OWNER session against a real Mongo (and with the two keys, a real scan). None of this has been done.
+1. **Runtime verification** — run `db-cli setup` to create the 6+1 collections, start the API, and exercise `/api/intelligence/*` with an OWNER session against a real Mongo (and with the two keys, a real scan). None of this has been done.
 2. **API tests** — no unit tests for the pure services (scoring/compare/snapshots) and no route tests (with mocked Places/Anthropic) were added. (The worker has 32 passing tests.)
 3. **Secrets manifest + docs** — add the 3 keys to `SECRETS_MANIFEST` and document them + the new collections/crons in `docs/INFRASTRUCTURE.md`, `docs/ARCHITECTURE.md`, `docs/SECRETS.md`, `.github/copilot-instructions.md`.
 4. **CI + deploy** — add an `intelligence-worker` test job to `ci.yml`, and deploy it as a continuous WebJob alongside publisher/content-engine in the deploy workflows.
