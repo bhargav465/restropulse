@@ -22,6 +22,7 @@ import creditPackRoutes from './routes/credit-packs.js';
 import invoiceRoutes from './routes/invoices.js';
 import configRoutes from './routes/config.js';
 import accountRoutes from './routes/account.js';
+import adminIntelligenceRoutes from './routes/admin/intelligence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -95,6 +96,12 @@ const env = loadAndValidateEnv({
         RAZORPAY_KEY_ID: z.string().min(1).optional(),
         RAZORPAY_KEY_SECRET: z.string().min(1).optional(),
         RAZORPAY_WEBHOOK_SECRET: z.string().min(1).optional(),
+        // Restaurant Intelligence (scan pipeline). Optional -- the Places/Anthropic
+        // stages 503 gracefully when their key is absent, so reports/snapshots/
+        // compare still serve on seeded data. Keys are available via content-engine.
+        GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
+        ANTHROPIC_API_KEY: z.string().min(1).optional(),
+        ZOMATO_ADAPTER: z.enum(['manual', 'stub']).default('manual'),
         FEATURE_DELETE_ACCOUNT: booleanFlag,
         FEATURE_WEB_THEME: z.enum(['legacy', 'orchid-admin']).default('orchid-admin'),
         ENABLED_PLATFORMS: z.string().default('INSTAGRAM,FACEBOOK'),
@@ -150,6 +157,7 @@ app.use('/api/credit-packs', creditPackRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/account', accountRoutes);
+app.use('/api/admin/intelligence', adminIntelligenceRoutes);
 
 // Dev-only: proxy /dev-assets/* to the content-engine asset server (port 3002).
 // Allows the single ngrok tunnel to serve both API routes and placeholder media

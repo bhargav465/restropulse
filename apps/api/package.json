@@ -26,6 +26,7 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
+        "@anthropic-ai/sdk": "^0.68.0",
         "@restropulse/shared": "*",
         "@restropulse/telemetry": "*",
         "@restropulse/db": "*",

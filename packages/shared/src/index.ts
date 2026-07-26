@@ -4,6 +4,8 @@
 // the monorepo (web, api, publisher, content-engine, db-cli).
 // -------------------------------------------------------
 
+import type { WatchlistEntry } from './intelligence.js';
+
 // ----- Enums / Literal Unions -----
 
 export type SubscriptionTier = 'STARTER' | 'GROWTH' | 'PREMIUM';
@@ -186,6 +188,15 @@ export interface Restaurant {
   menu?: MenuItem[];
   /** City this record was sourced from. Set by the acquire-restaurants script. */
   sourceCity?: string;
+  /** Confirmed Google Places (New) place id for this restaurant (set once a scan
+   *  place is confirmed, so future scans skip text search). */
+  googlePlaceId?: string;
+  /** Restaurant Intelligence per-restaurant state (competitor watchlist). */
+  intelligence?: {
+    watchlist?: WatchlistEntry[];
+    /** Merchant-provided Zomato URL for the restaurant's own listing. */
+    selfZomatoUrl?: string;
+  };
   /** Source of the data: acquisition script writes this; manual entries leave it absent. */
   dataSource?: 'kaggle-zomato' | 'osm' | 'merged' | 'manual';
   /**
