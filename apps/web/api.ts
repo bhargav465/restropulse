@@ -1,4 +1,6 @@
 import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags, Platform } from '@restropulse/shared';
+import type { SnapshotSource, SnapshotReview, ReviewTheme, WatchlistEntry } from '@restropulse/shared';
+import { intelligenceAPI as demoIntelligenceAPI } from './demo-api-intelligence';
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { getApiUrl } from './utils/env';
 
@@ -584,3 +586,89 @@ export const accountManagerAPI = {
         return response.data!;
     },
 };
+
+// ===== Restaurant Intelligence =====
+// Client-facing types used by components/v2/intelligence/*. (Ported from v2.)
+
+export interface SnapshotSeriesPoint {
+    date: string; // YYYY-MM-DD (day) or YYYY-MM (month)
+    source: SnapshotSource;
+    rating: number;
+    reviewCount: number;
+    newReviews: number;
+    photoCount: number;
+    seoScore?: number;
+    backfilled?: boolean;
+}
+
+/** A new review in the feedback feed, tagged with its source. */
+export interface FeedbackReview extends SnapshotReview {
+    source: SnapshotSource;
+}
+
+/** One day of the self-only "what changed" feed. */
+export interface FeedbackDay {
+    date: string;
+    newReviews: FeedbackReview[];
+    ratingBefore: number | null;
+    ratingAfter: number;
+    themesTrending: ReviewTheme[];
+}
+
+/** One New Openings radar row (nearby sighting first seen within the window). */
+export interface NewOpening {
+    placeId: string;
+    name: string;
+    distanceKm: number;
+    cuisine?: string;
+    firstSeenAt: string; // ISO
+    ratingAtFirstSeen: number;
+    reviewsAtFirstSeen: number;
+    currentReviewCount: number;
+    reviewsSinceFirstSeen: number;
+    daysSinceFirstSeen: number;
+    fastStarter: boolean;
+}
+
+export interface SnapshotSeriesResponse {
+    target: string;
+    source: string;
+    granularity: string;
+    points: SnapshotSeriesPoint[];
+}
+
+export interface WatchlistResponse {
+    entries: WatchlistEntry[];
+    max: number;
+}
+
+export interface SnapshotQuery {
+    target?: string; // 'self' | placeId
+    source?: SnapshotSource | 'both';
+    granularity: 'day' | 'month';
+    from?: string;
+    to?: string;
+}
+
+export interface CompareQuery {
+    granularity: 'day' | 'month';
+    date?: string; // YYYY-MM-DD (day)
+    month?: string; // YYYY-MM (month)
+}
+
+export interface WatchlistInput {
+    placeId: string;
+    name?: string;
+    zomatoUrl?: string;
+}
+
+export interface ZomatoManualInput {
+    target?: string;
+    rating: number;
+    reviewCount: number;
+    photoCount: number;
+}
+
+// P1: demo twin only (in-memory sample fixtures, zero backend).
+// P2 will introduce the real fetch-backed client + an isDemoMode() swap.
+export const intelligenceAPI = demoIntelligenceAPI;

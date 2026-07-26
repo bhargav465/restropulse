@@ -54,7 +54,7 @@ export type TokenStatus = 'valid' | 'expiring_soon' | 'expired';
 
 export type EmailVerificationStatus = 'idle' | 'sending' | 'sent' | 'link_ready' | 'verifying' | 'verified' | 'error';
 
-export type ViewState = 'LOGIN' | 'ONBOARDING' | 'DASHBOARD' | 'STUDIO' | 'INPUTS' | 'STRATEGY';
+export type ViewState = 'LOGIN' | 'ONBOARDING' | 'DASHBOARD' | 'STUDIO' | 'INPUTS' | 'STRATEGY' | 'INTELLIGENCE';
 
 export type InstagramConnectionError =
   | 'NO_PAGES_FOUND'
@@ -549,3 +549,4 @@ export type { TimingConstraintConfig } from './approval-deadlines.js';
 
 export * from './cost-events.js';
 export * from './media-jobs.js';
+export * from './intelligence.js';

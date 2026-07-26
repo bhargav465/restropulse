@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/*
+  Semantic color utilities (bg-primary, text-ink, border-line, bg-canvas,
+  text-muted, bg-surface, text-success, ...). `inline` makes the generated
+  utilities reference the --rp-* vars at use-time, so they follow the runtime
+  data-theme switch (legacy <-> orchid-admin) instead of baking a fixed value.
+  This is the bridge that lets the ported Restaurant Intelligence tree -- which
+  uses v2's semantic tokens -- theme correctly in both themes with no edits.
+*/
+@theme inline {
+  --color-primary: var(--rp-primary);
+  --color-primary-strong: var(--rp-primary-strong);
+  --color-primary-soft: var(--rp-primary-soft);
+  --color-canvas: var(--rp-canvas);
+  --color-surface: var(--rp-surface);
+  --color-ink: var(--rp-text);
+  --color-muted: var(--rp-muted);
+  --color-line: var(--rp-line);
+  --color-sidebar: var(--rp-sidebar);
+  --color-sidebar-ink: var(--rp-sidebar-ink);
+  --color-banner: var(--rp-banner);
+  --color-success: var(--rp-success);
+  --color-warning: var(--rp-warning);
+  --color-danger: var(--rp-danger);
+  --color-info: var(--rp-info);
+  --color-orchid: var(--rp-accent);
+}
+
 :root,
 :root[data-theme='legacy'] {
   --rp-canvas: #f8fafc;
@@ -20,6 +47,7 @@
 
   --rp-sidebar: #ffffff;
   --rp-sidebar-ink: #64748b;
+  --rp-banner: #1e293b;
 }
 
 :root[data-theme='orchid-admin'] {
@@ -41,6 +69,7 @@
 
   --rp-sidebar: #221833;
   --rp-sidebar-ink: #cfc4e6;
+  --rp-banner: #2a1e3f;
 }
 
 body {

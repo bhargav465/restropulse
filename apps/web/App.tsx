@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
 import ContentStudio from './components/ContentStudio';
+import Intelligence from './components/Intelligence';
 import Inputs from './components/Inputs';
 import Strategy from './components/Strategy';
 import ProfileSheet from './components/ProfileSheet';
@@ -243,25 +243,28 @@ const App: React.FC = () => {
         const instagramConnected = instagramEnabled && metaConnected;
 
         switch (currentView) {
+            // Restaurant Intelligence replaces the old Dashboard as the home view.
+            case 'INTELLIGENCE':
             case 'DASHBOARD':
-                return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
+                return <Intelligence restaurant={restaurantData} />;
             case 'STUDIO':
                 return <ContentStudio onCreatePost={metaConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={metaConnected} onConnectInstagram={handleConnectInstagram} postApprovalBufferMins={featureFlags?.postApprovalBufferMins} instagramEnabled={instagramEnabled} facebookEnabled={facebookEnabled} />;
             case 'INPUTS':
                 if (featureFlags?.updatesSection === false) {
-                    return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
+                    return <Intelligence restaurant={restaurantData} />;
                 }
                 return <Inputs restaurantData={restaurantData} onRefresh={refreshRestaurantData} />;
             case 'STRATEGY':
                 return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} cycleApprovalBufferMins={featureFlags?.cycleApprovalBufferMins} instagramEnabled={instagramEnabled} />;
             default:
-                return <Dashboard setView={navigateTo} restaurantData={restaurantData} userName={userData?.name} />;
+                return <Intelligence restaurant={restaurantData} />;
         }
     };
 
     const getPageTitle = () => {
         switch (currentView) {
-            case 'DASHBOARD': return 'Dashboard';
+            case 'INTELLIGENCE':
+            case 'DASHBOARD': return 'Restaurant Intelligence';
             case 'STUDIO': return 'Content Studio';
             case 'INPUTS': return 'Updates';
             case 'STRATEGY': return 'Strategy';

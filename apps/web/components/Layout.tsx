@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, PenTool, Lightbulb, Megaphone, Plus, Bell } from 'lucide-react';
+import { Gauge, PenTool, Lightbulb, Megaphone, Plus, Bell } from 'lucide-react';
 import { ViewState, FeatureFlags } from '@restropulse/shared';
 import Sidebar from './Sidebar';
 
@@ -99,7 +99,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, 
       {/* Sticky Bottom Navigation - 4 flat items (mobile only) */}
       <nav aria-label="Primary" className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 lg:hidden" style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.25rem)' }}>
         <div className="flex justify-around items-center px-2 pt-1 pb-1">
-          <NavItem view="DASHBOARD" icon={Home} label="Home" />
+          <NavItem view="INTELLIGENCE" icon={Gauge} label="Insights" />
           <NavItem view="STUDIO" icon={PenTool} label="Studio" />
           {featureFlags?.updatesSection ? (
               <NavItem view="INPUTS" icon={Megaphone} label="Updates" />

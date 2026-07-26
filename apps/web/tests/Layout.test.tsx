@@ -10,7 +10,7 @@ describe('Layout Component', () => {
     const mockChildren = <div>Test Content</div>;
 
     const defaultProps = {
-        currentView: 'DASHBOARD' as ViewState,
+        currentView: 'INTELLIGENCE' as ViewState,
         setView: mockSetView,
         title: 'Dashboard',
         restaurantName: 'Test Restaurant',
@@ -49,7 +49,7 @@ describe('Layout Component', () => {
         render(<Layout {...defaultProps}>{mockChildren}</Layout>);
         // Scope to the bottom (Primary) nav; the desktop sidebar duplicates some labels.
         const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
-        expect(within(primaryNav).getByText('Home')).toBeInTheDocument();
+        expect(within(primaryNav).getByText('Insights')).toBeInTheDocument();
         expect(within(primaryNav).getByText('Studio')).toBeInTheDocument();
         expect(within(primaryNav).getByText('Updates')).toBeInTheDocument();
         expect(within(primaryNav).getByText('Strategy')).toBeInTheDocument();
@@ -58,19 +58,19 @@ describe('Layout Component', () => {
     it('should highlight the active navigation item', () => {
         render(<Layout {...defaultProps}>{mockChildren}</Layout>);
         const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
-        const homeButton = within(primaryNav).getByText('Home').closest('button');
+        const insightsButton = within(primaryNav).getByText('Insights').closest('button');
         const studioButton = within(primaryNav).getByText('Studio').closest('button');
 
-        expect(homeButton).toHaveClass('text-orange-600');
+        expect(insightsButton).toHaveClass('text-orange-600');
         expect(studioButton).toHaveClass('text-slate-400');
     });
 
-    it('should call setView when Home nav item is clicked', () => {
+    it('should call setView when Insights nav item is clicked', () => {
         render(<Layout {...defaultProps} currentView="STUDIO" title="Studio">{mockChildren}</Layout>);
         const primaryNav = screen.getByRole('navigation', { name: 'Primary' });
-        const homeButton = within(primaryNav).getByText('Home').closest('button');
-        fireEvent.click(homeButton!);
-        expect(mockSetView).toHaveBeenCalledWith('DASHBOARD');
+        const insightsButton = within(primaryNav).getByText('Insights').closest('button');
+        fireEvent.click(insightsButton!);
+        expect(mockSetView).toHaveBeenCalledWith('INTELLIGENCE');
     });
 
     it('should call setView when Studio nav item is clicked', () => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, PenTool, Lightbulb, Megaphone, User } from 'lucide-react';
+import { Gauge, PenTool, Lightbulb, Megaphone, User } from 'lucide-react';
 import { ViewState, FeatureFlags } from '@restropulse/shared';
 
 interface SidebarProps {
@@ -55,7 +55,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onProfileOpen, 
 
       {/* Section navigation */}
       <nav aria-label="Sidebar" className="flex flex-col gap-1 flex-1 overflow-y-auto no-scrollbar">
-        <NavItem view="DASHBOARD" icon={Home} label="Dashboard" />
+        <NavItem view="INTELLIGENCE" icon={Gauge} label="Intelligence" />
         <NavItem view="STUDIO" icon={PenTool} label="Content Studio" />
         {featureFlags?.updatesSection ? (
           <NavItem view="INPUTS" icon={Megaphone} label="Updates" />
