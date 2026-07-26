@@ -15,8 +15,11 @@
  */
 
 import { getCompetitorCacheCollection } from '@restropulse/db';
+import { createLogger } from '@restropulse/telemetry/server';
 import { StageError } from './errors.js';
 import { getDistanceKm, threatScore } from './scoring.js';
+
+const log = createLogger('intelligence-places');
 
 const PLACES_BASE = 'https://places.googleapis.com/v1';
 
@@ -217,27 +220,48 @@ export async function getBaseRestaurantDetails(
     if (placeId && placeId.trim()) {
         resolvedPlaceId = placeId.trim();
     } else {
-        // Prefer the restaurant's own coordinates (from onboarding) to disambiguate:
-        // search the name biased to that location, which is far more reliable than a
-        // free-text "name, city" query when `city` is a messy/verbose address.
-        const searchBody: Record<string, unknown> = selfLocation
-            ? {
-                textQuery: name,
-                pageSize: 1,
-                locationBias: {
-                    circle: {
-                        center: { latitude: selfLocation.lat, longitude: selfLocation.lng },
-                        radius: 1000.0,
+        const FIND_MASK = 'places.id,places.displayName,places.rating,places.userRatingCount,places.location';
+        // Reject (0,0) and out-of-range coords: onboarding defaults missing
+        // location to lat:0/lng:0, which would bias the search into the ocean.
+        const hasValidLoc =
+            !!selfLocation &&
+            Number.isFinite(selfLocation.lat) && Number.isFinite(selfLocation.lng) &&
+            !(selfLocation.lat === 0 && selfLocation.lng === 0) &&
+            Math.abs(selfLocation.lat) <= 90 && Math.abs(selfLocation.lng) <= 180;
+
+        // Attempt 1: name biased to the restaurant's own coordinates (most reliable).
+        if (hasValidLoc) {
+            const biased = await placesTextSearch(
+                {
+                    textQuery: name,
+                    pageSize: 1,
+                    locationBias: {
+                        circle: {
+                            center: { latitude: selfLocation!.lat, longitude: selfLocation!.lng },
+                            radius: 2000.0,
+                        },
                     },
                 },
-            }
-            : { textQuery: `${name}, ${city}`, pageSize: 1 };
-        const findData = await placesTextSearch(
-            searchBody,
-            'places.id,places.displayName,places.rating,places.userRatingCount,places.location',
-        ).catch(() => null);
-        found = findData?.places?.[0];
-        if (!found?.id) return null;
+                FIND_MASK,
+            ).catch(() => null);
+            found = biased?.places?.[0];
+        }
+
+        // Attempt 2 (fallback): free-text "name, city". Runs when there were no
+        // valid coords, or the biased search matched nothing.
+        if (!found?.id) {
+            const text = await placesTextSearch({ textQuery: `${name}, ${city}`, pageSize: 1 }, FIND_MASK)
+                .catch(() => null);
+            found = text?.places?.[0];
+        }
+
+        if (!found?.id) {
+            log.warn(
+                { name, city, hasValidLoc, lat: selfLocation?.lat, lng: selfLocation?.lng },
+                'Places lookup found no match for the restaurant',
+            );
+            return null;
+        }
         resolvedPlaceId = found.id;
     }
 
