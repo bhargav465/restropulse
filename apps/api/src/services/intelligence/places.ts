@@ -108,7 +108,7 @@ export interface BaseRestaurant {
 interface PlacesTextSearchResponse {
     places?: PlaceApi[];
     nextPageToken?: string;
-    error?: { status?: string };
+    error?: { status?: string; message?: string; code?: number };
 }
 
 interface PlaceApi {
@@ -144,15 +144,21 @@ async function placesTextSearch(body: Record<string, unknown>, fieldMask: string
     });
     const data = (await res.json().catch(() => ({}))) as PlacesTextSearchResponse;
     if (!res.ok) {
+        // Surface the exact Google error so misconfig (API not enabled, key
+        // restriction, billing) is diagnosable instead of a generic "not found".
+        log.error(
+            { status: res.status, googleStatus: data?.error?.status, googleMessage: data?.error?.message, textQuery: body.textQuery },
+            'Google Places searchText failed',
+        );
         if (res.status === 403) {
             throw new StageError(
-                'Location search was denied — enable "Places API (New)" on the Google Cloud project for this key.',
+                `Location search was denied by Google (${data?.error?.message || 'permission denied'}). Enable "Places API (New)" on the Google Cloud project for this key and ensure billing + key restrictions allow it.`,
                 503,
                 'FETCHING_PLACES',
             );
         }
         throw new StageError(
-            `Restaurant search failed (Places API: ${data?.error?.status || res.status}).`,
+            `Restaurant search failed (Places API ${res.status}: ${data?.error?.message || data?.error?.status || 'unknown error'}).`,
             502,
             'FETCHING_PLACES',
         );
@@ -229,6 +235,12 @@ export async function getBaseRestaurantDetails(
             !(selfLocation.lat === 0 && selfLocation.lng === 0) &&
             Math.abs(selfLocation.lat) <= 90 && Math.abs(selfLocation.lng) <= 180;
 
+        // NOTE: we intentionally do NOT swallow errors here. placesTextSearch only
+        // throws on a non-OK Google response (403 API-not-enabled, 502, etc.); an
+        // empty-but-OK result returns { places: [] } and falls through to attempt 2.
+        // Letting a real API error propagate surfaces the true cause instead of a
+        // misleading "could not find".
+
         // Attempt 1: name biased to the restaurant's own coordinates (most reliable).
         if (hasValidLoc) {
             const biased = await placesTextSearch(
@@ -243,22 +255,21 @@ export async function getBaseRestaurantDetails(
                     },
                 },
                 FIND_MASK,
-            ).catch(() => null);
+            );
             found = biased?.places?.[0];
         }
 
         // Attempt 2 (fallback): free-text "name, city". Runs when there were no
-        // valid coords, or the biased search matched nothing.
+        // valid coords, or the biased search matched nothing (0 results).
         if (!found?.id) {
-            const text = await placesTextSearch({ textQuery: `${name}, ${city}`, pageSize: 1 }, FIND_MASK)
-                .catch(() => null);
+            const text = await placesTextSearch({ textQuery: `${name}, ${city}`, pageSize: 1 }, FIND_MASK);
             found = text?.places?.[0];
         }
 
         if (!found?.id) {
             log.warn(
                 { name, city, hasValidLoc, lat: selfLocation?.lat, lng: selfLocation?.lng },
-                'Places lookup found no match for the restaurant',
+                'Places lookup returned zero matches for the restaurant',
             );
             return null;
         }
