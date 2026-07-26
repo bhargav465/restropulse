@@ -121,6 +121,27 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     const pendingCycle = cycles.find(c => c.status === 'PENDING_APPROVAL' || c.status === 'CHANGES_REQUESTED');
     const approvedCycle = cycles.find(c => c.status === 'APPROVED');
     const activeCycle = cycles.find(c => c.status === 'ACTIVE');
+    // A cycle the content-engine is still generating -- transient (becomes
+    // PENDING_APPROVAL). Must NOT read as "All Caught Up": a strategy IS coming.
+    const generatingCycle = cycles.find(c => c.status === 'PENDING_GENERATION');
+    const isGenerating = !!generatingCycle;
+
+    // While a strategy is being generated, poll so the screen advances to the
+    // approval card on its own instead of sitting on the "Setting up" state.
+    useEffect(() => {
+        if (!isGenerating) return;
+        const interval = setInterval(async () => {
+            try {
+                const [cycleData, strategyData] = await Promise.all([
+                    strategyAPI.getAllCycles(),
+                    strategyAPI.getStrategy(),
+                ]);
+                setCycles(cycleData);
+                setSuggestCreateCycle(strategyData.suggestCreateCycle ?? false);
+            } catch { /* keep polling; transient errors are non-fatal */ }
+        }, 15000);
+        return () => clearInterval(interval);
+    }, [isGenerating]);
 
     const handleApprove = async (id: string) => {
         try {
@@ -347,7 +368,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     }
 
     return (
-        <PageContainer max="wide" className="py-4 space-y-8">
+        <PageContainer max="readable" className="py-4 space-y-8">
             {instagramEnabled && !instagramConnected && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
                     <p className="text-xs text-amber-800 font-medium">Connect Instagram to approve strategies and start publishing.</p>
@@ -366,7 +387,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 />
             )}
 
-            <div className="space-y-8 lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0 lg:items-start">
+            <div className="space-y-8">
                 {/* Pending Action Section */}
                 {pendingCycle && (
                     <div className="animate-in slide-in-from-top duration-500">
@@ -390,7 +411,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 )}
 
                 {!pendingCycle && !approvedCycle && !activeCycle && (
-                    suggestCreateCycle ? (
+                    (suggestCreateCycle || generatingCycle) ? (
                         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-3xl border border-blue-100 text-center">
                             <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-blue-600">
                                 <Zap size={24} />
