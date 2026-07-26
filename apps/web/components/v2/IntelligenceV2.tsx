@@ -255,11 +255,6 @@ const IntelligenceV2: React.FC<IntelligenceV2Props> = ({ restaurantData, onNavig
                 defaults={scanDefaults}
                 api={intelligenceAPI}
                 onReport={setReport}
-                onPlaceConfirmed={(_sel) => {
-                    // TODO(P2): persist the confirmed placeId (add googlePlaceId to
-                    // Restaurant + a restaurant update endpoint) so future scans skip
-                    // text search. No-op in demo mode -- nothing persists.
-                }}
             />
         );
     }
