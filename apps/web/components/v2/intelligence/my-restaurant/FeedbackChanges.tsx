@@ -14,7 +14,7 @@ import { ProvenanceChip } from '../provenance';
  */
 
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-    <div className={`bg-surface rounded-2xl p-6 border border-line ${className}`}>{children}</div>
+    <div className={`bg-surface rounded-2xl p-4 sm:p-6 border border-line ${className}`}>{children}</div>
 );
 
 const Stars: React.FC<{ n: number }> = ({ n }) => (
@@ -68,7 +68,7 @@ export const FeedbackChangesView: React.FC<{
         activeTheme ? reviews.filter((r) => (r.themes ?? []).includes(activeTheme)) : reviews;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Negative-trend alert */}
             {negatives.length > 0 && (
                 <div className="bg-surface rounded-2xl p-5 border border-line border-l-[3px] border-l-danger" data-testid="negative-trend-alert">

@@ -17,7 +17,7 @@ import { TrendChart, type TrendSeries } from '../charts';
 type SourceMode = SnapshotSource | 'both';
 
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-    <div className={`bg-surface rounded-2xl p-6 border border-line ${className}`}>{children}</div>
+    <div className={`bg-surface rounded-2xl p-4 sm:p-6 border border-line ${className}`}>{children}</div>
 );
 
 function cell(row: CompareRow, source: SnapshotSource): CompareRow['google'] | undefined {
@@ -55,7 +55,7 @@ export const CompareView: React.FC<{
     ];
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Source toggle */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
                 <h3 className="text-base font-semibold text-ink">Compare</h3>

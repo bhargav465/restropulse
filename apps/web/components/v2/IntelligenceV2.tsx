@@ -80,7 +80,7 @@ const HeaderBand: React.FC<{
     const withinWindow = Date.now() - scannedAt.getTime() < DAY_MS;
 
     return (
-        <div className="bg-surface rounded-2xl p-6 border border-line">
+        <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
             <div className="grid gap-6 md:grid-cols-[auto_1fr_auto] md:items-center">
                 {/* Dial */}
                 <div className="flex justify-center lg:justify-start">
@@ -260,7 +260,7 @@ const IntelligenceV2: React.FC<IntelligenceV2Props> = ({ restaurantData, onNavig
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             <HeaderBand
                 report={report}
                 selectedPillar={selectedPillar}

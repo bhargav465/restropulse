@@ -12,7 +12,7 @@ import { resolveActionHref, resolveDeepLink, type DeepLinkTarget } from './deep-
  */
 
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-    <div className={`bg-surface rounded-2xl p-6 border border-line ${className}`}>{children}</div>
+    <div className={`bg-surface rounded-2xl p-4 sm:p-6 border border-line ${className}`}>{children}</div>
 );
 
 const ChecklistCard: React.FC<{ title: string; pillar?: PillarScore; onNavigate: (t: DeepLinkTarget) => void }> = ({ title, pillar, onNavigate }) => {
@@ -54,7 +54,7 @@ const SearchSEO: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLink
     const [showDetail, setShowDetail] = useState(false);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
                 <ChecklistCard title="Google profile" pillar={profile} onNavigate={onNavigate} />
                 <ChecklistCard title="Website & SEO" pillar={website} onNavigate={onNavigate} />

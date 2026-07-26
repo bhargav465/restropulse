@@ -17,7 +17,7 @@ import { aovBandLabel } from '../aov';
 type BucketKey = 'DIRECT' | 'OVERALL';
 
 const Card: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="bg-surface rounded-2xl p-6 border border-line">{children}</div>
+    <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">{children}</div>
 );
 
 const Segmented: React.FC<{
@@ -235,7 +235,7 @@ const TopThreats: React.FC<{ buckets?: CompetitionBuckets }> = ({ buckets }) => 
     // Old reports (pre-Brief 10) have no buckets — optional-field guard.
     if (!buckets) {
         return (
-            <div className="bg-surface rounded-2xl p-6 border border-line">
+            <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
                 <p className="text-sm text-muted">
                     Top Threats appears after your next scan — re-scan to rank your closest same-cuisine and overall rivals.
                 </p>

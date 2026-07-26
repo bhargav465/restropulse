@@ -17,7 +17,7 @@ import ZomatoManualModal from './ZomatoManualModal';
  */
 
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-    <div className={`bg-surface rounded-2xl p-6 border border-line ${className}`}>{children}</div>
+    <div className={`bg-surface rounded-2xl p-4 sm:p-6 border border-line ${className}`}>{children}</div>
 );
 
 /** Continuous daily labels between the first and last date (reveals gap days). */
@@ -153,7 +153,7 @@ export const DailyTrendsView: React.FC<{
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Rating trend */}
             <Card>
                 <div className="flex items-center justify-between gap-2 mb-2">

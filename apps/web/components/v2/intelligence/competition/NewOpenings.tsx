@@ -21,7 +21,7 @@ export const NewOpeningsView: React.FC<{
     onAdd: (o: NewOpening) => void;
     onNavigate: (t: DeepLinkTarget) => void;
 }> = ({ openings, sinceDays, onSinceDaysChange, atCapacity, trackedPlaceIds, onAdd, onNavigate }) => (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-base font-semibold text-ink">New openings within 5 km</h3>
             <div className="inline-flex items-center gap-1 rounded-xl bg-primary-soft p-1">
@@ -42,7 +42,7 @@ export const NewOpeningsView: React.FC<{
         </div>
 
         {openings.length === 0 ? (
-            <div className="bg-surface rounded-2xl p-6 border border-line">
+            <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
                 <p className="text-sm text-muted">
                     No new openings within 5 km in the last {sinceDays} days — quiet streets are good news.
                 </p>

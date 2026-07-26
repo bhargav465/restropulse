@@ -18,7 +18,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const OpsStrip: React.FC<{ metrics: IntelligenceSelfMetrics }> = ({ metrics }) => {
     const peakMax = Math.max(1, ...metrics.peakHours.flat());
     return (
-        <div className="bg-surface rounded-2xl p-6 border border-line">
+        <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
             <div className="flex items-center gap-2 mb-4">
                 <h3 className="text-base font-semibold text-ink">Your operations</h3>
                 <ProvenanceChip provenance="measured" source="your orders" />
@@ -67,7 +67,7 @@ const Overview: React.FC<{
     metrics: IntelligenceSelfMetrics | null;
     onNavigate: (t: DeepLinkTarget) => void;
 }> = ({ report, metrics, onNavigate }) => (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
         {/* Ranking summary line (Brief 10, from the sample report). */}
         <p className="text-sm text-ink font-semibold" data-testid="ranking-summary">
             You are ranked #{report.ranking.rank}{' '}

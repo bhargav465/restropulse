@@ -219,7 +219,7 @@ export const ScanStepper: React.FC<{
 }> = ({ status, error, onRetry }) => {
     const failed = status === 'FAILED';
     return (
-        <div className="bg-surface rounded-2xl p-6 border border-line max-w-xl">
+        <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line max-w-xl">
             <h3 className="text-base font-semibold text-ink">
                 {failed ? 'Scan stopped' : status === 'COMPLETED' ? 'Scan complete' : 'Scanning your restaurant…'}
             </h3>
