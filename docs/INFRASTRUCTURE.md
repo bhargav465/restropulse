@@ -59,6 +59,9 @@ Rules:
 | SECRETS_BACKEND                  | No       | `env`                                            | `env` (process.env) or `azure-kv` (Azure Key Vault)    |
 | AZURE_KEY_VAULT_URL              | Cond.    | --                                               | Full Key Vault URL, e.g. `https://restropulse-prod-kv.vault.azure.net`. Required when `SECRETS_BACKEND=azure-kv` |
 | AZURE_KEY_VAULT_KEY_PREFIX       | No       | (none)                                           | Optional prefix prepended to all KV secret names (e.g. `dev`, `staging`) |
+| GOOGLE_MAPS_API_KEY              | No       | --                                               | Google Places API (New) for Restaurant Intelligence scans (server-side). Absent -> scan 503s gracefully |
+| ANTHROPIC_API_KEY                | No       | --                                               | Anthropic key for Restaurant Intelligence competitive analysis (haiku-4-5 classify + sonnet-4-6 analysis). Absent -> scan 503s gracefully |
+| ZOMATO_ADAPTER                   | No       | manual                                           | Restaurant Intelligence Zomato source: `manual` (merchant-entered) or `stub` |
 
 *JWT_SECRET has a dev default but must be changed in production.
 *RAZORPAY_* vars are optional in dev; service throws if called without config.
@@ -179,6 +182,8 @@ When `CURRENT_AFFAIRS_V2_ENABLED=true`:
 | Publisher       | */5 * * * *       | Asia/Kolkata  | Publish due scheduled posts       |
 | Token Refresh   | 0 2 * * *         | Asia/Kolkata  | Refresh expiring Instagram tokens |
 | Content Engine  | */2 * * * *       | Asia/Kolkata  | Process content generation queue  |
+| Intelligence (weekly) | 0 3 * * 1   | Asia/Kolkata  | `CRON_INTELLIGENCE`: re-scan, trend deltas, competitor alerts, prune to last 12 reports |
+| Intelligence (daily)  | 0 2 * * *   | Asia/Kolkata  | `CRON_INTELLIGENCE_DAILY`: daily snapshots + boot backfill (kill-switch `INTELLIGENCE_DAILY_ENABLED`) |
 
 ## External Service Dependencies
 
@@ -186,6 +191,7 @@ When `CURRENT_AFFAIRS_V2_ENABLED=true`:
 
 - **Database**: `restropulse`
 - **Collections**: users, restaurants, posts, contentStrategies, strategyCycles, accountManagers, subscriptionPlans, subscriptions, coupons, couponRedemptions, creditPurchases, creditPacks, invoices
+- **Restaurant Intelligence collections**: intelligenceScans, intelligenceReports, competitorCache (7-day TTL), intelligenceSnapshots, nearbySightings, zomatoManualEntries, events. See `docs/INTELLIGENCE_BACKEND_CHANGES.md`.
 - **Driver**: mongodb v6.12
 - **Connection**: Shared singleton via `@restropulse/db`
 

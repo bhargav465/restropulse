@@ -26,6 +26,7 @@ apps/
   api/              Express 4 REST API (port 3001)
   publisher/        Standalone cron worker (publishing + token refresh)
   content-engine/   Standalone poll worker (content generation)
+  intelligence-worker/ Standalone cron worker (Restaurant Intelligence: weekly re-scan + daily snapshots)
   db-cli/           Commander CLI for DB operations
 packages/
   shared/           @restropulse/shared -- unified TypeScript types
@@ -95,6 +96,7 @@ packages/
 - MongoDB Atlas (driver: mongodb v6.12)
 - Database name: `restropulse`
 - Collections: users, restaurants, posts, contentStrategies, strategyCycles, accountManagers, subscriptionPlans, subscriptions, coupons, couponRedemptions, creditPurchases, creditPacks, invoices
+- Restaurant Intelligence collections: intelligenceScans, intelligenceReports, competitorCache (7d TTL), intelligenceSnapshots, nearbySightings, zomatoManualEntries, events (see `docs/INTELLIGENCE_BACKEND_CHANGES.md`)
 - Document IDs: Support both ObjectId and custom string IDs (e.g., `r1` for seed data)
 - Connection: Always use `@restropulse/db` singleton -- never create separate MongoClient instances
 
@@ -196,6 +198,15 @@ When changing AI-backend code:
 - Tests use mocked external APIs (`vi.mock('ai', ...)` for Vercel AI SDK; mocked `fetch` for Replicate/Sonar/Calendar). Do not introduce real network calls.
 - The `CostEvent` type lives in `@restropulse/shared`; the `MediaJobRecord` type lives there too. Don't duplicate types in app-local files.
 - Adding a new external API surface (e.g. a new media provider): also add per-call pricing in the relevant `pricing.ts` so cost dashboards stay accurate.
+
+## Restaurant Intelligence
+
+Competitor + self analytics feature. Frontend section (`apps/web/components/v2/IntelligenceV2.tsx` + `components/intelligence/**`) is the app's home view, replacing the old Dashboard. Runs on the in-memory demo twin when `VITE_DEMO_MODE=true`, otherwise the real client hits `/api/admin/intelligence/*`.
+
+- Backend: `apps/api/src/services/intelligence/*` (scan pipeline: Google Places New + Anthropic Haiku/Sonnet analysis; snapshots/compare/scoring) behind `apps/api/src/routes/admin/intelligence.ts` (mounted `/api/admin/intelligence`, `requireAuth` + `requireRole('OWNER')`, scoped to `req.user.restaurantId`).
+- Worker: `apps/intelligence-worker` (weekly re-scan `CRON_INTELLIGENCE`; daily snapshots `CRON_INTELLIGENCE_DAILY`, kill-switch `INTELLIGENCE_DAILY_ENABLED`). Mongo-only by default.
+- Keys (optional, 503 gracefully): `GOOGLE_MAPS_API_KEY`, `ANTHROPIC_API_KEY` (Anthropic model ids are cost-optimized: haiku-4-5 classify + sonnet-4-6 analysis -- don't upgrade to Opus). `ZOMATO_ADAPTER=manual|stub`.
+- Intelligence types live in `@restropulse/shared` (`packages/shared/src/intelligence.ts`). `self-metrics` is stubbed (no Ordering system in this app). Full detail: `docs/INTELLIGENCE_BACKEND_CHANGES.md`.
 
 ## Secrets Management
 
