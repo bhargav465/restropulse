@@ -146,6 +146,25 @@ jobs:
         if: github.event_name == 'pull_request'
         run: node scripts/check-coverage.mjs @restropulse/content-engine apps/content-engine/coverage/lcov.info
 
+  test-intelligence-worker:
+    name: Test Intelligence Worker
+    needs: detect-changes
+    if: needs.detect-changes.outputs.intelligence-worker == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+
+      - name: Run tests
+        run: npx turbo test --filter=@restropulse/intelligence-worker
+        env:
+          NODE_ENV: test
+      # Coverage excluded (like publisher): src/ is worker cron wiring; the
+      # meaningful logic is covered by the 32 unit tests run above.
+
   ci-complete:
     name: CI Complete
     if: always()
@@ -157,6 +176,7 @@ jobs:
       - test-api
       - test-publisher
       - test-content-engine
+      - test-intelligence-worker
     runs-on: ubuntu-latest
     steps:
       - name: Check upstream job results
@@ -168,6 +188,7 @@ jobs:
           echo "test-api: ${{ needs.test-api.result }}"
           echo "test-publisher: ${{ needs.test-publisher.result }}"
           echo "test-content-engine: ${{ needs.test-content-engine.result }}"
+          echo "test-intelligence-worker: ${{ needs.test-intelligence-worker.result }}"
 
           # Fail if any upstream job failed (skipped is OK)
           if [[ "${{ needs.detect-changes.result }}" == "failure" ]] || \
@@ -176,7 +197,8 @@ jobs:
              [[ "${{ needs.test-web.result }}" == "failure" ]] || \
              [[ "${{ needs.test-api.result }}" == "failure" ]] || \
              [[ "${{ needs.test-publisher.result }}" == "failure" ]] || \
-             [[ "${{ needs.test-content-engine.result }}" == "failure" ]]; then
+             [[ "${{ needs.test-content-engine.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-intelligence-worker.result }}" == "failure" ]]; then
             echo "One or more upstream jobs failed."
             exit 1
           fi
