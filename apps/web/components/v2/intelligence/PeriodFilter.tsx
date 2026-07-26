@@ -34,6 +34,9 @@ const COMP_PRESETS: Array<{ id: CompetitionPreset; label: string }> = [
 
 const inputClass = 'text-xs border border-line rounded-lg px-2 py-1.5 bg-surface text-ink';
 
+// Mobile-only compact dropdown that replaces the pill group (< sm).
+const selectClass = 'sm:hidden w-full text-xs font-semibold border border-line rounded-lg px-3 py-2 bg-primary-soft text-primary-strong';
+
 interface MineProps {
     bucket: 'MINE';
     selection: MineSelection;
@@ -50,8 +53,20 @@ export const PeriodFilter: React.FC<PeriodFilterProps> = (props) => {
     if (props.bucket === 'MINE') {
         const { selection, onChange } = props;
         return (
-            <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="My Restaurant period">
-                <div className="inline-flex items-center gap-1 rounded-xl bg-primary-soft p-1">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto" role="group" aria-label="My Restaurant period">
+                {/* Mobile: compact dropdown */}
+                <select
+                    aria-label="My Restaurant period"
+                    value={selection.preset}
+                    onChange={(e) => onChange({ ...selection, preset: e.target.value as MinePreset })}
+                    className={selectClass}
+                >
+                    {MINE_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                </select>
+                {/* Desktop: pill group */}
+                <div className="hidden sm:inline-flex items-center gap-1 rounded-xl bg-primary-soft p-1">
                     {MINE_PRESETS.map((p) => (
                         <button
                             key={p.id}
@@ -79,8 +94,20 @@ export const PeriodFilter: React.FC<PeriodFilterProps> = (props) => {
 
     const { selection, onChange } = props;
     return (
-        <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Competition period">
-            <div className="inline-flex items-center gap-1 rounded-xl bg-primary-soft p-1">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto" role="group" aria-label="Competition period">
+            {/* Mobile: compact dropdown */}
+            <select
+                aria-label="Competition period"
+                value={selection.preset}
+                onChange={(e) => onChange({ ...selection, preset: e.target.value as CompetitionPreset })}
+                className={selectClass}
+            >
+                {COMP_PRESETS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+            </select>
+            {/* Desktop: pill group */}
+            <div className="hidden sm:inline-flex items-center gap-1 rounded-xl bg-primary-soft p-1">
                 {COMP_PRESETS.map((p) => (
                     <button
                         key={p.id}
