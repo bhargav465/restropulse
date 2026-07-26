@@ -53,3 +53,4 @@ export * from './invoices.js';
 export * from './archived-accounts.js';
 export * from './cost-events.js';
 export * from './media-jobs.js';
+export * from './intelligence.js';

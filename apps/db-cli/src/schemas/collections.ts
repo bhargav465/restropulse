@@ -483,4 +483,46 @@ export const COLLECTIONS: CollectionSchema[] = [
             { spec: { restaurantId: 1, archivedAt: -1 } },
         ],
     },
+    // ----- Restaurant Intelligence -----
+    {
+        name: 'intelligenceScans',
+        indexes: [
+            { spec: { restaurantId: 1, createdAt: -1 } },
+        ],
+    },
+    {
+        name: 'intelligenceReports',
+        indexes: [
+            { spec: { restaurantId: 1, generatedAt: -1 } },
+        ],
+    },
+    {
+        name: 'competitorCache',
+        indexes: [
+            { spec: { placeId: 1 }, options: { unique: true } },
+            // 7-day TTL on Places (New) results to control cost.
+            { spec: { fetchedAt: 1 }, options: { expireAfterSeconds: 7 * 24 * 60 * 60 } },
+        ],
+    },
+    {
+        name: 'intelligenceSnapshots',
+        indexes: [
+            // Unique per target x source x day makes the daily job an idempotent upsert.
+            { spec: { restaurantId: 1, targetPlaceId: 1, source: 1, date: 1 }, options: { unique: true } },
+            { spec: { restaurantId: 1, date: -1 } },
+        ],
+    },
+    {
+        name: 'nearbySightings',
+        indexes: [
+            { spec: { restaurantId: 1, placeId: 1 }, options: { unique: true } },
+            { spec: { restaurantId: 1, firstSeenAt: -1 } },
+        ],
+    },
+    {
+        name: 'zomatoManualEntries',
+        indexes: [
+            { spec: { restaurantId: 1, targetPlaceId: 1, date: -1 } },
+        ],
+    },
 ];
