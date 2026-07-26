@@ -207,6 +207,7 @@ export async function getBaseRestaurantDetails(
     name: string,
     city: string,
     placeId?: string,
+    selfLocation?: { lat: number; lng: number },
 ): Promise<BaseRestaurant | null> {
     // Brief 10: when the owner confirmed their restaurant in the place picker, we
     // already know the placeId — skip text-search disambiguation entirely and go
@@ -216,8 +217,23 @@ export async function getBaseRestaurantDetails(
     if (placeId && placeId.trim()) {
         resolvedPlaceId = placeId.trim();
     } else {
+        // Prefer the restaurant's own coordinates (from onboarding) to disambiguate:
+        // search the name biased to that location, which is far more reliable than a
+        // free-text "name, city" query when `city` is a messy/verbose address.
+        const searchBody: Record<string, unknown> = selfLocation
+            ? {
+                textQuery: name,
+                pageSize: 1,
+                locationBias: {
+                    circle: {
+                        center: { latitude: selfLocation.lat, longitude: selfLocation.lng },
+                        radius: 1000.0,
+                    },
+                },
+            }
+            : { textQuery: `${name}, ${city}`, pageSize: 1 };
         const findData = await placesTextSearch(
-            { textQuery: `${name}, ${city}`, pageSize: 1 },
+            searchBody,
             'places.id,places.displayName,places.rating,places.userRatingCount,places.location',
         ).catch(() => null);
         found = findData?.places?.[0];

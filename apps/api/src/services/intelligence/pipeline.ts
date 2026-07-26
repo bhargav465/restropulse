@@ -51,16 +51,17 @@ function compact(rows: Array<{ name: string; rating: number; totalRatings: numbe
  */
 export async function runScanPipeline(
     scanId: string,
-    query: { name: string; city: string; placeId?: string },
+    query: { name: string; city: string; placeId?: string; selfLocation?: { lat: number; lng: number } },
 ): Promise<void> {
     try {
         // ---- FETCHING_PLACES ----
         await setStatus(scanId, 'FETCHING_PLACES');
-        // Brief 10: a confirmed placeId skips text-search disambiguation.
-        const base = await getBaseRestaurantDetails(query.name, query.city, query.placeId);
+        // A confirmed placeId skips text search; otherwise we bias the search to the
+        // restaurant's own coordinates when we have them (more reliable than name+city).
+        const base = await getBaseRestaurantDetails(query.name, query.city, query.placeId, query.selfLocation);
         if (!base) {
             throw new StageError(
-                `Could not find "${query.name}" in ${query.city} on Google. Check the name and city and try again.`,
+                `Could not find "${query.name}" on Google near your saved location. Check your restaurant name and address in your profile, then try again.`,
                 502,
                 'FETCHING_PLACES',
             );

@@ -127,9 +127,22 @@ router.post('/scan', handle(async (req: Request, res: Response<ApiResponse<{ sca
     };
     await getIntelligenceScansCollection().insertOne(scan as unknown as Record<string, unknown>);
 
+    // Bias the Places search to the restaurant's own coordinates (from onboarding)
+    // when available -- far more reliable than matching a free-text name + city.
+    const loc = restaurant?.location;
+    const selfLocation =
+        loc && typeof loc.lat === 'number' && typeof loc.lng === 'number'
+            ? { lat: loc.lat, lng: loc.lng }
+            : undefined;
+
     // Fire-and-forget: the pipeline writes status to the scan doc; the response
     // does not wait on it. runScanPipeline never throws (writes FAILED itself).
-    void runScanPipeline(scanId, { name: scanName, city: scanCity, ...(scanPlaceId ? { placeId: scanPlaceId } : {}) });
+    void runScanPipeline(scanId, {
+        name: scanName,
+        city: scanCity,
+        ...(scanPlaceId ? { placeId: scanPlaceId } : {}),
+        ...(selfLocation ? { selfLocation } : {}),
+    });
 
     log.info({ scanId, restaurantId: rid }, 'Intelligence scan queued');
     res.status(202).json({ success: true, data: { scanId } });
