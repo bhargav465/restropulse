@@ -85,8 +85,8 @@ const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkT
                 </div>
             </Card>
 
-            {/* Threats vs opportunities */}
-            <div className="grid md:grid-cols-2 gap-4">
+            {/* Threats vs opportunities -- also surfaced in the Competition bucket; hidden on mobile. */}
+            <div className="hidden sm:grid md:grid-cols-2 gap-4">
                 <div className="bg-surface rounded-2xl p-6 border border-line border-l-[3px] border-l-danger">
                     <h3 className="text-sm font-semibold text-ink">Immediate threats</h3>
                     <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.immediateThreats}</p>

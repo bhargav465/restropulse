@@ -15,7 +15,13 @@ interface IntelligenceProps {
  * in-memory demo twin in P1; the real backend client arrives in P2.
  */
 const Intelligence: React.FC<IntelligenceProps> = ({ restaurant, onNavigate }) => {
-  return <IntelligenceV2 restaurantData={restaurant} onNavigate={onNavigate} />;
+  // Mobile horizontal gutter so cards don't touch the viewport edges. Layout
+  // supplies desktop gutters (lg:px-6), so we drop ours at lg to avoid doubling.
+  return (
+    <div className="px-4 pt-4 lg:px-0 lg:pt-0">
+      <IntelligenceV2 restaurantData={restaurant} onNavigate={onNavigate} />
+    </div>
+  );
 };
 
 export default Intelligence;

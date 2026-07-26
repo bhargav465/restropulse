@@ -93,7 +93,7 @@ const RevenueCard: React.FC<{ report: IntelligenceReport }> = ({ report }) => {
                 <Metric label="Extra revenue / year" value={inr(extraPerYear)} />
             </div>
 
-            <p className="text-[11px] text-sidebar-ink mt-3 leading-relaxed">
+            <p className="text-[11px] text-sidebar-ink mt-3 leading-relaxed hidden sm:block">
                 Assumes {guests.toLocaleString('en-IN')} guests/month × {Math.round(UPLIFT_PCT * 100)}% uplift ×{' '}
                 {inr(avgSpend)} average spend. Default guests = review count × 2, capped {GUESTS_MIN.toLocaleString('en-IN')}–
                 {GUESTS_MAX.toLocaleString('en-IN')}. Edit the inputs to match your numbers.

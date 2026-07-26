@@ -189,8 +189,8 @@ export const DailyTrendsView: React.FC<{
                 </Card>
             )}
 
-            {/* Photo small-multiples */}
-            <Card>
+            {/* Photo small-multiples -- secondary trend, hidden on mobile. */}
+            <Card className="hidden sm:block">
                 <div className="flex items-center justify-between gap-2 mb-2">
                     <h3 className="text-base font-semibold text-ink">Photos</h3>
                     <ProvenanceChip provenance="measured" source="Google" />
@@ -212,9 +212,9 @@ export const DailyTrendsView: React.FC<{
                 )}
             </Card>
 
-            {/* SEO sparkline */}
+            {/* SEO sparkline -- secondary trend, hidden on mobile. */}
             {seoHasData && (
-                <Card>
+                <Card className="hidden sm:block">
                     <div className="flex items-center justify-between gap-2 mb-2">
                         <h3 className="text-base font-semibold text-ink">SEO score</h3>
                         <ProvenanceChip provenance="computed" />
@@ -223,8 +223,8 @@ export const DailyTrendsView: React.FC<{
                 </Card>
             )}
 
-            {/* Computed metric chips */}
-            <Card>
+            {/* Computed metric chips -- derived numbers, hidden on mobile. */}
+            <Card className="hidden sm:block">
                 <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="text-base font-semibold text-ink">Computed metrics</h3>
                     <ProvenanceChip provenance="computed" />

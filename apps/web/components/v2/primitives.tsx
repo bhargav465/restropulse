@@ -254,6 +254,8 @@ export const ActionCard: React.FC<ActionCardProps> = ({ emoji, title, descriptio
 export interface SubNavTab<T extends string> {
     id: T;
     label: string;
+    /** Optional shorter label shown on mobile (< sm) to keep the tab row on one line. */
+    shortLabel?: string;
     /** Retained for API compatibility; no longer rendered (declutter §3.1/§3.2). */
     emoji?: string;
 }
@@ -284,7 +286,9 @@ export function SubNav<T extends string>({ tabs, active, onChange, label }: SubN
                                 : 'border-transparent text-muted hover:text-ink'
                         }`}
                     >
-                        {t.label}
+                        {/* Short label on mobile, full label on sm+ */}
+                        <span className="sm:hidden">{t.shortLabel ?? t.label}</span>
+                        <span className="hidden sm:inline">{t.label}</span>
                     </button>
                 );
             })}

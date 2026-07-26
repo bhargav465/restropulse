@@ -210,16 +210,16 @@ const IntelligenceV2: React.FC<IntelligenceV2Props> = ({ restaurantData, onNavig
 
     const mineTabs: Array<SubNavTab<MineTab>> = [
         { id: 'OVERVIEW', label: 'Overview' },
-        { id: 'TRENDS', label: 'Daily Trends' },
-        { id: 'FEEDBACK', label: 'Feedback Changes' },
-        { id: 'SEARCH', label: 'Search & SEO' },
+        { id: 'TRENDS', label: 'Daily Trends', shortLabel: 'Trends' },
+        { id: 'FEEDBACK', label: 'Feedback Changes', shortLabel: 'Feedback' },
+        { id: 'SEARCH', label: 'Search & SEO', shortLabel: 'SEO' },
     ];
     const compTabs: Array<SubNavTab<CompTab>> = [
-        { id: 'THREATS', label: 'Top Threats' },
+        { id: 'THREATS', label: 'Top Threats', shortLabel: 'Threats' },
         { id: 'WATCHLIST', label: 'Watchlist' },
         { id: 'COMPARE', label: 'Compare' },
-        { id: 'BEAT', label: 'Where They Beat You' },
-        { id: 'OPENINGS', label: 'New Openings' },
+        { id: 'BEAT', label: 'Where They Beat You', shortLabel: 'Gaps' },
+        { id: 'OPENINGS', label: 'New Openings', shortLabel: 'New' },
     ];
 
     const minePeriod = mineQuery(mineSel);
