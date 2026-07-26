@@ -1,6 +1,10 @@
 import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags, Platform } from '@restropulse/shared';
-import type { SnapshotSource, SnapshotReview, ReviewTheme, WatchlistEntry } from '@restropulse/shared';
+import type {
+    SnapshotSource, SnapshotReview, ReviewTheme, WatchlistEntry,
+    IntelligenceScan, IntelligenceReport, IntelligenceReportSummary, IntelligenceSelfMetrics, CompareRow,
+} from '@restropulse/shared';
 import { intelligenceAPI as demoIntelligenceAPI } from './demo-api-intelligence';
+import { isDemoMode } from './lib/demo';
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { getApiUrl } from './utils/env';
 
@@ -669,6 +673,94 @@ export interface ZomatoManualInput {
     photoCount: number;
 }
 
-// P1: demo twin only (in-memory sample fixtures, zero backend).
-// P2 will introduce the real fetch-backed client + an isDemoMode() swap.
-export const intelligenceAPI = demoIntelligenceAPI;
+// Real fetch-backed client -> /api/admin/intelligence (OWNER-scoped).
+const realIntelligenceAPI = {
+    startScan: async (body: { name?: string; city?: string; force?: boolean; placeId?: string }): Promise<{ scanId: string }> => {
+        const res = await fetchAPI<ApiResponse<{ scanId: string }>>('/admin/intelligence/scan', {
+            method: 'POST', body: JSON.stringify(body),
+        });
+        return res.data!;
+    },
+    getScan: async (scanId: string): Promise<IntelligenceScan> => {
+        const res = await fetchAPI<ApiResponse<IntelligenceScan>>(`/admin/intelligence/scan/${scanId}`);
+        return res.data!;
+    },
+    getReports: async (): Promise<IntelligenceReportSummary[]> => {
+        const res = await fetchAPI<ApiResponse<IntelligenceReportSummary[]>>('/admin/intelligence/reports');
+        return res.data ?? [];
+    },
+    getReport: async (reportId: string): Promise<IntelligenceReport> => {
+        const res = await fetchAPI<ApiResponse<IntelligenceReport>>(`/admin/intelligence/reports/${reportId}`);
+        return res.data!;
+    },
+    getLatestReport: async (): Promise<IntelligenceReport | null> => {
+        const res = await fetchAPI<ApiResponse<IntelligenceReport | null>>('/admin/intelligence/reports/latest');
+        return res.data ?? null;
+    },
+    getSelfMetrics: async (): Promise<IntelligenceSelfMetrics> => {
+        const res = await fetchAPI<ApiResponse<IntelligenceSelfMetrics>>('/admin/intelligence/self-metrics');
+        return res.data!;
+    },
+    getWatchlist: async (): Promise<WatchlistResponse> => {
+        const res = await fetchAPI<ApiResponse<WatchlistResponse>>('/admin/intelligence/watchlist');
+        return res.data!;
+    },
+    putWatchlist: async (entries: WatchlistInput[]): Promise<WatchlistResponse> => {
+        const res = await fetchAPI<ApiResponse<WatchlistResponse>>('/admin/intelligence/watchlist', {
+            method: 'PUT', body: JSON.stringify({ entries }),
+        });
+        return res.data!;
+    },
+    getSnapshots: async (query: SnapshotQuery): Promise<SnapshotSeriesResponse> => {
+        const params = new URLSearchParams();
+        if (query.target) params.set('target', query.target);
+        if (query.source) params.set('source', query.source);
+        params.set('granularity', query.granularity);
+        if (query.from) params.set('from', query.from);
+        if (query.to) params.set('to', query.to);
+        const res = await fetchAPI<ApiResponse<SnapshotSeriesResponse>>(`/admin/intelligence/snapshots?${params}`);
+        return res.data!;
+    },
+    getFeedbackChanges: async (query: { from?: string; to?: string } = {}): Promise<{ days: FeedbackDay[] }> => {
+        const params = new URLSearchParams();
+        if (query.from) params.set('from', query.from);
+        if (query.to) params.set('to', query.to);
+        const qs = params.toString();
+        const res = await fetchAPI<ApiResponse<{ days: FeedbackDay[] }>>(`/admin/intelligence/feedback-changes${qs ? `?${qs}` : ''}`);
+        return res.data ?? { days: [] };
+    },
+    getCompare: async (query: CompareQuery): Promise<CompareRow[]> => {
+        const params = new URLSearchParams({ granularity: query.granularity });
+        if (query.granularity === 'day' && query.date) params.set('date', query.date);
+        if (query.granularity === 'month' && query.month) params.set('month', query.month);
+        const res = await fetchAPI<ApiResponse<CompareRow[]>>(`/admin/intelligence/compare?${params}`);
+        return res.data ?? [];
+    },
+    getNewOpenings: async (query: { sinceDays?: 30 | 60 | 90; radiusKm?: number } = {}): Promise<NewOpening[]> => {
+        const params = new URLSearchParams();
+        if (query.sinceDays) params.set('sinceDays', String(query.sinceDays));
+        if (query.radiusKm) params.set('radiusKm', String(query.radiusKm));
+        const qs = params.toString();
+        const res = await fetchAPI<ApiResponse<NewOpening[]>>(`/admin/intelligence/new-openings${qs ? `?${qs}` : ''}`);
+        return res.data ?? [];
+    },
+    postZomatoManual: async (body: ZomatoManualInput): Promise<{ snapshotWritten: boolean }> => {
+        const res = await fetchAPI<ApiResponse<{ snapshotWritten: boolean }>>('/admin/intelligence/zomato-manual', {
+            method: 'POST', body: JSON.stringify(body),
+        });
+        return res.data!;
+    },
+    captureNow: async (): Promise<{ captured: number }> => {
+        const res = await fetchAPI<ApiResponse<{ captured: number }>>('/admin/intelligence/snapshots/capture', {
+            method: 'POST',
+        });
+        return res.data!;
+    },
+};
+
+// Demo twin (VITE_DEMO_MODE=true) swaps in the in-memory fixtures; otherwise the
+// real /api/admin/intelligence client is used. `typeof realIntelligenceAPI`
+// forces the demo twin to expose an identical surface.
+export const intelligenceAPI: typeof realIntelligenceAPI = isDemoMode()
+    ? (demoIntelligenceAPI as typeof realIntelligenceAPI)
+    : realIntelligenceAPI;
