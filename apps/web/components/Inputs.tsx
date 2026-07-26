@@ -4,6 +4,7 @@ import { Restaurant } from '@restropulse/shared';
 import { restaurantAPI } from '../api';
 import { ActionNotice } from './ActionNotice';
 import ConfirmDialog from './ConfirmDialog';
+import PageContainer from './ui/PageContainer';
 
 interface InputsProps {
     restaurantData: Restaurant;
@@ -166,7 +167,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
     const menuUpdated = restaurantData.menuLastUpdated;
 
     return (
-        <div className="p-4 space-y-8">
+        <PageContainer max="wide" className="py-4 space-y-8">
             {notice && (
                 <ActionNotice
                     message={notice.message}
@@ -179,7 +180,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                 <p className="text-slate-500 text-sm font-medium">Keep your AI content engine smart by sharing the latest updates from your restaurant.</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 <ActionButton
                     id="offers"
                     title="Upcoming Offers"
@@ -421,7 +422,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                 </Modal>
             )}
 
-        </div>
+        </PageContainer>
     );
 };
 

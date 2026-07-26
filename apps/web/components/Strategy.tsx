@@ -8,6 +8,7 @@ import {
     isCyclePastApprovalDeadline,
 } from '@restropulse/shared';
 import { ActionNotice } from './ActionNotice';
+import PageContainer from './ui/PageContainer';
 
 function formatBillingRange(startDate?: string, endDate?: string): string | null {
     if (!startDate || !endDate) return null;
@@ -346,7 +347,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     }
 
     return (
-        <div className="p-4 space-y-8">
+        <PageContainer max="wide" className="py-4 space-y-8">
             {instagramEnabled && !instagramConnected && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
                     <p className="text-xs text-amber-800 font-medium">Connect Instagram to approve strategies and start publishing.</p>
@@ -365,58 +366,60 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 />
             )}
 
-            {/* Pending Action Section */}
-            {pendingCycle && (
-                <div className="animate-in slide-in-from-top duration-500">
-                    <div className="flex items-center gap-2 mb-3 px-1">
-                        <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                        <h2 className="text-sm font-bold text-orange-600 uppercase tracking-widest">Action Required</h2>
-                    </div>
-                    <StrategyCard cycle={pendingCycle} isActionable={true} />
-                </div>
-            )}
-
-            {/* Approved / Upcoming Section */}
-            {approvedCycle && (
-                <div className="animate-in slide-in-from-top duration-500">
-                    <div className="flex items-center gap-2 mb-3 px-1">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        <h2 className="text-sm font-bold text-blue-600 uppercase tracking-widest">Upcoming Strategy</h2>
-                    </div>
-                    <StrategyCard cycle={approvedCycle} isActionable={false} />
-                </div>
-            )}
-
-            {!pendingCycle && !approvedCycle && !activeCycle && (
-                suggestCreateCycle ? (
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-3xl border border-blue-100 text-center">
-                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-blue-600">
-                            <Zap size={24} />
+            <div className="space-y-8 lg:grid lg:grid-cols-2 lg:gap-5 lg:space-y-0 lg:items-start">
+                {/* Pending Action Section */}
+                {pendingCycle && (
+                    <div className="animate-in slide-in-from-top duration-500">
+                        <div className="flex items-center gap-2 mb-3 px-1">
+                            <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                            <h2 className="text-sm font-bold text-orange-600 uppercase tracking-widest">Action Required</h2>
                         </div>
-                        <h3 className="font-bold text-blue-900">Setting Up Your Strategy</h3>
-                        <p className="text-xs text-blue-700 mt-1">Your first content strategy is being prepared. It will appear here shortly.</p>
+                        <StrategyCard cycle={pendingCycle} isActionable={true} />
                     </div>
-                ) : (
-                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-3xl border border-green-100 text-center">
-                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-green-600">
-                            <CheckCircle size={24} />
-                        </div>
-                        <h3 className="font-bold text-green-900">All Caught Up!</h3>
-                        <p className="text-xs text-green-700 mt-1">Your next strategy cycle will be created when your billing period begins.</p>
-                    </div>
-                )
-            )}
+                )}
 
-            {/* Active Strategy Section */}
-            {activeCycle && (
-                <div>
-                    <div className="flex items-center gap-2 mb-3 px-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Active Cycle</h2>
+                {/* Approved / Upcoming Section */}
+                {approvedCycle && (
+                    <div className="animate-in slide-in-from-top duration-500">
+                        <div className="flex items-center gap-2 mb-3 px-1">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <h2 className="text-sm font-bold text-blue-600 uppercase tracking-widest">Upcoming Strategy</h2>
+                        </div>
+                        <StrategyCard cycle={approvedCycle} isActionable={false} />
                     </div>
-                    <StrategyCard cycle={activeCycle} isActionable={false} />
-                </div>
-            )}
+                )}
+
+                {!pendingCycle && !approvedCycle && !activeCycle && (
+                    suggestCreateCycle ? (
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-3xl border border-blue-100 text-center">
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-blue-600">
+                                <Zap size={24} />
+                            </div>
+                            <h3 className="font-bold text-blue-900">Setting Up Your Strategy</h3>
+                            <p className="text-xs text-blue-700 mt-1">Your first content strategy is being prepared. It will appear here shortly.</p>
+                        </div>
+                    ) : (
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-3xl border border-green-100 text-center">
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-green-600">
+                                <CheckCircle size={24} />
+                            </div>
+                            <h3 className="font-bold text-green-900">All Caught Up!</h3>
+                            <p className="text-xs text-green-700 mt-1">Your next strategy cycle will be created when your billing period begins.</p>
+                        </div>
+                    )
+                )}
+
+                {/* Active Strategy Section */}
+                {activeCycle && (
+                    <div>
+                        <div className="flex items-center gap-2 mb-3 px-1">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Active Cycle</h2>
+                        </div>
+                        <StrategyCard cycle={activeCycle} isActionable={false} />
+                    </div>
+                )}
+            </div>
 
             <div className="h-10"></div>
 
@@ -501,7 +504,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 </div>
             )}
 
-        </div>
+        </PageContainer>
     );
 };
 
