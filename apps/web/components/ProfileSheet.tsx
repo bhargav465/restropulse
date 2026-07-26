@@ -1360,20 +1360,13 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
 
     return (
         <>
-            {/* Desktop-only dim backdrop over the main content (not the sidebar,
-                which starts at left-0 and stays clickable). Click to close. */}
+            {/* Full-page on mobile; in-shell settings page on desktop -- fills the
+                main content area beside the sidebar (starts at lg:left-64), no dim,
+                sidebar stays visible with Account highlighted. */}
             <div
-                className="hidden lg:block fixed inset-0 lg:left-64 z-40 bg-slate-900/40 backdrop-blur-sm animate-in fade-in"
-                aria-hidden="true"
-                onClick={onClose}
-            />
-
-            {/* Full-page on mobile; right-side slide-over drawer on desktop */}
-            <div
-                role="dialog"
-                aria-modal="true"
+                role="region"
                 aria-label="Account"
-                className="fixed inset-0 z-50 bg-white animate-in slide-in-from-right duration-300 overflow-y-auto no-scrollbar lg:inset-y-0 lg:right-0 lg:left-auto lg:w-[34rem] lg:shadow-2xl lg:border-l lg:border-slate-200"
+                className="fixed inset-0 z-40 bg-white animate-in slide-in-from-right duration-300 overflow-y-auto no-scrollbar lg:left-64"
                 onTouchStart={(e) => {
                     if (!isEditingProfile && !isSubscriptionOpen && !showInstagramErrorModal && !showAccountPicker && !showSetupGuide) {
                         setSwipeStartX(e.touches[0].clientX);
@@ -1404,7 +1397,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     </button>
                 </div>
 
-                <div className="p-6 space-y-6">
+                <div className="p-6 space-y-6 lg:max-w-3xl">
                     {/* Header: avatar + name */}
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center shrink-0">
