@@ -49,36 +49,64 @@ const ActionPlanCard: React.FC<{ item: ActionPlanItem; onNavigate: (t: DeepLinkT
     );
 };
 
+/** Chevron shown only on mobile (sm:hidden) for the collapsible section headers. */
+const Chevron: React.FC<{ open: boolean }> = ({ open }) => (
+    <span className={`sm:hidden text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 9l6 6 6-6" />
+        </svg>
+    </span>
+);
+
 const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkTarget) => void }> = ({ report, onNavigate }) => {
     const { narrative } = report;
     const [verdictOpen, setVerdictOpen] = useState(false);
+    // Mobile collapsible verbose sections (always fully shown on sm+).
+    const [headlineOpen, setHeadlineOpen] = useState(false); // collapsed by default on mobile
+    const [actionOpen, setActionOpen] = useState(true);      // expanded by default (core value)
 
     return (
         <div className="space-y-6">
-            {/* Narrative + key findings — one card, no bullets-of-bullets */}
+            {/* Narrative + key findings — collapsible on mobile (collapsed by default). */}
             <Card>
-                <h3 className="text-base font-semibold text-ink">The headline</h3>
-                <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.overview}</p>
-                <div className="mt-4 border-t border-line pt-4">
-                    <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Key findings</p>
-                    <ul className="space-y-2">
-                        {narrative.keyFindings.map((f, i) => (
-                            <li key={i} className="flex items-start gap-2.5 text-sm text-ink">
-                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />
-                                <span className="leading-relaxed">{f}</span>
-                            </li>
-                        ))}
-                    </ul>
+                <button
+                    type="button"
+                    onClick={() => setHeadlineOpen((o) => !o)}
+                    aria-expanded={headlineOpen}
+                    className="w-full flex items-center justify-between gap-3 text-left sm:pointer-events-none"
+                >
+                    <h3 className="text-base font-semibold text-ink">The headline</h3>
+                    <Chevron open={headlineOpen} />
+                </button>
+                <div className={headlineOpen ? 'block' : 'hidden sm:block'}>
+                    <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.overview}</p>
+                    <div className="mt-4 border-t border-line pt-4">
+                        <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Key findings</p>
+                        <ul className="space-y-2">
+                            {narrative.keyFindings.map((f, i) => (
+                                <li key={i} className="flex items-start gap-2.5 text-sm text-ink">
+                                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />
+                                    <span className="leading-relaxed">{f}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 </div>
             </Card>
 
-            {/* Action plan — the loop Owner cannot close */}
+            {/* Action plan — collapsible on mobile (expanded by default; it's the core CTA). */}
             <Card>
-                <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <button
+                    type="button"
+                    onClick={() => setActionOpen((o) => !o)}
+                    aria-expanded={actionOpen}
+                    className="w-full flex items-center justify-between gap-3 text-left sm:pointer-events-none mb-0 sm:mb-4"
+                >
                     <h3 className="text-base font-semibold text-ink">Your action plan</h3>
-                    <span className="text-xs text-muted">Prioritized · act inside RestroPulse</span>
-                </div>
-                <div className="grid gap-3">
+                    <span className="hidden sm:inline text-xs text-muted">Prioritized · act inside RestroPulse</span>
+                    <Chevron open={actionOpen} />
+                </button>
+                <div className={`${actionOpen ? 'grid' : 'hidden sm:grid'} gap-3 mt-4 sm:mt-0`}>
                     {narrative.actionPlan.map((item) => (
                         <ActionPlanCard key={item.priority} item={item} onNavigate={onNavigate} />
                     ))}
