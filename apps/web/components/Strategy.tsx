@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Clock, CalendarCheck, Zap, ChevronRight, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar, Lock } from 'lucide-react';
+import { Target, Clock, CalendarCheck, Zap, ChevronRight, ChevronDown, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar, Lock } from 'lucide-react';
 import { strategyAPI } from '../api';
 import {
     StrategyCycle,
@@ -46,6 +46,12 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     const [suggestCreateCycle, setSuggestCreateCycle] = useState(false);
     const [notice, setNotice] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
     const [now, setNow] = useState(() => new Date());
+    // Mobile-only expand toggles, keyed by cycle id. Held in the parent because
+    // StrategyCard is re-created (and remounted) on every `now` tick, which would
+    // reset any state held inside it.
+    const [expanded, setExpanded] = useState<Record<string, { schedule?: boolean; summary?: boolean }>>({});
+    const toggleExpanded = (id: string, key: 'schedule' | 'summary') =>
+        setExpanded(prev => ({ ...prev, [id]: { ...prev[id], [key]: !prev[id]?.[key] } }));
 
     // Tick proportionally to the buffer: 1/12 of buffer, capped 10 s–60 s.
     useEffect(() => {
@@ -197,6 +203,12 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
         const cycleBufferHours = (cycleApprovalBufferMins ?? 4320) / 60;
         const deadline = isPendingReview ? computeCycleApprovalDeadline(cycle, cycleBufferHours) : null;
         const feedbackLocked = isPendingReview && isCyclePastApprovalDeadline(cycle, now, cycleBufferHours);
+        // plannedSchedule added to StrategyCycle in packages/shared -- cast until types propagate.
+        const plannedSchedule = (cycle as any).plannedSchedule as Array<{ scheduledFor: string; category: string; postType: string }> | undefined;
+        const hasSchedule = !!plannedSchedule?.length;
+        const scheduleOpen = !!expanded[cycle.id]?.schedule;
+        const summaryOpen = !!expanded[cycle.id]?.summary;
+        const totalPlanned = cycle.plannedPosts.reduce((acc, curr) => acc + curr.count, 0);
 
         return (
             <div className={`rounded-3xl p-6 shadow-sm border relative overflow-hidden ${isActionable ? 'bg-white border-orange-100 shadow-md' : 'bg-slate-50 border-slate-200'}`}>
@@ -204,10 +216,10 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 {/* Status Badge */}
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex flex-col">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Billing Period</span>
+                        <span className="hidden sm:block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Billing Period</span>
                         <h3 className="text-lg font-bold text-slate-800">{cycle.period}</h3>
                         {formatBillingRange(cycle.startDate, cycle.endDate) && (
-                            <span className="text-[11px] text-slate-500 mt-0.5">
+                            <span className="hidden sm:block text-[11px] text-slate-500 mt-0.5">
                                 {formatBillingRange(cycle.startDate, cycle.endDate)}
                             </span>
                         )}
@@ -230,73 +242,115 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
                 <div className="space-y-5">
                     <div>
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Executive Summary</h4>
-                        <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                        <p className={`text-sm text-slate-700 leading-relaxed font-medium max-w-3xl ${summaryOpen ? '' : 'line-clamp-3'} sm:line-clamp-none`}>
                             {cycle.summary}
                         </p>
+                        <button
+                            onClick={() => toggleExpanded(cycle.id, 'summary')}
+                            className="sm:hidden mt-1 text-xs font-bold text-orange-600"
+                        >
+                            {summaryOpen ? 'Show less' : 'Show more'}
+                        </button>
                     </div>
 
-                    <div className="bg-slate-100/50 rounded-2xl p-4 border border-slate-100">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-                            <Target size={14} /> Planned Content Mix
-                        </h4>
-                        <div className="space-y-3">
-                            {cycle.plannedPosts.map((post, idx) => (
-                                <div key={idx} className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600 font-medium">{post.category}</span>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full ${idx % 2 === 0 ? 'bg-orange-400' : 'bg-blue-400'}`}
-                                                style={{ width: `${Math.min((post.count / 8) * 100, 100)}%` }}
-                                            ></div>
+                    {/* Content Mix + Schedule: single column on mobile/tablet, two
+                        columns side-by-side on desktop when a schedule exists. */}
+                    <div className={hasSchedule ? 'grid gap-5 lg:grid-cols-2 items-start' : ''}>
+                        <div>
+                            {/* Full bars -- tablet/desktop */}
+                            <div className="hidden sm:block bg-slate-100/50 rounded-2xl p-4 border border-slate-100">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                    <Target size={14} /> Planned Content Mix
+                                </h4>
+                                <div className="space-y-3">
+                                    {cycle.plannedPosts.map((post, idx) => (
+                                        <div key={idx} className="flex items-center justify-between text-sm">
+                                            <span className="text-slate-600 font-medium">{post.category}</span>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full ${idx % 2 === 0 ? 'bg-orange-400' : 'bg-blue-400'}`}
+                                                        style={{ width: `${Math.min((post.count / 8) * 100, 100)}%` }}
+                                                    ></div>
+                                                </div>
+                                                <span className="font-bold text-slate-800 w-4 text-right">{post.count}</span>
+                                            </div>
                                         </div>
-                                        <span className="font-bold text-slate-800 w-4 text-right">{post.count}</span>
+                                    ))}
+                                    <div className="pt-2 mt-2 border-t border-slate-200 flex justify-between items-center text-xs font-bold text-slate-500">
+                                        <span>Total Planned Posts</span>
+                                        <span>{totalPlanned}</span>
                                     </div>
                                 </div>
-                            ))}
-                            <div className="pt-2 mt-2 border-t border-slate-200 flex justify-between items-center text-xs font-bold text-slate-500">
-                                <span>Total Planned Posts</span>
-                                <span>{cycle.plannedPosts.reduce((acc, curr) => acc + curr.count, 0)}</span>
+                            </div>
+                            {/* Compact chips -- mobile */}
+                            <div className="sm:hidden bg-slate-100/50 rounded-2xl p-4 border border-slate-100">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                                    <Target size={14} /> Planned Content Mix
+                                </h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {cycle.plannedPosts.map((post, idx) => (
+                                        <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-200 text-xs font-medium text-slate-600">
+                                            {post.category}
+                                            <span className="font-bold text-slate-800">{post.count}</span>
+                                        </span>
+                                    ))}
+                                </div>
+                                <div className="pt-3 mt-3 border-t border-slate-200 flex justify-between items-center text-xs font-bold text-slate-500">
+                                    <span>Total Planned Posts</span>
+                                    <span>{totalPlanned}</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Planned Schedule */}
-                    {/* plannedSchedule added to StrategyCycle in packages/shared -- type will be available after merge */}
-                    {((cycle as any).plannedSchedule as Array<{ scheduledFor: string; category: string; postType: string }> | undefined)?.length ? (
-                        <div className="bg-slate-100/50 rounded-2xl p-4 border border-slate-100">
-                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-                                <Calendar size={14} /> Planned Schedule
-                            </h4>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-xs">
-                                    <thead>
-                                        <tr className="border-b border-slate-200">
-                                            <th className="text-left pb-2 pr-3 font-bold text-slate-400 w-6">#</th>
-                                            <th className="text-left pb-2 pr-3 font-bold text-slate-400">Archetype</th>
-                                            <th className="text-left pb-2 pr-3 font-bold text-slate-400">Type</th>
-                                            <th className="text-left pb-2 font-bold text-slate-400">Scheduled For</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {((cycle as any).plannedSchedule as Array<{ scheduledFor: string; category: string; postType: string }>).map((slot, idx) => {
-                                            const date = new Date(slot.scheduledFor);
-                                            const datePart = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                                            const timePart = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-                                            return (
-                                                <tr key={idx} className="border-b border-slate-100 last:border-0">
-                                                    <td className="py-2 pr-3 text-slate-400 font-medium">{idx + 1}</td>
-                                                    <td className="py-2 pr-3 text-slate-700 font-medium">{slot.category}</td>
-                                                    <td className="py-2 pr-3 text-slate-600">{slot.postType}</td>
-                                                    <td className="py-2 text-slate-600">{datePart} &bull; {timePart}</td>
+                        {/* Planned Schedule -- collapsible on mobile, always shown on sm+ */}
+                        {hasSchedule && (
+                            <div className="bg-slate-100/50 rounded-2xl p-4 border border-slate-100">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wide flex items-center gap-2">
+                                        <Calendar size={14} /> Planned Schedule
+                                    </h4>
+                                    <button
+                                        onClick={() => toggleExpanded(cycle.id, 'schedule')}
+                                        aria-expanded={scheduleOpen}
+                                        className="sm:hidden inline-flex items-center gap-1 text-xs font-bold text-orange-600"
+                                    >
+                                        {scheduleOpen ? 'Hide' : 'Show'}
+                                        <ChevronDown size={14} className={`transition-transform ${scheduleOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                </div>
+                                <div className={`${scheduleOpen ? 'block' : 'hidden'} sm:block`}>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs">
+                                            <thead>
+                                                <tr className="border-b border-slate-200">
+                                                    <th className="text-left pb-2 pr-3 font-bold text-slate-400 w-6">#</th>
+                                                    <th className="text-left pb-2 pr-3 font-bold text-slate-400">Archetype</th>
+                                                    <th className="text-left pb-2 pr-3 font-bold text-slate-400">Type</th>
+                                                    <th className="text-left pb-2 font-bold text-slate-400">Scheduled For</th>
                                                 </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
+                                            </thead>
+                                            <tbody>
+                                                {plannedSchedule!.map((slot, idx) => {
+                                                    const date = new Date(slot.scheduledFor);
+                                                    const datePart = date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                                                    const timePart = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+                                                    return (
+                                                        <tr key={idx} className="border-b border-slate-100 last:border-0">
+                                                            <td className="py-2 pr-3 text-slate-400 font-medium">{idx + 1}</td>
+                                                            <td className="py-2 pr-3 text-slate-700 font-medium">{slot.category}</td>
+                                                            <td className="py-2 pr-3 text-slate-600">{slot.postType}</td>
+                                                            <td className="py-2 text-slate-600">{datePart} &bull; {timePart}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    ) : null}
+                        )}
+                    </div>
 
                     {/* Feedback Display if Changes Requested */}
                     {isChangesRequested && cycle.feedback && (
@@ -368,7 +422,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     }
 
     return (
-        <PageContainer max="readable" className="py-4 space-y-8">
+        <PageContainer max="wide" className="py-4 space-y-8">
             {instagramEnabled && !instagramConnected && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-center justify-between gap-3">
                     <p className="text-xs text-amber-800 font-medium">Connect Instagram to approve strategies and start publishing.</p>

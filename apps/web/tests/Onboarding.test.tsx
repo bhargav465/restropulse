@@ -435,9 +435,11 @@ describe('Onboarding Component', () => {
     it('should render step indicator with correct labels', () => {
         render(<Onboarding onComplete={mockOnComplete} />);
 
-        expect(screen.getByText('About You')).toBeInTheDocument();
-        expect(screen.getByText('Your Restaurant')).toBeInTheDocument();
-        expect(screen.getByText('Account Manager')).toBeInTheDocument();
+        // Labels appear in the mobile header and (on desktop) the brand panel;
+        // both render in jsdom, so assert at least one instance of each.
+        expect(screen.getAllByText('About You').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Your Restaurant').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Account Manager').length).toBeGreaterThan(0);
     });
 
     // --- Zone selection (step 3) ---

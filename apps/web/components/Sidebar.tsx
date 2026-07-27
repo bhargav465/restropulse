@@ -66,7 +66,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onProfileOpen, 
             <span className="ml-auto text-[9px] font-bold uppercase tracking-wide text-[var(--rp-primary)]">Soon</span>
           </div>
         )}
-        <NavItem view="STRATEGY" icon={Lightbulb} label="Strategy" />
+        <NavItem view="STRATEGY" icon={Lightbulb} label="Content Strategy" />
       </nav>
 
       {/* Account */}

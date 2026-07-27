@@ -756,17 +756,66 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
     );
 
     return (
-        <div className="h-screen bg-slate-50 flex flex-col relative overflow-hidden">
+        <div className="h-screen bg-slate-50 flex flex-col lg:flex-row relative overflow-hidden">
             {/* Background Decor */}
             <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-orange-500 rounded-full blur-[100px]"></div>
                 <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-amber-600 rounded-full blur-[100px]"></div>
             </div>
 
+            {/* Brand panel -- desktop only. Uses the free horizontal space with
+                branding, a value prop, and a vertical step indicator. Hidden below
+                lg so mobile keeps the single-column layout unchanged. */}
+            <div className="hidden lg:flex lg:w-[42%] xl:w-[38%] relative z-10 flex-col justify-between p-12 bg-gradient-to-br from-orange-500 to-amber-600 text-white overflow-hidden">
+                <div className="absolute inset-0 opacity-20 pointer-events-none">
+                    <div className="absolute top-[-15%] right-[-10%] w-[60%] h-[60%] bg-white rounded-full blur-[120px]"></div>
+                    <div className="absolute bottom-[-20%] left-[-15%] w-[55%] h-[55%] bg-amber-300 rounded-full blur-[110px]"></div>
+                </div>
+
+                <div className="relative flex items-center gap-3">
+                    <div className="w-11 h-11 bg-white/15 backdrop-blur rounded-xl flex items-center justify-center ring-1 ring-white/25">
+                        <span className="text-white font-bold text-lg">R</span>
+                    </div>
+                    <span className="text-white font-semibold tracking-wide">RestroPulse</span>
+                </div>
+
+                <div className="relative">
+                    <h1 className="text-3xl font-bold leading-tight">Let's get you set up.</h1>
+                    <p className="mt-3 text-white/80 text-sm leading-relaxed max-w-sm">
+                        A few quick details and RestroPulse starts planning, creating, and publishing your social content.
+                    </p>
+                </div>
+
+                <div className="relative space-y-4">
+                    {STEP_LABELS.map((label, index) => {
+                        const stepNum = (index + 1) as OnboardingStep;
+                        const isActive = step === stepNum;
+                        const isCompleted = step > stepNum;
+                        return (
+                            <div key={label} className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${isActive
+                                    ? 'bg-white text-orange-600 shadow-lg'
+                                    : isCompleted
+                                        ? 'bg-white/25 text-white ring-1 ring-white/40'
+                                        : 'bg-white/10 text-white/60 ring-1 ring-white/20'
+                                    }`}>
+                                    {isCompleted ? <Check size={14} /> : stepNum}
+                                </div>
+                                <span className={`text-sm ${isActive ? 'text-white font-semibold' : 'text-white/70'}`}>{label}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Form panel -- full screen on mobile, right column on desktop */}
+            <div className="flex-1 flex flex-col relative z-10 min-w-0 lg:bg-white lg:border-l lg:border-slate-200">
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto z-10">
                 <div className="w-full max-w-md mx-auto px-6 pt-6 pb-4">
-                    {renderHeader()}
+                    {/* Mobile header (brand + horizontal steps). On desktop the left
+                        panel carries branding + steps, so this is hidden. */}
+                    <div className="lg:hidden">{renderHeader()}</div>
 
                     {error && (
                         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm text-center">
@@ -822,6 +871,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         </button>
                     )}
                 </div>
+            </div>
             </div>
         </div>
     );
