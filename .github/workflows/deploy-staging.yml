@@ -23,6 +23,7 @@ jobs:
       api: ${{ steps.changes.outputs.api }}
       publisher: ${{ steps.changes.outputs.publisher }}
       content-engine: ${{ steps.changes.outputs.content-engine }}
+      intelligence-worker: ${{ steps.changes.outputs.intelligence-worker }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -150,12 +151,14 @@ jobs:
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
-          needs.detect-changes.outputs.content-engine == 'true'
+          needs.detect-changes.outputs.content-engine == 'true' ||
+          needs.detect-changes.outputs.intelligence-worker == 'true'
         run: >-
           npx turbo prune
           @restropulse/api
           @restropulse/publisher
           @restropulse/content-engine
+          @restropulse/intelligence-worker
           --out-dir=pruned
 
       # Run from repo root with --prefix so npm uses pruned/ as the install
@@ -166,7 +169,8 @@ jobs:
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
-          needs.detect-changes.outputs.content-engine == 'true'
+          needs.detect-changes.outputs.content-engine == 'true' ||
+          needs.detect-changes.outputs.intelligence-worker == 'true'
         run: |
           npm ci --prefix pruned --omit=dev --ignore-scripts
           echo "pruned/node_modules package count: $(ls pruned/node_modules | wc -l)"
@@ -176,7 +180,8 @@ jobs:
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
-          needs.detect-changes.outputs.content-engine == 'true'
+          needs.detect-changes.outputs.content-engine == 'true' ||
+          needs.detect-changes.outputs.intelligence-worker == 'true'
         run: |
           for pkg_dir in pruned/packages/*/; do
             pkg_name=$(basename "$pkg_dir")
@@ -184,7 +189,7 @@ jobs:
               cp -r "packages/$pkg_name/dist/." "$pkg_dir/dist/"
             fi
           done
-          for app in api publisher content-engine; do
+          for app in api publisher content-engine intelligence-worker; do
             cp -r "apps/$app/dist/." "pruned/apps/$app/dist/"
           done
 
@@ -196,7 +201,8 @@ jobs:
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
-          needs.detect-changes.outputs.content-engine == 'true'
+          needs.detect-changes.outputs.content-engine == 'true' ||
+          needs.detect-changes.outputs.intelligence-worker == 'true'
         run: |
           mkdir -p pruned/node_modules/@restropulse
           for pkg_dir in pruned/packages/*/; do
@@ -211,7 +217,8 @@ jobs:
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
-          needs.detect-changes.outputs.content-engine == 'true'
+          needs.detect-changes.outputs.content-engine == 'true' ||
+          needs.detect-changes.outputs.intelligence-worker == 'true'
         run: |
           mkdir -p pruned/App_Data/jobs/continuous/publisher
           cat > pruned/App_Data/jobs/continuous/publisher/run.sh << 'SCRIPT'
@@ -227,12 +234,20 @@ jobs:
           SCRIPT
           chmod +x pruned/App_Data/jobs/continuous/content-engine/run.sh
 
+          mkdir -p pruned/App_Data/jobs/continuous/intelligence-worker
+          cat > pruned/App_Data/jobs/continuous/intelligence-worker/run.sh << 'SCRIPT'
+          #!/bin/bash
+          node "$(dirname "$0")/../../../apps/intelligence-worker/dist/worker.js"
+          SCRIPT
+          chmod +x pruned/App_Data/jobs/continuous/intelligence-worker/run.sh
+
       - name: Upload API bundle artifact
         if: >-
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
           needs.detect-changes.outputs.publisher == 'true' ||
-          needs.detect-changes.outputs.content-engine == 'true'
+          needs.detect-changes.outputs.content-engine == 'true' ||
+          needs.detect-changes.outputs.intelligence-worker == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: api-bundle
@@ -334,7 +349,8 @@ jobs:
         run: |
           rm -rf api-bundle/node_modules/@restropulse/api \
                  api-bundle/node_modules/@restropulse/publisher \
-                 api-bundle/node_modules/@restropulse/content-engine
+                 api-bundle/node_modules/@restropulse/content-engine \
+                 api-bundle/node_modules/@restropulse/intelligence-worker
           cd api-bundle && zip -r ../api-deploy.zip . && cd ..
           az webapp deploy \
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
