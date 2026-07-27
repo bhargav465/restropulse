@@ -201,7 +201,7 @@ When changing AI-backend code:
 
 ## Restaurant Intelligence
 
-Competitor + self analytics feature. Frontend section (`apps/web/components/v2/IntelligenceV2.tsx` + `components/intelligence/**`) is the app's home view, replacing the old Dashboard. Runs on the in-memory demo twin when `VITE_DEMO_MODE=true`, otherwise the real client hits `/api/intelligence/*`.
+Competitor + self analytics feature. Frontend section (`apps/web/components/intelligence/IntelligenceDashboard.tsx` + `components/intelligence/sections/**`) is the app's home view, replacing the old Dashboard. Runs on the in-memory demo twin when `VITE_DEMO_MODE=true`, otherwise the real client hits `/api/intelligence/*`.
 
 - Backend: `apps/api/src/services/intelligence/*` (scan pipeline: Google Places New + Anthropic Haiku/Sonnet analysis; snapshots/compare/scoring) behind `apps/api/src/routes/intelligence.ts` (mounted `/api/intelligence`, `requireAuth` + `requireRole('OWNER')`, scoped to `req.user.restaurantId`).
 - Worker: `apps/intelligence-worker` (weekly re-scan `CRON_INTELLIGENCE`; daily snapshots `CRON_INTELLIGENCE_DAILY`, kill-switch `INTELLIGENCE_DAILY_ENABLED`). Mongo-only by default.

@@ -1,5 +1,5 @@
 /**
- * Review theme tagging (Brief 07, v2).
+ * Review theme tagging (Brief 07).
  *
  * `tagReviewThemes` attaches the fixed `REVIEW_THEMES` taxonomy ("hashtags") to
  * the new reviews captured in a daily snapshot. ONE batched `claude-haiku-4-5`

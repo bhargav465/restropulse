@@ -3,7 +3,7 @@
  *
  * Serves the entire Intelligence UI (both buckets, scan stepper, watchlist
  * edits, Zomato-manual, capture) from in-memory SAMPLE fixtures with zero
- * backend. Ported from the v2 workspace demo-api.ts intelligence section.
+ * backend. Ported from the source workspace demo-api.ts intelligence section.
  * P1 wires api.ts -> this twin directly; P2 adds the real fetch-backed client
  * and an isDemoMode() swap.
  */
@@ -93,17 +93,17 @@ export const intelligenceAPI = {
         return clone(DEMO_INTELLIGENCE_SELF_METRICS);
     },
 
-    // ----- v2: two-bucket dashboard (fixtures-backed, in-memory mutations) -----
+    // ----- Intelligence: two-bucket dashboard (fixtures-backed, in-memory mutations) -----
 
     getWatchlist: async (): Promise<WatchlistResponse> => {
         await delay();
-        const { state } = await intelV2State();
+        const { state } = await intelDashboardState();
         return { entries: clone(state.watchlist), max: WATCHLIST_MAX };
     },
 
     putWatchlist: async (entries: WatchlistInput[]): Promise<WatchlistResponse> => {
         await delay();
-        const { state } = await intelV2State();
+        const { state } = await intelDashboardState();
         if (entries.length > WATCHLIST_MAX) {
             throw new Error(`Watchlist exceeds the maximum of ${WATCHLIST_MAX} competitors.`);
         }
@@ -126,9 +126,9 @@ export const intelligenceAPI = {
 
     getSnapshots: async (query: SnapshotQuery): Promise<SnapshotSeriesResponse> => {
         await delay();
-        const { m, state } = await intelV2State();
+        const { m, state } = await intelDashboardState();
         const target = query.target ?? 'self';
-        const targetPlaceId = target === 'self' ? m.DEMO_V2_SELF_PLACE_ID : target;
+        const targetPlaceId = target === 'self' ? m.DEMO_SELF_PLACE_ID : target;
         const source = query.source ?? 'both';
         const points = m.deriveSeries(state.snapshots, {
             targetPlaceId,
@@ -142,7 +142,7 @@ export const intelligenceAPI = {
 
     getFeedbackChanges: async (query: { from?: string; to?: string } = {}): Promise<{ days: FeedbackDay[] }> => {
         await delay();
-        const { m, state } = await intelV2State();
+        const { m, state } = await intelDashboardState();
         const to = query.to ?? state.anchor;
         const from = query.from ?? new Date(Date.parse(`${to}T00:00:00Z`) - 30 * 86400000).toISOString().slice(0, 10);
         return clone(m.deriveFeedbackDays(state.snapshots, from, to));
@@ -150,31 +150,31 @@ export const intelligenceAPI = {
 
     getCompare: async (query: CompareQuery): Promise<CompareRow[]> => {
         await delay();
-        const { m, state } = await intelV2State();
+        const { m, state } = await intelDashboardState();
         const value = query.granularity === 'month' ? (query.month ?? state.anchor.slice(0, 7)) : (query.date ?? state.anchor);
         return clone(m.deriveCompareRows(state.snapshots, state.watchlist, DEMO_RESTAURANT.name, query.granularity, value));
     },
 
     getNewOpenings: async (query: { sinceDays?: 30 | 60 | 90; radiusKm?: number } = {}): Promise<NewOpening[]> => {
         await delay();
-        const { m, state } = await intelV2State();
+        const { m, state } = await intelDashboardState();
         const now = Date.parse(`${state.anchor}T00:00:00.000Z`);
         return clone(m.deriveNewOpenings(state.sightings, query.radiusKm ?? 5, query.sinceDays ?? 30, now));
     },
 
     postZomatoManual: async (body: ZomatoManualInput): Promise<{ snapshotWritten: boolean }> => {
         await delay();
-        const { m, state } = await intelV2State();
-        const targetPlaceId = !body.target || body.target === 'self' ? m.DEMO_V2_SELF_PLACE_ID : body.target;
+        const { m, state } = await intelDashboardState();
+        const targetPlaceId = !body.target || body.target === 'self' ? m.DEMO_SELF_PLACE_ID : body.target;
         const date = state.anchor;
         state.snapshots = state.snapshots.filter(
             (s) => !(s.targetPlaceId === targetPlaceId && s.source === 'zomato' && s.date === date),
         );
         const snap: DailySnapshot = {
-            _id: `snapv2-${targetPlaceId}-zomato-${date}`,
+            _id: `snap-${targetPlaceId}-zomato-${date}`,
             restaurantId: DEMO_RESTAURANT.id,
             targetPlaceId,
-            isSelf: targetPlaceId === m.DEMO_V2_SELF_PLACE_ID,
+            isSelf: targetPlaceId === m.DEMO_SELF_PLACE_ID,
             source: 'zomato',
             date,
             rating: body.rating,
@@ -190,32 +190,32 @@ export const intelligenceAPI = {
 
     captureNow: async (): Promise<{ captured: number }> => {
         await new Promise((resolve) => setTimeout(resolve, 1500));
-        const { state } = await intelV2State();
+        const { state } = await intelDashboardState();
         notifyDemoBackendAction();
         return { captured: 2 + state.watchlist.length };
     },
 };
 
-// ----- In-memory v2 intelligence state (lazy; built once per session) -----
-type IntelV2Module = typeof import('./lib/demo-fixtures-intelligence-v2');
-interface IntelV2State {
+// ----- In-memory intelligence dashboard state (lazy; built once per session) -----
+type IntelDashboardModule = typeof import('./lib/demo-fixtures-intelligence-dashboard');
+interface IntelDashboardState {
     anchor: string;
     snapshots: DailySnapshot[];
     watchlist: WatchlistEntry[];
     sightings: NearbyPlaceSighting[];
 }
-let intelV2: IntelV2State | null = null;
+let intelDashboard: IntelDashboardState | null = null;
 
-async function intelV2State(): Promise<{ m: IntelV2Module; state: IntelV2State }> {
-    const m = (await import('./lib/demo-fixtures-intelligence-v2')) as IntelV2Module;
-    if (!intelV2) {
+async function intelDashboardState(): Promise<{ m: IntelDashboardModule; state: IntelDashboardState }> {
+    const m = (await import('./lib/demo-fixtures-intelligence-dashboard')) as IntelDashboardModule;
+    if (!intelDashboard) {
         const anchor = m.todayStr();
-        intelV2 = {
+        intelDashboard = {
             anchor,
             snapshots: m.buildSnapshots(anchor),
             watchlist: m.buildWatchlist(anchor),
             sightings: m.buildSightings(anchor),
         };
     }
-    return { m, state: intelV2 };
+    return { m, state: intelDashboard };
 }

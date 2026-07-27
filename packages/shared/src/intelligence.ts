@@ -13,7 +13,7 @@ export type Provenance = 'measured' | 'computed' | 'ai-inferred';
 
 /**
  * Scan job lifecycle. Mirrored client-side by the scan status machine
- * (`apps/web/components/v2/intelligence/scan-status.ts`) and server-side by
+ * (`apps/web/components/intelligence/sections/scan-status.ts`) and server-side by
  * `apps/api/src/services/intelligence/scan-status.ts` — change all or none.
  */
 export type ScanStatus =
@@ -277,7 +277,7 @@ export interface IntelligenceSelfMetrics {
   cohorts: Array<{ id: string; name: string; count: number }>;
 }
 
-// ----- v2: daily snapshots & two-bucket dashboard (Brief 06, additive) -----
+// ----- Daily snapshots & two-bucket dashboard (Brief 06, additive) -----
 
 export type SnapshotSource = 'google' | 'zomato';
 

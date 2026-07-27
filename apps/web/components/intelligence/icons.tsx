@@ -1,10 +1,9 @@
 import React from 'react';
 
 /**
- * V2 admin icon set — small inline SVG line icons (stroke style, `currentColor`).
+ * Intelligence dashboard icon set — small inline SVG line icons (stroke style, `currentColor`).
  *
- * Only rendered when the app is built with VITE_ADMIN_SHELL=v2. Emoji render
- * per-OS and read prototype-grade (design.md §3 declutter), so nav buckets, KPI
+ * Emoji render per-OS and read prototype-grade (design.md §3 declutter), so nav buckets, KPI
  * chips and quick actions use these instead. Every glyph inherits color from
  * its parent via `currentColor`, so the "one accent tint per bucket" comes from
  * the surrounding text-color class (see ACCENT below) — no hex here.

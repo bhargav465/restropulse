@@ -190,10 +190,10 @@ export interface PillarInputs {
 }
 
 const HREF = {
-    getStarted: '/admin-v2/get-started',
-    content: '/admin-v2/content',
-    website: '/admin-v2/website-design',
-    intelligence: '/admin-v2/intelligence',
+    getStarted: '/admin/get-started',
+    content: '/admin/content',
+    website: '/admin/website-design',
+    intelligence: '/admin/intelligence',
 };
 
 export function computePillars(inputs: PillarInputs): PillarScore[] {

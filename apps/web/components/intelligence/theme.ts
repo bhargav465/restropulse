@@ -1,7 +1,7 @@
 /**
- * V2 admin design tokens — ELECTRIC LAVENDER palette.
+ * Intelligence dashboard design tokens — ELECTRIC LAVENDER palette.
  *
- * Single source of truth for the v2 shell's colors (design.md §2). The same
+ * Single source of truth for the intelligence dashboard's colors (design.md §2). The same
  * values are mirrored as Tailwind color utilities via the `@theme` block in
  * apps/web/index.css, so components should prefer semantic classes
  * (`bg-primary`, `text-ink`, `border-line`, …) for layout, and reach for the

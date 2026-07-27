@@ -1,5 +1,5 @@
 /**
- * Daily snapshots (Brief 07, v2) — the time-series backbone of both buckets.
+ * Daily snapshots (Brief 07) — the time-series backbone of both buckets.
  *
  *  - `captureSnapshot` — fetch current numbers for a target×source, diff new
  *    reviews against the latest prior snapshot, tag themes, and upsert by the

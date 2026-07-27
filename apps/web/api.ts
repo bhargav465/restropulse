@@ -593,7 +593,7 @@ export const accountManagerAPI = {
 };
 
 // ===== Restaurant Intelligence =====
-// Client-facing types used by components/v2/intelligence/*. (Ported from v2.)
+// Client-facing types used by components/intelligence/sections/*. (Ported from the source workspace.)
 
 export interface SnapshotSeriesPoint {
     date: string; // YYYY-MM-DD (day) or YYYY-MM (month)

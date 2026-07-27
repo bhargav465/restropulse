@@ -76,7 +76,7 @@ export const FeedbackChangesView: React.FC<{
                     <p className="text-sm text-muted mt-1">
                         {negatives.map((t) => `#${t}`).join(', ')} mentioned in multiple low-star reviews this week. Reply and address it before it drags your rating.
                     </p>
-                    <button type="button" onClick={reply} title="/admin-v2/get-started" className="mt-2 text-xs font-semibold text-primary-strong hover:underline">
+                    <button type="button" onClick={reply} title="/admin/get-started" className="mt-2 text-xs font-semibold text-primary-strong hover:underline">
                         Reply now →
                     </button>
                 </div>
@@ -139,7 +139,7 @@ export const FeedbackChangesView: React.FC<{
                                     {(r.themes ?? []).map((t) => (
                                         <span key={t} className="text-[10px] text-muted">#{t}</span>
                                     ))}
-                                    <button type="button" onClick={reply} title="/admin-v2/get-started" className="ml-auto text-xs font-semibold text-primary-strong hover:underline">
+                                    <button type="button" onClick={reply} title="/admin/get-started" className="ml-auto text-xs font-semibold text-primary-strong hover:underline">
                                         Reply now →
                                     </button>
                                 </div>

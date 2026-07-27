@@ -1,12 +1,12 @@
 /**
- * *** SAMPLE DATA ONLY — demo-mode Intelligence v2 fixtures (VITE_DEMO_MODE) ***
+ * *** SAMPLE DATA ONLY — demo-mode Intelligence dashboard fixtures (VITE_DEMO_MODE) ***
  *
  * MIRROR of packages/db/src/seeds/intelligence-snapshots-demo.ts (Brief 06):
  * the same demo restaurant (`demo-r1`, self placeId `sample-place-demo-kitchen`),
  * a 3-competitor watchlist, 60 days of per-target×source daily snapshots, and 8
  * nearby sightings (2 recent fast-starters). Every human string is [SAMPLE].
  *
- * LAZY-LOADED (dynamic import()) from demo-api.ts's v2 intelligence methods so
+ * LAZY-LOADED (dynamic import()) from demo-api.ts's intelligence dashboard methods so
  * this fixture only ships in the chunk the Intelligence tab pulls in.
  *
  * DETERMINISTIC given an anchor date: a seeded mulberry32 PRNG (no Math.random)
@@ -33,9 +33,9 @@ import type {
 import { REVIEW_THEMES } from '@restropulse/shared';
 import type { SnapshotSeriesPoint, FeedbackDay, FeedbackReview, NewOpening } from '../api';
 
-export const DEMO_V2_RESTAURANT_ID = 'demo-r1';
-export const DEMO_V2_SELF_PLACE_ID = 'sample-place-demo-kitchen';
-const R = DEMO_V2_RESTAURANT_ID;
+export const DEMO_RESTAURANT_ID = 'demo-r1';
+export const DEMO_SELF_PLACE_ID = 'sample-place-demo-kitchen';
+const R = DEMO_RESTAURANT_ID;
 const SNAPSHOT_DAYS = 60;
 
 // ---- Deterministic PRNG (mulberry32) ----
@@ -167,7 +167,7 @@ function buildSeries(anchorMs: number, cfg: SeriesConfig): DailySnapshot[] {
         }
 
         out.push({
-            _id: `snapv2-${cfg.targetPlaceId}-${cfg.source}-${date}`,
+            _id: `snap-${cfg.targetPlaceId}-${cfg.source}-${date}`,
             restaurantId: R,
             targetPlaceId: cfg.targetPlaceId,
             isSelf: cfg.isSelf,
@@ -195,7 +195,7 @@ export function buildSnapshots(anchor: string): DailySnapshot[] {
     const anchorMs = Date.parse(`${anchor}T00:00:00.000Z`);
     return [
         ...buildSeries(anchorMs, {
-            targetPlaceId: DEMO_V2_SELF_PLACE_ID, isSelf: true, source: 'google',
+            targetPlaceId: DEMO_SELF_PLACE_ID, isSelf: true, source: 'google',
             ratingStart: 4.2, ratingEnd: 4.4, reviewStart: 780, velocityMin: 2, velocityMax: 6,
             photoStart: 40, withSeo: true, responseRate: 42,
             gapDays: SELF_GAP_DAYS, backfilledDays: SELF_BACKFILLED_DAYS, photoStagnant: true,
@@ -239,7 +239,7 @@ function sighting(
 ): NearbyPlaceSighting {
     const firstSeen = dayStringFrom(anchorMs, firstSeenDaysAgo);
     return {
-        _id: `sightv2-${idx}`, restaurantId: R, placeId: `sample-sight-${idx}`, name,
+        _id: `sight-${idx}`, restaurantId: R, placeId: `sample-sight-${idx}`, name,
         lat, lng, distanceKm, cuisine,
         firstSeenAt: capturedAt(firstSeen),
         lastSeenAt: new Date(anchorMs),
@@ -443,7 +443,7 @@ export function deriveCompareRows(
             zomato: reduceSource(rows.filter((r) => r.source === 'zomato'), gran, value),
         };
     };
-    const self = load(DEMO_V2_SELF_PLACE_ID, selfName, true);
+    const self = load(DEMO_SELF_PLACE_ID, selfName, true);
     const rows: CompareRow[] = [toCompareRow(self, [])];
     for (const w of watchlist) rows.push(toCompareRow(load(w.placeId, w.name, false), beatsYouFor(self, load(w.placeId, w.name, false))));
     return rows;

@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { IntelligenceReport, IntelligenceSelfMetrics, PillarScore, Restaurant } from '@restropulse/shared';
 import { intelligenceAPI } from '../../api';
 import { SubNav, SubNavTab } from './primitives';
-import { ScoreDial, PillarBar, CheckRow, type Grade, PILLAR_LABELS, gradeTextClass } from './intelligence/primitives';
-import { ProvenanceChip, ProvenanceLegend } from './intelligence/provenance';
-import { resolveActionHref, type DeepLinkTarget } from './intelligence/deep-links';
-import ScanFlow from './intelligence/ScanFlow';
-import { BucketSwitch } from './intelligence/BucketSwitch';
-import { PeriodFilter } from './intelligence/PeriodFilter';
+import { ScoreDial, PillarBar, CheckRow, type Grade, PILLAR_LABELS, gradeTextClass } from './sections/primitives';
+import { ProvenanceChip, ProvenanceLegend } from './sections/provenance';
+import { resolveActionHref, type DeepLinkTarget } from './sections/deep-links';
+import ScanFlow from './sections/ScanFlow';
+import { BucketSwitch } from './sections/BucketSwitch';
+import { PeriodFilter } from './sections/PeriodFilter';
 import {
     type BucketId,
     type MineSelection,
@@ -16,23 +16,23 @@ import {
     defaultCompetitionSelection,
     mineQuery,
     competitionQuery,
-} from './intelligence/period';
-// My Restaurant bucket (v1 Overview + Search re-homed; Trends + Feedback new).
-import MyOverview from './intelligence/my-restaurant/Overview';
-import DailyTrends from './intelligence/my-restaurant/DailyTrends';
-import FeedbackChanges from './intelligence/my-restaurant/FeedbackChanges';
-import SearchSEO from './intelligence/my-restaurant/SearchSEO';
+} from './sections/period';
+// My Restaurant bucket (Overview + Search re-homed; Trends + Feedback new).
+import MyOverview from './sections/my-restaurant/Overview';
+import DailyTrends from './sections/my-restaurant/DailyTrends';
+import FeedbackChanges from './sections/my-restaurant/FeedbackChanges';
+import SearchSEO from './sections/my-restaurant/SearchSEO';
 // Competition bucket (Competitors + Reviews re-homed/rebuilt here).
-import TopThreats from './intelligence/competition/TopThreats';
-import Watchlist from './intelligence/competition/Watchlist';
-import Compare from './intelligence/competition/Compare';
-import WhereTheyBeatYou from './intelligence/competition/WhereTheyBeatYou';
-import NewOpenings from './intelligence/competition/NewOpenings';
+import TopThreats from './sections/competition/TopThreats';
+import Watchlist from './sections/competition/Watchlist';
+import Compare from './sections/competition/Compare';
+import WhereTheyBeatYou from './sections/competition/WhereTheyBeatYou';
+import NewOpenings from './sections/competition/NewOpenings';
 
 /**
  * Restaurant Intelligence bucket — two-bucket dashboard (Brief 09). RestroScore
  * header band (unchanged) → BucketSwitch (My Restaurant | Competition) →
- * bucket-scoped PeriodFilter → bucket content. Every v1 sub-tab's content
+ * bucket-scoped PeriodFilter → bucket content. Every sub-tab's content
  * survives, re-homed under a bucket (nothing deleted). Renders entirely from the
  * [SAMPLE] fixtures in demo mode with zero backend (intelligenceAPI → demo twin).
  */
@@ -51,9 +51,9 @@ function initialBucket(): BucketId {
     return 'MINE';
 }
 
-interface IntelligenceV2Props {
+interface IntelligenceDashboardProps {
     restaurantData: Restaurant;
-    /** Deep-link navigation into other buckets (wired by ShellV2). */
+    /** Deep-link navigation into other buckets (wired by the shell). */
     onNavigate?: (target: DeepLinkTarget) => void;
 }
 
@@ -164,7 +164,7 @@ function restroGrade(score: number): Grade {
     return 'F';
 }
 
-const IntelligenceV2: React.FC<IntelligenceV2Props> = ({ restaurantData, onNavigate }) => {
+const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restaurantData, onNavigate }) => {
     const [report, setReport] = useState<IntelligenceReport | null | undefined>(undefined);
     const [selfMetrics, setSelfMetrics] = useState<IntelligenceSelfMetrics | null>(null);
     const [selectedPillar, setSelectedPillar] = useState<PillarScore['key'] | null>(null);
@@ -302,4 +302,4 @@ const IntelligenceV2: React.FC<IntelligenceV2Props> = ({ restaurantData, onNavig
     );
 };
 
-export default IntelligenceV2;
+export default IntelligenceDashboard;

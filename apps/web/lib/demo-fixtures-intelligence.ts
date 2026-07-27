@@ -175,7 +175,7 @@ const pillars: PillarScore[] = [
             { id: 'profile-hours', label: 'Business hours set', pass: true, note: '[SAMPLE] Hours listed for all 7 days.' },
             { id: 'profile-phone', label: 'Phone number present', pass: true, note: '[SAMPLE] Primary contact number verified.' },
             { id: 'profile-category', label: 'Primary category set', pass: true, note: '[SAMPLE] Listed as "North Indian Restaurant".' },
-            { id: 'profile-description', label: 'Business description', pass: false, note: '[SAMPLE] No description on the Google profile.', actionHref: '/admin-v2/get-started' },
+            { id: 'profile-description', label: 'Business description', pass: false, note: '[SAMPLE] No description on the Google profile.', actionHref: '/admin/get-started' },
         ],
     },
     {
@@ -183,37 +183,37 @@ const pillars: PillarScore[] = [
             { id: 'reviews-rating', label: 'Rating above area average', pass: true, note: '[SAMPLE] 4.6 vs area avg 4.4.' },
             { id: 'reviews-volume', label: 'Healthy review volume', pass: true, note: '[SAMPLE] 820 ratings and growing.' },
             { id: 'reviews-recency', label: 'Recent reviews (last 30d)', pass: true, note: '[SAMPLE] 18 reviews in the last month.' },
-            { id: 'reviews-replies', label: 'Owner replies to reviews', pass: false, note: '[SAMPLE] Only 12% of reviews have owner replies.', actionHref: '/admin-v2/get-started' },
+            { id: 'reviews-replies', label: 'Owner replies to reviews', pass: false, note: '[SAMPLE] Only 12% of reviews have owner replies.', actionHref: '/admin/get-started' },
         ],
     },
     {
         key: 'photos', score: 62, grade: 'C', provenance: 'measured', checks: [
             { id: 'photos-count', label: 'At least 30 photos', pass: true, note: '[SAMPLE] 46 photos on the profile.' },
             { id: 'photos-food', label: 'Menu/food photos present', pass: true, note: '[SAMPLE] 20 food photos.' },
-            { id: 'photos-fresh', label: 'Photos added recently', pass: false, note: '[SAMPLE] No new photos in 90 days.', actionHref: '/admin-v2/content' },
+            { id: 'photos-fresh', label: 'Photos added recently', pass: false, note: '[SAMPLE] No new photos in 90 days.', actionHref: '/admin/content' },
         ],
     },
     {
         key: 'website', score: 34, grade: 'F', provenance: 'measured', checks: [
             { id: 'website-exists', label: 'Website linked on profile', pass: true, note: '[SAMPLE] Links to a social page, not a site.' },
-            { id: 'website-custom-domain', label: 'Custom domain', pass: false, note: '[SAMPLE] No custom domain — using a link-in-bio page.', actionHref: '/admin-v2/website-design' },
-            { id: 'website-ordering', label: 'Online ordering link', pass: false, note: '[SAMPLE] No direct ordering link from search.', actionHref: '/admin-v2/website-design' },
-            { id: 'website-meta', label: 'SEO title & meta description', pass: false, note: '[SAMPLE] Missing meta description and H1.', actionHref: '/admin-v2/website-design' },
-            { id: 'website-mobile', label: 'Mobile-friendly', pass: false, note: '[SAMPLE] Landing page not mobile-optimized.', actionHref: '/admin-v2/website-design' },
+            { id: 'website-custom-domain', label: 'Custom domain', pass: false, note: '[SAMPLE] No custom domain — using a link-in-bio page.', actionHref: '/admin/website-design' },
+            { id: 'website-ordering', label: 'Online ordering link', pass: false, note: '[SAMPLE] No direct ordering link from search.', actionHref: '/admin/website-design' },
+            { id: 'website-meta', label: 'SEO title & meta description', pass: false, note: '[SAMPLE] Missing meta description and H1.', actionHref: '/admin/website-design' },
+            { id: 'website-mobile', label: 'Mobile-friendly', pass: false, note: '[SAMPLE] Landing page not mobile-optimized.', actionHref: '/admin/website-design' },
         ],
     },
     {
         key: 'competition', score: 66, grade: 'C', provenance: 'computed', checks: [
             { id: 'competition-rank', label: 'Top-5 by rating nearby', pass: true, note: '[SAMPLE] Ranked #4 of 38 nearby.' },
             { id: 'competition-samecuisine', label: 'Leads closest same-cuisine rival', pass: true, note: '[SAMPLE] Ahead of Punjabi Rasoi on rating.' },
-            { id: 'competition-volume', label: 'Review volume vs top rivals', pass: false, note: '[SAMPLE] Meghana and Empire have far more reviews.', actionHref: '/admin-v2/get-started' },
+            { id: 'competition-volume', label: 'Review volume vs top rivals', pass: false, note: '[SAMPLE] Meghana and Empire have far more reviews.', actionHref: '/admin/get-started' },
         ],
     },
     {
         key: 'momentum', score: 60, grade: 'C', provenance: 'computed', checks: [
             { id: 'momentum-rating', label: 'Rating trending up', pass: true, note: '[SAMPLE] +0.1 vs last scan.' },
             { id: 'momentum-reviews', label: 'Review growth pace', pass: true, note: '[SAMPLE] +45 reviews week-over-week.' },
-            { id: 'momentum-newrivals', label: 'No new same-cuisine rivals nearby', pass: false, note: '[SAMPLE] A new biryani outlet opened 0.9 km away.', actionHref: '/admin-v2/intelligence' },
+            { id: 'momentum-newrivals', label: 'No new same-cuisine rivals nearby', pass: false, note: '[SAMPLE] A new biryani outlet opened 0.9 km away.', actionHref: '/admin/intelligence' },
         ],
     },
 ];

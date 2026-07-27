@@ -2,7 +2,7 @@
  * Intelligence scan status machine (server-side owner).
  *
  * Mirrors `ScanStatus` from @restropulse/shared verbatim. The web mirror lives at
- * `apps/web/components/v2/intelligence/scan-status.ts` (added in PR3) — per the
+ * `apps/web/components/intelligence/sections/scan-status.ts` (added in PR3) — per the
  * module CLAUDE.md §10 rule these two files change together or not at all.
  *
  * Linear happy path:

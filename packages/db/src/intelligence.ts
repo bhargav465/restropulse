@@ -1,7 +1,7 @@
 /**
  * @restropulse/db - Restaurant Intelligence collection helpers.
  *
- * Collections (camelCase, per this repo's convention -- v2 used snake_case):
+ * Collections (camelCase, per this repo's convention -- the reference used snake_case):
  *  - `intelligenceScans`     - async scan jobs (one per scan request)
  *  - `intelligenceReports`   - completed reports (keep last 12 per restaurant)
  *  - `competitorCache`       - Places (New) results, 7-day TTL to control cost
@@ -74,7 +74,7 @@ export function assertWatchlistSize(watchlist: readonly unknown[]): void {
 
 // ----- Analytics events (best-effort internal signals) -----
 // The intelligence worker emits scan/alert signals into a shared `events`
-// collection. (v2 kept this in ordering.ts; this app has no ordering system,
+// collection. (the reference kept this in ordering.ts; this app has no ordering system,
 // so the minimal seam lives here alongside the other intelligence helpers.)
 
 export interface AnalyticsEvent {

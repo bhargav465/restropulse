@@ -6,7 +6,7 @@ import type { BucketId } from './period';
  * Intelligence dashboard between the two buckets. `bg-primary-soft` track, the
  * active segment `bg-primary` + white text. Tokens only.
  *
- * Selection is owned by IntelligenceV2 (persisted per session + `?bucket=`),
+ * Selection is owned by IntelligenceDashboard (persisted per session + `?bucket=`),
  * so this is a controlled component.
  */
 

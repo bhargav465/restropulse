@@ -79,7 +79,7 @@ export const NewOpeningsView: React.FC<{
                                 <button
                                     type="button"
                                     onClick={() => onNavigate(resolveDeepLink({ bucket: 'content', params: { brief: 'new-competitor-response' } }))}
-                                    title="/admin-v2/content"
+                                    title="/admin/content"
                                     className="text-xs font-semibold text-primary-strong hover:underline"
                                 >
                                     Draft a response post →

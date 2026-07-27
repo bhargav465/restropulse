@@ -74,7 +74,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
  * within the new-competitor radius and maps each to a `new_competitor` alert.
  *
  * v1 tenants have no sightings, so this returns `[]` and the weekly job is
- * byte-identical to what shipped; only v2 tenants (running the daily sweep) gain
+ * byte-identical to what shipped; only opted-in tenants (running the daily sweep) gain
  * these alerts.
  */
 async function weeklySnapshotAlerts(restaurantId: string, now: Date): Promise<CompetitorAlert[]> {

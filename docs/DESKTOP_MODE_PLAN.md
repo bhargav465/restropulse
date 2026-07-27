@@ -6,8 +6,8 @@ Status: PLANNING ONLY. No source changed by this doc.
 
 Add adaptive desktop-responsive support to `apps/web`: keep the existing mobile
 layout at small widths; add a **desktop sidebar shell** at wider widths. One
-responsive codebase, existing page components reused as-is. Modeled on the v2
-reference `ShellV2`, but keeping **our** sections (Dashboard, Content Studio,
+responsive codebase, existing page components reused as-is. Modeled on the
+reference shell, but keeping **our** sections (Dashboard, Content Studio,
 Inputs, Strategy, Profile) — no tabbed "Content Engine" grouping.
 
 ## Decisions locked (from brief)
@@ -17,7 +17,7 @@ Inputs, Strategy, Profile) — no tabbed "Content Engine" grouping.
 - Theme via `document.documentElement.dataset.theme` (`legacy` | `orchid-admin`)
   using the existing `--rp-*` CSS vars (`--rp-sidebar`, `--rp-sidebar-ink`, …).
 - Out of scope: Online Ordering, Restaurant Intelligence, Website Design,
-  "Get Started" (v2-only product areas — ignore).
+  "Get Started" (reference-only product areas — ignore).
 
 ---
 
@@ -32,7 +32,7 @@ Inputs, Strategy, Profile) — no tabbed "Content Engine" grouping.
 | In-scope pages (`Dashboard`, `ContentStudio`, `Inputs`, `Strategy`) | Outer wrapper `className="p-4 space-y-*"`, **no `max-width`** | Content stretches edge-to-edge on wide monitors — long line lengths, oversized cards, sparse calendar |
 | `Dashboard.tsx` | Single-column stacked stat cards / lists | Looks empty and stretched on desktop; wants a multi-column grid + capped width |
 | `ContentStudio.tsx` | Phone-width calendar/post cards | Calendar and post gallery read as a narrow phone column centered/stretched on desktop |
-| Nav color styling | `Layout` uses hardcoded `text-orange-600` / `bg-white` / `text-slate-400`; theming happens via `index.css` legacy-utility remaps | The v2 sidebar relies on semantic tokens (`bg-sidebar`, `text-sidebar-ink`) that **do not exist** in our Tailwind config — see §6 |
+| Nav color styling | `Layout` uses hardcoded `text-orange-600` / `bg-white` / `text-slate-400`; theming happens via `index.css` legacy-utility remaps | The reference sidebar relies on semantic tokens (`bg-sidebar`, `text-sidebar-ink`) that **do not exist** in our Tailwind config — see §6 |
 
 `ProfileSheet.tsx` is **already responsive** (`fixed inset-0`, `items-end
 sm:items-center`, `max-w-md`, `rounded-t-3xl sm:rounded-3xl`) — bottom-sheet on
@@ -42,9 +42,9 @@ existing `onProfileOpen`.
 
 ---
 
-## 2. Target Desktop Layout (distilled from `ShellV2`)
+## 2. Target Desktop Layout (distilled from the reference shell)
 
-v2's `ShellV2` uses a two-region flex-row (`flex h-screen`): a `w-64`
+The reference shell uses a two-region flex-row (`flex h-screen`): a `w-64`
 (`256px`) aubergine `<aside>` rail + a `flex-1 overflow-y-auto` `<main>`, with a
 centered `max-w-[1100px]` content column and `px-4 sm:px-6 md:px-8` responsive
 gutters. Below `md` it collapses the rail into an off-canvas drawer + a mobile
@@ -69,10 +69,10 @@ lg+  (>=1024px)                  below lg  (<1024px) — UNCHANGED from today
   the current mobile header + bottom nav show below `lg` (`lg:hidden`).
   Rationale: ContentStudio's calendar and Dashboard grids want real width;
   tablet-portrait (768–1023px) is better served by the roomy mobile column than
-  a cramped rail+content split. (v2 used `md`; `md` is the fallback option if we
+  a cramped rail+content split. (the reference used `md`; `md` is the fallback option if we
   later want the sidebar on tablets — it is a one-token change.)
 - **No off-canvas drawer.** Because we keep the existing bottom nav intact below
-  `lg`, we do **not** need v2's hamburger drawer/backdrop/Escape machinery. This
+  `lg`, we do **not** need the reference's hamburger drawer/backdrop/Escape machinery. This
   removes a whole slice of complexity and keeps mobile byte-identical.
 - **Sidebar structure** (`<aside class="hidden lg:flex w-64 shrink-0 flex-col">`):
   wordmark/brand → restaurant identity tile (logo or gradient initial) → `<nav>`
@@ -125,7 +125,7 @@ semantics + `aria-current`.
   | (action) | Profile | avatar → `onProfileOpen` |
 
 - **`App.tsx`**: no structural change. The single `<Layout>` branch already
-  passes every prop Sidebar needs. (Do **not** replicate v2's `VITE_ADMIN_SHELL`
+  passes every prop Sidebar needs. (Do **not** replicate the reference's `VITE_ADMIN_SHELL`
   fork — this is one responsive shell, always on.)
 
 ---
@@ -176,13 +176,13 @@ No page's *mobile* classes change — only additive `lg:`/`xl:` utilities.
 
 ## 6. Theme Integration (critical nuance)
 
-The v2 `ShellV2` styles the rail with **semantic Tailwind color utilities**
+The reference shell styles the rail with **semantic Tailwind color utilities**
 (`bg-sidebar`, `text-sidebar-ink`, `bg-canvas`, `text-ink`, `text-muted`,
-`border-line`, `bg-primary`). Those utilities exist in v2 only because v2's
+`border-line`, `bg-primary`). Those utilities exist in the reference only because the reference's
 `index.css` declares them in a `@theme { --color-sidebar: … }` block. **Our
 `apps/web/index.css` has no such `@theme` block** — it defines `--rp-*` CSS vars
 and remaps legacy `slate/orange` utilities for `orchid-admin`. So a naive copy
-of v2's class names would render an **unstyled/transparent** sidebar.
+of the reference's class names would render an **unstyled/transparent** sidebar.
 
 Resolution — bridge our vars into Tailwind utilities (recommended):
 
@@ -256,9 +256,9 @@ Total: **5 phases** (S, M, M, M, S).
 
 ## 9. Out of Scope (restated)
 
-- **Online Ordering** (`OrderingV2` / any `ordering` dir)
-- **Restaurant Intelligence** (`IntelligenceV2`, `components/v2/intelligence/**`)
-- **Website Design** (`WebsiteDesignV2`)
-- **"Get Started"** onboarding bucket (`GetStartedV2`)
-- v2's tabbed **"Content Engine"** grouping (we keep our discrete sections)
-- v2's `VITE_ADMIN_SHELL` build fork (we ship one always-on responsive shell)
+- **Online Ordering** (`Ordering` / any `ordering` dir)
+- **Restaurant Intelligence** (`IntelligenceDashboard`, `components/intelligence/sections/**`)
+- **Website Design** (`WebsiteDesign`)
+- **"Get Started"** onboarding bucket (`GetStarted`)
+- the reference's tabbed **"Content Engine"** grouping (we keep our discrete sections)
+- the reference's `VITE_ADMIN_SHELL` build fork (we ship one always-on responsive shell)

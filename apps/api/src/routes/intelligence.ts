@@ -216,7 +216,7 @@ router.get('/reports/:id', handle(async (req: Request, res: Response<ApiResponse
 // ============================================================
 
 router.get('/self-metrics', handle(async (_req: Request, res: Response<ApiResponse<IntelligenceSelfMetrics>>) => {
-    // Intentionally stubbed. v2 derived these from its Ordering system
+    // Intentionally stubbed. the reference derived these from its Ordering system
     // (orders/events/cohorts), which this app does not have. Returns an
     // empty-but-valid shape so the "My Restaurant" overview renders gracefully.
     // Wire real data if/when an ordering or analytics source exists here.
@@ -234,7 +234,7 @@ router.get('/self-metrics', handle(async (_req: Request, res: Response<ApiRespon
 }));
 
 // ============================================================
-// Intelligence v2 — two-bucket dashboard (Brief 07, additive)
+// Intelligence — two-bucket dashboard (Brief 07, additive)
 // All routes below inherit merchant JWT + OWNER (router.use above).
 // ============================================================
 
@@ -488,7 +488,7 @@ router.post('/snapshots/capture', handle(async (req: Request, res: Response<ApiR
     }
 
     const written = await runDailySnapshotJob(rid, todayStr());
-    log.info({ restaurantId: rid, captured: written.length }, 'Intelligence v2 manual capture');
+    log.info({ restaurantId: rid, captured: written.length }, 'Intelligence manual capture');
     res.json({ success: true, data: { captured: written.length } });
 }));
 

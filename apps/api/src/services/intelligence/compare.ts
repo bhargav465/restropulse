@@ -1,5 +1,5 @@
 /**
- * Competition-bucket comparison (Brief 07, v2).
+ * Competition-bucket comparison (Brief 07).
  *
  *  - `buildCompareRows` — PURE + unit-tested. Given the self row and each
  *    watchlist competitor's per-source window data, computes the

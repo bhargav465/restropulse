@@ -1,7 +1,7 @@
 /**
- * Zomato snapshot adapter (Brief 07, v2).
+ * Zomato snapshot adapter (Brief 07).
  *
- * Zomato has no public API, so v2 ships a manual/stub adapter:
+ * Zomato has no public API, so the reference ships a manual/stub adapter:
  *  - `manualZomatoAdapter` — reads the latest merchant-supplied numbers posted
  *    via `POST /api/admin/intelligence/zomato-manual` (stored in the small
  *    `zomato_manual_entries` collection, keyed by target placeId). Provenance is

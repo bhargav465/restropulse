@@ -1,7 +1,7 @@
 import React from 'react';
 import { Restaurant } from '@restropulse/shared';
-import IntelligenceV2 from './v2/IntelligenceV2';
-import type { DeepLinkTarget } from './v2/intelligence/deep-links';
+import IntelligenceDashboard from './intelligence/IntelligenceDashboard';
+import type { DeepLinkTarget } from './intelligence/sections/deep-links';
 
 interface IntelligenceProps {
   restaurant: Restaurant;
@@ -10,7 +10,7 @@ interface IntelligenceProps {
 }
 
 /**
- * Restaurant Intelligence page -- thin wrapper mounting the ported v2
+ * Restaurant Intelligence page -- thin wrapper mounting the ported
  * two-bucket dashboard (RestroScore + My Restaurant + Competition). Runs on the
  * in-memory demo twin in P1; the real backend client arrives in P2.
  */
@@ -19,7 +19,7 @@ const Intelligence: React.FC<IntelligenceProps> = ({ restaurant, onNavigate }) =
   // supplies desktop gutters (lg:px-6), so we drop ours at lg to avoid doubling.
   return (
     <div className="px-4 pt-4 lg:px-0 lg:pt-0">
-      <IntelligenceV2 restaurantData={restaurant} onNavigate={onNavigate} />
+      <IntelligenceDashboard restaurantData={restaurant} onNavigate={onNavigate} />
     </div>
   );
 };

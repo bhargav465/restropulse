@@ -3,9 +3,8 @@ import { DELTA_TEXT, DeltaTone, GRADIENT, TOKENS } from './theme';
 import { Icon, IconName } from './icons';
 
 /**
- * V2 admin shell primitives — Electric Lavender building blocks used by the
- * bucket pages under components/v2/. Only rendered when the app is built with
- * VITE_ADMIN_SHELL=v2; the default (v1) shell never imports these.
+ * Intelligence dashboard primitives — Electric Lavender building blocks used by the
+ * bucket pages under components/intelligence/.
  *
  * Design contract (design.md §2 + §3): tokens only (no raw hex), quiet
  * chrome — 1px `border-line` over shadows, one hover shadow level, deltas as
@@ -52,11 +51,11 @@ export const DeltaChip: React.FC<{ text: string; tone?: DeltaTone }> = ({ text, 
 
 /**
  * Shimmer skeleton block (design.md §3 quiet chrome). A soft primary-tinted bar
- * with a sweeping highlight (`.v2-skeleton` keyframes in index.css). Used while
+ * with a sweeping highlight (`.intel-skeleton` keyframes in index.css). Used while
  * data loads so cards never flash `0` / `₹0` before the API resolves.
  */
 export const Skeleton: React.FC<{ className?: string }> = ({ className = '' }) => (
-    <div className={`v2-skeleton bg-primary-soft rounded-lg ${className}`} aria-hidden="true" />
+    <div className={`intel-skeleton bg-primary-soft rounded-lg ${className}`} aria-hidden="true" />
 );
 
 /**

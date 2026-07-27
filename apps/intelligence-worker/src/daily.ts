@@ -74,7 +74,7 @@ export function isDailyEnabled(): boolean {
 }
 
 /**
- * Restaurants with intelligence enabled = opted into v2 (has an `intelligence`
+ * Restaurants with intelligence enabled = opted in (has an `intelligence`
  * settings block) OR already producing intelligence data (snapshots / a v1
  * report). Union keeps v1 tenants covered without a new flag.
  */

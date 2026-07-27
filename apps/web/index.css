@@ -6,7 +6,7 @@
   utilities reference the --rp-* vars at use-time, so they follow the runtime
   data-theme switch (legacy <-> orchid-admin) instead of baking a fixed value.
   This is the bridge that lets the ported Restaurant Intelligence tree -- which
-  uses v2's semantic tokens -- theme correctly in both themes with no edits.
+  uses the dashboard's semantic tokens -- theme correctly in both themes with no edits.
 */
 @theme inline {
   --color-primary: var(--rp-primary);
