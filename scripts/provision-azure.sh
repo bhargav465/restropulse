@@ -566,6 +566,8 @@ declare -a KV_SECRET_BASENAMES=(
   "razorpay-key-secret"
   "razorpay-webhook-secret"
   "firebase-service-account-key"
+  "google-maps-api-key"
+  "anthropic-api-key"
 )
 
 for GROUP_PREFIX in prod staging dev; do
@@ -683,6 +685,7 @@ configure_app_target() {
       APPLICATIONINSIGHTS_CONNECTION_STRING="$AI_CONNECTION_STRING" \
       LOG_LEVEL="info" \
       OTEL_TRACES_SAMPLER_ARG="0.1" \
+      ZOMATO_ADAPTER="manual" \
     --output none
 
   run_az_with_retry az webapp config appsettings set \
@@ -699,6 +702,8 @@ configure_app_target() {
       RAZORPAY_KEY_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-razorpay-key-secret)" \
       RAZORPAY_WEBHOOK_SECRET="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-razorpay-webhook-secret)" \
       FIREBASE_SERVICE_ACCOUNT_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-firebase-service-account-key)" \
+      GOOGLE_MAPS_API_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-google-maps-api-key)" \
+      ANTHROPIC_API_KEY="@Microsoft.KeyVault(VaultName=$KV_NAME;SecretName=${secret_group_prefix}-anthropic-api-key)" \
     --output none
 
   log_ok "App Service settings configured for $target_env"

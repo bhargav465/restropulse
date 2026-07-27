@@ -18,6 +18,9 @@
 #     --razorpay-key-id "..." \
 #     --razorpay-key-secret "..." \
 #     --razorpay-webhook-secret "..." \
+#     --google-maps-api-key "..." \
+#     --anthropic-api-key "..." \
+#     --zomato-adapter "manual" \
 #     --frontend-url "https://<staging-web>" \
 #     --backend-url "https://<staging-api>" \
 #     --asset-server-base-url "https://<staging-api>/content/mockdata"
@@ -63,11 +66,14 @@ FIREBASE_SERVICE_ACCOUNT_KEY=""
 RAZORPAY_KEY_ID=""
 RAZORPAY_KEY_SECRET=""
 RAZORPAY_WEBHOOK_SECRET=""
+GOOGLE_MAPS_API_KEY=""
+ANTHROPIC_API_KEY=""
 
 # Plain App Service settings (empty = skip)
 FRONTEND_URL=""
 BACKEND_URL=""
 ASSET_SERVER_BASE_URL=""
+ZOMATO_ADAPTER=""
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -95,9 +101,12 @@ while [[ $# -gt 0 ]]; do
     --razorpay-key-id)            RAZORPAY_KEY_ID="$2";            shift 2 ;;
     --razorpay-key-secret)        RAZORPAY_KEY_SECRET="$2";        shift 2 ;;
     --razorpay-webhook-secret)    RAZORPAY_WEBHOOK_SECRET="$2";    shift 2 ;;
+    --google-maps-api-key)        GOOGLE_MAPS_API_KEY="$2";        shift 2 ;;
+    --anthropic-api-key)          ANTHROPIC_API_KEY="$2";          shift 2 ;;
     --frontend-url)               FRONTEND_URL="$2";               shift 2 ;;
     --backend-url)                BACKEND_URL="$2";                shift 2 ;;
     --asset-server-base-url)      ASSET_SERVER_BASE_URL="$2";      shift 2 ;;
+    --zomato-adapter)             ZOMATO_ADAPTER="$2";             shift 2 ;;
     --dry-run)                    DRY_RUN=true;                    shift   ;;
     --help|-h)                    usage ;;
     *) echo "[ERR] Unknown option: $1" >&2; exit 1 ;;
@@ -268,6 +277,15 @@ log_info "--- Key Vault secrets ---"
   && kv_and_appsetting "${KV_PREFIX}-razorpay-webhook-secret" "RAZORPAY_WEBHOOK_SECRET" "$RAZORPAY_WEBHOOK_SECRET" \
   || log_skip "RAZORPAY_WEBHOOK_SECRET (not provided)"
 
+# Restaurant Intelligence server-side keys (api). Absent -> scan 503s gracefully.
+[[ -n "$GOOGLE_MAPS_API_KEY" ]] \
+  && kv_and_appsetting "${KV_PREFIX}-google-maps-api-key" "GOOGLE_MAPS_API_KEY" "$GOOGLE_MAPS_API_KEY" \
+  || log_skip "GOOGLE_MAPS_API_KEY (not provided)"
+
+[[ -n "$ANTHROPIC_API_KEY" ]] \
+  && kv_and_appsetting "${KV_PREFIX}-anthropic-api-key" "ANTHROPIC_API_KEY" "$ANTHROPIC_API_KEY" \
+  || log_skip "ANTHROPIC_API_KEY (not provided)"
+
 # ---------------------------------------------------------------------------
 # Plain App Service settings (not secrets, not in KV)
 # ---------------------------------------------------------------------------
@@ -285,6 +303,11 @@ log_info "--- Plain App Service settings ---"
 [[ -n "$ASSET_SERVER_BASE_URL" ]] \
   && plain_appsetting "ASSET_SERVER_BASE_URL" "$ASSET_SERVER_BASE_URL" \
   || log_skip "ASSET_SERVER_BASE_URL (not provided)"
+
+# Restaurant Intelligence Zomato source selector (plain toggle; default 'manual').
+[[ -n "$ZOMATO_ADAPTER" ]] \
+  && plain_appsetting "ZOMATO_ADAPTER" "$ZOMATO_ADAPTER" \
+  || log_skip "ZOMATO_ADAPTER (not provided)"
 
 # ---------------------------------------------------------------------------
 # Done

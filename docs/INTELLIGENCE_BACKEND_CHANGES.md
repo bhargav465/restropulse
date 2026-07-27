@@ -1,7 +1,7 @@
 # Restaurant Intelligence — Backend Change Summary (for manual review)
 
 This documents every **backend** change made to add Restaurant Intelligence,
-ported from the v2 reference workspace. Branch: `feature/restaurant-intelligence`.
+ported from the reference workspace. Branch: `feature/restaurant-intelligence`.
 Frontend/UI changes are excluded here (see the commit log for those).
 
 > **Verification status up front (read this first):**
@@ -15,7 +15,7 @@ Frontend/UI changes are excluded here (see the commit log for those).
 
 Declared in the canonical schema `apps/db-cli/src/schemas/collections.ts`
 (`db-cli setup`/`validate` create + manage indexes). Names are **camelCase**
-to match this repo's convention (v2 used snake_case).
+to match this repo's convention (the reference used snake_case).
 
 | Collection | Indexes | Purpose |
 |---|---|---|
@@ -67,13 +67,13 @@ already has `OWNER` — no remap needed), every operation scoped to
 | POST `/scan` | start async scan | 24h throttle (`force` overrides) |
 | GET `/scan/:id` | poll scan status | |
 | GET `/reports`, `/reports/latest`, `/reports/:id` | report list / latest / one | |
-| GET `/self-metrics` | **STUBBED** — returns an empty-but-valid shape | v2 derived this from its Ordering `cohorts` service, which this app deliberately excludes. No ordering dependency was pulled in. |
+| GET `/self-metrics` | **STUBBED** — returns an empty-but-valid shape | the reference derived this from its Ordering `cohorts` service, which this app deliberately excludes. No ordering dependency was pulled in. |
 | GET/PUT `/watchlist` | competitor watchlist | cap `WATCHLIST_MAX` (5) |
 | GET `/snapshots`, `/feedback-changes`, `/compare`, `/new-openings` | time-series reads | |
 | POST `/zomato-manual` | merchant Zomato numbers | |
 | POST `/snapshots/capture` | on-demand capture | 1/hour rate limit |
 
-**The one deliberate deviation from v2:** `self-metrics` is stubbed (empty
+**The one deliberate deviation from the reference:** `self-metrics` is stubbed (empty
 zeros) instead of computing from orders/events/cohorts — per the decision to
 not port the Ordering system. The "My Restaurant" overview renders gracefully
 on the empty shape.
@@ -113,16 +113,21 @@ Added to the `apps/api` Zod schema in `server.ts`:
 
 | Var | Default | Purpose |
 |---|---|---|
-| `GOOGLE_MAPS_API_KEY` | — (optional) | Google Places (New) for scans. Available via content-engine. |
-| `ANTHROPIC_API_KEY` | — (optional) | Anthropic analysis. Available via content-engine. |
-| `ZOMATO_ADAPTER` | `manual` | `manual` \| `stub` |
+| `GOOGLE_MAPS_API_KEY` | — (optional) | Google Places (New) for scans. Read by **api** (also declared for content-engine). |
+| `ANTHROPIC_API_KEY` | — (optional) | Anthropic analysis. Read by **api** and content-engine. |
+| `ZOMATO_ADAPTER` | `manual` | `manual` \| `stub` (plain toggle, not a secret) |
 
 Worker crons: `CRON_INTELLIGENCE`, `CRON_INTELLIGENCE_DAILY`,
 `INTELLIGENCE_DAILY_ENABLED`.
 
-> **Not yet done:** these keys are **not** added to `packages/secrets/src/manifest.ts`
-> (`SECRETS_MANIFEST`) or documented in `docs/INFRASTRUCTURE.md` / `docs/SECRETS.md`.
-> Per this repo's conventions they should be, before deploy.
+> **Done:** `GOOGLE_MAPS_API_KEY` (apps: `api`) and `ANTHROPIC_API_KEY` (apps:
+> `content-engine`, `api`) are in `packages/secrets/src/manifest.ts`
+> (`SECRETS_MANIFEST`) and documented in `docs/INFRASTRUCTURE.md` / `docs/SECRETS.md`.
+> `ZOMATO_ADAPTER` is deliberately **not** in the manifest -- it is a plain
+> config toggle, not a KV secret. The KV-reference wiring for the deployed API
+> slot lives in `scripts/provision-azure.sh` and `scripts/set-keyvault-secrets.sh`;
+> the actual KV secret **values** must still be created per env (operator step).
+> The **intelligence-worker needs none** of these keys (Mongo-only enqueue seam).
 
 ---
 
@@ -130,9 +135,10 @@ Worker crons: `CRON_INTELLIGENCE`, `CRON_INTELLIGENCE_DAILY`,
 
 1. **Runtime verification** — run `db-cli setup` to create the 6+1 collections, start the API, and exercise `/api/intelligence/*` with an OWNER session against a real Mongo (and with the two keys, a real scan). None of this has been done.
 2. **API tests** — no unit tests for the pure services (scoring/compare/snapshots) and no route tests (with mocked Places/Anthropic) were added. (The worker has 32 passing tests.)
-3. **Secrets manifest + docs** — add the 3 keys to `SECRETS_MANIFEST` and document them + the new collections/crons in `docs/INFRASTRUCTURE.md`, `docs/ARCHITECTURE.md`, `docs/SECRETS.md`, `.github/copilot-instructions.md`.
-4. **CI + deploy** — add an `intelligence-worker` test job to `ci.yml`, and deploy it as a continuous WebJob alongside publisher/content-engine in the deploy workflows.
+3. **Secrets manifest + docs** — DONE. `GOOGLE_MAPS_API_KEY` + `ANTHROPIC_API_KEY` are in `SECRETS_MANIFEST` and the provisioning scripts (`provision-azure.sh`, `set-keyvault-secrets.sh`); `ZOMATO_ADAPTER` stays a plain toggle. Remaining operator step: create the `{env}-google-maps-api-key` / `{env}-anthropic-api-key` KV secret **values** and re-run the scripts (needs Azure access).
+4. **CI + deploy** — DONE. `intelligence-worker` has a `ci.yml` test job (via `detect-changes`) and is deployed as a continuous WebJob alongside publisher/content-engine in `deploy-staging.yml` / `deploy-production.yml`.
 5. **`self-metrics`** — currently stubbed; wire to a real data source if/when one exists here.
+6. **Runtime verification** — still pending (see item 1).
 
 ---
 

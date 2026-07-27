@@ -21,8 +21,8 @@ The provider is selected at service startup via `createSecretsProvider(process.e
 
 ## Per-service secret scope
 
-Each service only loads its own secrets. Source of truth: `config/secrets-manifest.ts`.
-- `getAppSecretKeys('api')` -- JWT, Instagram, Razorpay, Firebase, MongoDB, ENCRYPTION_KEY
+Each service only loads its own secrets. Source of truth: `packages/secrets/src/manifest.ts`.
+- `getAppSecretKeys('api')` -- JWT, Instagram, Razorpay, Firebase, MongoDB, ENCRYPTION_KEY, GOOGLE_MAPS_API_KEY, ANTHROPIC_API_KEY
 - `getAppSecretKeys('content-engine')` -- Anthropic, Replicate, Google Calendar, Perplexity, MongoDB
 - `getAppSecretKeys('publisher')` -- ENCRYPTION_KEY, Instagram, MongoDB
 - `getAppSecretKeys('db-cli')` -- MongoDB only
@@ -37,6 +37,7 @@ Each service only loads its own secrets. Source of truth: `config/secrets-manife
 | `ENCRYPTION_KEY` | `encryption-key` |
 | `JWT_SECRET` | `jwt-secret` |
 | `ANTHROPIC_API_KEY` | `anthropic-api-key` |
+| `GOOGLE_MAPS_API_KEY` | `google-maps-api-key` |
 | `REPLICATE_API_TOKEN` | `replicate-api-token` |
 | `INSTAGRAM_APP_SECRET` | `instagram-app-secret` |
 | `RAZORPAY_KEY_SECRET` | `razorpay-key-secret` |
@@ -46,7 +47,7 @@ With `AZURE_KEY_VAULT_KEY_PREFIX=dev`, all names get a `dev-` prefix.
 
 ## Adding a new secret
 
-1. Add entry to `config/secrets-manifest.ts`
+1. Add entry to `packages/secrets/src/manifest.ts`
 2. Add key to the relevant app's Zod schema
 3. Add key to `tests/integration/.env.integration.example`
 4. Add integration test suite under `tests/integration/suites/` if needed
@@ -447,10 +448,12 @@ The full required-settings list mirrors the local `.env` files but with environm
 | `FIREBASE_SERVICE_ACCOUNT`                 | per-slot              | JSON pasted as a single string.                                    |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING`    | per-slot              | One App Insights resource per slot or shared.                      |
 | `CONTENT_GENERATOR_BACKEND`                | per-slot              | `placeholder` until promoted; `ai` once rolled out.                |
-| `ANTHROPIC_API_KEY`                        | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
+| `ANTHROPIC_API_KEY`                        | per-slot              | Content-engine AI captions and Restaurant Intelligence analysis. Absent -> intelligence scan 503s gracefully. |
 | `REPLICATE_API_TOKEN`                      | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
 | `GOOGLE_CALENDAR_API_KEY`                  | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
 | `PERPLEXITY_API_KEY`                       | per-slot              | Required when `CONTENT_GENERATOR_BACKEND=ai`.                      |
+| `GOOGLE_MAPS_API_KEY`                      | per-slot              | Restaurant Intelligence Places (New) scans (api, server-side). Absent -> scan 503s gracefully. |
+| `ZOMATO_ADAPTER`                           | per-slot              | Plain toggle (not a secret): `manual` (default) or `stub`.         |
 
 ### Optional: Key Vault references (operator-side)
 
