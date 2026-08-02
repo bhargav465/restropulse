@@ -332,7 +332,11 @@ export function getRecentPublishAttempts(limit: number = 50): PublishAttempt[] {
  */
 export function startPublishingCron(): void {
     const job = cron.schedule(CRON_SCHEDULE, async () => {
-        await tracedCronJob('publishing-job', () => runPublishingJob());
+        try {
+            await tracedCronJob('publishing-job', () => runPublishingJob());
+        } catch (error) {
+            log.error({ err: error }, 'Publishing cron tick failed');
+        }
     }, {
         timezone: 'Asia/Kolkata'
     });
@@ -343,7 +347,11 @@ export function startPublishingCron(): void {
     if (process.env.NODE_ENV === 'development') {
         log.info('Development mode: Running initial check in 10 seconds...');
         setTimeout(async () => {
-            await tracedCronJob('publishing-job', () => runPublishingJob());
+            try {
+                await tracedCronJob('publishing-job', () => runPublishingJob());
+            } catch (error) {
+                log.error({ err: error }, 'Initial publishing check failed');
+            }
         }, 10000);
     }
 }

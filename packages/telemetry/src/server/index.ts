@@ -16,6 +16,10 @@ export { requestLoggingMiddleware, errorHandlerMiddleware } from './middleware.j
 // Cron job tracing
 export { tracedCronJob } from './cron.js';
 
+// Process-level guards
+export { registerProcessGuards } from './process-guards.js';
+export type { ProcessGuardOptions } from './process-guards.js';
+
 // Event and metric tracking
 export { trackEvent, serverMetrics, recordMetric, incrementCounter } from './events.js';
 

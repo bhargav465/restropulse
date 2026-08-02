@@ -76,6 +76,7 @@ packages/
 - API returns `{ success: boolean, data?: T, error?: string }` (ApiResponse type)
 - HTTP status codes: 200 (success), 201 (created), 400 (bad request), 401 (unauthorized), 404 (not found), 500 (server error)
 - All async route handlers must catch errors and return proper ApiResponse
+- Runtime policy for Node services: `uncaughtException` and `unhandledRejection` are logged and terminate the process; SIGINT/SIGTERM perform graceful shutdown
 
 ### No Special Characters
 - Do not use special characters like emoji in code, documentation, print statements, or logs

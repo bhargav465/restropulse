@@ -7,7 +7,7 @@ import http from 'node:http';
 import { fileURLToPath } from 'url';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
-import { createLogger, requestLoggingMiddleware, errorHandlerMiddleware, shutdownServerTelemetry } from '@restropulse/telemetry/server';
+import { createLogger, requestLoggingMiddleware, errorHandlerMiddleware, shutdownServerTelemetry, registerProcessGuards } from '@restropulse/telemetry/server';
 import { createSecretsProvider, hydrateEnvFromProvider, API_SECRET_KEYS } from '@restropulse/secrets';
 import { initializeFirebaseAdmin } from './services/firebase-admin.js';
 // NOTE: Cron jobs (publishing + token refresh) are now handled by apps/publisher
@@ -213,33 +213,12 @@ const startServer = async () => {
     }
 };
 
-// Process-level error safety net
-// unhandledRejection: log and continue — rejection is isolated to one async chain,
-// does not indicate heap corruption.
-process.on('unhandledRejection', (reason) => {
-    log.error({ err: reason }, 'Unhandled promise rejection');
-});
-
-// uncaughtException: log and exit — synchronous throw outside try/catch means the
-// heap state is unknown; safest to restart cleanly.
-process.on('uncaughtException', (error) => {
-    log.error({ err: error }, 'Uncaught exception — shutting down');
-    process.exit(1);
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-    log.info('Shutting down gracefully (SIGINT)');
-    await shutdownServerTelemetry();
-    await disconnectDB();
-    process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-    log.info('Shutting down gracefully (SIGTERM)');
-    await shutdownServerTelemetry();
-    await disconnectDB();
-    process.exit(0);
+registerProcessGuards({
+    logger: log,
+    onShutdown: async () => {
+        await shutdownServerTelemetry();
+        await disconnectDB();
+    },
 });
 
 startServer();

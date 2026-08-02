@@ -177,7 +177,11 @@ export function getRecentRefreshAttempts(limit: number = 50): RefreshAttempt[] {
 export function startTokenRefreshCron(): void {
     // Schedule: At 2:00 AM every day
     const job = cron.schedule('0 2 * * *', async () => {
-        await tracedCronJob('token-refresh-job', () => runTokenRefreshJob());
+        try {
+            await tracedCronJob('token-refresh-job', () => runTokenRefreshJob());
+        } catch (error) {
+            log.error({ err: error }, 'Token refresh cron tick failed');
+        }
     }, {
         timezone: 'Asia/Kolkata' // Adjust timezone as needed
     });
@@ -188,7 +192,11 @@ export function startTokenRefreshCron(): void {
     if (process.env.NODE_ENV === 'development') {
         log.info('Development mode: Running initial check...');
         setTimeout(async () => {
-            await tracedCronJob('token-refresh-job', () => runTokenRefreshJob());
+            try {
+                await tracedCronJob('token-refresh-job', () => runTokenRefreshJob());
+            } catch (error) {
+                log.error({ err: error }, 'Initial token refresh check failed');
+            }
         }, 5000); // Wait 5 seconds for DB connection
     }
 }

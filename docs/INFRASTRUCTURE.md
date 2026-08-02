@@ -285,6 +285,13 @@ from previous deployments before extracting the new zip.
 | OTP Expiry (dev)           | 5 minutes     |
 | OTP Max Attempts (dev)     | 3 per number  |
 
+## Runtime exception policy
+
+- `uncaughtException`: log structured error and terminate process (`exit 1`)
+- `unhandledRejection`: log structured error and terminate process (`exit 1`)
+- `SIGINT` / `SIGTERM`: run graceful shutdown hooks (DB disconnect, telemetry flush, server close where applicable) then exit
+- Request/job-level failures are handled within route middleware and processor loops so one failed request/job item does not crash the full service loop
+
 ## Encryption
 
 - **Algorithm**: AES-256-CBC

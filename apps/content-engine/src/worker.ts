@@ -27,7 +27,7 @@ import path from 'node:path';
 import cron from 'node-cron';
 import { loadAndValidateEnv, z, ROLLING_WINDOW_HOURS, POST_APPROVAL_BUFFER_HOURS, CYCLE_APPROVAL_BUFFER_HOURS, validateTimingConstraints } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
-import { createLogger, shutdownServerTelemetry, tracedCronJob } from '@restropulse/telemetry/server';
+import { createLogger, shutdownServerTelemetry, tracedCronJob, registerProcessGuards } from '@restropulse/telemetry/server';
 import { createSecretsProvider, hydrateEnvFromProvider, CONTENT_ENGINE_SECRET_KEYS } from '@restropulse/secrets';
 import {
   createAdhocProcessor,
@@ -201,7 +201,11 @@ const startWorker = async () => {
       logger.info('Development mode: Running initial check in 5 seconds...');
       setTimeout(async () => {
         for (const processor of processors) {
-          await processor.run();
+          try {
+            await processor.run();
+          } catch (error) {
+            logger.error({ err: error, processor: processor.name }, 'Initial processor run failed');
+          }
         }
       }, 5000);
     }
@@ -211,21 +215,13 @@ const startWorker = async () => {
   }
 };
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  logger.info('Shutting down gracefully...');
-  assetServer?.close();
-  await disconnectDB();
-  await shutdownServerTelemetry();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  logger.info('Shutting down gracefully...');
-  assetServer?.close();
-  await disconnectDB();
-  await shutdownServerTelemetry();
-  process.exit(0);
+registerProcessGuards({
+  logger,
+  onShutdown: async () => {
+    assetServer?.close();
+    await disconnectDB();
+    await shutdownServerTelemetry();
+  },
 });
 
 startWorker();

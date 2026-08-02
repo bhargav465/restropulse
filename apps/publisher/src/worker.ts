@@ -19,7 +19,7 @@ import path from 'node:path';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { startPublishingCron, startTokenRefreshCron } from '@restropulse/publishing';
-import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
+import { createLogger, shutdownServerTelemetry, registerProcessGuards } from '@restropulse/telemetry/server';
 import { createSecretsProvider, hydrateEnvFromProvider, PUBLISHER_SECRET_KEYS } from '@restropulse/secrets';
 
 const logger = createLogger('publisher');
@@ -67,19 +67,12 @@ const startWorker = async () => {
   }
 };
 
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  logger.info('Shutting down gracefully...');
-  await disconnectDB();
-  await shutdownServerTelemetry();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  logger.info('Shutting down gracefully...');
-  await disconnectDB();
-  await shutdownServerTelemetry();
-  process.exit(0);
+registerProcessGuards({
+  logger,
+  onShutdown: async () => {
+    await disconnectDB();
+    await shutdownServerTelemetry();
+  },
 });
 
 startWorker();
