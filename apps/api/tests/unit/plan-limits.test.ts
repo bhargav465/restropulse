@@ -289,7 +289,7 @@ describe('enforcePlanLimits Middleware', () => {
                 });
 
             expect(res.status).toBe(403);
-            expect(res.body.error).toContain('No subscription found');
+            expect(res.body.code).toBe('UPGRADE_REQUIRED');
         });
 
         test('should return 403 when over limit and no credits', async () => {
@@ -337,10 +337,11 @@ describe('enforcePlanLimits Middleware', () => {
         });
     });
 
-    describe('No active plan (NONE/CANCELLED) - credits only', () => {
-        test('should allow post creation with credits when status is NONE', async () => {
+    describe('Trial and locked (no active plan)', () => {
+        test('allows full access during an active free trial (no plan, no credit deduction)', async () => {
             mockFindActiveSubscription.mockResolvedValue({
-                id: 'sub-1', restaurantId: 'r1', status: 'NONE', credits: 20,
+                id: 'sub-1', restaurantId: 'r1', status: 'NONE', credits: 0,
+                trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
             });
 
             const res = await request(app)
@@ -352,10 +353,30 @@ describe('enforcePlanLimits Middleware', () => {
                 });
 
             expect(res.status).toBe(201);
-            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 1);
+            // Trial grants full access without consuming credits.
+            expect(mockDeductCredits).not.toHaveBeenCalled();
         });
 
-        test('should allow post creation with credits when status is CANCELLED', async () => {
+        test('returns 403 UPGRADE_REQUIRED once the trial has ended (status NONE, even with credits)', async () => {
+            mockFindActiveSubscription.mockResolvedValue({
+                id: 'sub-1', restaurantId: 'r1', status: 'NONE', credits: 20,
+                trialEndsAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+            });
+
+            const res = await request(app)
+                .post('/api/posts')
+                .set('Authorization', `Bearer ${authToken}`)
+                .send({
+                    type: 'IMAGE', caption: 'Test', thumbnail: '/test.jpg',
+                    platforms: ['INSTAGRAM'],
+                });
+
+            expect(res.status).toBe(403);
+            expect(res.body.code).toBe('UPGRADE_REQUIRED');
+            expect(mockDeductCredits).not.toHaveBeenCalled();
+        });
+
+        test('returns 403 UPGRADE_REQUIRED when status is CANCELLED (must resubscribe)', async () => {
             mockFindActiveSubscription.mockResolvedValue({
                 id: 'sub-1', restaurantId: 'r1', status: 'CANCELLED', credits: 5,
             });
@@ -368,8 +389,9 @@ describe('enforcePlanLimits Middleware', () => {
                     platforms: ['INSTAGRAM'],
                 });
 
-            expect(res.status).toBe(201);
-            expect(mockDeductCredits).toHaveBeenCalledWith('sub-1', 1);
+            expect(res.status).toBe(403);
+            expect(res.body.code).toBe('UPGRADE_REQUIRED');
+            expect(mockDeductCredits).not.toHaveBeenCalled();
         });
     });
 

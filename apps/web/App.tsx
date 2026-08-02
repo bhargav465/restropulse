@@ -10,8 +10,10 @@ import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
-import { ViewState, Restaurant, User, Post, FeatureFlags, Platform, WebThemeName } from '@restropulse/shared';
-import { authAPI, restaurantAPI, postsAPI, configAPI } from './api';
+import Landing from './components/Landing';
+import Paywall from './components/Paywall';
+import { ViewState, Restaurant, User, Post, FeatureFlags, Platform, WebThemeName, EntitlementState } from '@restropulse/shared';
+import { authAPI, restaurantAPI, postsAPI, configAPI, subscriptionAPI } from './api';
 import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
 
 function getUserInitials(name: string): string {
@@ -19,8 +21,11 @@ function getUserInitials(name: string): string {
 }
 
 const App: React.FC = () => {
-    const [currentView, setCurrentView] = useState<ViewState>('LOGIN');
+    const [currentView, setCurrentView] = useState<ViewState>('LANDING');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    // Plan slug chosen from the landing pricing cards, remembered across the
+    // login -> onboarding flow so a trial can be auto-started afterwards.
+    const [pendingPlan, setPendingPlan] = useState<string | null>(null);
     const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
     const [userData, setUserData] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
@@ -34,6 +39,10 @@ const App: React.FC = () => {
 
     // Pending count for bell badge
     const [pendingCount, setPendingCount] = useState(0);
+    // Feature entitlement (active plan or in-trial). Null until loaded; the
+    // gated views (Content Engine, Intelligence, Strategy) show a paywall when
+    // this resolves to not-entitled.
+    const [entitlement, setEntitlement] = useState<EntitlementState | null>(null);
     // Bootstrap from localStorage cache so platform flags are available instantly on
     // every visit — no flash of Facebook UI before the API responds.
     const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(() => {
@@ -59,6 +68,13 @@ const App: React.FC = () => {
         document.documentElement.dataset.theme = activeWebTheme;
     }, [activeWebTheme]);
 
+    // Persist a plan chosen on the landing page so it survives the login ->
+    // onboarding round-trip (and a reload). Phase 3 reads `rp_pending_plan`
+    // after onboarding to auto-start that plan's free trial.
+    useEffect(() => {
+        if (pendingPlan) localStorage.setItem('rp_pending_plan', pendingPlan);
+    }, [pendingPlan]);
+
     // Load public config (feature flags incl. web theme) on boot, independent of
     // auth. These come from a public endpoint, so fetching them here — rather than
     // only after login — ensures the configured theme and platform flags apply on
@@ -66,6 +82,18 @@ const App: React.FC = () => {
     useEffect(() => {
         configAPI.getFeatures().then(updateFeatureFlags).catch(() => {});
     }, []);
+
+    // Load feature entitlement (active plan or in-trial) once authenticated with a
+    // restaurant, and whenever content refreshes. Gated views read this to decide
+    // whether to render their content or the paywall.
+    useEffect(() => {
+        if (!isLoggedIn || !restaurantData) return;
+        let active = true;
+        subscriptionAPI.getCurrent()
+            .then(d => { if (active) setEntitlement(d.entitlement ?? null); })
+            .catch(() => { /* leave prior value; views default to allowed until known */ });
+        return () => { active = false; };
+    }, [isLoggedIn, restaurantData?.id, refreshKey]);
 
     // Check if this is an Instagram OAuth callback
     useEffect(() => {
@@ -206,8 +234,9 @@ const App: React.FC = () => {
             setRestaurantData(null);
             setUserData(null);
             setIsProfileOpen(false);
-            window.history.replaceState({ view: 'LOGIN' }, '', '/');
-            setCurrentView('LOGIN');
+            setPendingPlan(null);
+            window.history.replaceState({ view: 'LANDING' }, '', '/');
+            setCurrentView('LANDING');
         }
     };
 
@@ -234,6 +263,15 @@ const App: React.FC = () => {
 
     const renderView = () => {
         if (!restaurantData) return <div>Loading...</div>;
+
+        // Gate the paid features behind an active plan or an in-progress trial.
+        // Default to allowed until entitlement is known, to avoid a paywall flash.
+        const entitled = entitlement ? entitlement.entitled : true;
+        const gatedViews: ViewState[] = ['INTELLIGENCE', 'DASHBOARD', 'STUDIO', 'STRATEGY'];
+        const inputsShowsIntelligence = currentView === 'INPUTS' && featureFlags?.updatesSection === false;
+        if (!entitled && (gatedViews.includes(currentView) || inputsShowsIntelligence)) {
+            return <Paywall onSubscribe={() => setIsProfileOpen(true)} />;
+        }
 
         // Raw Meta credentials connection state — used to enable publishing actions
         // (approve buttons, create post) regardless of which platform is toggled on.
@@ -312,6 +350,18 @@ const App: React.FC = () => {
     }
 
     if (!isLoggedIn) {
+        // Landing is the default pre-auth view; any CTA flips to LOGIN.
+        if (currentView !== 'LOGIN') {
+            return (
+                <ErrorBoundary>
+                    <Landing
+                        onStartFree={() => { setPendingPlan(null); setCurrentView('LOGIN'); }}
+                        onSelectPlan={(slug) => { setPendingPlan(slug); setCurrentView('LOGIN'); }}
+                        onLogin={() => { setPendingPlan(null); setCurrentView('LOGIN'); }}
+                    />
+                </ErrorBoundary>
+            );
+        }
         return (
             <ErrorBoundary>
                 <Login
@@ -351,6 +401,8 @@ const App: React.FC = () => {
                 onProfileOpen={() => setIsProfileOpen(v => !v)}
                 profileOpen={isProfileOpen}
                 featureFlags={featureFlags}
+                entitlement={entitlement}
+                onUpgrade={() => setIsProfileOpen(true)}
             >
                 {renderView()}
             </Layout>

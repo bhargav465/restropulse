@@ -1,17 +1,20 @@
 import { RequestHandler } from 'express';
 import { findActiveSubscription, getWeeklyPostCounts, getDailyAdhocPostCounts } from '@restropulse/db';
 import { POST_TYPE_CREDIT_COSTS, PostType, Platform } from '@restropulse/shared';
+import { getEntitlement } from '../lib/entitlement.js';
 
 /**
- * enforcePlanLimits middleware.
- * Checks weekly post counts against per-platform per-post-type plan limits, plus
- * a daily count against per-platform per-post-type dailyAdhoc limits for adhoc posts.
- * If over limit on ANY requested platform (or no active plan), checks credit balance.
- * Sets req.creditCost if credit deduction is needed. Returns 403 if no credits available.
+ * enforcePlanLimits middleware (Content Engine gate).
  *
- * Expects req.body.type and req.body.platforms. A post is treated as adhoc when
- * req.body.strategyId is absent, matching how routes/posts.ts sets Post.isAdhoc.
- * Must be used after requireAuth.
+ * Access model:
+ *  - Not entitled (no active plan and trial ended / never started) -> 403 UPGRADE_REQUIRED.
+ *  - In free trial -> full access (limits bypassed).
+ *  - Active paid plan -> per-platform per-post-type weekly limits, plus a daily
+ *    dailyAdhoc cap for adhoc posts; over-limit falls back to purchased credit packs.
+ *
+ * Sets req.creditCost when a credit-pack deduction is needed. Expects req.body.type
+ * and req.body.platforms. A post is adhoc when req.body.strategyId is absent
+ * (matching routes/posts.ts). Must be used after requireAuth.
  */
 export const enforcePlanLimits: RequestHandler = async (req, res, next) => {
     try {
@@ -22,22 +25,32 @@ export const enforcePlanLimits: RequestHandler = async (req, res, next) => {
         const isAdhoc = !req.body.strategyId;
 
         const subscription = await findActiveSubscription(restaurantId);
+        const entitlement = getEntitlement(subscription);
 
-        // No subscription doc at all -- block
-        if (!subscription) {
+        // Neither trialing nor subscribed -- feature is locked.
+        if (!entitlement.entitled) {
             res.status(403).json({
                 success: false,
-                error: 'No subscription found. Please subscribe or purchase credits.',
+                error: 'Your free trial has ended. Subscribe to a plan to keep creating content.',
+                code: 'UPGRADE_REQUIRED',
                 creditsNeeded: creditCost,
             });
             return;
         }
 
-        const isActive = subscription.status === 'ACTIVE' || subscription.status === 'PAST_DUE';
+        // Free trial grants full access -- no plan/credit limits.
+        if (entitlement.inTrial) {
+            next();
+            return;
+        }
 
-        if (isActive && subscription.planSnapshot?.limits) {
+        // Active paid plan (entitled and not trialing implies a non-null active sub).
+        const sub = subscription!;
+
+        // Enforce plan limits, fall back to purchased credit packs.
+        if (sub.planSnapshot?.limits) {
             const counts = await getWeeklyPostCounts(restaurantId);
-            const weeklyLimits = subscription.planSnapshot.limits.weekly;
+            const weeklyLimits = sub.planSnapshot.limits.weekly;
 
             // Check if within limits on ALL requested platforms
             let withinLimit = true;
@@ -58,8 +71,8 @@ export const enforcePlanLimits: RequestHandler = async (req, res, next) => {
 
             // Daily adhoc cap is an additional gate on top of the weekly limit above --
             // only applies when the plan defines it and the request is for an adhoc post.
-            if (withinLimit && isAdhoc && subscription.planSnapshot.limits.dailyAdhoc) {
-                const dailyAdhocLimits = subscription.planSnapshot.limits.dailyAdhoc;
+            if (withinLimit && isAdhoc && sub.planSnapshot.limits.dailyAdhoc) {
+                const dailyAdhocLimits = sub.planSnapshot.limits.dailyAdhoc;
                 const dailyCounts = await getDailyAdhocPostCounts(restaurantId);
                 for (const platform of platforms) {
                     const limit = dailyAdhocLimits[platform]?.[postType];
@@ -78,8 +91,8 @@ export const enforcePlanLimits: RequestHandler = async (req, res, next) => {
             }
         }
 
-        // Over limit or no active plan -- check credits
-        if (subscription.credits >= creditCost) {
+        // Over the plan limit -- fall back to purchased credit packs.
+        if (sub.credits >= creditCost) {
             req.creditCost = creditCost;
             next();
             return;
@@ -87,9 +100,9 @@ export const enforcePlanLimits: RequestHandler = async (req, res, next) => {
 
         res.status(403).json({
             success: false,
-            error: 'No active subscription or credits. Subscribe to a plan or purchase credits.',
+            error: 'You have hit your plan limit. Purchase credits or upgrade your plan.',
             creditsNeeded: creditCost,
-            creditsAvailable: subscription.credits,
+            creditsAvailable: sub.credits,
         });
     } catch (error) {
         next(error);

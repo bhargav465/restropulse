@@ -1,4 +1,4 @@
-import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags, Platform } from '@restropulse/shared';
+import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags, Platform, EntitlementState } from '@restropulse/shared';
 import type {
     SnapshotSource, SnapshotReview, ReviewTheme, WatchlistEntry,
     IntelligenceScan, IntelligenceReport, IntelligenceReportSummary, IntelligenceSelfMetrics, CompareRow,
@@ -434,8 +434,8 @@ export const subscriptionAPI = {
         return response.data!;
     },
 
-    getCurrent: async (): Promise<{ subscription: Subscription | null; usage: PlanUsage | null }> => {
-        const response = await fetchAPI<ApiResponse<{ subscription: Subscription | null; usage: PlanUsage | null }>>('/subscriptions/current');
+    getCurrent: async (): Promise<{ subscription: Subscription | null; usage: PlanUsage | null; entitlement?: EntitlementState }> => {
+        const response = await fetchAPI<ApiResponse<{ subscription: Subscription | null; usage: PlanUsage | null; entitlement?: EntitlementState }>>('/subscriptions/current');
         return response.data!;
     },
 

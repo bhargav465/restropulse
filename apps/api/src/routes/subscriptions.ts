@@ -35,6 +35,7 @@ import {
 } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
+import { getEntitlement } from '../lib/entitlement.js';
 import {
     createRazorpaySubscription,
     cancelRazorpaySubscription,
@@ -362,7 +363,7 @@ router.get('/current', requireAuth, handle(async (req: Request, res: Response<Ap
     const stored = await findActiveSubscription(restaurantId);
 
     if (!stored) {
-        return res.json({ success: true, data: { subscription: null, usage: null } });
+        return res.json({ success: true, data: { subscription: null, usage: null, entitlement: getEntitlement(null) } });
     }
 
     // Reconcile transitional state against Razorpay so the UI never gets stuck on
@@ -386,7 +387,7 @@ router.get('/current', requireAuth, handle(async (req: Request, res: Response<Ap
         }
     }
 
-    res.json({ success: true, data: { subscription, usage } });
+    res.json({ success: true, data: { subscription, usage, entitlement: getEntitlement(subscription) } });
 }));
 
 // POST /subscribe -- requireAuth, create Razorpay subscription

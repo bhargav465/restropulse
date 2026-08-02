@@ -264,7 +264,7 @@ fetches a secret it does not own.
 
 ### packages/shared
 
-Single source of truth for all TypeScript types, enums, and interfaces used across the monorepo. Key exports: `User`, `Restaurant`, `Post`, `ContentStrategy`, `StrategyCycle`, `AccountManager`, `SubscriptionPlan`, `Subscription`, `Coupon`, `Invoice`, `CreditPack`, and all status/type enums. Also exports constants: `POST_TYPE_CREDIT_COSTS`, `FREE_SIGNUP_CREDITS`.
+Single source of truth for all TypeScript types, enums, and interfaces used across the monorepo. Key exports: `User`, `Restaurant`, `Post`, `ContentStrategy`, `StrategyCycle`, `AccountManager`, `SubscriptionPlan`, `Subscription`, `Coupon`, `Invoice`, `CreditPack`, and all status/type enums. Also exports the `POST_TYPE_CREDIT_COSTS` constant and the `EntitlementState` type (trial/subscription feature-access snapshot).
 
 ### packages/db
 
@@ -353,7 +353,7 @@ transitions through the following statuses:
 Onboarding (POST /api/restaurant)
     |
     v
- NONE  <-- free tier, holds FREE_SIGNUP_CREDITS, no active plan
+ NONE  <-- no active plan; onboarding grants a no-card free trial (trialEndsAt = now + settings.trialDays)
     |
     | POST /api/subscriptions/subscribe
     v
@@ -398,7 +398,7 @@ calling `GET /v1/customers?contact=:phone` then backfills `razorpayCustomerId`.
 #### First-time subscribe (new user)
 
 ```
-1. Onboarding creates subscription document: status=NONE, credits=FREE_SIGNUP_CREDITS
+1. Onboarding creates subscription document: status=NONE, credits=0, trialEndsAt=now+settings.trialDays (no-card free trial granting full feature access)
 2. Onboarding creates Razorpay customer; stores ID in user.razorpayCustomerId
 3. User selects plan + billing cycle on the frontend
 4. POST /api/subscriptions/subscribe

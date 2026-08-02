@@ -14,8 +14,9 @@ import {
     findUserById,
     updateUser,
     createSubscription,
+    getTrialDays,
 } from '@restropulse/db';
-import { ApiResponse, Restaurant, AccountManager, City, FREE_SIGNUP_CREDITS } from '@restropulse/shared';
+import { ApiResponse, Restaurant, AccountManager, City } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { generateTokens } from '../services/jwt.js';
@@ -69,11 +70,16 @@ router.post('/', requireAuth, handle(async (req: Request, res: Response<ApiRespo
     // Link restaurant to user
     await updateUser(userId, { restaurantId: restaurant.id });
 
-    // Create subscription doc with free signup credits (no active plan)
+    // Create the subscription doc and start the no-card, full-feature free trial.
+    // The DB-configurable trial length (settings.trialDays, default 14) grants
+    // access to all gated features until trialEndsAt; after that a paid plan is required.
+    const trialDays = await getTrialDays();
+    const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
     await createSubscription({
         restaurantId: restaurant.id,
         status: 'NONE',
-        credits: FREE_SIGNUP_CREDITS,
+        credits: 0,
+        trialEndsAt,
     });
 
     // Create Razorpay customer early so it's available for future subscriptions

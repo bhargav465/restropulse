@@ -1,6 +1,6 @@
 import React from 'react';
 import { Gauge, PenTool, Lightbulb, Megaphone, Plus, Bell } from 'lucide-react';
-import { ViewState, FeatureFlags } from '@restropulse/shared';
+import { ViewState, FeatureFlags, EntitlementState } from '@restropulse/shared';
 import Sidebar from './Sidebar';
 
 interface LayoutProps {
@@ -15,9 +15,11 @@ interface LayoutProps {
   onProfileOpen: () => void;
   profileOpen?: boolean;
   featureFlags?: FeatureFlags | null;
+  entitlement?: EntitlementState | null;
+  onUpgrade?: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, restaurantName, userInitials, pendingCount, onCreatePost, onProfileOpen, profileOpen, featureFlags }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, restaurantName, userInitials, pendingCount, onCreatePost, onProfileOpen, profileOpen, featureFlags, entitlement, onUpgrade }) => {
 
   const NavItem = ({ view, icon: Icon, label }: { view: ViewState, icon: any, label: string }) => {
     const isActive = currentView === view;
@@ -87,6 +89,30 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, 
       </header>
 
       {/* Main Content Area */}
+      {/* Trial / lock status banner */}
+      {entitlement && entitlement.inTrial && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-primary-soft text-primary-strong text-sm border-b border-line">
+          <span className="font-medium">
+            {entitlement.trialDaysLeft} {entitlement.trialDaysLeft === 1 ? 'day' : 'days'} left in your free trial
+          </span>
+          {onUpgrade && (
+            <button onClick={onUpgrade} className="font-semibold underline underline-offset-2 hover:opacity-80 whitespace-nowrap">
+              Subscribe now
+            </button>
+          )}
+        </div>
+      )}
+      {entitlement && !entitlement.entitled && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-primary text-white text-sm">
+          <span className="font-medium">Your free trial has ended. Subscribe to keep using RestroPulse.</span>
+          {onUpgrade && (
+            <button onClick={onUpgrade} className="font-semibold rounded-md bg-white/20 px-3 py-1 hover:bg-white/30 whitespace-nowrap">
+              See plans
+            </button>
+          )}
+        </div>
+      )}
+
       <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0 no-scrollbar">
         {/* Full-width content with desktop gutters. The shell does NOT cap width;
             each page owns its own max-width (e.g. Dashboard/Profile stay narrow,

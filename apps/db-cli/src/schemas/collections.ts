@@ -533,4 +533,10 @@ export const COLLECTIONS: CollectionSchema[] = [
             { spec: { name: 1, ts: -1 } },
         ],
     },
+    {
+        // Operator-editable app settings, stored as a singleton document (_id: 'app').
+        // Holds e.g. trialDays (free-trial length). No indexes needed.
+        name: 'settings',
+        indexes: [],
+    },
 ];

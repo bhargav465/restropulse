@@ -414,4 +414,10 @@ export const SEED_DATA: Record<string, any[]> = {
     ],
 
     sessions: [],
+
+    // Operator-editable app settings (singleton). trialDays controls the no-card
+    // free-trial length granted at onboarding; change it in the DB anytime.
+    settings: [
+        { _id: 'app', trialDays: 14 },
+    ],
 };
