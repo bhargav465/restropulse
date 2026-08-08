@@ -362,14 +362,6 @@ jobs:
                  api-bundle/node_modules/@restropulse/intelligence-worker
           cd api-bundle && zip -r ../api-deploy.zip . && cd ..
           API_BUNDLE_SHA256=$(sha256sum api-deploy.zip | awk '{print $1}')
-          az webapp deploy \
-            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
-            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
-            --slot staging \
-            --src-path api-deploy.zip \
-            --type zip \
-            --clean true \
-            --async false
           DEPLOYED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           az webapp config appsettings set \
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
@@ -380,6 +372,14 @@ jobs:
               APP_DEPLOY_RUN_ID="${{ github.run_id }}" \
               APP_DEPLOYED_AT="$DEPLOYED_AT" \
               APP_ARTIFACT_SHA256="$API_BUNDLE_SHA256"
+          az webapp deploy \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --slot staging \
+            --src-path api-deploy.zip \
+            --type zip \
+            --clean true \
+            --async false
           az webapp config set \
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
