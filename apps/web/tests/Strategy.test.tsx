@@ -189,7 +189,7 @@ describe('Strategy Component', () => {
             if (requestButton) {
                 fireEvent.click(requestButton);
                 expect(mockHistoryPushState).toHaveBeenCalledWith(
-                    { modal: 'strategy_feedback' },
+                    { level: 'modal', id: 'feedback' },
                     '',
                     '#feedback'
                 );
@@ -292,7 +292,9 @@ describe('Strategy Component', () => {
                     fireEvent.touchMove(modal, { touches: [{ clientY: 250 }] });
                     fireEvent.touchEnd(modal);
 
-                    expect(mockHistoryBack).toHaveBeenCalled();
+                    await waitFor(() => {
+                        expect(screen.queryByText('Strategy Feedback')).not.toBeInTheDocument();
+                    });
                 }
             }
         });

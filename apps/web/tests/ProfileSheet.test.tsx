@@ -237,7 +237,7 @@ describe('ProfileSheet Component', () => {
     it('should open Edit Profile modal on click', () => {
         render(<ProfileSheet {...defaultProps} />);
         fireEvent.click(screen.getByText('Edit Restaurant Profile'));
-        expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'editProfile' }, '', '#edit-profile');
+        expect(mockHistoryPushState).toHaveBeenCalledWith({ level: 'modal', id: 'edit-profile' }, '', '#edit-profile');
         // Modal should be visible with form fields
         expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
         expect(screen.getByLabelText('Cuisine')).toBeInTheDocument();
@@ -269,7 +269,7 @@ describe('ProfileSheet Component', () => {
         expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
 
         fireEvent.click(screen.getByText('Cancel'));
-        expect(mockHistoryBack).toHaveBeenCalled();
+        expect(screen.queryByLabelText('Restaurant Name')).not.toBeInTheDocument();
     });
 
     // --- Subscription ---
@@ -299,7 +299,7 @@ describe('ProfileSheet Component', () => {
         });
 
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
-        expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'subscription' }, '', '#subscription');
+        expect(mockHistoryPushState).toHaveBeenCalledWith({ level: 'modal', id: 'subscription' }, '', '#subscription');
 
         // Subscription modal content should be visible
         await waitFor(() => {
@@ -563,7 +563,7 @@ describe('ProfileSheet Component', () => {
         const cancelButtons = screen.getAllByText('Cancel');
         fireEvent.click(cancelButtons[cancelButtons.length - 1]);
 
-        expect(mockHistoryBack).toHaveBeenCalled();
+        expect(screen.queryByText('Connect Instagram')).not.toBeInTheDocument();
     });
 
     // --- Billing History ---
@@ -700,7 +700,7 @@ describe('ProfileSheet Component', () => {
         const backdrop = document.querySelector('[data-subscription-modal]')?.parentElement?.querySelector('.absolute.inset-0');
         if (backdrop) {
             fireEvent.click(backdrop);
-            expect(mockHistoryBack).toHaveBeenCalled();
+            expect(screen.queryByText('Manage your plan')).not.toBeInTheDocument();
         }
     });
 

@@ -174,7 +174,7 @@ describe('Inputs Component', () => {
             fireEvent.click(offersButton!);
 
             expect(screen.getByText('Add New Offer')).toBeInTheDocument();
-            expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'offers' }, '', '#offers');
+            expect(mockHistoryPushState).toHaveBeenCalledWith({ level: 'modal', id: 'offers' }, '', '#offers');
         });
 
         it('should open specials modal when button is clicked', () => {
@@ -189,7 +189,7 @@ describe('Inputs Component', () => {
             if (specialsButton) {
                 fireEvent.click(specialsButton);
                 expect(screen.getByText("Add Chef's Special")).toBeInTheDocument();
-                expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'special' }, '', '#special');
+                expect(mockHistoryPushState).toHaveBeenCalledWith({ level: 'modal', id: 'special' }, '', '#special');
             }
         });
 
@@ -204,7 +204,7 @@ describe('Inputs Component', () => {
 
             if (menuButton) {
                 fireEvent.click(menuButton);
-                expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'menu' }, '', '#menu');
+                expect(mockHistoryPushState).toHaveBeenCalledWith({ level: 'modal', id: 'menu' }, '', '#menu');
             }
         });
 
@@ -292,7 +292,7 @@ describe('Inputs Component', () => {
             await waitFor(() => {
                 expect(restaurantAPI.updateOffers).toHaveBeenCalledWith('r1', 'ADD', 'Flash Sale');
                 expect(mockOnRefresh).toHaveBeenCalled();
-                expect(mockHistoryBack).toHaveBeenCalled();
+                expect(screen.queryByText('Add New Offer')).not.toBeInTheDocument();
             });
         });
 
@@ -317,7 +317,7 @@ describe('Inputs Component', () => {
                 await waitFor(() => {
                     expect(restaurantAPI.updateSpecials).toHaveBeenCalledWith('r1', 'ADD', 'Lobster Thermidor');
                     expect(mockOnRefresh).toHaveBeenCalled();
-                    expect(mockHistoryBack).toHaveBeenCalled();
+                    expect(screen.queryByText("Add Chef's Special")).not.toBeInTheDocument();
                 });
             }
         });
@@ -343,7 +343,7 @@ describe('Inputs Component', () => {
                     await waitFor(() => {
                         expect(restaurantAPI.updateMenu).toHaveBeenCalledWith('r1');
                         expect(mockOnRefresh).toHaveBeenCalled();
-                        expect(mockHistoryBack).toHaveBeenCalled();
+                        expect(screen.queryByText('Upload Menu File')).not.toBeInTheDocument();
                     });
                 }
             }
@@ -438,7 +438,7 @@ describe('Inputs Component', () => {
             });
         });
 
-        it('should close modal when backdrop is clicked (covers handleClose + history.back)', async () => {
+        it('should close modal when backdrop is clicked', async () => {
             render(<Inputs restaurantData={mockRestaurant} onRefresh={mockOnRefresh} />);
 
             // Open offers modal
@@ -450,8 +450,8 @@ describe('Inputs Component', () => {
             const backdrop = document.querySelector('.fixed.inset-0 .absolute.inset-0') as HTMLElement;
             fireEvent.click(backdrop);
 
-            // history.back() should be called (triggers popstate which closes modal)
-            expect(mockHistoryBack).toHaveBeenCalled();
+            // Backdrop click closes the modal directly via onClose
+            expect(screen.queryByText('Add New Offer')).not.toBeInTheDocument();
         });
 
         it('should close modal via popstate (covers closeModal)', async () => {

@@ -20,6 +20,17 @@ function getUserInitials(name: string): string {
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
 }
 
+// Top-level app views that can be restored from a ?view= deep link / refresh.
+// Auth-flow views (LANDING/LOGIN/ONBOARDING) are driven by auth state, not the URL.
+const RESTORABLE_VIEWS: ViewState[] = ['DASHBOARD', 'STUDIO', 'INPUTS', 'STRATEGY', 'INTELLIGENCE'];
+
+function readViewFromUrl(): ViewState | null {
+    const raw = new URLSearchParams(window.location.search).get('view');
+    if (!raw) return null;
+    const view = raw.toUpperCase() as ViewState;
+    return RESTORABLE_VIEWS.includes(view) ? view : null;
+}
+
 const App: React.FC = () => {
     const [currentView, setCurrentView] = useState<ViewState>('LANDING');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -144,11 +155,12 @@ const App: React.FC = () => {
                             setPendingCount(posts.filter((p: Post) => p.status === 'PENDING_APPROVAL' || p.status === 'CHANGES_REQUESTED').length);
                         } catch { /* ignore */ }
 
+                        // Restore the view from the URL (?view=) so a refresh or
+                        // deep link lands where the user was, not always DASHBOARD.
+                        const initialView = readViewFromUrl() ?? 'DASHBOARD';
                         setIsLoggedIn(true);
-                        if (!window.history.state) {
-                            window.history.replaceState({ view: 'DASHBOARD' }, '');
-                        }
-                        setCurrentView('DASHBOARD');
+                        window.history.replaceState({ level: 'view', view: initialView }, '', `?view=${initialView.toLowerCase()}`);
+                        setCurrentView(initialView);
                     }
                 } catch (error) {
                     console.error('Session validation failed:', error);
@@ -165,10 +177,12 @@ const App: React.FC = () => {
     // Handle browser back button
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
-            if (event.state && event.state.view) {
-                setCurrentView(event.state.view);
-            } else if (isLoggedIn) {
-                setCurrentView('DASHBOARD');
+            const state = event.state as { level?: string; view?: ViewState } | null;
+            // Only react to top-level view entries. Modal-level pops (level: 'modal')
+            // are owned by the component that opened the sheet; ignoring them here
+            // keeps the underlying view intact when a sheet is dismissed via Back.
+            if (state?.level === 'view' && state.view) {
+                setCurrentView(state.view);
             }
         };
 
@@ -182,7 +196,7 @@ const App: React.FC = () => {
         setIsProfileOpen(false);
         setCurrentView(view);
         trackPageView(view);
-        window.history.pushState({ view }, '', `?view=${view.toLowerCase()}`);
+        window.history.pushState({ level: 'view', view }, '', `?view=${view.toLowerCase()}`);
     };
 
     const onLoginSuccess = async (response: { success: boolean; message?: string }) => {
@@ -193,7 +207,7 @@ const App: React.FC = () => {
         if (!restaurantId) {
             // New user without a restaurant -- go to onboarding
             setIsLoggedIn(true);
-            window.history.replaceState({ view: 'ONBOARDING' }, '', '?view=onboarding');
+            window.history.replaceState({ level: 'view', view: 'ONBOARDING' }, '', '?view=onboarding');
             setCurrentView('ONBOARDING');
             return;
         }
@@ -207,7 +221,7 @@ const App: React.FC = () => {
             setUserData(sessionData.user ?? null);
         } catch { /* ignore */ }
 
-        window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
+        window.history.replaceState({ level: 'view', view: 'DASHBOARD' }, '', '?view=dashboard');
         setCurrentView('DASHBOARD');
         setIsLoggedIn(true);
     };
@@ -235,7 +249,7 @@ const App: React.FC = () => {
             setUserData(null);
             setIsProfileOpen(false);
             setPendingPlan(null);
-            window.history.replaceState({ view: 'LANDING' }, '', '/');
+            window.history.replaceState({ level: 'view', view: 'LANDING' }, '', '/');
             setCurrentView('LANDING');
         }
     };
@@ -331,7 +345,7 @@ const App: React.FC = () => {
                         setUserData(sessionData.user ?? null);
                         setIsLoggedIn(true);
                         setIsInstagramCallback(false);
-                        window.history.replaceState({ view: 'DASHBOARD' }, '', '/');
+                        window.history.replaceState({ level: 'view', view: 'DASHBOARD' }, '', '/');
                         setCurrentView('DASHBOARD');
                         return;
                     } catch { /* fall through to manual navigation */ }
@@ -380,7 +394,7 @@ const App: React.FC = () => {
                         setRestaurantData(restaurant);
                         const sessionData = await authAPI.checkSession().catch(() => null);
                         if (sessionData) setUserData(sessionData.user ?? null);
-                        window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
+                        window.history.replaceState({ level: 'view', view: 'DASHBOARD' }, '', '?view=dashboard');
                         setCurrentView('DASHBOARD');
                     }}
                 />
