@@ -66,9 +66,43 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
         let razorpayPlanIdsByPlan: Record<string, RazorpayPlanIds> = {};
         try {
             const allEnvIds = JSON.parse(readFileSync(PLAN_IDS_PATH, 'utf-8'));
-            razorpayPlanIdsByPlan = allEnvIds[env] || allEnvIds['development'] || {};
+            razorpayPlanIdsByPlan = allEnvIds[env] || {};
         } catch {
-            // File missing/unreadable -- fall back to existing DB IDs, then seed defaults
+            // File missing/unreadable -- treated as "no IDs" by the validation below
+        }
+
+        // Pre-seed validation: refuse to seed unless razorpay-plan-ids.json has a
+        // complete (monthly + annual) ID for every subscription plan in this env.
+        // This prevents seeding plans with blank Razorpay IDs, which silently
+        // breaks /subscribe with "Razorpay plan not configured".
+        // NOTE: a fresh environment has an empty JSON by design -- bootstrap it via
+        // `reset` (creates the plan docs) then `razorpay:setup` (creates the
+        // Razorpay plans and writes the IDs into this JSON), then re-run seed.
+        const seedPlans = (SEED_DATA as Record<string, any[]>).subscriptionPlans ?? [];
+        const missingRazorpay = seedPlans
+            .filter((p) => p._id)
+            .map((p) => {
+                const ids = razorpayPlanIdsByPlan[p._id as string];
+                const missing = [
+                    !ids?.monthly ? 'monthly' : null,
+                    !ids?.annual ? 'annual' : null,
+                ].filter(Boolean) as string[];
+                return { id: p._id as string, name: p.name as string, missing };
+            })
+            .filter((r) => r.missing.length > 0);
+
+        if (missingRazorpay.length > 0) {
+            spinner.stop();
+            console.error(chalk.red(`\nSeed aborted: missing Razorpay plan IDs for env "${env}".`));
+            console.error(chalk.red('razorpay-plan-ids.json must define monthly + annual IDs for every plan:'));
+            for (const r of missingRazorpay) {
+                console.error(chalk.red(`  - ${r.id} (${r.name}): missing ${r.missing.join(', ')}`));
+            }
+            const scriptSuffix = env === 'development' ? '' : env === 'production' ? ':prod' : `:${env}`;
+            console.error(chalk.yellow(`\nFix: run "npm run razorpay:setup${scriptSuffix} --workspace=@restropulse/db-cli"`));
+            console.error(chalk.yellow('(for a brand-new environment, run reset first to create the plan docs).'));
+            await disconnect();
+            process.exit(1);
         }
 
         // Ensure indexes exist before seeding
