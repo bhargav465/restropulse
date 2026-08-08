@@ -31,8 +31,8 @@ export const SECRETS_MANIFEST: SecretDefinition[] = [
   { key: 'GOOGLE_CALENDAR_API_KEY', kvName: 'google-calendar-api-key', description: 'Google Calendar API key for India holidays', apps: ['content-engine'], required: false, category: 'ai' },
   { key: 'PERPLEXITY_API_KEY', kvName: 'perplexity-api-key', description: 'Perplexity Sonar Pro API key', apps: ['content-engine'], required: false, category: 'ai' },
   // Payments
-  { key: 'RAZORPAY_KEY_ID', kvName: 'razorpay-key-id', description: 'Razorpay API key ID', apps: ['api'], required: false, category: 'payment' },
-  { key: 'RAZORPAY_KEY_SECRET', kvName: 'razorpay-key-secret', description: 'Razorpay API key secret', apps: ['api'], required: false, category: 'payment' },
+  { key: 'RAZORPAY_KEY_ID', kvName: 'razorpay-key-id', description: 'Razorpay API key ID', apps: ['api', 'db-cli'], required: false, category: 'payment' },
+  { key: 'RAZORPAY_KEY_SECRET', kvName: 'razorpay-key-secret', description: 'Razorpay API key secret', apps: ['api', 'db-cli'], required: false, category: 'payment' },
   { key: 'RAZORPAY_WEBHOOK_SECRET', kvName: 'razorpay-webhook-secret', description: 'Razorpay webhook HMAC signing secret', apps: ['api'], required: false, category: 'payment' },
   // Azure / Observability
   { key: 'APPLICATIONINSIGHTS_CONNECTION_STRING', kvName: 'applicationinsights-connection-string', description: 'Azure Monitor connection string', apps: ['api', 'publisher', 'content-engine', 'intelligence-worker'], required: false, category: 'azure' },

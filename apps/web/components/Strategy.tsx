@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Clock, CalendarCheck, Zap, ChevronRight, ChevronDown, CheckCircle, RefreshCw, X, Send, AlertCircle, MessageCircle, Calendar, Lock } from 'lucide-react';
 import { strategyAPI } from '../api';
+import { useHistoryModal } from '../hooks/useHistoryModal';
 import {
     StrategyCycle,
     Restaurant,
@@ -95,17 +96,13 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
     const [dragStartY, setDragStartY] = useState<number | null>(null);
     const [dragOffset, setDragOffset] = useState(0);
 
-    // History Handling
-    useEffect(() => {
-        const handlePopState = () => {
-            if (feedbackState.isOpen) {
-                setFeedbackState({ isOpen: false, cycleId: null });
-                setDragOffset(0);
-            }
-        };
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, [feedbackState.isOpen]);
+    const closeFeedbackModal = () => {
+        setFeedbackState({ isOpen: false, cycleId: null });
+        setDragOffset(0);
+    };
+
+    // History Handling -- browser/mobile Back dismisses the feedback modal.
+    useHistoryModal('feedback', feedbackState.isOpen, closeFeedbackModal);
 
     // Escape key to dismiss feedback modal
     useEffect(() => {
@@ -114,11 +111,6 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [feedbackState.isOpen]);
-
-    const closeFeedbackModal = () => {
-        setDragOffset(0);
-        window.history.back();
-    };
 
     // Form State
     const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
@@ -161,7 +153,6 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
 
     const openFeedbackModal = (id: string) => {
         setFeedbackState({ isOpen: true, cycleId: id });
-        window.history.pushState({ modal: 'strategy_feedback' }, '', '#feedback');
         setSelectedAreas([]);
         setFeedbackNote("");
     };
@@ -190,7 +181,7 @@ const Strategy: React.FC<StrategyProps> = ({ restaurantData, instagramConnected 
             setNotice({ message: 'Something went wrong. Please try again.', type: 'error' });
         }
 
-        window.history.back();
+        closeFeedbackModal();
     };
 
     const toggleArea = (area: string) => {

@@ -49,6 +49,7 @@ import { recordZomatoManualEntry } from '../services/intelligence/zomato.js';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole } from '../middleware/require-role.js';
+import { requireEntitlement } from '../middleware/require-entitlement.js';
 import { runScanPipeline } from '../services/intelligence/pipeline.js';
 import { createLogger } from '@restropulse/telemetry/server';
 
@@ -56,8 +57,8 @@ const log = createLogger('admin-intelligence');
 
 const router = express.Router();
 
-// Merchant auth for everything below (OWNER only).
-router.use(requireAuth, requireRole('OWNER'));
+// Merchant auth for everything below (OWNER only) + trial/subscription entitlement.
+router.use(requireAuth, requireRole('OWNER'), requireEntitlement);
 
 function restaurantId(req: Request): string {
     return req.user!.restaurantId;

@@ -4,10 +4,12 @@ import {
   CYCLE_APPROVAL_BUFFER_HOURS,
   ROLLING_WINDOW_HOURS,
   MIN_SCHEDULE_AHEAD_HOURS,
+  POST_PUBLISH_GRACE_HOURS,
   computePostApprovalDeadline,
   computeCycleApprovalDeadline,
   isPostPastApprovalDeadline,
   isCyclePastApprovalDeadline,
+  isPostPastPublishGrace,
   validateTimingConstraints,
 } from '../src/approval-deadlines.js';
 
@@ -126,6 +128,43 @@ describe('isCyclePastApprovalDeadline', () => {
     expect(
       isCyclePastApprovalDeadline({ startDate: undefined as unknown as string }, now),
     ).toBe(false);
+  });
+});
+
+describe('isPostPastPublishGrace', () => {
+  it('grace constant is 2 hours', () => {
+    expect(POST_PUBLISH_GRACE_HOURS).toBe(2);
+  });
+
+  it('returns true when now is 3 hours past scheduledFor (default 2h grace)', () => {
+    const scheduled = '2026-04-19T10:00:00.000Z';
+    const now = new Date(new Date(scheduled).getTime() + 3 * HOUR_MS);
+    expect(isPostPastPublishGrace({ scheduledFor: scheduled }, now)).toBe(true);
+  });
+
+  it('returns false when now is only 1 hour past scheduledFor (default 2h grace)', () => {
+    const scheduled = '2026-04-19T10:00:00.000Z';
+    const now = new Date(new Date(scheduled).getTime() + 1 * HOUR_MS);
+    expect(isPostPastPublishGrace({ scheduledFor: scheduled }, now)).toBe(false);
+  });
+
+  it('returns false when scheduledFor is in the future', () => {
+    const scheduled = '2026-04-19T10:00:00.000Z';
+    const now = new Date(new Date(scheduled).getTime() - HOUR_MS);
+    expect(isPostPastPublishGrace({ scheduledFor: scheduled }, now)).toBe(false);
+  });
+
+  it('returns false when scheduledFor is missing', () => {
+    const now = new Date('2026-04-19T10:00:00.000Z');
+    expect(isPostPastPublishGrace({ scheduledFor: undefined }, now)).toBe(false);
+  });
+
+  it('respects a custom graceHours override', () => {
+    const scheduled = '2026-04-19T10:00:00.000Z';
+    const now = new Date(new Date(scheduled).getTime() + 5 * HOUR_MS);
+    // 5h past scheduledFor: past a 4h custom grace, not past a 6h custom grace
+    expect(isPostPastPublishGrace({ scheduledFor: scheduled }, now, 4)).toBe(true);
+    expect(isPostPastPublishGrace({ scheduledFor: scheduled }, now, 6)).toBe(false);
   });
 });
 

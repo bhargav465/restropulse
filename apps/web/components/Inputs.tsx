@@ -5,6 +5,7 @@ import { restaurantAPI } from '../api';
 import { ActionNotice } from './ActionNotice';
 import ConfirmDialog from './ConfirmDialog';
 import PageContainer from './ui/PageContainer';
+import { useHistoryModal } from '../hooks/useHistoryModal';
 
 interface InputsProps {
     restaurantData: Restaurant;
@@ -13,29 +14,17 @@ interface InputsProps {
 
 // Updated Modal to Bottom Sheet
 const Modal = ({ title, onClose, children }: any) => {
-    // Handle back button closing
-    useEffect(() => {
-        const handlePopState = () => onClose();
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, [onClose]);
-
     // Escape key to dismiss
     useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); };
+        const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
-
-    // Manual close handler to sync history
-    const handleClose = () => {
-        window.history.back();
-    };
+    }, [onClose]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
             {/* Backdrop click to close */}
-            <div className="absolute inset-0" onClick={handleClose}></div>
+            <div className="absolute inset-0" onClick={onClose}></div>
 
             <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 relative z-10">
                 {/* Drag Handle */}
@@ -107,6 +96,8 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
         setSelectedFile(null);
     };
 
+    useHistoryModal(activeModal ?? '', activeModal !== null, closeModal);
+
     const handleAdd = async (type: 'OFFER' | 'SPECIAL' | 'MENU', value?: string) => {
         setLoading(true);
         try {
@@ -121,7 +112,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
             }
 
             await onRefresh();
-            window.history.back();
+            closeModal();
             setOfferInput("");
             setSpecialInput("");
         } catch (error) {
@@ -159,7 +150,6 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
             return;
         }
         setActiveModal(id);
-        window.history.pushState({ modal: id }, '', `#${id}`);
     };
 
     const activeOffers = restaurantData.activeOffers || [];
@@ -206,7 +196,7 @@ const Inputs: React.FC<InputsProps> = ({ restaurantData, onRefresh }) => {
                     icon={FileText}
                     color="bg-blue-500 shadow-lg shadow-blue-500/20"
                     isFull={false}
-                    onClick={() => { setActiveModal('menu'); window.history.pushState({ modal: 'menu' }, '', '#menu'); }}
+                    onClick={() => setActiveModal('menu')}
                 />
                 <ActionButton
                     id="moment"

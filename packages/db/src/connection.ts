@@ -139,6 +139,10 @@ export function getInvoicesCollection(): Collection {
   return getDB().collection('invoices');
 }
 
+export function getSettingsCollection(): Collection {
+  return getDB().collection('settings');
+}
+
 export function getArchivedAccountsCollection(): Collection {
   return getDB().collection('archivedAccounts');
 }

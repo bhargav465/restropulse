@@ -34,6 +34,7 @@ function emptyCol() {
   return {
     find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) }),
     updateOne: vi.fn(),
+    updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
   };
 }
 
@@ -53,6 +54,7 @@ describe('processDeadlines -> posts', () => {
     const postsCol = {
       find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([postDoc]) }),
       updateOne: vi.fn().mockResolvedValue({ matchedCount: 1, modifiedCount: 1 }),
+      updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
     };
 
     mockGetPostsCollection.mockReturnValue(postsCol as never);
@@ -81,6 +83,7 @@ describe('processDeadlines -> posts', () => {
       // DB pre-filter would exclude this doc; simulate that by returning an empty array.
       find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) }),
       updateOne: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
     };
 
     mockGetPostsCollection.mockReturnValue(postsCol as never);
@@ -105,6 +108,7 @@ describe('processDeadlines -> posts', () => {
     const postsCol = {
       find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([postDoc]) }),
       updateOne: vi.fn().mockResolvedValue({ matchedCount: 1, modifiedCount: 1 }),
+      updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
     };
 
     mockGetPostsCollection.mockReturnValue(postsCol as never);
@@ -129,6 +133,7 @@ describe('processDeadlines -> posts', () => {
     const postsCol = {
       find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([postDoc]) }),
       updateOne: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
     };
 
     mockGetPostsCollection.mockReturnValue(postsCol as never);
@@ -151,6 +156,7 @@ describe('processDeadlines -> posts', () => {
     const postsCol = {
       find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([postDoc]) }),
       updateOne: vi.fn().mockRejectedValue(new Error('db down')),
+      updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
     };
 
     mockGetPostsCollection.mockReturnValue(postsCol as never);
@@ -172,6 +178,7 @@ describe('processDeadlines -> posts', () => {
     const postsCol = {
       find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([postDoc]) }),
       updateOne: vi.fn().mockResolvedValue({ matchedCount: 0, modifiedCount: 0 }),
+      updateMany: vi.fn().mockResolvedValue({ modifiedCount: 0 }),
     };
 
     mockGetPostsCollection.mockReturnValue(postsCol as never);
@@ -181,6 +188,44 @@ describe('processDeadlines -> posts', () => {
 
     expect(result.postsAdvanced).toBe(0);
     expect(result.failed).toBe(0);
+  });
+
+  it('reaps past-due posts to MISSED_DEADLINE before the approval advance', async () => {
+    const postsCol = {
+      find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) }),
+      updateOne: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ modifiedCount: 2 }),
+    };
+
+    mockGetPostsCollection.mockReturnValue(postsCol as never);
+    mockGetStrategyCyclesCollection.mockReturnValue(emptyCol() as never);
+
+    const result = await processDeadlines();
+
+    expect(result.postsMissed).toBe(2);
+    expect(result.failed).toBe(0);
+    expect(postsCol.updateMany).toHaveBeenCalledTimes(1);
+    const [filter, update] = postsCol.updateMany.mock.calls[0];
+    expect(filter.status.$in).toEqual(
+      expect.arrayContaining(['PENDING_CONTENT', 'PENDING_MEDIA', 'PENDING_APPROVAL', 'CHANGES_REQUESTED']),
+    );
+    expect(update.$set.status).toBe('MISSED_DEADLINE');
+  });
+
+  it('counts a failure when the reap updateMany throws, without throwing', async () => {
+    const postsCol = {
+      find: vi.fn().mockReturnValue({ toArray: vi.fn().mockResolvedValue([]) }),
+      updateOne: vi.fn(),
+      updateMany: vi.fn().mockRejectedValue(new Error('db down')),
+    };
+
+    mockGetPostsCollection.mockReturnValue(postsCol as never);
+    mockGetStrategyCyclesCollection.mockReturnValue(emptyCol() as never);
+
+    const result = await processDeadlines();
+
+    expect(result.failed).toBe(1);
+    expect(result.postsMissed).toBe(0);
   });
 });
 

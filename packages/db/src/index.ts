@@ -30,6 +30,7 @@ export {
   getCreditPurchasesCollection,
   getCreditPacksCollection,
   getInvoicesCollection,
+  getSettingsCollection,
   getArchivedAccountsCollection,
   toApiFormat,
   toApiFormatArray,
@@ -54,3 +55,4 @@ export * from './archived-accounts.js';
 export * from './cost-events.js';
 export * from './media-jobs.js';
 export * from './intelligence.js';
+export * from './settings.js';

@@ -56,7 +56,7 @@ export type TokenStatus = 'valid' | 'expiring_soon' | 'expired';
 
 export type EmailVerificationStatus = 'idle' | 'sending' | 'sent' | 'link_ready' | 'verifying' | 'verified' | 'error';
 
-export type ViewState = 'LOGIN' | 'ONBOARDING' | 'DASHBOARD' | 'STUDIO' | 'INPUTS' | 'STRATEGY' | 'INTELLIGENCE';
+export type ViewState = 'LANDING' | 'LOGIN' | 'ONBOARDING' | 'DASHBOARD' | 'STUDIO' | 'INPUTS' | 'STRATEGY' | 'INTELLIGENCE';
 
 export type InstagramConnectionError =
   | 'NO_PAGES_FOUND'
@@ -294,8 +294,6 @@ export const PLATFORM_POST_TYPES: Record<Platform, PostType[]> = {
   FACEBOOK: ['IMAGE', 'VIDEO', 'CAROUSEL', 'STORY'],
 };
 
-export const FREE_SIGNUP_CREDITS = 20;
-
 export type PostTypeLimits = Partial<Record<PostType, number>>;
 export interface PlanLimits {
   weekly: Partial<Record<Platform, PostTypeLimits>>;
@@ -335,6 +333,12 @@ export interface Subscription {
   currentPeriodStart?: string | Date;
   currentPeriodEnd?: string | Date;
   credits: number;
+  /**
+   * ISO timestamp when the no-card, full-feature free trial ends. Set at
+   * onboarding to now + trialDays (DB-configurable). While now < trialEndsAt the
+   * restaurant is entitled to all gated features even without a paid plan.
+   */
+  trialEndsAt?: string | Date;
   couponCode?: string;
   cancelledAt?: string | Date;
   cancelAtPeriodEnd?: boolean;
@@ -364,6 +368,20 @@ export interface Coupon {
   createdBy: string;
   createdAt?: string | Date;
   updatedAt?: string | Date;
+}
+
+/**
+ * Feature-entitlement snapshot returned by GET /subscriptions/current. A
+ * restaurant may use the gated features (Content Engine, Restaurant
+ * Intelligence, Strategy) when `entitled` is true -- i.e. it has an active paid
+ * plan OR is inside its free-trial window.
+ */
+export interface EntitlementState {
+  entitled: boolean;
+  inTrial: boolean;
+  activePlan: boolean;
+  trialEndsAt?: string;
+  trialDaysLeft: number;
 }
 
 export interface CouponRedemption {
@@ -550,10 +568,12 @@ export {
   CYCLE_APPROVAL_BUFFER_HOURS,
   ROLLING_WINDOW_HOURS,
   MIN_SCHEDULE_AHEAD_HOURS,
+  POST_PUBLISH_GRACE_HOURS,
   computePostApprovalDeadline,
   computeCycleApprovalDeadline,
   isPostPastApprovalDeadline,
   isCyclePastApprovalDeadline,
+  isPostPastPublishGrace,
   validateTimingConstraints,
 } from './approval-deadlines.js';
 export type { TimingConstraintConfig } from './approval-deadlines.js';

@@ -201,7 +201,6 @@ describe('ContentStudio Component', () => {
                     status: 'PENDING_CONTENT' as const,
                     thumbnail: '/mock.jpg',
                     platforms: ['INSTAGRAM'] as Platform[],
-                    createdAt: new Date().toISOString(),
                 },
             ]);
 
@@ -226,7 +225,6 @@ describe('ContentStudio Component', () => {
                     platforms: ['INSTAGRAM'] as Platform[],
                     mediaJobId: 'job_v1',
                     generationStep: 'MEDIA_REQUESTED' as const,
-                    createdAt: new Date().toISOString(),
                 },
             ]);
 
@@ -251,7 +249,6 @@ describe('ContentStudio Component', () => {
                     thumbnail: '',
                     platforms: ['INSTAGRAM'] as Platform[],
                     mediaJobId: 'job_v2',
-                    createdAt: new Date().toISOString(),
                 },
             ]);
 
@@ -924,7 +921,6 @@ describe('ContentStudio Component', () => {
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p1.jpg',
                     platforms: ['INSTAGRAM'] as Platform[],
-                    createdAt: new Date().toISOString(),
                 },
                 {
                     id: 'p2',
@@ -933,7 +929,6 @@ describe('ContentStudio Component', () => {
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p2.jpg',
                     platforms: ['INSTAGRAM'] as Platform[],
-                    createdAt: new Date().toISOString(),
                 },
             ];
 
@@ -954,7 +949,6 @@ describe('ContentStudio Component', () => {
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p1.jpg',
                     platforms: ['INSTAGRAM'] as Platform[],
-                    createdAt: new Date().toISOString(),
                 },
                 {
                     id: 's1',
@@ -1074,7 +1068,6 @@ describe('ContentStudio Component', () => {
                     status: 'CHANGES_REQUESTED' as const,
                     thumbnail: '/img.jpg',
                     platforms: ['INSTAGRAM'] as Platform[],
-                    createdAt: new Date().toISOString(),
                     feedback: '{"broken": json',
                 },
                 {
@@ -1084,7 +1077,6 @@ describe('ContentStudio Component', () => {
                     status: 'CHANGES_REQUESTED' as const,
                     thumbnail: '/img.jpg',
                     platforms: ['INSTAGRAM'] as Platform[],
-                    createdAt: new Date().toISOString(),
                     feedback: '{}',
                 }
             ];
@@ -1727,7 +1719,6 @@ describe('ContentStudio Component', () => {
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/img.jpg',
                     platforms: ['INSTAGRAM'] as Platform[],
-                    createdAt: new Date().toISOString(),
                 },
             ];
             const refreshedPosts = [
@@ -1739,7 +1730,6 @@ describe('ContentStudio Component', () => {
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/img2.jpg',
                     platforms: ['INSTAGRAM'] as Platform[],
-                    createdAt: new Date().toISOString(),
                 },
             ];
 

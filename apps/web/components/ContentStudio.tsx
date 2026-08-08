@@ -9,6 +9,7 @@ import {
 import { postsAPI, restaurantAPI } from '../api';
 import { browserEvents } from '@restropulse/telemetry/browser';
 import { ActionNotice } from './ActionNotice';
+import { useHistoryModal } from '../hooks/useHistoryModal';
 
 // Constants for Feedback configuration
 const FEEDBACK_CATEGORIES = [
@@ -706,17 +707,12 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
     const [previousNote, setPreviousNote] = useState("");
     const [previousResolution, setPreviousResolution] = useState("");
 
-    // History Handling for Modal (Back Button Support)
-    useEffect(() => {
-        const handlePopState = (event: PopStateEvent) => {
-            if (feedbackState.isOpen) {
-                setFeedbackState(prev => ({ ...prev, isOpen: false }));
-            }
-        };
+    const closeFeedbackModal = () => {
+        setFeedbackState(prev => ({ ...prev, isOpen: false }));
+    };
 
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, [feedbackState.isOpen]);
+    // Back button support: pushes/pops a history entry in sync with isOpen.
+    useHistoryModal('feedback', feedbackState.isOpen, closeFeedbackModal);
 
     // Escape key to dismiss feedback modal
     useEffect(() => {
@@ -725,13 +721,6 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [feedbackState.isOpen]);
-
-    const closeFeedbackModal = () => {
-        // Manual close should trigger history back to keep sync
-        if (feedbackState.isOpen) {
-            window.history.back();
-        }
-    };
 
     const handleTouchStart = (e: React.TouchEvent) => {
         // Only enable drag if we are at the top of the scroll container
@@ -779,8 +768,6 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
         setFeedbackState({ isOpen: true, postId: id, type, warning: null, isReadOnly, isLimitReached });
         setDragOffset(0); // Reset drag state
         setActiveFeedbackTab('Caption'); // Reset tab
-
-        window.history.pushState({ modal: 'feedback', postId: id }, '', '#feedback');
 
         setSelectedTags(previousData.tags);
         setTagDetails(previousData.details);
@@ -943,13 +930,8 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
             setNotice({ message: 'Post moved back to Review.', type: 'success' });
         }
 
-        // Hard Close: Immediately update state to closed, then sync history
+        // Hard Close: update state to closed; useHistoryModal syncs the history entry.
         setFeedbackState(prev => ({ ...prev, isOpen: false }));
-
-        // Only pop history if it matches our modal state to avoid navigating back too far
-        if (window.history.state?.modal === 'feedback') {
-            window.history.back();
-        }
     };
 
     const contactAccountManager = () => {

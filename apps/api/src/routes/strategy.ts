@@ -12,8 +12,13 @@ import {
 import { ApiResponse, StrategyCycle, ContentStrategy, isCyclePastApprovalDeadline } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireEntitlement } from '../middleware/require-entitlement.js';
 
 const router = express.Router();
+
+// Strategy is a gated feature: require an active subscription or an in-progress
+// free trial for every route. requireAuth runs first so req.user is populated.
+router.use(requireAuth, requireEntitlement);
 
 // Get content strategy
 router.get('/', requireAuth, handle(async (req: Request, res: Response<ApiResponse<ContentStrategy & { suggestCreateCycle?: boolean }>>) => {

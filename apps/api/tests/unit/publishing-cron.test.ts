@@ -8,11 +8,13 @@ const mockFind = vi.fn<any>(() => ({ sort: mockSort }));
 const mockFindOne = vi.fn();
 const mockFindOneAndUpdate = vi.fn();
 const mockUpdateOne = vi.fn();
+const mockUpdateMany = vi.fn();
 const mockPostsCollection = {
     find: mockFind,
     findOne: mockFindOne,
     findOneAndUpdate: mockFindOneAndUpdate,
-    updateOne: mockUpdateOne
+    updateOne: mockUpdateOne,
+    updateMany: mockUpdateMany
 };
 
 const mockRestFindOne = vi.fn();
@@ -61,6 +63,7 @@ describe('Publishing Cron Service', () => {
         vi.clearAllMocks();
         mockToArray.mockResolvedValue([]);
         mockUpdateOne.mockResolvedValue({ modifiedCount: 1 });
+        mockUpdateMany.mockResolvedValue({ modifiedCount: 0 });
         // Mock findOneAndUpdate to return a successful update (the post doc)
         mockFindOneAndUpdate.mockResolvedValue({ _id: 'post-1', status: 'PUBLISHING' });
     });
@@ -75,7 +78,7 @@ describe('Publishing Cron Service', () => {
             expect(mockFind).toHaveBeenCalledWith(
                 expect.objectContaining({
                     status: 'SCHEDULED',
-                    scheduledFor: { $lte: expect.any(String) }
+                    scheduledFor: expect.objectContaining({ $lte: expect.any(String) })
                 })
             );
             expect(result).toHaveLength(1);
@@ -298,7 +301,7 @@ describe('Publishing Cron Service', () => {
 
             const stats = await runPublishingJob();
 
-            expect(stats).toEqual({ published: 0, failed: 0, skipped: 0 });
+            expect(stats).toEqual({ published: 0, failed: 0, skipped: 0, missed: 0 });
         });
 
         it('should process multiple posts', async () => {
@@ -379,7 +382,7 @@ describe('Publishing Cron Service', () => {
 
             const stats = await triggerManualPublish();
 
-            expect(stats).toEqual({ published: 0, failed: 0, skipped: 0 });
+            expect(stats).toEqual({ published: 0, failed: 0, skipped: 0, missed: 0 });
         });
     });
 });

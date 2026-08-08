@@ -18,30 +18,65 @@ import {
   isCyclePastApprovalDeadline,
   POST_APPROVAL_BUFFER_HOURS,
   CYCLE_APPROVAL_BUFFER_HOURS,
+  POST_PUBLISH_GRACE_HOURS,
 } from '@restropulse/shared';
 import { createLogger } from '@restropulse/telemetry/server';
 
 const logger = createLogger('content-engine:deadline-processor');
 const MS_PER_HOUR = 60 * 60 * 1000;
 
+// Non-terminal post states that still expect to be published. Any of these that
+// falls more than the publish grace past its scheduledFor has missed its window
+// and is reaped to MISSED_DEADLINE (rather than continuing toward publishing).
+const REAPABLE_STATUSES = ['PENDING_CONTENT', 'PENDING_MEDIA', 'PENDING_APPROVAL', 'CHANGES_REQUESTED'] as const;
+
 export interface DeadlineConfig {
   postApprovalBufferHours?: number;
   cycleApprovalBufferHours?: number;
+  publishGraceHours?: number;
 }
 
 export async function processDeadlines(config: DeadlineConfig = {}): Promise<{
   postsAdvanced: number;
+  postsMissed: number;
   cyclesAdvanced: number;
   failed: number;
 }> {
   const postsCol = getPostsCollection();
   const cyclesCol = getStrategyCyclesCollection();
-  const stats = { postsAdvanced: 0, cyclesAdvanced: 0, failed: 0 };
+  const stats = { postsAdvanced: 0, postsMissed: 0, cyclesAdvanced: 0, failed: 0 };
 
   const postBufferHours = config.postApprovalBufferHours ?? POST_APPROVAL_BUFFER_HOURS;
   const cycleBufferHours = config.cycleApprovalBufferHours ?? CYCLE_APPROVAL_BUFFER_HOURS;
+  const publishGraceHours = config.publishGraceHours ?? POST_PUBLISH_GRACE_HOURS;
 
   const now = new Date();
+
+  // --- Reap past-due posts (runs BEFORE the approval advance below) -----
+  // A non-terminal post more than the grace past its scheduledFor missed its
+  // window: it must go to MISSED_DEADLINE, not be advanced toward publishing.
+  // Running first means a past-due review post is reaped here and is therefore
+  // never picked up by the review->SCHEDULED advance in the next block.
+  const graceCutoff = new Date(now.getTime() - publishGraceHours * MS_PER_HOUR);
+  try {
+    const reap = await postsCol.updateMany(
+      {
+        status: { $in: REAPABLE_STATUSES as unknown as string[] },
+        scheduledFor: { $lt: graceCutoff.toISOString() },
+      },
+      { $set: { status: 'MISSED_DEADLINE', updatedAt: new Date() } },
+    );
+    if (reap.modifiedCount > 0) {
+      stats.postsMissed = reap.modifiedCount;
+      logger.info(
+        { count: reap.modifiedCount, graceHours: publishGraceHours, reason: 'past_publish_grace' },
+        'Reaped past-due posts to MISSED_DEADLINE',
+      );
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to reap past-due posts');
+    stats.failed++;
+  }
 
   // --- Posts ------------------------------------------------------------
   const postHorizon = new Date(now.getTime() + postBufferHours * MS_PER_HOUR);

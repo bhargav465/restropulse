@@ -237,7 +237,7 @@ describe('ProfileSheet Component', () => {
     it('should open Edit Profile modal on click', () => {
         render(<ProfileSheet {...defaultProps} />);
         fireEvent.click(screen.getByText('Edit Restaurant Profile'));
-        expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'editProfile' }, '', '#edit-profile');
+        expect(mockHistoryPushState).toHaveBeenCalledWith({ level: 'modal', id: 'edit-profile' }, '', '#edit-profile');
         // Modal should be visible with form fields
         expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
         expect(screen.getByLabelText('Cuisine')).toBeInTheDocument();
@@ -269,7 +269,7 @@ describe('ProfileSheet Component', () => {
         expect(screen.getByLabelText('Restaurant Name')).toBeInTheDocument();
 
         fireEvent.click(screen.getByText('Cancel'));
-        expect(mockHistoryBack).toHaveBeenCalled();
+        expect(screen.queryByLabelText('Restaurant Name')).not.toBeInTheDocument();
     });
 
     // --- Subscription ---
@@ -299,7 +299,7 @@ describe('ProfileSheet Component', () => {
         });
 
         fireEvent.click(screen.getByText('Subscription').closest('button')!);
-        expect(mockHistoryPushState).toHaveBeenCalledWith({ modal: 'subscription' }, '', '#subscription');
+        expect(mockHistoryPushState).toHaveBeenCalledWith({ level: 'modal', id: 'subscription' }, '', '#subscription');
 
         // Subscription modal content should be visible
         await waitFor(() => {
@@ -307,6 +307,39 @@ describe('ProfileSheet Component', () => {
             expect(screen.getByText('Current Plan')).toBeInTheDocument();
             expect(screen.getByText('This Week')).toBeInTheDocument();
         });
+    });
+
+    it('auto-opens the Subscription panel when autoOpenSubscription is set (See plans / upgrade CTA)', async () => {
+        // Simulates the trial-ended banner "See plans" / Paywall "Subscribe" CTA,
+        // which opens the sheet with autoOpenSubscription -> jump straight to plans.
+        render(<ProfileSheet {...defaultProps} autoOpenSubscription={true} />);
+
+        // No click needed -- the effect opens the Subscription panel directly.
+        await waitFor(() => {
+            expect(screen.getByText('Manage your plan')).toBeInTheDocument();
+            expect(screen.getByText('Current Plan')).toBeInTheDocument();
+        });
+    });
+
+    it('propagates fresh entitlement to onEntitlementChange when subscription data loads', async () => {
+        // Regression: after subscribing, App's entitlement (trial/lock banner + gated
+        // views) must update without a full page reload. ProfileSheet pushes the fresh
+        // entitlement up via this callback whenever it (re)loads subscription data.
+        const onEntitlementChange = vi.fn();
+        const entitlement = { entitled: true, inTrial: false, activePlan: true, trialDaysLeft: 0 };
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1', restaurantId: 'r1', status: 'ACTIVE', billingCycle: 'MONTHLY', credits: 15,
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
+                currentPeriodEnd: '2026-04-01',
+            },
+            usage: null,
+            entitlement,
+        } as any);
+
+        render(<ProfileSheet {...defaultProps} onEntitlementChange={onEntitlementChange} />);
+
+        await waitFor(() => expect(onEntitlementChange).toHaveBeenCalledWith(entitlement));
     });
 
     it('should show weekly usage in Subscription modal', async () => {
@@ -563,7 +596,7 @@ describe('ProfileSheet Component', () => {
         const cancelButtons = screen.getAllByText('Cancel');
         fireEvent.click(cancelButtons[cancelButtons.length - 1]);
 
-        expect(mockHistoryBack).toHaveBeenCalled();
+        expect(screen.queryByText('Connect Instagram')).not.toBeInTheDocument();
     });
 
     // --- Billing History ---
@@ -700,7 +733,7 @@ describe('ProfileSheet Component', () => {
         const backdrop = document.querySelector('[data-subscription-modal]')?.parentElement?.querySelector('.absolute.inset-0');
         if (backdrop) {
             fireEvent.click(backdrop);
-            expect(mockHistoryBack).toHaveBeenCalled();
+            expect(screen.queryByText('Manage your plan')).not.toBeInTheDocument();
         }
     });
 

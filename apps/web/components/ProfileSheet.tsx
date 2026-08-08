@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
 import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, ChevronDown, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft, Phone, Mail } from 'lucide-react';
-import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, Restaurant, InstagramConnectionError, InstagramAccount, Invoice, FeatureFlags, Platform } from '@restropulse/shared';
+import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, Restaurant, InstagramConnectionError, InstagramAccount, Invoice, FeatureFlags, Platform, EntitlementState } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, configAPI, accountAPI } from '../api';
 import ConfirmDialog from './ConfirmDialog';
 import InvoiceHistoryPanel from './InvoiceHistoryPanel';
@@ -10,6 +10,7 @@ import { browserEvents } from '@restropulse/telemetry/browser';
 import { FacebookIcon, InstagramIcon, WhatsAppIcon } from './BrandIcons';
 import { ActionNotice } from './ActionNotice';
 import { getGoogleMapsApiKey } from '../utils/env';
+import { useHistoryModal } from '../hooks/useHistoryModal';
 
 interface ProfileSheetProps {
     isOpen: boolean;
@@ -21,7 +22,12 @@ interface ProfileSheetProps {
     userEmail?: string;
     onRestaurantUpdate: (restaurant: Restaurant) => void;
     autoOpenInstagramSetup?: boolean;
+    /** When true (and the sheet is open), auto-open the Subscription panel -- used by upgrade / See-plans CTAs. */
+    autoOpenSubscription?: boolean;
     onAutoOpenHandled?: () => void;
+    /** Propagates fresh entitlement up to App whenever subscription data is (re)loaded,
+     *  so the trial/lock banner and gated views update after subscribing without a reload. */
+    onEntitlementChange?: (entitlement: EntitlementState | null) => void;
     featureFlags?: FeatureFlags | null;
     instagramEnabled?: boolean;
     facebookEnabled?: boolean;
@@ -148,7 +154,7 @@ const RAZORPAY_DISPLAY_CONFIG = {
     },
 } as const;
 
-const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled, featureFlags, instagramEnabled = true, facebookEnabled = true }) => {
+const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, autoOpenSubscription, onAutoOpenHandled, onEntitlementChange, featureFlags, instagramEnabled = true, facebookEnabled = true }) => {
     const topupCreditsEnabled = featureFlags?.topupCredits === true;
     const enabledPlatforms: Platform[] = [
         ...(instagramEnabled ? ['INSTAGRAM' as const] : []),
@@ -221,6 +227,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             setPlans(plansData);
             setCreditPacks(packsData);
             setInvoices(invoicesData);
+            onEntitlementChange?.(currentData.entitlement ?? null);
         } catch (error) {
             console.error('Failed to load subscription data:', error);
         } finally {
@@ -243,6 +250,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                 if (status === 'ACTIVE' || status === 'PAST_DUE') {
                     setSubscription(currentData.subscription);
                     setUsage(currentData.usage);
+                    onEntitlementChange?.(currentData.entitlement ?? null);
                     return;
                 }
             } catch {
@@ -298,25 +306,6 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         return () => window.removeEventListener('message', handleMessage);
     }, [isOpen, restaurantData.id]);
 
-    // History handling for modals
-    useEffect(() => {
-        const handlePopState = () => {
-            if (isEditingProfile) {
-                setIsEditingProfile(false);
-                setDragOffset(0);
-            }
-            if (isSubscriptionOpen) {
-                setIsSubscriptionOpen(false);
-                setDragOffset(0);
-            }
-            if (showInstagramErrorModal) setShowInstagramErrorModal(false);
-            if (showAccountPicker) setShowAccountPicker(false);
-            if (showSetupGuide) setShowSetupGuide(false);
-        };
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, [isEditingProfile, isSubscriptionOpen, showInstagramErrorModal, showAccountPicker, showSetupGuide]);
-
     // Escape key to dismiss sheet
     useEffect(() => {
         if (!isOpen) return;
@@ -329,7 +318,6 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     useEffect(() => {
         if (isOpen && autoOpenInstagramSetup && !instagramConnected && !showSetupGuide) {
             setShowSetupGuide(true);
-            window.history.pushState({ modal: 'setupGuide' }, '', '#setup-guide');
             onAutoOpenHandled?.();
         }
     }, [isOpen, autoOpenInstagramSetup]);
@@ -345,7 +333,6 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
 
     const handleInstagramConnect = async () => {
         setShowSetupGuide(true);
-        window.history.pushState({ modal: 'setupGuide' }, '', '#setup-guide');
     };
 
     const handleInstagramDisconnect = async () => {
@@ -440,25 +427,37 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
 
     const openEditProfile = () => {
         setIsEditingProfile(true);
-        window.history.pushState({ modal: 'editProfile' }, '', '#edit-profile');
     };
 
     const closeEditProfile = () => {
         setDragOffset(0);
-        window.history.back();
+        setIsEditingProfile(false);
     };
 
     const openSubscription = () => {
         setActionError(null);
         setIsSubscriptionOpen(true);
-        window.history.pushState({ modal: 'subscription' }, '', '#subscription');
         loadSubscriptionData();
     };
 
     const closeSubscription = () => {
         setDragOffset(0);
-        window.history.back();
+        setIsSubscriptionOpen(false);
     };
+
+    // Back-button dismissal for the three independent sub-sheets.
+    useHistoryModal('setup-guide', showSetupGuide, () => setShowSetupGuide(false));
+    useHistoryModal('edit-profile', isEditingProfile, closeEditProfile);
+    useHistoryModal('subscription', isSubscriptionOpen, closeSubscription);
+
+    // Auto-open the Subscription panel when launched from an upgrade / See-plans CTA.
+    useEffect(() => {
+        if (isOpen && autoOpenSubscription && !isSubscriptionOpen) {
+            openSubscription();
+            onAutoOpenHandled?.();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, autoOpenSubscription]);
 
     // Errors persist until dismissed — no auto-dismiss.
 
@@ -723,7 +722,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         if (!showSetupGuide) return null;
         return (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in">
-                <div className="absolute inset-0" onClick={() => { setShowSetupGuide(false); window.history.back(); }}></div>
+                <div className="absolute inset-0" onClick={() => setShowSetupGuide(false)}></div>
                 <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300 relative z-10 max-h-[90vh] overflow-y-auto">
                     <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4 sm:hidden"></div>
                     <div className="flex items-center gap-4 mb-6">
@@ -747,7 +746,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                     Use this if you have a Facebook Page with Instagram Professional account already linked.
                                 </p>
                                 <button
-                                    onClick={() => { window.history.back(); startInstagramOAuth(false); }}
+                                    onClick={() => { setShowSetupGuide(false); startInstagramOAuth(false); }}
                                     className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 bg-[#1877F2] text-white hover:bg-[#1565D8] text-sm"
                                 >
                                     <FacebookIcon size={16} />
@@ -768,7 +767,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                     Use this for a guided setup that helps you create a Page and link Instagram.
                                 </p>
                                 <button
-                                    onClick={() => { window.history.back(); startInstagramOAuth(true); }}
+                                    onClick={() => { setShowSetupGuide(false); startInstagramOAuth(true); }}
                                     className="w-full px-4 py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 via-pink-500 to-orange-500 text-white hover:opacity-90 text-sm"
                                 >
                                     <InstagramIcon size={16} />
@@ -788,7 +787,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                     </div>
 
                     <button
-                        onClick={() => { setShowSetupGuide(false); window.history.back(); }}
+                        onClick={() => setShowSetupGuide(false)}
                         className="w-full px-4 py-3 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200"
                     >
                         Cancel
@@ -1530,7 +1529,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {!instagramConnected && !instagramLoading && (
-                                        <button onClick={() => { setShowSetupGuide(true); window.history.pushState({ modal: 'setupGuide' }, '', '#setup-guide'); }} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 flex items-center justify-center transition-colors" title="View setup guide">
+                                        <button onClick={() => setShowSetupGuide(true)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 flex items-center justify-center transition-colors" title="View setup guide">
                                             <HelpCircle size={16} />
                                         </button>
                                     )}

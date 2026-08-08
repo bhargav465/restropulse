@@ -130,6 +130,10 @@ useEffect(() => {
 *Pattern C — Event listeners and timers:* Always return a cleanup function. This is
 already done correctly throughout the codebase.
 
+**Navigation & History Contract**
+
+The app uses state-based routing (`currentView: ViewState` in `apps/web/App.tsx`), synced to the URL query `?view=<view>`. It does not use react-router. Browser history entries carry a single discriminated `history.state` shape so multiple `popstate` listeners never conflict: `{ level: 'view', view }` for top-level view navigation (pushed by `App.navigateTo`; app's `popstate` handler acts only on these), and `{ level: 'modal', id }` for modals/bottom-sheets with a matching `#<id>` URL hash (pushed by `useHistoryModal` hook; app's `popstate` handler intentionally ignores these, so dismissing via Back button never changes the underlying view). On load/refresh, the top-level view is restored from the `?view=` query (see `readViewFromUrl` in App.tsx). Modals/bottom-sheets must use the `useHistoryModal(id, isOpen, onClose)` hook (`apps/web/hooks/useHistoryModal.ts`) instead of hand-rolled `pushState`/`popstate`; opening a modal sets its open-state true, closing sets it false, and the hook manages the history entry both ways. This model is identical on mobile-web and desktop — only the Layout chrome (bottom nav vs sidebar) differs by viewport via `lg:` breakpoints; the routing/history layer does not branch on platform.
+
 ### apps/api -- REST API
 
 - **Framework**: Express 4 + TypeScript
@@ -264,7 +268,7 @@ fetches a secret it does not own.
 
 ### packages/shared
 
-Single source of truth for all TypeScript types, enums, and interfaces used across the monorepo. Key exports: `User`, `Restaurant`, `Post`, `ContentStrategy`, `StrategyCycle`, `AccountManager`, `SubscriptionPlan`, `Subscription`, `Coupon`, `Invoice`, `CreditPack`, and all status/type enums. Also exports constants: `POST_TYPE_CREDIT_COSTS`, `FREE_SIGNUP_CREDITS`.
+Single source of truth for all TypeScript types, enums, and interfaces used across the monorepo. Key exports: `User`, `Restaurant`, `Post`, `ContentStrategy`, `StrategyCycle`, `AccountManager`, `SubscriptionPlan`, `Subscription`, `Coupon`, `Invoice`, `CreditPack`, and all status/type enums. Also exports the `POST_TYPE_CREDIT_COSTS` constant and the `EntitlementState` type (trial/subscription feature-access snapshot).
 
 ### packages/db
 
@@ -353,7 +357,7 @@ transitions through the following statuses:
 Onboarding (POST /api/restaurant)
     |
     v
- NONE  <-- free tier, holds FREE_SIGNUP_CREDITS, no active plan
+ NONE  <-- no active plan; onboarding grants a no-card free trial (trialEndsAt = now + settings.trialDays)
     |
     | POST /api/subscriptions/subscribe
     v
@@ -398,7 +402,7 @@ calling `GET /v1/customers?contact=:phone` then backfills `razorpayCustomerId`.
 #### First-time subscribe (new user)
 
 ```
-1. Onboarding creates subscription document: status=NONE, credits=FREE_SIGNUP_CREDITS
+1. Onboarding creates subscription document: status=NONE, credits=0, trialEndsAt=now+settings.trialDays (no-card free trial granting full feature access)
 2. Onboarding creates Razorpay customer; stores ID in user.razorpayCustomerId
 3. User selects plan + billing cycle on the frontend
 4. POST /api/subscriptions/subscribe

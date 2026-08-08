@@ -10,17 +10,33 @@ import Login from './components/Login';
 import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
-import { ViewState, Restaurant, User, Post, FeatureFlags, Platform, WebThemeName } from '@restropulse/shared';
-import { authAPI, restaurantAPI, postsAPI, configAPI } from './api';
+import Landing from './components/Landing';
+import Paywall from './components/Paywall';
+import { ViewState, Restaurant, User, Post, FeatureFlags, Platform, WebThemeName, EntitlementState } from '@restropulse/shared';
+import { authAPI, restaurantAPI, postsAPI, configAPI, subscriptionAPI } from './api';
 import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
 
 function getUserInitials(name: string): string {
     return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
 }
 
+// Top-level app views that can be restored from a ?view= deep link / refresh.
+// Auth-flow views (LANDING/LOGIN/ONBOARDING) are driven by auth state, not the URL.
+const RESTORABLE_VIEWS: ViewState[] = ['DASHBOARD', 'STUDIO', 'INPUTS', 'STRATEGY', 'INTELLIGENCE'];
+
+function readViewFromUrl(): ViewState | null {
+    const raw = new URLSearchParams(window.location.search).get('view');
+    if (!raw) return null;
+    const view = raw.toUpperCase() as ViewState;
+    return RESTORABLE_VIEWS.includes(view) ? view : null;
+}
+
 const App: React.FC = () => {
-    const [currentView, setCurrentView] = useState<ViewState>('LOGIN');
+    const [currentView, setCurrentView] = useState<ViewState>('LANDING');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    // Plan slug chosen from the landing pricing cards, remembered across the
+    // login -> onboarding flow so a trial can be auto-started afterwards.
+    const [pendingPlan, setPendingPlan] = useState<string | null>(null);
     const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
     const [userData, setUserData] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
@@ -31,9 +47,16 @@ const App: React.FC = () => {
     const [isAdhocModalOpen, setIsAdhocModalOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const [autoOpenInstagramSetup, setAutoOpenInstagramSetup] = useState(false);
+    // When an upgrade / "See plans" CTA is used, open the profile sheet AND
+    // jump straight to its Subscription panel (rather than landing on the sheet root).
+    const [autoOpenSubscription, setAutoOpenSubscription] = useState(false);
 
     // Pending count for bell badge
     const [pendingCount, setPendingCount] = useState(0);
+    // Feature entitlement (active plan or in-trial). Null until loaded; the
+    // gated views (Content Engine, Intelligence, Strategy) show a paywall when
+    // this resolves to not-entitled.
+    const [entitlement, setEntitlement] = useState<EntitlementState | null>(null);
     // Bootstrap from localStorage cache so platform flags are available instantly on
     // every visit — no flash of Facebook UI before the API responds.
     const [featureFlags, setFeatureFlags] = useState<FeatureFlags | null>(() => {
@@ -59,6 +82,13 @@ const App: React.FC = () => {
         document.documentElement.dataset.theme = activeWebTheme;
     }, [activeWebTheme]);
 
+    // Persist a plan chosen on the landing page so it survives the login ->
+    // onboarding round-trip (and a reload). Phase 3 reads `rp_pending_plan`
+    // after onboarding to auto-start that plan's free trial.
+    useEffect(() => {
+        if (pendingPlan) localStorage.setItem('rp_pending_plan', pendingPlan);
+    }, [pendingPlan]);
+
     // Load public config (feature flags incl. web theme) on boot, independent of
     // auth. These come from a public endpoint, so fetching them here — rather than
     // only after login — ensures the configured theme and platform flags apply on
@@ -66,6 +96,18 @@ const App: React.FC = () => {
     useEffect(() => {
         configAPI.getFeatures().then(updateFeatureFlags).catch(() => {});
     }, []);
+
+    // Load feature entitlement (active plan or in-trial) once authenticated with a
+    // restaurant, and whenever content refreshes. Gated views read this to decide
+    // whether to render their content or the paywall.
+    useEffect(() => {
+        if (!isLoggedIn || !restaurantData) return;
+        let active = true;
+        subscriptionAPI.getCurrent()
+            .then(d => { if (active) setEntitlement(d.entitlement ?? null); })
+            .catch(() => { /* leave prior value; views default to allowed until known */ });
+        return () => { active = false; };
+    }, [isLoggedIn, restaurantData?.id, refreshKey]);
 
     // Check if this is an Instagram OAuth callback
     useEffect(() => {
@@ -116,11 +158,12 @@ const App: React.FC = () => {
                             setPendingCount(posts.filter((p: Post) => p.status === 'PENDING_APPROVAL' || p.status === 'CHANGES_REQUESTED').length);
                         } catch { /* ignore */ }
 
+                        // Restore the view from the URL (?view=) so a refresh or
+                        // deep link lands where the user was, not always DASHBOARD.
+                        const initialView = readViewFromUrl() ?? 'DASHBOARD';
                         setIsLoggedIn(true);
-                        if (!window.history.state) {
-                            window.history.replaceState({ view: 'DASHBOARD' }, '');
-                        }
-                        setCurrentView('DASHBOARD');
+                        window.history.replaceState({ level: 'view', view: initialView }, '', `?view=${initialView.toLowerCase()}`);
+                        setCurrentView(initialView);
                     }
                 } catch (error) {
                     console.error('Session validation failed:', error);
@@ -137,10 +180,12 @@ const App: React.FC = () => {
     // Handle browser back button
     useEffect(() => {
         const handlePopState = (event: PopStateEvent) => {
-            if (event.state && event.state.view) {
-                setCurrentView(event.state.view);
-            } else if (isLoggedIn) {
-                setCurrentView('DASHBOARD');
+            const state = event.state as { level?: string; view?: ViewState } | null;
+            // Only react to top-level view entries. Modal-level pops (level: 'modal')
+            // are owned by the component that opened the sheet; ignoring them here
+            // keeps the underlying view intact when a sheet is dismissed via Back.
+            if (state?.level === 'view' && state.view) {
+                setCurrentView(state.view);
             }
         };
 
@@ -154,7 +199,7 @@ const App: React.FC = () => {
         setIsProfileOpen(false);
         setCurrentView(view);
         trackPageView(view);
-        window.history.pushState({ view }, '', `?view=${view.toLowerCase()}`);
+        window.history.pushState({ level: 'view', view }, '', `?view=${view.toLowerCase()}`);
     };
 
     const onLoginSuccess = async (response: { success: boolean; message?: string }) => {
@@ -165,7 +210,7 @@ const App: React.FC = () => {
         if (!restaurantId) {
             // New user without a restaurant -- go to onboarding
             setIsLoggedIn(true);
-            window.history.replaceState({ view: 'ONBOARDING' }, '', '?view=onboarding');
+            window.history.replaceState({ level: 'view', view: 'ONBOARDING' }, '', '?view=onboarding');
             setCurrentView('ONBOARDING');
             return;
         }
@@ -179,7 +224,7 @@ const App: React.FC = () => {
             setUserData(sessionData.user ?? null);
         } catch { /* ignore */ }
 
-        window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
+        window.history.replaceState({ level: 'view', view: 'DASHBOARD' }, '', '?view=dashboard');
         setCurrentView('DASHBOARD');
         setIsLoggedIn(true);
     };
@@ -206,8 +251,9 @@ const App: React.FC = () => {
             setRestaurantData(null);
             setUserData(null);
             setIsProfileOpen(false);
-            window.history.replaceState({ view: 'LOGIN' }, '', '/');
-            setCurrentView('LOGIN');
+            setPendingPlan(null);
+            window.history.replaceState({ level: 'view', view: 'LANDING' }, '', '/');
+            setCurrentView('LANDING');
         }
     };
 
@@ -232,8 +278,24 @@ const App: React.FC = () => {
         setIsProfileOpen(true);
     };
 
+    // Open the profile sheet directly on the Subscription panel (used by the
+    // trial-ended banner "See plans" and the Paywall "Subscribe" CTA).
+    const openSubscriptionPanel = () => {
+        setAutoOpenSubscription(true);
+        setIsProfileOpen(true);
+    };
+
     const renderView = () => {
         if (!restaurantData) return <div>Loading...</div>;
+
+        // Gate the paid features behind an active plan or an in-progress trial.
+        // Default to allowed until entitlement is known, to avoid a paywall flash.
+        const entitled = entitlement ? entitlement.entitled : true;
+        const gatedViews: ViewState[] = ['INTELLIGENCE', 'DASHBOARD', 'STUDIO', 'STRATEGY'];
+        const inputsShowsIntelligence = currentView === 'INPUTS' && featureFlags?.updatesSection === false;
+        if (!entitled && (gatedViews.includes(currentView) || inputsShowsIntelligence)) {
+            return <Paywall onSubscribe={openSubscriptionPanel} />;
+        }
 
         // Raw Meta credentials connection state — used to enable publishing actions
         // (approve buttons, create post) regardless of which platform is toggled on.
@@ -293,7 +355,7 @@ const App: React.FC = () => {
                         setUserData(sessionData.user ?? null);
                         setIsLoggedIn(true);
                         setIsInstagramCallback(false);
-                        window.history.replaceState({ view: 'DASHBOARD' }, '', '/');
+                        window.history.replaceState({ level: 'view', view: 'DASHBOARD' }, '', '/');
                         setCurrentView('DASHBOARD');
                         return;
                     } catch { /* fall through to manual navigation */ }
@@ -312,6 +374,18 @@ const App: React.FC = () => {
     }
 
     if (!isLoggedIn) {
+        // Landing is the default pre-auth view; any CTA flips to LOGIN.
+        if (currentView !== 'LOGIN') {
+            return (
+                <ErrorBoundary>
+                    <Landing
+                        onStartFree={() => { setPendingPlan(null); setCurrentView('LOGIN'); }}
+                        onSelectPlan={(slug) => { setPendingPlan(slug); setCurrentView('LOGIN'); }}
+                        onLogin={() => { setPendingPlan(null); setCurrentView('LOGIN'); }}
+                    />
+                </ErrorBoundary>
+            );
+        }
         return (
             <ErrorBoundary>
                 <Login
@@ -330,7 +404,7 @@ const App: React.FC = () => {
                         setRestaurantData(restaurant);
                         const sessionData = await authAPI.checkSession().catch(() => null);
                         if (sessionData) setUserData(sessionData.user ?? null);
-                        window.history.replaceState({ view: 'DASHBOARD' }, '', '?view=dashboard');
+                        window.history.replaceState({ level: 'view', view: 'DASHBOARD' }, '', '?view=dashboard');
                         setCurrentView('DASHBOARD');
                     }}
                 />
@@ -351,6 +425,8 @@ const App: React.FC = () => {
                 onProfileOpen={() => setIsProfileOpen(v => !v)}
                 profileOpen={isProfileOpen}
                 featureFlags={featureFlags}
+                entitlement={entitlement}
+                onUpgrade={openSubscriptionPanel}
             >
                 {renderView()}
             </Layout>
@@ -359,7 +435,7 @@ const App: React.FC = () => {
             {restaurantData && (
                 <ProfileSheet
                     isOpen={isProfileOpen}
-                    onClose={() => { setIsProfileOpen(false); setAutoOpenInstagramSetup(false); }}
+                    onClose={() => { setIsProfileOpen(false); setAutoOpenInstagramSetup(false); setAutoOpenSubscription(false); }}
                     onLogout={handleLogout}
                     restaurantData={restaurantData}
                     userName={userData?.name || ''}
@@ -367,7 +443,9 @@ const App: React.FC = () => {
                     userEmail={userData?.email}
                     onRestaurantUpdate={(updated) => setRestaurantData(updated)}
                     autoOpenInstagramSetup={autoOpenInstagramSetup}
-                    onAutoOpenHandled={() => setAutoOpenInstagramSetup(false)}
+                    autoOpenSubscription={autoOpenSubscription}
+                    onAutoOpenHandled={() => { setAutoOpenInstagramSetup(false); setAutoOpenSubscription(false); }}
+                    onEntitlementChange={(e) => setEntitlement(e)}
                     featureFlags={featureFlags}
                     instagramEnabled={instagramEnabled}
                     facebookEnabled={facebookEnabled}
