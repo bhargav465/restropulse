@@ -1,9 +1,32 @@
 import chalk from 'chalk';
 import ora from 'ora';
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { connect, getConfig, disconnect } from '../config/database.js';
 import { getResolvedEnv, requireNonDevConfirmation } from '../lib/env.js';
 import { SEED_DATA } from '../data/seedData.js';
 import { COLLECTIONS } from '../schemas/collections.js';
+
+type RazorpayPlanIds = { monthly: string; annual: string };
+
+/**
+ * Resolve a plan's Razorpay IDs when seeding, so a reseed never blanks them
+ * (the seedData defaults ship empty). Precedence:
+ *   1. env-specific IDs from razorpay-plan-ids.json (dev has these committed);
+ *   2. the existing DB doc's non-empty IDs (protects staging/prod IDs that were
+ *      written by `razorpay:setup` but are not in the JSON);
+ *   3. the seedData default (empty) as a last resort.
+ */
+function resolveRazorpayPlanIds(
+    jsonIds: RazorpayPlanIds | undefined,
+    existingIds: RazorpayPlanIds | undefined,
+    seedIds: RazorpayPlanIds | undefined,
+): RazorpayPlanIds | undefined {
+    if (jsonIds && (jsonIds.monthly || jsonIds.annual)) return jsonIds;
+    if (existingIds && (existingIds.monthly || existingIds.annual)) return existingIds;
+    return seedIds;
+}
 
 interface SeedOptions {
     clean?: boolean;
@@ -35,6 +58,18 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
 
         const db = client.db(config.database);
         console.log(chalk.cyan(`\nSeeding database: ${chalk.bold(config.database)}`));
+
+        // Load environment-specific Razorpay plan IDs so reseeding preserves them
+        // (mirrors the reset command; see resolveRazorpayPlanIds precedence).
+        const env = getResolvedEnv();
+        const PLAN_IDS_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../data/razorpay-plan-ids.json');
+        let razorpayPlanIdsByPlan: Record<string, RazorpayPlanIds> = {};
+        try {
+            const allEnvIds = JSON.parse(readFileSync(PLAN_IDS_PATH, 'utf-8'));
+            razorpayPlanIdsByPlan = allEnvIds[env] || allEnvIds['development'] || {};
+        } catch {
+            // File missing/unreadable -- fall back to existing DB IDs, then seed defaults
+        }
 
         // Ensure indexes exist before seeding
         spinner.start('Ensuring indexes exist...');
@@ -84,9 +119,24 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
                 // Use upsert to avoid duplicates
                 for (const doc of docsWithTimestamps) {
                     if (doc._id) {
+                        // For subscription plans, preserve Razorpay IDs across reseeds:
+                        // seedData ships empty IDs, so a plain replace would blank the
+                        // real IDs and break /subscribe. Resolve from JSON/existing DB.
+                        let docToWrite: any = doc;
+                        if (collectionName === 'subscriptionPlans') {
+                            const existing = await col.findOne({ _id: doc._id } as any);
+                            docToWrite = {
+                                ...doc,
+                                razorpayPlanIds: resolveRazorpayPlanIds(
+                                    razorpayPlanIdsByPlan[doc._id as string],
+                                    (existing as any)?.razorpayPlanIds,
+                                    (doc as any).razorpayPlanIds,
+                                ),
+                            };
+                        }
                         await col.replaceOne(
                             { _id: doc._id },
-                            doc,
+                            docToWrite,
                             { upsert: true }
                         );
                     } else {
