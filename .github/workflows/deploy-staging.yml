@@ -248,7 +248,7 @@ jobs:
             local name="$1"
             local command="$2"
             echo "[startup] launching ${name}: ${command}"
-            bash -lc "$command" >>"/home/LogFiles/${name}.log" 2>&1 &
+            bash -c "$command" >>"/home/LogFiles/${name}.log" 2>&1 &
             pids+=("$!")
           }
 
