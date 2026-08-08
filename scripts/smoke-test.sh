@@ -14,42 +14,55 @@ EXPECTED_GIT_SHA="${EXPECTED_GIT_SHA:-}"
 
 MAX_RETRIES=5
 RETRY_DELAY=10
+SHA_CHECK_RETRIES=12
+SHA_CHECK_DELAY=10
 
 case "$SERVICE" in
   api)
     echo "Smoke testing API at ${BASE_URL}/health ..."
     RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/health")
-    if echo "$RESPONSE" | grep -q '"status"'; then
-      if [ -n "$EXPECTED_GIT_SHA" ]; then
-        DEPLOYED_SHA=$(echo "$RESPONSE" | jq -r '.deployment.gitSha // empty')
-        if [ "$DEPLOYED_SHA" != "$EXPECTED_GIT_SHA" ]; then
-          echo "API deploy SHA mismatch. expected=$EXPECTED_GIT_SHA actual=$DEPLOYED_SHA"
-          exit 1
-        fi
-      fi
-      echo "API health check passed."
-    else
+    if ! echo "$RESPONSE" | grep -q '"status"'; then
       echo "API health check failed. Response: $RESPONSE"
       exit 1
     fi
+    if [ -n "$EXPECTED_GIT_SHA" ]; then
+      for attempt in $(seq 1 "$SHA_CHECK_RETRIES"); do
+        RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/health")
+        DEPLOYED_SHA=$(echo "$RESPONSE" | jq -r '.deployment.gitSha // empty')
+        if [ "$DEPLOYED_SHA" = "$EXPECTED_GIT_SHA" ]; then
+          break
+        fi
+        if [ "$attempt" -eq "$SHA_CHECK_RETRIES" ]; then
+          echo "API deploy SHA mismatch. expected=$EXPECTED_GIT_SHA actual=$DEPLOYED_SHA"
+          exit 1
+        fi
+        sleep "$SHA_CHECK_DELAY"
+      done
+    fi
+    echo "API health check passed."
     ;;
   web)
     echo "Smoke testing Web at ${BASE_URL} ..."
     RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}")
-    if echo "$RESPONSE" | grep -q '<div id="root"'; then
-      if [ -n "$EXPECTED_GIT_SHA" ]; then
-        CONFIG_RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/config.json")
-        DEPLOYED_SHA=$(echo "$CONFIG_RESPONSE" | jq -r '.deployment.gitSha // empty')
-        if [ "$DEPLOYED_SHA" != "$EXPECTED_GIT_SHA" ]; then
-          echo "Web deploy SHA mismatch. expected=$EXPECTED_GIT_SHA actual=$DEPLOYED_SHA"
-          exit 1
-        fi
-      fi
-      echo "Web smoke test passed."
-    else
+    if ! echo "$RESPONSE" | grep -q '<div id="root"'; then
       echo "Web smoke test failed. Response does not contain root div."
       exit 1
     fi
+    if [ -n "$EXPECTED_GIT_SHA" ]; then
+      for attempt in $(seq 1 "$SHA_CHECK_RETRIES"); do
+        CONFIG_RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/config.json")
+        DEPLOYED_SHA=$(echo "$CONFIG_RESPONSE" | jq -r '.deployment.gitSha // empty')
+        if [ "$DEPLOYED_SHA" = "$EXPECTED_GIT_SHA" ]; then
+          break
+        fi
+        if [ "$attempt" -eq "$SHA_CHECK_RETRIES" ]; then
+          echo "Web deploy SHA mismatch. expected=$EXPECTED_GIT_SHA actual=$DEPLOYED_SHA"
+          exit 1
+        fi
+        sleep "$SHA_CHECK_DELAY"
+      done
+    fi
+    echo "Web smoke test passed."
     ;;
   *)
     echo "Unknown service: $SERVICE"
