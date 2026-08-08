@@ -87,7 +87,7 @@
   box-shadow: 0 8px 30px rgba(36, 27, 53, 0.05);
 }
 .rp-landing .nav { display: flex; align-items: center; justify-content: space-between; height: 68px; }
-.rp-landing .wordmark { font-size: 21px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; background: none; border: none; cursor: pointer; padding: 0; }
+.rp-landing .wordmark { font-size: 21px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em; background: none; border: none; cursor: pointer; padding: 0; white-space: nowrap; }
 .rp-landing .wordmark b { color: var(--primary-strong); font-weight: 700; position: relative; }
 .rp-landing .wordmark .dot {
   display: inline-block; width: 7px; height: 7px; border-radius: 50%;
@@ -153,6 +153,7 @@
   box-shadow: 0 8px 24px rgba(157, 78, 221, 0.12);
 }
 .rp-landing .btn-block { width: 100%; }
+.rp-landing .nav-cta { padding: 10px 20px; }
 
 /* ============ Hero + aurora ============ */
 .rp-landing .hero {
@@ -498,6 +499,13 @@
   .rp-landing h1 { font-size: 31px; }
   .rp-landing .lead { font-size: 15.5px; }
   .rp-landing .marquee-band { display: none; }
+
+  /* De-crowd the header so the wordmark (incl. its accent dot) and nav fit on
+     one row without wrapping or squeezing. */
+  .rp-landing .nav { height: 60px; }
+  .rp-landing .wordmark { font-size: 17px; }
+  .rp-landing .nav-links { gap: 12px; }
+  .rp-landing .nav-cta { padding: 9px 15px; font-size: 13.5px; }
   .rp-landing .hero { padding: 44px 0 20px; }
   .rp-landing section { padding: 40px 0; }
   .rp-landing .pillar, .rp-landing .plan { padding: 24px; }

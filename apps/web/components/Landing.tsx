@@ -174,7 +174,7 @@ const Landing: React.FC<LandingProps> = ({ onStartFree, onSelectPlan, onLogin })
                         <button className="linklike hide-m" onClick={() => scrollTo(productRef)}>Product</button>
                         <button className="linklike" onClick={() => scrollTo(pricingRef)}>Pricing</button>
                         <button className="linklike" onClick={onLogin}>Log in</button>
-                        <button className="btn btn-primary" style={{ padding: '10px 20px' }} onClick={onStartFree}>Start free</button>
+                        <button className="btn btn-primary nav-cta" onClick={onStartFree}>Start free</button>
                     </nav>
                 </div>
             </header>
