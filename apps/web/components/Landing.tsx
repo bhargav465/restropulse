@@ -312,7 +312,7 @@ const Landing: React.FC<LandingProps> = ({ onStartFree, onSelectPlan, onLogin })
                 </section>
 
                 {/* ==================== HOW IT WORKS ==================== */}
-                <section style={{ paddingTop: 0 }}>
+                <section className="lp-secondary" style={{ paddingTop: 0 }}>
                     <div className="wrap">
                         <div className="sec-head reveal">
                             <span className="label">How it works</span>
@@ -339,7 +339,7 @@ const Landing: React.FC<LandingProps> = ({ onStartFree, onSelectPlan, onLogin })
                 </section>
 
                 {/* ==================== WHY BAND ==================== */}
-                <section style={{ paddingTop: 0 }}>
+                <section className="lp-secondary" style={{ paddingTop: 0 }}>
                     <div className="wrap">
                         <div className="band reveal">
                             <div>

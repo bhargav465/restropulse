@@ -489,18 +489,29 @@
   .rp-landing .hero-ctas .btn { width: 100%; max-width: 340px; }
 }
 
-/* Extra simplification for phones */
+/* Extra simplification for phones.
+   Tighten to a conversion-focused page: Hero -> the two live products ->
+   Pricing -> Footer. The dashboard mockup, the secondary marketing sections
+   (How it works, Why band), the marquee, and the "coming soon" third pillar
+   are hidden on phones; desktop/tablet keep the full page. */
 @media (max-width: 560px) {
   .rp-landing h1 { font-size: 31px; }
   .rp-landing .lead { font-size: 15.5px; }
   .rp-landing .marquee-band { display: none; }
-  .rp-landing .hero { padding: 44px 0 36px; }
-  .rp-landing .preview-zone { margin-top: 44px; }
-  .rp-landing .preview-main { padding: 18px; }
-  .rp-landing section { padding: 52px 0; }
+  .rp-landing .hero { padding: 44px 0 20px; }
+  .rp-landing section { padding: 40px 0; }
   .rp-landing .pillar, .rp-landing .plan { padding: 24px; }
-  .rp-landing .band { padding: 32px 22px; }
   .rp-landing .foot { justify-content: center; text-align: center; }
+
+  /* Cut length + visual weight on phones */
+  .rp-landing .preview-zone { display: none; }
+  .rp-landing .lp-secondary { display: none; }
+  .rp-landing .soon-pillar { display: none; }
+
+  /* With the mockup gone, the hero no longer needs its large bottom gap; and
+     with How-it-works / Why band gone, tighten the run into Pricing. */
+  .rp-landing .sec-head { margin-bottom: 32px; }
+  .rp-landing .pricing-head { padding-top: 28px; }
 }
 
 /* ============ Reduced motion ============ */
