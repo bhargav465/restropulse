@@ -221,7 +221,7 @@ jobs:
             cp -r "$pkg_dir" "$target"
           done
 
-      - name: Add WebJob run scripts
+      - name: Add Linux startup script for API + workers
         if: >-
           inputs.force ||
           needs.detect-changes.outputs.api == 'true' ||
@@ -229,26 +229,49 @@ jobs:
           needs.detect-changes.outputs.content-engine == 'true' ||
           needs.detect-changes.outputs.intelligence-worker == 'true'
         run: |
-          mkdir -p pruned/App_Data/jobs/continuous/publisher
-          cat > pruned/App_Data/jobs/continuous/publisher/run.sh << 'SCRIPT'
+          cat > pruned/startup.sh << 'SCRIPT'
           #!/bin/bash
-          node "$(dirname "$0")/../../../apps/publisher/dist/worker.js"
-          SCRIPT
-          chmod +x pruned/App_Data/jobs/continuous/publisher/run.sh
+          set -euo pipefail
 
-          mkdir -p pruned/App_Data/jobs/continuous/content-engine
-          cat > pruned/App_Data/jobs/continuous/content-engine/run.sh << 'SCRIPT'
-          #!/bin/bash
-          node "$(dirname "$0")/../../../apps/content-engine/dist/worker.js"
-          SCRIPT
-          chmod +x pruned/App_Data/jobs/continuous/content-engine/run.sh
+          mkdir -p /home/LogFiles
 
-          mkdir -p pruned/App_Data/jobs/continuous/intelligence-worker
-          cat > pruned/App_Data/jobs/continuous/intelligence-worker/run.sh << 'SCRIPT'
-          #!/bin/bash
-          node "$(dirname "$0")/../../../apps/intelligence-worker/dist/worker.js"
+          pids=()
+
+          start_process() {
+            local name="$1"
+            local command="$2"
+            echo "[startup] launching ${name}: ${command}"
+            bash -lc "$command" >>"/home/LogFiles/${name}.log" 2>&1 &
+            pids+=("$!")
+          }
+
+          shutdown() {
+            echo "[startup] received shutdown signal; terminating child processes"
+            for pid in "${pids[@]}"; do
+              kill -TERM "$pid" 2>/dev/null || true
+            done
+            wait || true
+            exit 143
+          }
+
+          trap shutdown SIGTERM SIGINT
+
+          start_process "publisher" "node apps/publisher/dist/worker.js"
+          start_process "content-engine" "node apps/content-engine/dist/worker.js"
+          start_process "intelligence-worker" "node apps/intelligence-worker/dist/worker.js"
+          start_process "api" "node apps/api/dist/server.js"
+
+          # Exit if any process dies; App Service will restart the app.
+          wait -n "${pids[@]}"
+          code=$?
+          echo "[startup] child process exited with code ${code}; stopping remaining processes"
+          for pid in "${pids[@]}"; do
+            kill -TERM "$pid" 2>/dev/null || true
+          done
+          wait || true
+          exit "$code"
           SCRIPT
-          chmod +x pruned/App_Data/jobs/continuous/intelligence-worker/run.sh
+          chmod +x pruned/startup.sh
 
       - name: Upload API bundle artifact
         if: >-
@@ -384,7 +407,8 @@ jobs:
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
             --slot staging \
-            --startup-file "node apps/api/dist/server.js"
+            --startup-file "bash startup.sh" \
+            --always-on true
 
   smoke-test-api:
     name: Smoke Test API

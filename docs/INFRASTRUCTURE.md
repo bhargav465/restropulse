@@ -376,10 +376,11 @@ Coverage is enforced on PRs via `config/coverage-baseline.json` (85% minimum for
 |---------|---------------|----------------|-------------------|------|
 | `apps/web` | Static Web Apps (`restropulse-prod-web`) | Upload to `staging` SWA environment | Upload artifact to production SWA environment | Free tier |
 | `apps/api` | App Service (`restropulse-prod-api`) | Deploy bundle to `staging` slot | Slot swap: staging -> production | ~$13/month |
-| `apps/publisher` | Continuous WebJob on same App Service | Bundled with API deploy | Promoted via slot swap | $0 extra |
-| `apps/content-engine` | Continuous WebJob on same App Service | Bundled with API deploy | Promoted via slot swap | $0 extra |
+| `apps/publisher` | Same App Service process group (Linux startup script) | Bundled with API deploy | Promoted via slot swap | $0 extra |
+| `apps/content-engine` | Same App Service process group (Linux startup script) | Bundled with API deploy | Promoted via slot swap | $0 extra |
+| `apps/intelligence-worker` | Same App Service process group (Linux startup script) | Bundled with API deploy | Promoted via slot swap | $0 extra |
 
-Publisher and content-engine run as continuous WebJobs under `App_Data/jobs/continuous/<name>/` on the same App Service as the API.
+Linux App Service does not run Windows-style WebJobs (`App_Data/jobs/**`). The deployed package includes `startup.sh`, and App Service starts all four processes (`api`, `publisher`, `content-engine`, `intelligence-worker`) via `bash startup.sh`.
 
 There is no separate staging Azure resource group. All resources share `restropulse-prod-rg`. Staging isolation is achieved via:
 - App Service: the `staging` deployment slot (`restropulse-prod-api-staging.azurewebsites.net`) with slot-sticky settings (separate DB, secrets, NODE_ENV)

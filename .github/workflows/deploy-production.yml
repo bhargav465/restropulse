@@ -216,6 +216,11 @@ jobs:
               APP_GIT_SHA="${{ inputs.ref }}" \
               APP_DEPLOY_RUN_ID="${{ github.run_id }}" \
               APP_DEPLOYED_AT="$DEPLOYED_AT"
+          az webapp config set \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --startup-file "bash startup.sh" \
+            --always-on true
 
       - name: Swap staging slot to production
         run: |
