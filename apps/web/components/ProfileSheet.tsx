@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
 import { CreditCard, LogOut, Trash2, MapPin, Edit3, X, Save, CheckCircle2, Star, Zap, Crown, ChevronRight, ChevronDown, Loader2, AlertCircle, ExternalLink, HelpCircle, User, Plus, FileText, Download, ArrowLeft, Phone, Mail } from 'lucide-react';
-import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, Restaurant, InstagramConnectionError, InstagramAccount, Invoice, FeatureFlags, Platform } from '@restropulse/shared';
+import { SubscriptionTier, SubscriptionPlan, Subscription, PlanUsage, CreditPack, Restaurant, InstagramConnectionError, InstagramAccount, Invoice, FeatureFlags, Platform, EntitlementState } from '@restropulse/shared';
 import { instagramAPI, restaurantAPI, subscriptionAPI, couponAPI, creditPacksAPI, invoiceAPI, configAPI, accountAPI } from '../api';
 import ConfirmDialog from './ConfirmDialog';
 import InvoiceHistoryPanel from './InvoiceHistoryPanel';
@@ -25,6 +25,9 @@ interface ProfileSheetProps {
     /** When true (and the sheet is open), auto-open the Subscription panel -- used by upgrade / See-plans CTAs. */
     autoOpenSubscription?: boolean;
     onAutoOpenHandled?: () => void;
+    /** Propagates fresh entitlement up to App whenever subscription data is (re)loaded,
+     *  so the trial/lock banner and gated views update after subscribing without a reload. */
+    onEntitlementChange?: (entitlement: EntitlementState | null) => void;
     featureFlags?: FeatureFlags | null;
     instagramEnabled?: boolean;
     facebookEnabled?: boolean;
@@ -151,7 +154,7 @@ const RAZORPAY_DISPLAY_CONFIG = {
     },
 } as const;
 
-const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, autoOpenSubscription, onAutoOpenHandled, featureFlags, instagramEnabled = true, facebookEnabled = true }) => {
+const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, autoOpenSubscription, onAutoOpenHandled, onEntitlementChange, featureFlags, instagramEnabled = true, facebookEnabled = true }) => {
     const topupCreditsEnabled = featureFlags?.topupCredits === true;
     const enabledPlatforms: Platform[] = [
         ...(instagramEnabled ? ['INSTAGRAM' as const] : []),
@@ -224,6 +227,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             setPlans(plansData);
             setCreditPacks(packsData);
             setInvoices(invoicesData);
+            onEntitlementChange?.(currentData.entitlement ?? null);
         } catch (error) {
             console.error('Failed to load subscription data:', error);
         } finally {
@@ -246,6 +250,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                 if (status === 'ACTIVE' || status === 'PAST_DUE') {
                     setSubscription(currentData.subscription);
                     setUsage(currentData.usage);
+                    onEntitlementChange?.(currentData.entitlement ?? null);
                     return;
                 }
             } catch {

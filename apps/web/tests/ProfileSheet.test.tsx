@@ -321,6 +321,27 @@ describe('ProfileSheet Component', () => {
         });
     });
 
+    it('propagates fresh entitlement to onEntitlementChange when subscription data loads', async () => {
+        // Regression: after subscribing, App's entitlement (trial/lock banner + gated
+        // views) must update without a full page reload. ProfileSheet pushes the fresh
+        // entitlement up via this callback whenever it (re)loads subscription data.
+        const onEntitlementChange = vi.fn();
+        const entitlement = { entitled: true, inTrial: false, activePlan: true, trialDaysLeft: 0 };
+        vi.mocked(subscriptionAPI.getCurrent).mockResolvedValue({
+            subscription: {
+                id: 'sub1', restaurantId: 'r1', status: 'ACTIVE', billingCycle: 'MONTHLY', credits: 15,
+                planSnapshot: { id: 'p-growth', name: 'Growth', slug: 'growth', tier: 'GROWTH', version: 1, isCurrentVersion: true, limits: { weekly: { INSTAGRAM: { IMAGE: 10, STORY: 10, CAROUSEL: 3, REEL: 5, VIDEO: 5 } } }, pricing: { monthly: 99900, annual: 999900, currency: 'INR' }, features: ['INSTAGRAM'], razorpayPlanIds: { monthly: 'rp_m', annual: 'rp_a' } },
+                currentPeriodEnd: '2026-04-01',
+            },
+            usage: null,
+            entitlement,
+        } as any);
+
+        render(<ProfileSheet {...defaultProps} onEntitlementChange={onEntitlementChange} />);
+
+        await waitFor(() => expect(onEntitlementChange).toHaveBeenCalledWith(entitlement));
+    });
+
     it('should show weekly usage in Subscription modal', async () => {
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());

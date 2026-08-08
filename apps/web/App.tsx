@@ -445,6 +445,7 @@ const App: React.FC = () => {
                     autoOpenInstagramSetup={autoOpenInstagramSetup}
                     autoOpenSubscription={autoOpenSubscription}
                     onAutoOpenHandled={() => { setAutoOpenInstagramSetup(false); setAutoOpenSubscription(false); }}
+                    onEntitlementChange={(e) => setEntitlement(e)}
                     featureFlags={featureFlags}
                     instagramEnabled={instagramEnabled}
                     facebookEnabled={facebookEnabled}
