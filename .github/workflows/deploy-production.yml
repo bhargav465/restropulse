@@ -81,6 +81,7 @@ jobs:
           echo "::add-mask::$APPINSIGHTS"
           RAZORPAY_KEY_ID=$(get_secret RAZORPAY-KEY-ID)
           echo "::add-mask::$RAZORPAY_KEY_ID"
+          DEPLOYED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
           jq -n \
             --arg apiUrl "${{ vars.PRODUCTION_API_URL }}/api" \
@@ -89,6 +90,9 @@ jobs:
             --arg razorpayKeyId "$RAZORPAY_KEY_ID" \
             --arg appInsightsConnectionString "$APPINSIGHTS" \
             --argjson telemetrySampleRate 100 \
+            --arg deployGitSha "${{ inputs.ref }}" \
+            --arg deployRunId "${{ github.run_id }}" \
+            --arg deployedAt "$DEPLOYED_AT" \
             --arg firebaseApiKey "$FIREBASE_API_KEY" \
             --arg firebaseAuthDomain "$FIREBASE_AUTH_DOMAIN" \
             --arg firebaseProjectId "$FIREBASE_PROJECT_ID" \
@@ -102,6 +106,11 @@ jobs:
               razorpayKeyId: $razorpayKeyId,
               appInsightsConnectionString: $appInsightsConnectionString,
               telemetrySampleRate: $telemetrySampleRate,
+              deployment: {
+                gitSha: $deployGitSha,
+                runId: $deployRunId,
+                deployedAt: $deployedAt
+              },
               firebase: {
                 apiKey: $firebaseApiKey,
                 authDomain: $firebaseAuthDomain,
@@ -194,6 +203,7 @@ jobs:
       # mounts the zip as a read-only filesystem, bypassing Oryx entirely.
       - name: Configure production for zip-mount deploy
         run: |
+          DEPLOYED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           az webapp config appsettings set \
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
@@ -202,7 +212,10 @@ jobs:
               CORS_ORIGIN="${{ vars.PRODUCTION_WEB_URL }}" \
               WEBSITE_RUN_FROM_PACKAGE=1 \
               WEBSITE_NODE_DEFAULT_VERSION="~22" \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              APP_GIT_SHA="${{ inputs.ref }}" \
+              APP_DEPLOY_RUN_ID="${{ github.run_id }}" \
+              APP_DEPLOYED_AT="$DEPLOYED_AT"
 
       - name: Swap staging slot to production
         run: |
@@ -227,6 +240,8 @@ jobs:
 
       - name: Smoke test API
         run: bash scripts/smoke-test.sh api "${{ vars.PRODUCTION_API_URL }}"
+        env:
+          EXPECTED_GIT_SHA: ${{ inputs.ref }}
 
   smoke-test-web:
     name: Smoke Test Web
@@ -243,6 +258,8 @@ jobs:
 
       - name: Smoke test Web
         run: bash scripts/smoke-test.sh web "${{ vars.PRODUCTION_WEB_URL }}"
+        env:
+          EXPECTED_GIT_SHA: ${{ inputs.ref }}
 
   tag-production:
     name: Tag Production

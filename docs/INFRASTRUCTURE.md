@@ -245,6 +245,20 @@ These settings are required because the monorepo uses `@restropulse/*` workspace
 packages that Oryx cannot resolve (it runs `npm ci` without workspace context,
 producing a broken `node_modules`).
 
+### Deployment identity markers (staging/production)
+
+Deploy workflows stamp deployment metadata so the live resources can be verified
+against the workflow run/ref:
+
+| Setting / Surface | Description |
+|---|---|
+| `APP_GIT_SHA` | Deployed git identity (`github.sha` on staging, `inputs.ref` on production manual promote) |
+| `APP_DEPLOY_RUN_ID` | GitHub Actions run ID |
+| `APP_DEPLOYED_AT` | UTC deployment timestamp |
+| `APP_ARTIFACT_SHA256` | SHA-256 of `api-deploy.zip` (staging API bundle) |
+| `GET /health` | API returns deployment metadata in `deployment` object |
+| `web /config.json` | Runtime web config includes deployment metadata under `deployment` |
+
 ### Slot-Sticky Settings
 
 All app settings are **slot-sticky** (marked as "Deployment slot setting" in Azure Portal).

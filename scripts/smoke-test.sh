@@ -10,6 +10,7 @@ set -euo pipefail
 
 SERVICE="${1:?Usage: smoke-test.sh <api|web> <base-url>}"
 BASE_URL="${2:?Usage: smoke-test.sh <api|web> <base-url>}"
+EXPECTED_GIT_SHA="${EXPECTED_GIT_SHA:-}"
 
 MAX_RETRIES=5
 RETRY_DELAY=10
@@ -19,6 +20,13 @@ case "$SERVICE" in
     echo "Smoke testing API at ${BASE_URL}/health ..."
     RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/health")
     if echo "$RESPONSE" | grep -q '"status"'; then
+      if [ -n "$EXPECTED_GIT_SHA" ]; then
+        DEPLOYED_SHA=$(echo "$RESPONSE" | jq -r '.deployment.gitSha // empty')
+        if [ "$DEPLOYED_SHA" != "$EXPECTED_GIT_SHA" ]; then
+          echo "API deploy SHA mismatch. expected=$EXPECTED_GIT_SHA actual=$DEPLOYED_SHA"
+          exit 1
+        fi
+      fi
       echo "API health check passed."
     else
       echo "API health check failed. Response: $RESPONSE"
@@ -29,6 +37,14 @@ case "$SERVICE" in
     echo "Smoke testing Web at ${BASE_URL} ..."
     RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}")
     if echo "$RESPONSE" | grep -q '<div id="root"'; then
+      if [ -n "$EXPECTED_GIT_SHA" ]; then
+        CONFIG_RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/config.json")
+        DEPLOYED_SHA=$(echo "$CONFIG_RESPONSE" | jq -r '.deployment.gitSha // empty')
+        if [ "$DEPLOYED_SHA" != "$EXPECTED_GIT_SHA" ]; then
+          echo "Web deploy SHA mismatch. expected=$EXPECTED_GIT_SHA actual=$DEPLOYED_SHA"
+          exit 1
+        fi
+      fi
       echo "Web smoke test passed."
     else
       echo "Web smoke test failed. Response does not contain root div."

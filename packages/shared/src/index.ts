@@ -551,6 +551,12 @@ export interface ClientConfig {
   razorpayKeyId: string;
   appInsightsConnectionString: string;
   telemetrySampleRate: number;
+  deployment?: {
+    gitSha: string;
+    runId: string;
+    deployedAt: string;
+    artifactSha256?: string;
+  };
   firebase: {
     apiKey: string;
     authDomain: string;

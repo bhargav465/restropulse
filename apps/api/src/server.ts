@@ -142,7 +142,16 @@ app.use(requestLoggingMiddleware());
 
 // Health check
 app.get('/health', (_req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        deployment: {
+            gitSha: process.env.APP_GIT_SHA ?? null,
+            runId: process.env.APP_DEPLOY_RUN_ID ?? null,
+            deployedAt: process.env.APP_DEPLOYED_AT ?? null,
+            artifactSha256: process.env.APP_ARTIFACT_SHA256 ?? null,
+        },
+    });
 });
 
 // API Routes
