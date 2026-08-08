@@ -47,6 +47,9 @@ const App: React.FC = () => {
     const [isAdhocModalOpen, setIsAdhocModalOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const [autoOpenInstagramSetup, setAutoOpenInstagramSetup] = useState(false);
+    // When an upgrade / "See plans" CTA is used, open the profile sheet AND
+    // jump straight to its Subscription panel (rather than landing on the sheet root).
+    const [autoOpenSubscription, setAutoOpenSubscription] = useState(false);
 
     // Pending count for bell badge
     const [pendingCount, setPendingCount] = useState(0);
@@ -275,6 +278,13 @@ const App: React.FC = () => {
         setIsProfileOpen(true);
     };
 
+    // Open the profile sheet directly on the Subscription panel (used by the
+    // trial-ended banner "See plans" and the Paywall "Subscribe" CTA).
+    const openSubscriptionPanel = () => {
+        setAutoOpenSubscription(true);
+        setIsProfileOpen(true);
+    };
+
     const renderView = () => {
         if (!restaurantData) return <div>Loading...</div>;
 
@@ -284,7 +294,7 @@ const App: React.FC = () => {
         const gatedViews: ViewState[] = ['INTELLIGENCE', 'DASHBOARD', 'STUDIO', 'STRATEGY'];
         const inputsShowsIntelligence = currentView === 'INPUTS' && featureFlags?.updatesSection === false;
         if (!entitled && (gatedViews.includes(currentView) || inputsShowsIntelligence)) {
-            return <Paywall onSubscribe={() => setIsProfileOpen(true)} />;
+            return <Paywall onSubscribe={openSubscriptionPanel} />;
         }
 
         // Raw Meta credentials connection state — used to enable publishing actions
@@ -416,7 +426,7 @@ const App: React.FC = () => {
                 profileOpen={isProfileOpen}
                 featureFlags={featureFlags}
                 entitlement={entitlement}
-                onUpgrade={() => setIsProfileOpen(true)}
+                onUpgrade={openSubscriptionPanel}
             >
                 {renderView()}
             </Layout>
@@ -425,7 +435,7 @@ const App: React.FC = () => {
             {restaurantData && (
                 <ProfileSheet
                     isOpen={isProfileOpen}
-                    onClose={() => { setIsProfileOpen(false); setAutoOpenInstagramSetup(false); }}
+                    onClose={() => { setIsProfileOpen(false); setAutoOpenInstagramSetup(false); setAutoOpenSubscription(false); }}
                     onLogout={handleLogout}
                     restaurantData={restaurantData}
                     userName={userData?.name || ''}
@@ -433,7 +443,8 @@ const App: React.FC = () => {
                     userEmail={userData?.email}
                     onRestaurantUpdate={(updated) => setRestaurantData(updated)}
                     autoOpenInstagramSetup={autoOpenInstagramSetup}
-                    onAutoOpenHandled={() => setAutoOpenInstagramSetup(false)}
+                    autoOpenSubscription={autoOpenSubscription}
+                    onAutoOpenHandled={() => { setAutoOpenInstagramSetup(false); setAutoOpenSubscription(false); }}
                     featureFlags={featureFlags}
                     instagramEnabled={instagramEnabled}
                     facebookEnabled={facebookEnabled}

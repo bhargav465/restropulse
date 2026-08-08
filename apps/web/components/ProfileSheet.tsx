@@ -22,6 +22,8 @@ interface ProfileSheetProps {
     userEmail?: string;
     onRestaurantUpdate: (restaurant: Restaurant) => void;
     autoOpenInstagramSetup?: boolean;
+    /** When true (and the sheet is open), auto-open the Subscription panel -- used by upgrade / See-plans CTAs. */
+    autoOpenSubscription?: boolean;
     onAutoOpenHandled?: () => void;
     featureFlags?: FeatureFlags | null;
     instagramEnabled?: boolean;
@@ -149,7 +151,7 @@ const RAZORPAY_DISPLAY_CONFIG = {
     },
 } as const;
 
-const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, onAutoOpenHandled, featureFlags, instagramEnabled = true, facebookEnabled = true }) => {
+const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, restaurantData, userName, userPhone, userEmail, onRestaurantUpdate, autoOpenInstagramSetup, autoOpenSubscription, onAutoOpenHandled, featureFlags, instagramEnabled = true, facebookEnabled = true }) => {
     const topupCreditsEnabled = featureFlags?.topupCredits === true;
     const enabledPlatforms: Platform[] = [
         ...(instagramEnabled ? ['INSTAGRAM' as const] : []),
@@ -442,6 +444,15 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
     useHistoryModal('setup-guide', showSetupGuide, () => setShowSetupGuide(false));
     useHistoryModal('edit-profile', isEditingProfile, closeEditProfile);
     useHistoryModal('subscription', isSubscriptionOpen, closeSubscription);
+
+    // Auto-open the Subscription panel when launched from an upgrade / See-plans CTA.
+    useEffect(() => {
+        if (isOpen && autoOpenSubscription && !isSubscriptionOpen) {
+            openSubscription();
+            onAutoOpenHandled?.();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, autoOpenSubscription]);
 
     // Errors persist until dismissed — no auto-dismiss.
 

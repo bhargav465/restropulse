@@ -309,6 +309,18 @@ describe('ProfileSheet Component', () => {
         });
     });
 
+    it('auto-opens the Subscription panel when autoOpenSubscription is set (See plans / upgrade CTA)', async () => {
+        // Simulates the trial-ended banner "See plans" / Paywall "Subscribe" CTA,
+        // which opens the sheet with autoOpenSubscription -> jump straight to plans.
+        render(<ProfileSheet {...defaultProps} autoOpenSubscription={true} />);
+
+        // No click needed -- the effect opens the Subscription panel directly.
+        await waitFor(() => {
+            expect(screen.getByText('Manage your plan')).toBeInTheDocument();
+            expect(screen.getByText('Current Plan')).toBeInTheDocument();
+        });
+    });
+
     it('should show weekly usage in Subscription modal', async () => {
         render(<ProfileSheet {...defaultProps} />);
         await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
