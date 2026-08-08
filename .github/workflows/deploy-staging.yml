@@ -235,6 +235,13 @@ jobs:
 
           mkdir -p /home/LogFiles
 
+          # App Service may invoke startup from /home. Force cwd to deployed root.
+          ROOT_DIR="/home/site/wwwroot"
+          if [ ! -d "$ROOT_DIR" ]; then
+            ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+          fi
+          cd "$ROOT_DIR"
+
           pids=()
 
           start_process() {
@@ -256,10 +263,10 @@ jobs:
 
           trap shutdown SIGTERM SIGINT
 
-          start_process "publisher" "node apps/publisher/dist/worker.js"
-          start_process "content-engine" "node apps/content-engine/dist/worker.js"
-          start_process "intelligence-worker" "node apps/intelligence-worker/dist/worker.js"
-          start_process "api" "node apps/api/dist/server.js"
+          start_process "publisher" "node ./apps/publisher/dist/worker.js"
+          start_process "content-engine" "node ./apps/content-engine/dist/worker.js"
+          start_process "intelligence-worker" "node ./apps/intelligence-worker/dist/worker.js"
+          start_process "api" "node ./apps/api/dist/server.js"
 
           # Exit if any process dies; App Service will restart the app.
           wait -n "${pids[@]}"
