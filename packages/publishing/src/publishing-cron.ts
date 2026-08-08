@@ -14,13 +14,14 @@
 import cron from 'node-cron';
 import { getPostsCollection, getRestaurantsCollection, toApiFormat, toObjectId } from '@restropulse/db';
 import { publishPost, PublishResult } from './publishing-service.js';
-import { Post } from '@restropulse/shared';
+import { Post, POST_PUBLISH_GRACE_HOURS } from '@restropulse/shared';
 import { createLogger, tracedCronJob, trackEvent } from '@restropulse/telemetry/server';
 
 const log = createLogger('publishing-cron');
 
 // Constants
 const MAX_PUBLISH_ATTEMPTS = 3;
+const MS_PER_HOUR = 60 * 60 * 1000;
 const CRON_SCHEDULE = process.env.CRON_PUBLISHER ?? '*/5 * * * *';
 
 // Track publishing attempts for monitoring
@@ -45,10 +46,16 @@ const publishAttempts: PublishAttempt[] = [];
 export async function getPostsDueForPublishing(): Promise<any[]> {
     const col = getPostsCollection();
     const now = new Date();
+    // Lower bound: never publish a post more than the grace period past its
+    // scheduledFor. Such posts have missed their window and are reaped to
+    // MISSED_DEADLINE (see reapMissedScheduledPosts) instead of being published
+    // late. The bound lives in the query so every caller is protected, not just
+    // runPublishingJob.
+    const graceCutoff = new Date(now.getTime() - POST_PUBLISH_GRACE_HOURS * MS_PER_HOUR);
 
     const posts = await col.find({
         status: 'SCHEDULED',
-        scheduledFor: { $lte: now.toISOString() },
+        scheduledFor: { $lte: now.toISOString(), $gte: graceCutoff.toISOString() },
         $or: [
             { publishAttempts: { $exists: false } },
             { publishAttempts: { $lt: MAX_PUBLISH_ATTEMPTS } }
@@ -56,6 +63,32 @@ export async function getPostsDueForPublishing(): Promise<any[]> {
     }).sort({ scheduledFor: 1 }).toArray();
 
     return posts;
+}
+
+/**
+ * Move SCHEDULED posts that are more than the grace period past their
+ * scheduledFor to MISSED_DEADLINE. These missed their publish window (e.g. the
+ * post was stuck in content generation and only became SCHEDULED long after its
+ * target time) and must not be published late. publishError is intentionally
+ * left unset so the UI renders "Missed Deadline" rather than "Publish Failed".
+ * Returns the number of posts reaped.
+ */
+export async function reapMissedScheduledPosts(now: Date = new Date()): Promise<number> {
+    const col = getPostsCollection();
+    const graceCutoff = new Date(now.getTime() - POST_PUBLISH_GRACE_HOURS * MS_PER_HOUR);
+
+    const result = await col.updateMany(
+        {
+            status: 'SCHEDULED',
+            scheduledFor: { $lt: graceCutoff.toISOString() },
+        },
+        { $set: { status: 'MISSED_DEADLINE', updatedAt: new Date() } },
+    );
+
+    if (result.modifiedCount > 0) {
+        log.info({ count: result.modifiedCount, graceHours: POST_PUBLISH_GRACE_HOURS }, 'Reaped past-due scheduled posts to MISSED_DEADLINE');
+    }
+    return result.modifiedCount;
 }
 
 /**
@@ -279,12 +312,17 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
 /**
  * Run the publishing job - processes all posts due for publishing.
  */
-export async function runPublishingJob(): Promise<{ published: number; failed: number; skipped: number }> {
+export async function runPublishingJob(): Promise<{ published: number; failed: number; skipped: number; missed: number }> {
     log.info('Starting publishing job');
 
-    const stats = { published: 0, failed: 0, skipped: 0 };
+    const stats = { published: 0, failed: 0, skipped: 0, missed: 0 };
 
     try {
+        // Reap past-due posts first so they move to MISSED_DEADLINE instead of
+        // being published late; getPostsDueForPublishing then only returns
+        // within-grace posts.
+        stats.missed = await reapMissedScheduledPosts();
+
         const posts = await getPostsDueForPublishing();
 
         if (posts.length === 0) {
@@ -311,7 +349,7 @@ export async function runPublishingJob(): Promise<{ published: number; failed: n
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        log.info({ published: stats.published, failed: stats.failed }, 'Publishing job completed');
+        log.info({ published: stats.published, failed: stats.failed, missed: stats.missed }, 'Publishing job completed');
     } catch (error) {
         log.error({ error: String(error) }, 'Publishing job failed');
     }

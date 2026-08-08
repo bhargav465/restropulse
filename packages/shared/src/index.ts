@@ -568,10 +568,12 @@ export {
   CYCLE_APPROVAL_BUFFER_HOURS,
   ROLLING_WINDOW_HOURS,
   MIN_SCHEDULE_AHEAD_HOURS,
+  POST_PUBLISH_GRACE_HOURS,
   computePostApprovalDeadline,
   computeCycleApprovalDeadline,
   isPostPastApprovalDeadline,
   isCyclePastApprovalDeadline,
+  isPostPastPublishGrace,
   validateTimingConstraints,
 } from './approval-deadlines.js';
 export type { TimingConstraintConfig } from './approval-deadlines.js';

@@ -31,6 +31,14 @@ export const ROLLING_WINDOW_HOURS = 48;
 // ASAP scheduling defaults to exactly this value.
 export const MIN_SCHEDULE_AHEAD_HOURS = 2.5;
 
+// Grace period after a post's scheduledFor during which the publisher may still
+// publish it (covers the ~5-min publisher cadence + transient delays). Once a
+// post is more than this many hours past scheduledFor and still unpublished, it
+// is considered to have missed its window and is moved to MISSED_DEADLINE rather
+// than published late. Shared by the publisher guard and the content-engine
+// deadline sweep so both agree on the exact boundary.
+export const POST_PUBLISH_GRACE_HOURS = 2;
+
 const MS_PER_HOUR = 60 * 60 * 1000;
 
 function toDateOrNull(value: unknown): Date | null {
@@ -96,6 +104,24 @@ export function isCyclePastApprovalDeadline(
   const deadline = computeCycleApprovalDeadline(cycle, bufferHours);
   if (!deadline) return false;
   return now.getTime() >= deadline.getTime();
+}
+
+/**
+ * True when `now` is more than `graceHours` past the post's scheduledFor, i.e.
+ * the post has missed its publish window and should be moved to MISSED_DEADLINE
+ * instead of being published (or advanced toward publishing).
+ *
+ * Returns false when scheduledFor is missing/unparseable: an undated post has no
+ * window to miss, so it is never reaped by this rule.
+ */
+export function isPostPastPublishGrace(
+  post: Pick<Post, 'scheduledFor'>,
+  now: Date,
+  graceHours = POST_PUBLISH_GRACE_HOURS,
+): boolean {
+  const scheduled = toDateOrNull(post.scheduledFor);
+  if (!scheduled) return false;
+  return now.getTime() > scheduled.getTime() + graceHours * MS_PER_HOUR;
 }
 
 // -------------------------------------------------------

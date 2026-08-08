@@ -5,11 +5,13 @@ const mockSort = vi.fn<any>(() => ({ toArray: mockToArray }));
 const mockFind = vi.fn<any>(() => ({ sort: mockSort }));
 const mockFindOneAndUpdate = vi.fn();
 const mockUpdateOne = vi.fn();
+const mockUpdateMany = vi.fn();
 
 const mockPostsCollection = {
     find: mockFind,
     findOneAndUpdate: mockFindOneAndUpdate,
-    updateOne: mockUpdateOne
+    updateOne: mockUpdateOne,
+    updateMany: mockUpdateMany
 };
 
 const mockRestaurantFindOne = vi.fn();
@@ -40,6 +42,7 @@ const {
     getRestaurantCredentials,
     processPostForPublishing,
     runPublishingJob,
+    reapMissedScheduledPosts,
     getRecentPublishAttempts,
     startPublishingCron,
     triggerManualPublish
@@ -51,6 +54,7 @@ describe('publishing cron service', () => {
         mockToArray.mockResolvedValue([]);
         mockFindOneAndUpdate.mockResolvedValue({ _id: 'post-1', status: 'PUBLISHING' });
         mockUpdateOne.mockResolvedValue({ modifiedCount: 1 });
+        mockUpdateMany.mockResolvedValue({ modifiedCount: 0 });
     });
 
     it('gets due scheduled posts', async () => {
@@ -62,9 +66,53 @@ describe('publishing cron service', () => {
         expect(mockFind).toHaveBeenCalledWith(
             expect.objectContaining({
                 status: 'SCHEDULED',
-                scheduledFor: { $lte: expect.any(String) }
+                scheduledFor: expect.objectContaining({ $lte: expect.any(String) })
             })
         );
+    });
+
+    it('includes a $gte grace-cutoff lower bound alongside the $lte upper bound', async () => {
+        mockToArray.mockResolvedValue([]);
+
+        await getPostsDueForPublishing();
+
+        const filter = (mockFind.mock.calls[0] as any[])[0];
+        expect(filter.scheduledFor).toEqual(
+            expect.objectContaining({
+                $lte: expect.any(String),
+                $gte: expect.any(String)
+            })
+        );
+        // Lower bound must be strictly before the upper bound.
+        expect(new Date(filter.scheduledFor.$gte).getTime()).toBeLessThan(
+            new Date(filter.scheduledFor.$lte).getTime()
+        );
+    });
+
+    it('reaps SCHEDULED posts past the grace cutoff to MISSED_DEADLINE', async () => {
+        mockUpdateMany.mockResolvedValue({ modifiedCount: 3 });
+
+        const now = new Date('2026-04-19T12:00:00.000Z');
+        const count = await reapMissedScheduledPosts(now);
+
+        expect(count).toBe(3);
+        expect(mockUpdateMany).toHaveBeenCalledTimes(1);
+        const [filter, update] = mockUpdateMany.mock.calls[0] as any[];
+        // Grace is 2h, so cutoff = now - 2h.
+        expect(filter).toEqual({
+            status: 'SCHEDULED',
+            scheduledFor: { $lt: '2026-04-19T10:00:00.000Z' }
+        });
+        expect(update.$set.status).toBe('MISSED_DEADLINE');
+        expect(update.$set.publishError).toBeUndefined();
+    });
+
+    it('reapMissedScheduledPosts returns 0 when nothing was reaped', async () => {
+        mockUpdateMany.mockResolvedValue({ modifiedCount: 0 });
+
+        const count = await reapMissedScheduledPosts(new Date('2026-04-19T12:00:00.000Z'));
+
+        expect(count).toBe(0);
     });
 
     it('gets restaurant credentials', async () => {
@@ -422,7 +470,22 @@ describe('publishing cron service', () => {
         await vi.advanceTimersByTimeAsync(4000);
         const stats = await statsPromise;
 
-        expect(stats).toEqual({ published: 1, failed: 1, skipped: 0 });
+        expect(stats).toEqual({ published: 1, failed: 1, skipped: 0, missed: 0 });
+
+        vi.useRealTimers();
+    });
+
+    it('includes reaped posts in the missed count via runPublishingJob', async () => {
+        vi.useFakeTimers();
+        mockUpdateMany.mockResolvedValue({ modifiedCount: 2 });
+        mockToArray.mockResolvedValue([]);
+
+        const statsPromise = runPublishingJob();
+        await vi.advanceTimersByTimeAsync(1000);
+        const stats = await statsPromise;
+
+        expect(stats).toEqual({ published: 0, failed: 0, skipped: 0, missed: 2 });
+        expect(mockUpdateMany).toHaveBeenCalledTimes(1);
 
         vi.useRealTimers();
     });
@@ -437,7 +500,7 @@ describe('publishing cron service', () => {
 
         mockToArray.mockResolvedValue([]);
         const stats = await triggerManualPublish();
-        expect(stats).toEqual({ published: 0, failed: 0, skipped: 0 });
+        expect(stats).toEqual({ published: 0, failed: 0, skipped: 0, missed: 0 });
     });
 
     it('executes scheduled callback and handles processing errors', async () => {
