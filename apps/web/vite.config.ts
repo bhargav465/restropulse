@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { defineConfig, loadEnv } from 'vite';
+import { createLogger, defineConfig, loadEnv } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 
@@ -19,10 +19,29 @@ function getWebPort(): number {
 }
 
 const WEB_PORT = getWebPort();
+const viteLogger = createLogger();
+
+function isHmrNoiseLog(msg: string): boolean {
+  return msg.includes('hmr update') || msg.includes('page reload');
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  const quietHmr = env.VITE_QUIET_HMR !== 'false';
   return {
+    customLogger: quietHmr
+      ? {
+        ...viteLogger,
+        info(msg, options) {
+          if (isHmrNoiseLog(msg)) return;
+          viteLogger.info(msg, options);
+        },
+        warn(msg, options) {
+          if (isHmrNoiseLog(msg)) return;
+          viteLogger.warn(msg, options);
+        },
+      }
+      : viteLogger,
     server: {
       port: WEB_PORT,
       host: '0.0.0.0',
