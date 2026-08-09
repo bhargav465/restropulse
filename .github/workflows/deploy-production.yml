@@ -233,6 +233,8 @@ jobs:
               CORS_ORIGIN="${{ vars.PRODUCTION_WEB_URL }}" \
               CONTENT_GENERATOR_BACKEND=ai \
               ANTHROPIC_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-anthropic-api-key)" \
+              FIREBASE_PROJECT_ID="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-firebase-project-id)" \
+              GOOGLE_MAPS_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-google-maps-api-key)" \
               REPLICATE_API_TOKEN="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-replicate-api-token)" \
               GOOGLE_CALENDAR_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-google-calendar-api-key)" \
               PERPLEXITY_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-perplexity-api-key)" \
