@@ -68,3 +68,6 @@ tests/integration/.env.integration.*
 
 # Acquired restaurant fixture data (large generated files)
 apps/db-cli/data/restaurants/*.json
+
+# Local mongod data directory (scripts/dev-mongo.mjs)
+.mongo-data/

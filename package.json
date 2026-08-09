@@ -17,6 +17,7 @@
     "dev:test": "npm run env:test && npm run dev",
     "dev:prod": "npm run env:prod && npm run dev",
     "build:packages": "turbo run build --filter=!@restropulse/web --filter=!@restropulse/api --filter=!@restropulse/publisher --filter=!@restropulse/content-engine --filter=!@restropulse/db-cli",
+    "dev:mongo": "node scripts/dev-mongo.mjs",
     "dev:login": "node scripts/dev-login.mjs",
     "ngrok": "node scripts/start-ngrok.mjs",
     "ngrok:assets": "node scripts/start-asset-tunnel.mjs",
