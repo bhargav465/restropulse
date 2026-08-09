@@ -265,6 +265,13 @@ export const postsAPI = {
         return response.data!;
     },
 
+    publish: async (id: string): Promise<Post> => {
+        const response = await fetchAPI<ApiResponse<Post>>(`/posts/${id}/publish`, {
+            method: 'POST',
+        });
+        return response.data!;
+    },
+
     delete: async (id: string): Promise<void> => {
         await fetchAPI(`/posts/${id}`, { method: 'DELETE' });
     },
