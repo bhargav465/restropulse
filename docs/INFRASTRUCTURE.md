@@ -359,8 +359,8 @@ Individual app builds produce output in their respective `dist/` directories.
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `ci.yml` | PRs to `main`/`staging`, push to `staging` | Parallel type-check, lint, per-service tests with path filtering |
-| `deploy-staging.yml` | Push to `staging` | Build, deploy API to staging slot + SWA to staging environment, smoke tests, tag |
-| `deploy-production.yml` | Manual (`workflow_dispatch`) | Promote a staging tag to production via slot swap (API) and SWA upload (web) |
+| `deploy-staging.yml` | Push to `staging` | Build, deploy API to staging slot + SWA to staging environment, enforce/validate App Service Key Vault references, smoke tests, tag |
+| `deploy-production.yml` | Manual (`workflow_dispatch`) | Promote a staging tag to production via slot swap (API) and SWA upload (web), enforce/validate App Service Key Vault references |
 
 ### CI Gate (`ci.yml`)
 

@@ -5,6 +5,8 @@
  *
  * Checks:
  *  1) Required Key Vault secrets exist for all manifest-required keys.
+ *     Also enforces conditional keys for feature-flagged runtime paths
+ *     (for example CONTENT_GENERATOR_BACKEND=ai requires its AI provider keys).
  *  2) Full integration suite runs in kv:<env> mode.
  *
  * Usage:
@@ -34,10 +36,34 @@ if (!envMap[rawEnv]) {
 const { prefix, mode } = envMap[rawEnv];
 const vaultUrl = process.env.AZURE_KEY_VAULT_URL ?? 'https://restropulse-prod-kv.vault.azure.net';
 
+function parseBoolean(raw, defaultValue) {
+  if (raw == null || raw === '') return defaultValue;
+  const normalized = String(raw).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return defaultValue;
+}
+
+function getConditionalRequiredKeys() {
+  const backend = (process.env.CONTENT_GENERATOR_BACKEND ?? 'ai').trim().toLowerCase();
+  if (backend !== 'ai') return [];
+
+  const mediaBackend = (process.env.MEDIA_BACKEND ?? 'replicate').trim().toLowerCase();
+  const v1Enabled = parseBoolean(process.env.CURRENT_AFFAIRS_V1_ENABLED, true);
+  const v2Enabled = parseBoolean(process.env.CURRENT_AFFAIRS_V2_ENABLED, true);
+
+  const required = ['ANTHROPIC_API_KEY'];
+  if (mediaBackend !== 'placeholder') required.push('REPLICATE_API_TOKEN');
+  if (v1Enabled) required.push('GOOGLE_CALENDAR_API_KEY');
+  if (v2Enabled) required.push('PERPLEXITY_API_KEY');
+  return required;
+}
+
 async function validateRequiredSecrets() {
   const client = new SecretClient(vaultUrl, new DefaultAzureCredential());
+  const conditionalKeys = new Set(getConditionalRequiredKeys());
   const required = SECRETS_MANIFEST
-    .filter((d) => d.required && d.kvName)
+    .filter((d) => d.kvName && (d.required || conditionalKeys.has(d.key)))
     .map((d) => ({ key: d.key, secretName: `${prefix}-${d.kvName}` }));
 
   const missing = [];
@@ -78,4 +104,3 @@ function runIntegrationSuite() {
 
 await validateRequiredSecrets();
 runIntegrationSuite();
-

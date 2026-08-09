@@ -384,9 +384,44 @@ jobs:
             --slot-settings \
               NODE_ENV=staging \
               CORS_ORIGIN="${{ vars.STAGING_WEB_URL }}" \
+              CONTENT_GENERATOR_BACKEND=ai \
+              ANTHROPIC_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=staging-anthropic-api-key)" \
+              REPLICATE_API_TOKEN="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=staging-replicate-api-token)" \
+              GOOGLE_CALENDAR_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=staging-google-calendar-api-key)" \
+              PERPLEXITY_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=staging-perplexity-api-key)" \
               WEBSITE_RUN_FROM_PACKAGE=1 \
               WEBSITE_NODE_DEFAULT_VERSION="~22" \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false
+
+      - name: Validate staging Key Vault references resolve
+        run: |
+          settings_json=$(az webapp config appsettings list \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --slot staging \
+            -o json)
+
+          failures=0
+          while IFS= read -r ref; do
+            [ -z "$ref" ] && continue
+            vault_name=$(echo "$ref" | sed -n 's/.*VaultName=\([^;)]*\).*/\1/p')
+            secret_name=$(echo "$ref" | sed -n 's/.*SecretName=\([^;)]*\).*/\1/p')
+            if [ -z "$vault_name" ] || [ -z "$secret_name" ]; then
+              echo "Invalid Key Vault reference: $ref"
+              failures=1
+              continue
+            fi
+            if ! az keyvault secret show --vault-name "$vault_name" --name "$secret_name" --query id -o tsv >/dev/null; then
+              echo "Missing Key Vault secret: $vault_name/$secret_name"
+              failures=1
+            fi
+          done < <(echo "$settings_json" | jq -r '.[] | .value // "" | select(startswith("@Microsoft.KeyVault("))')
+
+          if [ "$failures" -ne 0 ]; then
+            echo "Key Vault reference validation failed for staging slot."
+            exit 1
+          fi
+          echo "All staging slot Key Vault references resolve."
 
       - name: Deploy to Azure App Service (staging slot)
         run: |
