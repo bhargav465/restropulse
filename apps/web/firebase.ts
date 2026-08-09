@@ -51,9 +51,8 @@ let confirmationResult: ConfirmationResult | null = null;
  * Must be called before sending OTP
  */
 export function initRecaptcha(buttonId: string): RecaptchaVerifier {
-    // Clear any existing verifier
     if ((window as any).recaptchaVerifier) {
-        (window as any).recaptchaVerifier.clear();
+        return (window as any).recaptchaVerifier as RecaptchaVerifier;
     }
 
     const verifier = new RecaptchaVerifier(requireAuth(), buttonId, {
@@ -81,11 +80,6 @@ export async function sendOTP(phoneNumber: string, recaptchaVerifier: RecaptchaV
         console.log('OTP sent successfully');
     } catch (error: any) {
         console.error('Error sending OTP:', error);
-        // Reset reCAPTCHA on error
-        if ((window as any).recaptchaVerifier) {
-            (window as any).recaptchaVerifier.clear();
-            (window as any).recaptchaVerifier = null;
-        }
         throw error;
     }
 }

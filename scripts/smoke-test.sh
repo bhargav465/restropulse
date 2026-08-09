@@ -46,7 +46,14 @@ case "$SERVICE" in
     fi
     if [ -n "$EXPECTED_GIT_SHA" ]; then
       for attempt in $(seq 1 "$SHA_CHECK_RETRIES"); do
-        RESPONSE=$(request "${BASE_URL}/health")
+        if ! RESPONSE=$(request "${BASE_URL}/health" 2>/dev/null); then
+          if [ "$attempt" -eq "$SHA_CHECK_RETRIES" ]; then
+            echo "API deploy SHA check failed: health endpoint never stabilized."
+            exit 1
+          fi
+          sleep "$SHA_CHECK_DELAY"
+          continue
+        fi
         DEPLOYED_SHA=$(echo "$RESPONSE" | jq -r '.deployment.gitSha // empty')
         if [ "$DEPLOYED_SHA" = "$EXPECTED_GIT_SHA" ]; then
           break
@@ -80,7 +87,14 @@ case "$SERVICE" in
     fi
     if [ -n "$EXPECTED_GIT_SHA" ]; then
       for attempt in $(seq 1 "$SHA_CHECK_RETRIES"); do
-        CONFIG_RESPONSE=$(request "${BASE_URL}/config.json")
+        if ! CONFIG_RESPONSE=$(request "${BASE_URL}/config.json" 2>/dev/null); then
+          if [ "$attempt" -eq "$SHA_CHECK_RETRIES" ]; then
+            echo "Web deploy SHA check failed: config endpoint never stabilized."
+            exit 1
+          fi
+          sleep "$SHA_CHECK_DELAY"
+          continue
+        fi
         DEPLOYED_SHA=$(echo "$CONFIG_RESPONSE" | jq -r '.deployment.gitSha // empty')
         if [ "$DEPLOYED_SHA" = "$EXPECTED_GIT_SHA" ]; then
           break
