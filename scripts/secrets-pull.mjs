@@ -11,6 +11,7 @@
  * Usage:
  *   node scripts/secrets-pull.mjs                    # pull for all apps
  *   node scripts/secrets-pull.mjs --app web           # pull for a single app
+ *   node scripts/secrets-pull.mjs --app root          # pull root tooling env (ngrok)
  *   node scripts/secrets-pull.mjs --dry-run           # print mapping, no network/writes
  *   node scripts/secrets-pull.mjs --dry-run --app api
  *
@@ -26,7 +27,15 @@ const REPO_ROOT = new URL('..', import.meta.url).pathname.replace(/^\/([A-Z]:)/i
 const KEY_VAULT_URL = process.env.AZURE_KEY_VAULT_URL || 'https://restropulse-prod-kv.vault.azure.net';
 const PREFIX = 'dev';
 
-const ALL_APPS = ['api', 'web', 'publisher', 'content-engine', 'db-cli'];
+const ALL_APPS = ['api', 'web', 'publisher', 'content-engine', 'intelligence-worker', 'db-cli', 'root'];
+const WEB_LOCAL_DEFAULTS = {
+  VITE_API_URL: 'http://localhost:3001/api',
+  VITE_APP_URL: 'http://localhost:3000',
+};
+const ROOT_SECRET_MAPPINGS = [
+  { key: 'NGROK_AUTH_TOKEN', kvName: 'ngrok-auth-token' },
+  { key: 'NGROK_DOMAIN', kvName: 'ngrok-domain' },
+];
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -41,10 +50,16 @@ if (requestedApp && !ALL_APPS.includes(requestedApp)) {
 const apps = requestedApp ? [requestedApp] : ALL_APPS;
 
 function envPathForApp(app) {
+  if (app === 'root') {
+    return join(REPO_ROOT, '.env');
+  }
   return join(REPO_ROOT, 'apps', app, '.env');
 }
 
 function selectSecretsForApp(app) {
+  if (app === 'root') {
+    return ROOT_SECRET_MAPPINGS;
+  }
   return SECRETS_MANIFEST.filter((def) => def.apps.includes(app));
 }
 
@@ -110,6 +125,14 @@ async function pullForApp(app, client) {
 
   if (dryRun) {
     return;
+  }
+
+  if (app === 'web') {
+    for (const [key, value] of Object.entries(WEB_LOCAL_DEFAULTS)) {
+      if (!resolved[key]) {
+        resolved[key] = value;
+      }
+    }
   }
 
   if (Object.keys(resolved).length > 0) {

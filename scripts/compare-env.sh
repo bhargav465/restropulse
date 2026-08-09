@@ -10,6 +10,7 @@
 #   bash scripts/compare-env.sh --env production       # production slot
 #   bash scripts/compare-env.sh --env staging --app api
 #   bash scripts/compare-env.sh --env staging --app web
+#   bash scripts/compare-env.sh --env staging --show-secrets
 #
 # Dependencies:
 #   - az CLI (logged in)
@@ -33,6 +34,18 @@ set -euo pipefail
 export MSYS_NO_PATHCONV=1
 export MSYS2_ARG_CONV_EXCL="*"
 
+# On Git Bash/Windows, some tools are only available as *.exe.
+# Provide lightweight shims so the script can call gh/jq uniformly.
+if [[ -x "/mnt/c/Program Files/Microsoft SDKs/Azure/CLI2/python.exe" ]]; then
+  az() { "/mnt/c/Program Files/Microsoft SDKs/Azure/CLI2/python.exe" -IBm azure.cli "$@"; }
+fi
+if ! command -v gh >/dev/null 2>&1 && command -v gh.exe >/dev/null 2>&1; then
+  gh() { gh.exe "$@"; }
+fi
+if ! command -v jq >/dev/null 2>&1 && command -v jq.exe >/dev/null 2>&1; then
+  jq() { jq.exe "$@"; }
+fi
+
 # ---------------------------------------------------------------------------
 # Infrastructure constants
 # ---------------------------------------------------------------------------
@@ -54,6 +67,7 @@ COL_STATUS=15
 # ---------------------------------------------------------------------------
 ENV_TARGET="staging"
 APP_FILTER=""
+SHOW_SECRETS=false
 
 # ---------------------------------------------------------------------------
 # Color helpers (fall back to no color when not in a terminal)
@@ -76,7 +90,7 @@ fi
 # Argument parsing
 # ---------------------------------------------------------------------------
 usage() {
-  echo "Usage: bash scripts/compare-env.sh [--env staging|production] [--app api|publisher|content-engine|web]"
+  echo "Usage: bash scripts/compare-env.sh [--env staging|production] [--app api|publisher|content-engine|web] [--show-secrets]"
   exit 0
 }
 
@@ -89,6 +103,10 @@ while [[ $# -gt 0 ]]; do
     --app)
       APP_FILTER="${2:?--app requires a value (api, publisher, content-engine, or web)}"
       shift 2
+      ;;
+    --show-secrets)
+      SHOW_SECRETS=true
+      shift 1
       ;;
     --help|-h)
       usage
@@ -157,21 +175,91 @@ resolve_kv_ref() {
   fi
 
   local secret_name=""
+  local vault_name=""
+  local secret_uri=""
 
-  # VaultName=...;SecretName=... form
-  if echo "$ref" | grep -q "SecretName="; then
-    secret_name=$(echo "$ref" | sed 's/.*SecretName=\([^;)]*\).*/\1/')
   # SecretUri=https://<vault>.vault.azure.net/secrets/<name>[/version] form
-  elif echo "$ref" | grep -q "SecretUri="; then
-    local uri
-    uri=$(echo "$ref" | sed 's/.*SecretUri=\([^)]*\).*/\1/')
-    secret_name=$(echo "$uri" | sed 's|.*/secrets/\([^/]*\).*|\1|')
+  if [[ "$ref" == *"SecretUri="* ]]; then
+    secret_uri=$(printf '%s' "$ref" | sed -n 's/.*SecretUri=\([^;)]*\).*/\1/p')
   fi
 
-  if [[ -z "$secret_name" ]]; then
+  # VaultName=...;SecretName=... form
+  if [[ "$ref" == *"SecretName="* ]]; then
+    secret_name=$(printf '%s' "$ref" | sed -n 's/.*SecretName=\([^;),]*\).*/\1/p')
+    if [[ "$ref" == *"VaultName="* ]]; then
+      vault_name=$(printf '%s' "$ref" | sed -n 's/.*VaultName=\([^;),]*\).*/\1/p')
+    fi
+  fi
+
+  local resolved=""
+
+  if [[ -n "$secret_uri" ]]; then
+    # First try identifier mode, then parse URI into vault/name(/version) as fallback.
+    resolved=$(az keyvault secret show \
+      --id "$secret_uri" \
+      --query "value" \
+      -o tsv 2>/dev/null) || true
+
+    if [[ -z "$resolved" ]]; then
+      local uri_no_qs vault_from_uri secret_from_uri version_from_uri
+      uri_no_qs="${secret_uri%%\?*}"
+      if [[ "$uri_no_qs" =~ ^https://([^.]+)\.vault\.azure\.net/secrets/([^/]+)(/([^/]+))?$ ]]; then
+        vault_from_uri="${BASH_REMATCH[1]}"
+        secret_from_uri="${BASH_REMATCH[2]}"
+        version_from_uri="${BASH_REMATCH[4]:-}"
+        if [[ -n "$version_from_uri" ]]; then
+          resolved=$(az keyvault secret show \
+            --vault-name "$vault_from_uri" \
+            --name "$secret_from_uri" \
+            --version "$version_from_uri" \
+            --query "value" \
+            -o tsv 2>/dev/null) || true
+        else
+          resolved=$(az keyvault secret show \
+            --vault-name "$vault_from_uri" \
+            --name "$secret_from_uri" \
+            --query "value" \
+            -o tsv 2>/dev/null) || true
+        fi
+      fi
+    fi
+  elif [[ -n "$secret_name" ]]; then
+    local target_vault="${vault_name:-$KV_NAME}"
+    resolved=$(az keyvault secret show \
+      --vault-name "$target_vault" \
+      --name "$secret_name" \
+      --query "value" \
+      -o tsv 2>/dev/null) || true
+  fi
+
+  if [[ -z "$resolved" ]]; then
     echo "$ref"
     return
   fi
+
+  # Strip Windows carriage return from az tsv output
+  echo "${resolved%$'\r'}"
+}
+
+# ---------------------------------------------------------------------------
+# resolve_secret_by_convention <key>
+# Best-effort fallback for older CLI responses that return empty values
+# for Key Vault-referenced app settings.
+# Convention: <env>-<lowercase-key-with-dashes>
+# ---------------------------------------------------------------------------
+resolve_secret_by_convention() {
+  local key="$1"
+  local env_prefix
+  if [[ "$ENV_TARGET" == "production" ]]; then
+    env_prefix="prod"
+  else
+    env_prefix="staging"
+  fi
+
+  local secret_name
+  secret_name="${key,,}"
+  secret_name="${secret_name//_/-}"
+  secret_name="${env_prefix}-${secret_name}"
 
   local resolved
   resolved=$(az keyvault secret show \
@@ -180,12 +268,7 @@ resolve_kv_ref() {
     --query "value" \
     -o tsv 2>/dev/null) || true
 
-  if [[ -n "$resolved" ]]; then
-    # Strip Windows carriage return from az tsv output
-    echo "${resolved%$'\r'}"
-  else
-    echo "$ref"
-  fi
+  echo "${resolved%$'\r'}"
 }
 
 # ---------------------------------------------------------------------------
@@ -227,44 +310,79 @@ load_local_env() {
 # load_appservice_vars
 # Populates global associative array CLOUD_VARS.
 # Resolves Key Vault references inline.
-# Uses az rest (POST to appsettings/list action) to avoid a known Azure CLI
-# bug where `az webapp config appsettings list` makes a secondary
-# is_flex_functionapp check that fails on non-Function App resources.
+# Uses az rest (POST to appsettings/list action) to avoid Azure CLI
+# version differences where `az webapp config appsettings list` can
+# return null values for Key Vault-referenced settings.
 # ---------------------------------------------------------------------------
 load_appservice_vars() {
   CLOUD_VARS=()
   CLOUD_FETCH_ERROR=false
 
-  local subscription_id
-  subscription_id=$(az account show --query "id" -o tsv 2>/dev/null) || { CLOUD_FETCH_ERROR=true; return; }
+  local raw="" parsed=false
 
-  local url_path
+  # Primary path: native command (most reliable for auth context).
   if [[ "$ENV_TARGET" == "staging" ]]; then
-    url_path="providers/Microsoft.Web/sites/${APP_NAME}/slots/staging/config/appsettings/list"
+    raw=$(az webapp config appsettings list --name "$APP_NAME" --resource-group "$RG_NAME" --slot staging -o json 2>/dev/null) || true
   else
-    url_path="providers/Microsoft.Web/sites/${APP_NAME}/config/appsettings/list"
+    raw=$(az webapp config appsettings list --name "$APP_NAME" --resource-group "$RG_NAME" -o json 2>/dev/null) || true
   fi
 
-  local rest_url="https://management.azure.com/subscriptions/${subscription_id}/resourceGroups/${RG_NAME}/${url_path}?api-version=2022-03-01"
+  if [[ -n "$raw" ]] && echo "$raw" | jq -e 'type=="array"' >/dev/null 2>&1; then
+    while IFS=$'\t' read -r key val; do
+      [[ -z "$key" ]] && continue
+      val="${val%$'\r'}"
 
-  local raw
-  raw=$(az rest --method POST --url "$rest_url" -o json 2>/dev/null) || { CLOUD_FETCH_ERROR=true; return; }
+      if [[ "$val" == @Microsoft.KeyVault* ]]; then
+        val=$(resolve_kv_ref "$val")
+      elif [[ -z "$val" ]] && [[ "$SHOW_SECRETS" == "true" ]] && is_sensitive "$key"; then
+        # Older az CLI versions can return empty value for KV-referenced keys.
+        local guessed
+        guessed=$(resolve_secret_by_convention "$key")
+        if [[ -n "$guessed" ]]; then
+          val="$guessed"
+        fi
+      fi
 
-  if ! echo "$raw" | jq -e '.properties' &>/dev/null 2>&1; then
-    CLOUD_FETCH_ERROR=true
-    return
+      CLOUD_VARS["$key"]="$val"
+    done < <(echo "$raw" | jq -r '.[] | [.name, (.value // "")] | @tsv' 2>/dev/null || true)
+    parsed=true
   fi
 
-  while IFS="=" read -r key val; do
-    [[ -z "$key" ]] && continue
-    # Strip Windows carriage return from jq CRLF output
-    val="${val%$'\r'}"
-    # Resolve Key Vault references
-    if [[ "$val" == @Microsoft.KeyVault* ]]; then
-      val=$(resolve_kv_ref "$val")
+  # Fallback path: ARM action (returns {properties:{...}}).
+  if [[ "$parsed" != "true" ]]; then
+    local subscription_id
+    subscription_id=$(az account show --query "id" -o tsv 2>/dev/null) || { CLOUD_FETCH_ERROR=true; return; }
+
+    local url_path
+    if [[ "$ENV_TARGET" == "staging" ]]; then
+      url_path="providers/Microsoft.Web/sites/${APP_NAME}/slots/staging/config/appsettings/list"
+    else
+      url_path="providers/Microsoft.Web/sites/${APP_NAME}/config/appsettings/list"
     fi
-    CLOUD_VARS["$key"]="$val"
-  done < <(echo "$raw" | jq -r '.properties | to_entries[] | "\(.key)=\(.value)"' 2>/dev/null || true)
+
+    local rest_url
+    rest_url="https://management.azure.com/subscriptions/${subscription_id}/resourceGroups/${RG_NAME}/${url_path}?api-version=2022-03-01"
+    raw=$(az rest --method POST --url "$rest_url" -o json 2>/dev/null) || { CLOUD_FETCH_ERROR=true; return; }
+    if ! echo "$raw" | jq -e '.properties' &>/dev/null 2>&1; then
+      CLOUD_FETCH_ERROR=true
+      return
+    fi
+
+    while IFS=$'\t' read -r key val; do
+      [[ -z "$key" ]] && continue
+      val="${val%$'\r'}"
+      if [[ "$val" == @Microsoft.KeyVault* ]]; then
+        val=$(resolve_kv_ref "$val")
+      elif [[ -z "$val" ]] && [[ "$SHOW_SECRETS" == "true" ]] && is_sensitive "$key"; then
+        local guessed
+        guessed=$(resolve_secret_by_convention "$key")
+        if [[ -n "$guessed" ]]; then
+          val="$guessed"
+        fi
+      fi
+      CLOUD_VARS["$key"]="$val"
+    done < <(echo "$raw" | jq -r '.properties | to_entries[] | [.key, (.value // "")] | @tsv' 2>/dev/null || true)
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -311,9 +429,9 @@ load_swa_vars() {
   fi
 
   # SWA appsettings list returns {"properties": {"KEY": "VALUE", ...}}
-  while IFS="=" read -r key val; do
+  while IFS=$'\t' read -r key val; do
     SWA_VARS["$key"]="$val"
-  done < <(echo "$raw" | jq -r '.properties | to_entries[] | "\(.key)=\(.value)"' 2>/dev/null || true)
+  done < <(echo "$raw" | jq -r '.properties | to_entries[] | [.key, (.value // "")] | @tsv' 2>/dev/null || true)
 }
 
 # ---------------------------------------------------------------------------
@@ -490,7 +608,7 @@ compare_and_print_appservice() {
 
     if [[ "$LOCAL_ENV_MISSING" == "true" ]]; then
       local_display="[NO LOCAL ENV]"
-    elif is_sensitive "$key"; then
+    elif is_sensitive "$key" && [[ "$SHOW_SECRETS" != "true" ]]; then
       local_display=$(mask_value "$local_val")
     else
       local_display="${local_val:-[NOT SET]}"
@@ -498,7 +616,7 @@ compare_and_print_appservice() {
 
     if [[ "$CLOUD_FETCH_ERROR" == "true" ]]; then
       cloud_display="[FETCH ERROR]"
-    elif is_sensitive "$key"; then
+    elif is_sensitive "$key" && [[ "$SHOW_SECRETS" != "true" ]]; then
       cloud_display=$(mask_value "$cloud_val")
     else
       cloud_display="${cloud_val:-[NOT SET]}"
@@ -580,7 +698,7 @@ compare_and_print_web() {
 
     if [[ "$LOCAL_ENV_MISSING" == "true" ]]; then
       local_display="[NO LOCAL ENV]"
-    elif is_sensitive "$key"; then
+    elif is_sensitive "$key" && [[ "$SHOW_SECRETS" != "true" ]]; then
       local_display=$(mask_value "$local_val")
     else
       local_display="${local_val:-[NOT SET]}"
@@ -588,7 +706,7 @@ compare_and_print_web() {
 
     if [[ "$GITHUB_FETCH_ERROR" == "true" ]]; then
       cloud_display="[FETCH ERROR]"
-    elif is_sensitive "$key"; then
+    elif is_sensitive "$key" && [[ "$SHOW_SECRETS" != "true" ]]; then
       cloud_display=$(mask_value "$github_val")
     else
       cloud_display="${github_val:-[NOT SET]}"
@@ -611,7 +729,7 @@ compare_and_print_web() {
     echo "  SWA Runtime Appsettings (reference only -- VITE_* vars are build-time baked):"
     for k in $(printf '%s\n' "${!SWA_VARS[@]}" | sort); do
       local v="${SWA_VARS[$k]}"
-      if is_sensitive "$k"; then
+      if is_sensitive "$k" && [[ "$SHOW_SECRETS" != "true" ]]; then
         v=$(mask_value "$v")
       fi
       printf "    %-40s = %s\n" "$k" "$v"

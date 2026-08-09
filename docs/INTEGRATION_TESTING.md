@@ -16,7 +16,14 @@ Missing secrets cause a hard failure with a clear error message listing which ke
 
 ## Triggering in CI
 
-Integration tests are NOT part of the PR-blocking CI gate and are never triggered by a build or deploy. Run explicitly via:
+Integration tests are NOT part of the PR-blocking CI gate.
+
+Staging deploys include a **targeted KV-backed smoke subset** after API/Web smoke checks:
+- `tests/integration/suites/database/mongodb.test.ts`
+- `tests/integration/suites/auth/jwt.test.ts`
+- `tests/integration/suites/auth/encryption.test.ts`
+
+The full integration matrix remains explicit/manual. Run full suites via:
 
 ```
 GitHub Actions -> Integration Tests -> Run workflow -> select environment (dev/staging/prod)
