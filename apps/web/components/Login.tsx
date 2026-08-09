@@ -42,20 +42,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
         }
     }, [countdown]);
 
-    // Initialize reCAPTCHA when component mounts (Firebase mode)
     useEffect(() => {
-        if (useFirebase && step === 'phone') {
-            // Small delay to ensure button is rendered
-            const timer = setTimeout(() => {
-                try {
-                    recaptchaVerifierRef.current = initRecaptcha('send-otp-button');
-                } catch (err) {
-                    console.error('Failed to initialize reCAPTCHA:', err);
-                }
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [useFirebase, step]);
+        return () => {
+            if ((window as any).recaptchaVerifier) {
+                (window as any).recaptchaVerifier.clear();
+                (window as any).recaptchaVerifier = null;
+            }
+            recaptchaVerifierRef.current = null;
+        };
+    }, []);
 
     // Format phone for display
     const formatPhone = (value: string) => {
@@ -83,8 +78,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
         const fullPhone = `+91${phone}`;
 
         try {
-            if (useFirebase && recaptchaVerifierRef.current) {
+            if (useFirebase) {
                 // Firebase Authentication
+                recaptchaVerifierRef.current = initRecaptcha('send-otp-button');
                 await sendOTP(fullPhone, recaptchaVerifierRef.current);
                 setStep('otp');
                 setCountdown(30);

@@ -123,11 +123,11 @@ Rules:
 
 #### Content Engine AI backend (env additions)
 
-Default behavior unchanged unless `CONTENT_GENERATOR_BACKEND=ai` is set. The flag is an "uber" master switch: when set, every AI sub-feature defaults on. All four required keys (`ANTHROPIC_API_KEY`, `REPLICATE_API_TOKEN`, `GOOGLE_CALENDAR_API_KEY`, `PERPLEXITY_API_KEY`) must be present or the factory throws a single combined error listing every missing key. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the supported rollout path and `docs/SECRETS.md` for how to obtain each key.
+`CONTENT_GENERATOR_BACKEND` defaults to `ai`. The flag is an "uber" master switch: when set to `ai`, every AI sub-feature defaults on. All four required keys (`ANTHROPIC_API_KEY`, `REPLICATE_API_TOKEN`, `GOOGLE_CALENDAR_API_KEY`, `PERPLEXITY_API_KEY`) must be present or the factory throws a single combined error listing every missing key. Set `CONTENT_GENERATOR_BACKEND=placeholder` to use the asset-catalog generator. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the rollout path and `docs/SECRETS.md` for how to obtain each key.
 
 | Variable                          | Required when                                          | Default (no AI)  | Default (AI mode) | Purpose                                                                       |
 |-----------------------------------|--------------------------------------------------------|------------------|-------------------|-------------------------------------------------------------------------------|
-| `CONTENT_GENERATOR_BACKEND`       | always                                                 | `placeholder`    | n/a               | Master switch: `placeholder` (asset catalog) or `ai` (full AI chain).         |
+| `CONTENT_GENERATOR_BACKEND`       | always                                                 | `ai`             | n/a               | Master switch: `placeholder` (asset catalog) or `ai` (full AI chain).         |
 | `ANTHROPIC_API_KEY`               | `CONTENT_GENERATOR_BACKEND=ai`                         | --               | required          | Anthropic API key for Sonnet 4.6 / Haiku 4.5 via `@ai-sdk/anthropic`.         |
 | `REPLICATE_API_TOKEN`             | AI mode + `MEDIA_BACKEND` not overridden               | --               | required          | Replicate API token for image (sync) and video (queue) generation.            |
 | `GOOGLE_CALENDAR_API_KEY`         | AI mode + V1 not overridden                            | --               | required          | Google Calendar API key for India public holidays calendar (V1).              |

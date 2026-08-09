@@ -129,7 +129,14 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
 
         if (options.clean) {
             spinner.start('Clearing existing data...');
-            for (const collectionName of Object.keys(SEED_DATA)) {
+            const collectionsToClear = Array.from(
+                new Set([
+                    ...COLLECTIONS.map((schema) => schema.name),
+                    ...Object.keys(SEED_DATA),
+                ]),
+            );
+
+            for (const collectionName of collectionsToClear) {
                 try {
                     await db.collection(collectionName).deleteMany({});
                 } catch (err) {

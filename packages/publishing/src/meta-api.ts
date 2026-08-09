@@ -11,9 +11,13 @@ import { createLogger } from '@restropulse/telemetry/server';
 const log = createLogger('meta-api');
 
 // Instagram OAuth Configuration
-const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID || '';
-const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || '';
-const INSTAGRAM_REDIRECT_URI = process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:3001/api/integrations/instagram/callback';
+function getInstagramConfig(): { appId: string; appSecret: string; redirectUri: string } {
+    return {
+        appId: process.env.INSTAGRAM_APP_ID || '',
+        appSecret: process.env.INSTAGRAM_APP_SECRET || '',
+        redirectUri: process.env.INSTAGRAM_REDIRECT_URI || 'http://localhost:3001/api/integrations/instagram/callback',
+    };
+}
 
 // API Endpoints
 const META_OAUTH_URL = 'https://www.facebook.com/v18.0/dialog/oauth';
@@ -91,14 +95,15 @@ export interface StoredInstagramCredentials {
  * See: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-facebook-login/business-login-for-instagram
  */
 export async function generateOAuthUrl(restaurantId: string, useOnboarding: boolean = false): Promise<{ url: string; state: string }> {
+    const { appId, redirectUri } = getInstagramConfig();
     const state = generateStateToken();
     const expiresAt = new Date(Date.now() + STATE_TOKEN_EXPIRY_MS);
     const col = getOauthSessionsCollection();
     await col.insertOne({ type: 'oauth_state', state, restaurantId, expiresAt });
 
     const params = new URLSearchParams({
-        client_id: INSTAGRAM_APP_ID,
-        redirect_uri: INSTAGRAM_REDIRECT_URI,
+        client_id: appId,
+        redirect_uri: redirectUri,
         scope: OAUTH_SCOPES,
         response_type: 'code',
         state: state
@@ -181,13 +186,14 @@ function parseMetaApiError(error: unknown): { code: number | null; message: stri
  * Exchange authorization code for access token
  */
 async function exchangeCodeForToken(code: string): Promise<{ accessToken: string; expiresIn: number } | null> {
+    const { appId, appSecret, redirectUri } = getInstagramConfig();
     log.info({ step: 1 }, 'Exchanging code for short-lived token');
     try {
         const response = await metaApi.get('/oauth/access_token', {
             params: {
-                client_id: INSTAGRAM_APP_ID,
-                client_secret: INSTAGRAM_APP_SECRET,
-                redirect_uri: INSTAGRAM_REDIRECT_URI,
+                client_id: appId,
+                client_secret: appSecret,
+                redirect_uri: redirectUri,
                 code: code
             }
         });
@@ -200,8 +206,8 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
         const longLivedResponse = await metaApi.get('/oauth/access_token', {
             params: {
                 grant_type: 'fb_exchange_token',
-                client_id: INSTAGRAM_APP_ID,
-                client_secret: INSTAGRAM_APP_SECRET,
+                client_id: appId,
+                client_secret: appSecret,
                 fb_exchange_token: shortLivedToken
             }
         });
@@ -221,6 +227,7 @@ async function exchangeCodeForToken(code: string): Promise<{ accessToken: string
  * Fetch user's managed Facebook Pages
  */
 async function getUserPages(accessToken: string): Promise<Array<{ id: string; name: string; access_token: string }>> {
+    const { appId, appSecret } = getInstagramConfig();
     log.info({ step: 3 }, 'Fetching Facebook Pages');
 
     // First, let's see who we're authenticated as
@@ -244,7 +251,7 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
         const debugResponse = await metaApi.get('/debug_token', {
             params: {
                 input_token: accessToken,
-                access_token: `${INSTAGRAM_APP_ID}|${INSTAGRAM_APP_SECRET}`
+                access_token: `${appId}|${appSecret}`
             }
         });
         log.info({ tokenDebug: debugResponse.data }, 'Token debug info');
@@ -549,6 +556,7 @@ export async function handleOAuthCallback(code: string, state: string, skipState
  * Should be called every 45 days (tokens expire after 60 days)
  */
 export async function refreshAccessToken(encryptedToken: string): Promise<{ accessToken: string; expiresAt: Date } | null> {
+    const { appId, appSecret } = getInstagramConfig();
     try {
         const currentToken = decrypt(encryptedToken);
         if (!currentToken) {
@@ -559,8 +567,8 @@ export async function refreshAccessToken(encryptedToken: string): Promise<{ acce
         const response = await metaApi.get('/oauth/access_token', {
             params: {
                 grant_type: 'fb_exchange_token',
-                client_id: INSTAGRAM_APP_ID,
-                client_secret: INSTAGRAM_APP_SECRET,
+                client_id: appId,
+                client_secret: appSecret,
                 fb_exchange_token: currentToken
             }
         });
@@ -649,5 +657,6 @@ export function prepareCredentialsForStorage(
  * Check if Instagram integration is properly configured
  */
 export function isInstagramConfigured(): boolean {
-    return !!(INSTAGRAM_APP_ID && INSTAGRAM_APP_SECRET && INSTAGRAM_REDIRECT_URI);
+    const { appId, appSecret, redirectUri } = getInstagramConfig();
+    return !!(appId && appSecret && redirectUri);
 }

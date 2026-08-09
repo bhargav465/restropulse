@@ -27,8 +27,9 @@ const log = createLogger('integrations');
 
 const router = express.Router();
 
-// App Secret for signature verification
-const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || '';
+function getInstagramAppSecret(): string {
+    return process.env.INSTAGRAM_APP_SECRET || '';
+}
 
 /**
  * Verify Facebook signed request
@@ -47,7 +48,7 @@ function verifySignedRequest(signedRequest: string): { userId: string } | null {
 
         // Verify signature
         const expectedSig = crypto
-            .createHmac('sha256', INSTAGRAM_APP_SECRET)
+            .createHmac('sha256', getInstagramAppSecret())
             .update(payload)
             .digest('base64')
             .replace(/\+/g, '-')
