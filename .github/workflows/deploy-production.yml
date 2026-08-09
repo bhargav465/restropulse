@@ -258,8 +258,16 @@ jobs:
           failures=0
           while IFS= read -r ref; do
             [ -z "$ref" ] && continue
-            vault_name=$(echo "$ref" | sed -n 's/.*VaultName=\([^;)]*\).*/\1/p')
-            secret_name=$(echo "$ref" | sed -n 's/.*SecretName=\([^;)]*\).*/\1/p')
+            vault_name=""
+            secret_name=""
+            secret_uri=$(echo "$ref" | sed -n 's/.*SecretUri=\([^;)]*\).*/\1/p')
+            if [ -n "$secret_uri" ]; then
+              vault_name=$(echo "$secret_uri" | awk -F/ '{print $3}' | cut -d. -f1)
+              secret_name=$(echo "$secret_uri" | awk -F/ '{print $5}')
+            else
+              vault_name=$(echo "$ref" | sed -n 's/.*VaultName=\([^;)]*\).*/\1/p')
+              secret_name=$(echo "$ref" | sed -n 's/.*SecretName=\([^;)]*\).*/\1/p')
+            fi
             if [ -z "$vault_name" ] || [ -z "$secret_name" ]; then
               echo "Invalid Key Vault reference: $ref"
               failures=1
