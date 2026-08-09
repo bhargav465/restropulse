@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import http from 'node:http';
 import { fileURLToPath } from 'url';
+import { config as dotenvConfig } from 'dotenv';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, requestLoggingMiddleware, errorHandlerMiddleware, shutdownServerTelemetry, registerProcessGuards } from '@restropulse/telemetry/server';
@@ -26,6 +27,8 @@ import intelligenceRoutes from './routes/intelligence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenvConfig({ path: path.resolve(process.cwd(), '.env'), override: false });
 
 type PortConfig = {
     web: number;

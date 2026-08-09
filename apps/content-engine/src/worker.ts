@@ -25,6 +25,7 @@ import './instrument.js';
 import http from 'node:http';
 import path from 'node:path';
 import cron from 'node-cron';
+import { config as dotenvConfig } from 'dotenv';
 import { loadAndValidateEnv, z, ROLLING_WINDOW_HOURS, POST_APPROVAL_BUFFER_HOURS, CYCLE_APPROVAL_BUFFER_HOURS, validateTimingConstraints } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, shutdownServerTelemetry, tracedCronJob, registerProcessGuards } from '@restropulse/telemetry/server';
@@ -52,6 +53,8 @@ import {
 import { runPostResumeOnBoot } from './services/post-resume.js';
 
 const logger = createLogger('content-engine');
+
+dotenvConfig({ path: path.resolve(process.cwd(), '.env'), override: false });
 
 if (process.env.SECRETS_BACKEND) {
   await hydrateEnvFromProvider(

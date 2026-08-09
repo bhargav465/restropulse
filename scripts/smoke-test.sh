@@ -16,18 +16,37 @@ MAX_RETRIES=5
 RETRY_DELAY=10
 SHA_CHECK_RETRIES=36
 SHA_CHECK_DELAY=10
+BOOT_RETRIES=24
+BOOT_RETRY_DELAY=10
+
+request() {
+  local url="$1"
+  curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+    --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "$url"
+}
 
 case "$SERVICE" in
   api)
     echo "Smoke testing API at ${BASE_URL}/health ..."
-    RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/health")
+    RESPONSE=""
+    for attempt in $(seq 1 "$BOOT_RETRIES"); do
+      if RESPONSE=$(request "${BASE_URL}/health" 2>/dev/null); then
+        break
+      fi
+      echo "API health not ready yet (attempt ${attempt}/${BOOT_RETRIES})..."
+      if [ "$attempt" -eq "$BOOT_RETRIES" ]; then
+        echo "API health check failed after ${BOOT_RETRIES} attempts."
+        exit 1
+      fi
+      sleep "$BOOT_RETRY_DELAY"
+    done
     if ! echo "$RESPONSE" | grep -q '"status"'; then
       echo "API health check failed. Response: $RESPONSE"
       exit 1
     fi
     if [ -n "$EXPECTED_GIT_SHA" ]; then
       for attempt in $(seq 1 "$SHA_CHECK_RETRIES"); do
-        RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/health")
+        RESPONSE=$(request "${BASE_URL}/health")
         DEPLOYED_SHA=$(echo "$RESPONSE" | jq -r '.deployment.gitSha // empty')
         if [ "$DEPLOYED_SHA" = "$EXPECTED_GIT_SHA" ]; then
           break
@@ -43,14 +62,25 @@ case "$SERVICE" in
     ;;
   web)
     echo "Smoke testing Web at ${BASE_URL} ..."
-    RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}")
+    RESPONSE=""
+    for attempt in $(seq 1 "$BOOT_RETRIES"); do
+      if RESPONSE=$(request "${BASE_URL}" 2>/dev/null); then
+        break
+      fi
+      echo "Web endpoint not ready yet (attempt ${attempt}/${BOOT_RETRIES})..."
+      if [ "$attempt" -eq "$BOOT_RETRIES" ]; then
+        echo "Web smoke check failed after ${BOOT_RETRIES} attempts."
+        exit 1
+      fi
+      sleep "$BOOT_RETRY_DELAY"
+    done
     if ! echo "$RESPONSE" | grep -q '<div id="root"'; then
       echo "Web smoke test failed. Response does not contain root div."
       exit 1
     fi
     if [ -n "$EXPECTED_GIT_SHA" ]; then
       for attempt in $(seq 1 "$SHA_CHECK_RETRIES"); do
-        CONFIG_RESPONSE=$(curl --fail --silent --max-time 30 --retry "$MAX_RETRIES" --retry-delay "$RETRY_DELAY" --retry-all-errors "${BASE_URL}/config.json")
+        CONFIG_RESPONSE=$(request "${BASE_URL}/config.json")
         DEPLOYED_SHA=$(echo "$CONFIG_RESPONSE" | jq -r '.deployment.gitSha // empty')
         if [ "$DEPLOYED_SHA" = "$EXPECTED_GIT_SHA" ]; then
           break

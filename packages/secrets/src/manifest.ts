@@ -59,4 +59,5 @@ export function getAppSecretKeys(app: AppName): string[] {
 export const API_SECRET_KEYS = getAppSecretKeys('api');
 export const PUBLISHER_SECRET_KEYS = getAppSecretKeys('publisher');
 export const CONTENT_ENGINE_SECRET_KEYS = getAppSecretKeys('content-engine');
+export const INTELLIGENCE_WORKER_SECRET_KEYS = getAppSecretKeys('intelligence-worker');
 export const DB_CLI_SECRET_KEYS = getAppSecretKeys('db-cli');

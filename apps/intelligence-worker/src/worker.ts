@@ -17,14 +17,25 @@
 import './instrument.js';
 
 import path from 'node:path';
+import { config as dotenvConfig } from 'dotenv';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, shutdownServerTelemetry } from '@restropulse/telemetry/server';
+import { createSecretsProvider, hydrateEnvFromProvider, INTELLIGENCE_WORKER_SECRET_KEYS } from '@restropulse/secrets';
 import { startIntelligenceRefreshCron } from './refresh.js';
 import { startDailySnapshotCron } from './daily-cron.js';
 import { runBackfill } from './backfill.js';
 
 const logger = createLogger('intelligence-worker');
+
+dotenvConfig({ path: path.resolve(process.cwd(), '.env'), override: false });
+
+if (process.env.SECRETS_BACKEND) {
+    await hydrateEnvFromProvider(
+        createSecretsProvider(process.env.SECRETS_BACKEND),
+        INTELLIGENCE_WORKER_SECRET_KEYS,
+    );
+}
 
 loadAndValidateEnv({
     serviceName: 'intelligence-worker',
@@ -42,6 +53,9 @@ loadAndValidateEnv({
             // (see src/rescan.ts). The default enqueue seam does not use them.
             GOOGLE_MAPS_API_KEY: z.string().optional(),
             ANTHROPIC_API_KEY: z.string().optional(),
+            SECRETS_BACKEND: z.enum(['env', 'azure-kv']).default('env'),
+            AZURE_KEY_VAULT_URL: z.string().url().optional(),
+            AZURE_KEY_VAULT_KEY_PREFIX: z.string().optional(),
         })
         .passthrough(),
 });

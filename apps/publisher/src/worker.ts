@@ -16,6 +16,7 @@
 import './instrument.js';
 
 import path from 'node:path';
+import { config as dotenvConfig } from 'dotenv';
 import { loadAndValidateEnv, z } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { startPublishingCron, startTokenRefreshCron } from '@restropulse/publishing';
@@ -23,6 +24,8 @@ import { createLogger, shutdownServerTelemetry, registerProcessGuards } from '@r
 import { createSecretsProvider, hydrateEnvFromProvider, PUBLISHER_SECRET_KEYS } from '@restropulse/secrets';
 
 const logger = createLogger('publisher');
+
+dotenvConfig({ path: path.resolve(process.cwd(), '.env'), override: false });
 
 if (process.env.SECRETS_BACKEND) {
   await hydrateEnvFromProvider(

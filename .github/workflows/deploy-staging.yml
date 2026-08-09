@@ -480,14 +480,10 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # Keep deploy-time integration checks short and deterministic.
-      - name: Run KV-backed staging integration smoke subset
+      - name: Run exhaustive KV-backed staging validation
         env:
           AZURE_KEY_VAULT_URL: https://restropulse-prod-kv.vault.azure.net
-        run: |
-          npm run test:integration:kv:staging -- tests/integration/suites/database/mongodb.test.ts
-          npm run test:integration:kv:staging -- tests/integration/suites/auth/jwt.test.ts
-          npm run test:integration:kv:staging -- tests/integration/suites/auth/encryption.test.ts
+        run: npm run validate:kv:staging
 
   tag-staging:
     name: Tag Staging
