@@ -516,6 +516,9 @@ jobs:
       - name: Setup Node
         uses: ./.github/actions/setup-node
 
+      - name: Build secrets package for KV validator
+        run: npm run build --workspace=@restropulse/secrets
+
       - name: Login to Azure
         uses: azure/login@v3
         with:
@@ -530,8 +533,8 @@ jobs:
 
   tag-staging:
     name: Tag Staging
-    needs: [smoke-test-api, smoke-test-web, integration-smoke-staging]
-    if: always() && !failure() && !cancelled()
+    needs: [integration-smoke-staging]
+    if: needs.integration-smoke-staging.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
