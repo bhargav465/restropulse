@@ -1,32 +1,35 @@
+# Cross-platform: `shell` runs each command through the platform shell
+# (cmd /C on Windows, $SHELL on macOS/Linux). Do not use `cmd: ["cmd", "/c", ...]`
+# here -- that hardcodes the Windows shell and breaks `npm run dev` on macOS/Linux.
 procs:
   env-editor:
-    cmd: ["cmd", "/c", "node scripts/env-editor.mjs"]
+    shell: "node scripts/env-editor.mjs"
     cwd: .
 
   web:
-    cmd: ["cmd", "/c", "npm run dev"]
+    shell: "npm run dev"
     cwd: apps/web
 
   api:
-    cmd: ["cmd", "/c", "npm run dev"]
+    shell: "npm run dev"
     cwd: apps/api
 
   publisher:
-    cmd: ["cmd", "/c", "npm run dev"]
+    shell: "npm run dev"
     cwd: apps/publisher
 
   content-engine:
-    cmd: ["cmd", "/c", "npm run dev"]
+    shell: "npm run dev"
     cwd: apps/content-engine
 
   intelligence-worker:
-    cmd: ["cmd", "/c", "npm run dev"]
+    shell: "npm run dev"
     cwd: apps/intelligence-worker
 
   webhook-tunnel:
-    cmd: ["cmd", "/c", "node scripts/start-ngrok.mjs"]
+    shell: "node scripts/start-ngrok.mjs"
     cwd: .
 
   asset-tunnel:
-    cmd: ["cmd", "/c", "node scripts/start-asset-tunnel.mjs"]
+    shell: "node scripts/start-asset-tunnel.mjs"
     cwd: .
