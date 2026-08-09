@@ -30,6 +30,7 @@ function resolveRazorpayPlanIds(
 
 interface SeedOptions {
     clean?: boolean;
+    allowMissingRazorpay?: boolean;
 }
 
 export async function seedCommand(options: SeedOptions): Promise<void> {
@@ -91,7 +92,7 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
             })
             .filter((r) => r.missing.length > 0);
 
-        if (missingRazorpay.length > 0) {
+        if (missingRazorpay.length > 0 && !options.allowMissingRazorpay) {
             spinner.stop();
             console.error(chalk.red(`\nSeed aborted: missing Razorpay plan IDs for env "${env}".`));
             console.error(chalk.red('razorpay-plan-ids.json must define monthly + annual IDs for every plan:'));
@@ -100,9 +101,13 @@ export async function seedCommand(options: SeedOptions): Promise<void> {
             }
             const scriptSuffix = env === 'development' ? '' : env === 'production' ? ':prod' : `:${env}`;
             console.error(chalk.yellow(`\nFix: run "npm run razorpay:setup${scriptSuffix} --workspace=@restropulse/db-cli"`));
+            console.error(chalk.yellow('Or bypass once with "--allow-missing-razorpay" (not recommended).'));
             console.error(chalk.yellow('(for a brand-new environment, run reset first to create the plan docs).'));
             await disconnect();
             process.exit(1);
+        }
+        if (missingRazorpay.length > 0 && options.allowMissingRazorpay) {
+            console.log(chalk.yellow(`\nProceeding with missing Razorpay plan IDs for env "${env}" because --allow-missing-razorpay was provided.`));
         }
 
         // Ensure indexes exist before seeding

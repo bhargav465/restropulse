@@ -78,7 +78,7 @@ jobs:
           get_secret() {
             az keyvault secret show \
               --vault-name restropulse-prod-kv \
-              --name "PROD-$1" \
+              --name "prod-$(echo "$1" | tr '[:upper:]' '[:lower:]')" \
               --query "value" -o tsv
           }
 

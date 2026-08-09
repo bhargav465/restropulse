@@ -29,16 +29,16 @@
   },
   "production": {
     "plan-starter-v1": {
-      "monthly": "",
-      "annual": ""
+      "monthly": "plan_TNdotXyjh4j8N5",
+      "annual": "plan_TNdotxxnCDCrQ1"
     },
     "plan-growth-v1": {
-      "monthly": "",
-      "annual": ""
+      "monthly": "plan_TNdouQQTrjGftE",
+      "annual": "plan_TNdouqQS3PY8Un"
     },
     "plan-premium-v1": {
-      "monthly": "",
-      "annual": ""
+      "monthly": "plan_TNdovCeyYH9HHi",
+      "annual": "plan_TNdovgZBWVhiYq"
     }
   }
 }

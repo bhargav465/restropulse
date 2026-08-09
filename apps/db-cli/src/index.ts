@@ -9,6 +9,13 @@ import { resetCommand } from './commands/reset.js';
 import { razorpaySetupCommand } from './commands/razorpay-setup.js';
 import { deleteAccountCommand } from './commands/delete-account.js';
 import { acquireRestaurantsCommand } from './commands/acquire-restaurants.js';
+import {
+    atlasInventoryCommand,
+    atlasBackupCloneCommand,
+    atlasProvisionCommand,
+    atlasValidateAccessCommand,
+    atlasCleanupLegacyCommand,
+} from './commands/atlas-admin.js';
 
 const program = new Command();
 
@@ -56,11 +63,13 @@ program
     .command('seed')
     .description('Seed database with sample data')
     .option('--clean', 'Clear existing data before seeding')
+    .option('--allow-missing-razorpay', 'Bypass Razorpay plan ID completeness check (not recommended)')
     .action(seedCommand);
 
 program
     .command('reset')
     .description('Drop all collections and recreate database with indexes and defaults (10s safety delay)')
+    .option('--allow-missing-razorpay', 'Bypass Razorpay plan ID completeness check (not recommended)')
     .action(resetCommand);
 
 program
@@ -95,5 +104,41 @@ program
         skipOsm: !!options.skipOsm,
         output: options.output,
     }));
+
+program
+    .command('atlas-inventory')
+    .description('List all Atlas users/roles and all databases into a sanitized inventory report')
+    .option('--output <path>', 'Output JSON path')
+    .action(atlasInventoryCommand);
+
+program
+    .command('atlas-backup-clone')
+    .description('Clone non-system/non-target databases into timestamped backup databases')
+    .option('--execute', 'Execute cloning (default is dry-run)')
+    .option('--output <path>', 'Output manifest JSON path')
+    .action(atlasBackupCloneCommand);
+
+program
+    .command('atlas-provision')
+    .description('Provision target DBs, scoped roles/users, and one super-admin with AKV-backed credentials')
+    .option('--execute', 'Execute provisioning (default is dry-run)')
+    .option('--confirm <env>', 'Non-interactive confirmation token (must match --env)')
+    .option('--vault-name <name>', 'Azure Key Vault name override')
+    .option('--output <path>', 'Output metadata JSON path (no secrets)')
+    .action(atlasProvisionCommand);
+
+program
+    .command('atlas-validate-access')
+    .description('Validate scoped user isolation and super-admin access using metadata + AKV secrets')
+    .option('--input <path>', 'Provision metadata JSON path')
+    .action(atlasValidateAccessCommand);
+
+program
+    .command('atlas-cleanup-legacy')
+    .description('Dry-run or execute cleanup of legacy users/databases (gated)')
+    .option('--execute', 'Execute deletion (default is dry-run)')
+    .option('--confirm <env>', 'Non-interactive confirmation token (must match --env)')
+    .option('--input <path>', 'Validation report path for traceability')
+    .action(atlasCleanupLegacyCommand);
 
 program.parse();

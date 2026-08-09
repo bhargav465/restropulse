@@ -80,7 +80,7 @@ jobs:
           get_secret() {
             az keyvault secret show \
               --vault-name restropulse-prod-kv \
-              --name "STAGING-$1" \
+              --name "staging-$(echo "$1" | tr '[:upper:]' '[:lower:]')" \
               --query "value" -o tsv
           }
 
