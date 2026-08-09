@@ -71,8 +71,10 @@ jobs:
       # VITE_RAZORPAY_KEY_ID into the compiled JS. Instead a same-origin
       # config.json sidecar is written into the build output and fetched at
       # runtime by apps/web/utils/client-config.ts. This file only ever
-      # contains public web-facing config -- never fetch/emit
-      # FIREBASE-SERVICE-ACCOUNT-KEY (server-only admin secret).
+      # contains public web-facing config. AKV-first policy: any secret-backed
+      # values in this file must come from Azure Key Vault fetches in this step
+      # (never GitHub secrets/vars). Never fetch/emit FIREBASE-SERVICE-ACCOUNT-KEY
+      # (server-only admin secret).
       - name: Generate config.json sidecar from Key Vault
         run: |
           get_secret() {
@@ -100,6 +102,8 @@ jobs:
           echo "::add-mask::$APPINSIGHTS"
           RAZORPAY_KEY_ID=$(get_secret RAZORPAY-KEY-ID)
           echo "::add-mask::$RAZORPAY_KEY_ID"
+          DEPLOY_GIT_SHA="${{ github.sha }}"
+          DEPLOY_RUN_ID="${{ github.run_id }}"
           DEPLOYED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
           jq -n \
@@ -109,8 +113,8 @@ jobs:
             --arg razorpayKeyId "$RAZORPAY_KEY_ID" \
             --arg appInsightsConnectionString "$APPINSIGHTS" \
             --argjson telemetrySampleRate 100 \
-            --arg deployGitSha "${{ github.sha }}" \
-            --arg deployRunId "${{ github.run_id }}" \
+            --arg deployGitSha "$DEPLOY_GIT_SHA" \
+            --arg deployRunId "$DEPLOY_RUN_ID" \
             --arg deployedAt "$DEPLOYED_AT" \
             --arg firebaseApiKey "$FIREBASE_API_KEY" \
             --arg firebaseAuthDomain "$FIREBASE_AUTH_DOMAIN" \

@@ -252,12 +252,16 @@ against the workflow run/ref:
 
 | Setting / Surface | Description |
 |---|---|
-| `APP_GIT_SHA` | Deployed git identity (`github.sha` on staging, `inputs.ref` on production manual promote) |
+| `APP_GIT_SHA` | Deployed git commit SHA (staging `github.sha`; production resolves `inputs.ref` to commit SHA first) |
 | `APP_DEPLOY_RUN_ID` | GitHub Actions run ID |
 | `APP_DEPLOYED_AT` | UTC deployment timestamp |
 | `APP_ARTIFACT_SHA256` | SHA-256 of `api-deploy.zip` (staging API bundle) |
 | `GET /health` | API returns deployment metadata in `deployment` object |
 | `web /config.json` | Runtime web config includes deployment metadata under `deployment` |
+
+Deployment metadata above is operational and non-secret. Secret-backed values for
+runtime web config are fetched from Azure Key Vault during deploy and are not read
+from GitHub secrets/vars.
 
 ### Slot-Sticky Settings
 
