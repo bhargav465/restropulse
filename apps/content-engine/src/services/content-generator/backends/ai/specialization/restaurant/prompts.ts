@@ -15,6 +15,7 @@ import type { DraftCycleInput } from '../../../../types.js';
 import { getRegionalAesthetic, PRICE_REGISTER_GUIDE, VERNACULAR_POSTURE } from './india-context.js';
 import { RESTAURANT_ARCHETYPES, getEnabledArchetypes, getFlagshipArchetypes } from './content-patterns.js';
 import { getDefaultHook } from './hooks.js';
+import { getPlatformTactics } from './platform-tactics.js';
 
 export function buildSystemPromptFragment(ctx: SpecializationContext): string {
   const name = ctx.restaurantName ?? 'the restaurant';
@@ -160,6 +161,9 @@ export function buildTaskPrompt(
       const archetype = archetypeId ? RESTAURANT_ARCHETYPES.find(a => a.id === archetypeId) : undefined;
       const hookEntry = archetype ? getDefaultHook(archetype.id) : null;
       const hasConcept = inp.concept && inp.concept.trim();
+      const postType = inp.type ?? 'IMAGE';
+      const platform = inp.platform ?? 'INSTAGRAM';
+      const tactics = getPlatformTactics(platform, postType);
 
       // Build the dish pool from specialization context (populated by toSpecializationContext from restaurantProfile)
       const dishPool = [
@@ -175,15 +179,16 @@ export function buildTaskPrompt(
           : archetype?.promptTemplate
           ? `Brief: ${archetype.promptTemplate}`
           : '',
-        `Type: ${inp.type ?? 'IMAGE'}. Platforms: ${(inp.platforms ?? []).join(', ') || 'INSTAGRAM'}.`,
+        `Type: ${postType}. Platform: ${platform}.`,
         archetype ? `Archetype: ${archetype.label} — ${archetype.description}.` : '',
         hookEntry ? `Hook guidance: ${hookEntry.captionOpener}` : '',
         hookEntry ? `Example opener style: "${hookEntry.exampleOpener}"` : '',
         ``,
-        `Caption requirements:`,
-        `- First 125 characters must hook the reader above the fold.`,
+        `Caption requirements (tuned for ${platform}):`,
+        `- First ${tactics.captionLength.aboveFoldChars} characters must hook the reader above the fold.`,
         `- Use sensory-first language — name the texture, aroma, temperature.`,
-        `- End with 3–8 relevant hashtags on a new line.`,
+        `- Keep the full caption under ${tactics.captionLength.totalChars} characters.`,
+        `- End with ${tactics.hashtagCount.min}-${tactics.hashtagCount.max} relevant hashtags on a new line.`,
         archetype?.fssaiSensitive
           ? `FSSAI SENSITIVE: State dietary properties as facts only (e.g. "made with ragi", "100% vegan"). No benefit claims. No comparative health language.`
           : '',

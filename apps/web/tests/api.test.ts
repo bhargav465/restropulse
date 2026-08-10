@@ -334,7 +334,7 @@ describe('API Service', () => {
         it('should create a new post', async () => {
             mockFetch.mockResolvedValueOnce({
                 ok: true,
-                json: async () => ({ success: true, data: { id: 'p3', caption: 'New post' } }),
+                json: async () => ({ success: true, data: [{ id: 'p3', caption: 'New post' }] }),
             });
 
             const result = await postsAPI.create({
@@ -345,7 +345,7 @@ describe('API Service', () => {
                 platforms: ['INSTAGRAM']
             });
 
-            expect(result.caption).toBe('New post');
+            expect(result[0].caption).toBe('New post');
         });
 
         it('should get post by id', async () => {
@@ -363,7 +363,7 @@ describe('API Service', () => {
                 ok: true,
                 json: async () => ({
                     success: true,
-                    data: { id: 'pgen1', caption: 'Promo post', type: 'IMAGE', platforms: ['INSTAGRAM'] },
+                    data: [{ id: 'pgen1', caption: 'Promo post', type: 'IMAGE', platform: 'INSTAGRAM' }],
                 }),
             });
 
@@ -373,7 +373,7 @@ describe('API Service', () => {
                 platforms: ['INSTAGRAM'],
             });
 
-            expect(result.id).toBe('pgen1');
+            expect(result[0].id).toBe('pgen1');
             expect(mockFetch).toHaveBeenCalledWith(
                 expect.stringContaining('/posts/generate'),
                 expect.objectContaining({ method: 'POST' })

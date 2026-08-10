@@ -14,13 +14,14 @@
 
 import { randomUUID } from 'node:crypto';
 import { createLogger } from '@restropulse/telemetry/server';
-import type { Platform, PostType, MediaJobRecord } from '@restropulse/shared';
+import type { PostType, MediaJobRecord } from '@restropulse/shared';
 import { withRetry, RETRY_PROFILES } from '../../with-retry.js';
 import { withCostTracking } from '../../with-cost-tracking.js';
 import { REPLICATE_MODELS } from './models.js';
 import { computeReplicateCostUsd } from './pricing.js';
 import type { ReplicateClient, ReplicatePrediction } from './replicate-client.js';
 import type { IMediaJobStore } from '../jobs/types.js';
+import { getPlatformTactics } from '../../specialization/restaurant/platform-tactics.js';
 import type {
   IMediaGenerator,
   ImageGenInput,
@@ -40,8 +41,8 @@ export interface ReplicateMediaGeneratorOptions {
   store: IMediaJobStore;
 }
 
-function pickAspectRatio(postType: PostType, _platforms: Platform[]): string {
-  return postType === 'STORY' ? '9:16' : '1:1';
+function pickAspectRatio(postType: PostType, platform: ImageGenInput['platform']): string {
+  return getPlatformTactics(platform, postType).aspectRatio;
 }
 
 function buildPrompt(input: Pick<ImageGenInput | VideoGenInput, 'concept' | 'themes' | 'caption'> & { promptSuffix?: string }): string {
@@ -186,7 +187,7 @@ export class ReplicateMediaGenerator implements IMediaGenerator {
     const jobId = randomUUID();
     const modelSlug = REPLICATE_MODELS.fluxDev;
     const prompt = buildPrompt(input);
-    const aspectRatio = pickAspectRatio(input.postType, input.platforms);
+    const aspectRatio = pickAspectRatio(input.postType, input.platform);
 
     let mediaUrl: string;
     try {
@@ -268,7 +269,7 @@ export class ReplicateMediaGenerator implements IMediaGenerator {
 
     const frameInputs: ImageGenInput[] = Array.from({ length: slideCount }, (_, i) => ({
       postType: 'IMAGE' as const,
-      platforms: input.platforms,
+      platform: input.platform,
       concept: input.concept,
       themes: input.themes,
       caption: input.caption,

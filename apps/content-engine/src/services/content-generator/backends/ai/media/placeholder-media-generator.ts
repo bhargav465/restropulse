@@ -17,7 +17,7 @@ import {
   getConstraintCompatibleImage,
   getConstraintCompatibleVideo,
 } from '../../../../asset-manager.js';
-import { getMergedConstraints } from '../../../../content-validator/media-constraints.js';
+import { getConstraints } from '../../../../content-validator/media-constraints.js';
 import type {
   IMediaGenerator,
   ImageGenInput,
@@ -37,7 +37,7 @@ export class PlaceholderMediaGenerator implements IMediaGenerator {
 
   async generateImage(input: ImageGenInput): Promise<MediaGenJob> {
     const theme = pickThemeKey(input);
-    const constraints = getMergedConstraints(input.postType, input.platforms);
+    const constraints = getConstraints(input.postType, input.platform);
     const selected = getConstraintCompatibleImage(constraints, theme) ?? getRandomImage(theme);
     return {
       jobId: randomUUID(),
@@ -62,7 +62,7 @@ export class PlaceholderMediaGenerator implements IMediaGenerator {
 
   async generateVideo(input: VideoGenInput): Promise<MediaGenJob> {
     const theme = pickThemeKey(input);
-    const constraints = getMergedConstraints(input.postType, input.platforms);
+    const constraints = getConstraints(input.postType, input.platform);
 
     const selected = getConstraintCompatibleVideo(constraints, theme);
     if (selected) {
@@ -79,7 +79,7 @@ export class PlaceholderMediaGenerator implements IMediaGenerator {
       };
     }
 
-    log.warn({ postType: input.postType, platforms: input.platforms, theme },
+    log.warn({ postType: input.postType, platform: input.platform, theme },
       'No constraint-compatible video; falling back to random video');
     const fallback = getRandomVideo(theme);
     return {

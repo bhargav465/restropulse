@@ -122,7 +122,8 @@ export const COLLECTIONS: CollectionSchema[] = [
         indexes: [
             { spec: { restaurantId: 1 } },
             { spec: { status: 1 } },
-            { spec: { platforms: 1 } },
+            { spec: { platform: 1 } },
+            { spec: { groupId: 1 } },
             { spec: { scheduledFor: 1 } },
             { spec: { postedAt: -1 } },
             { spec: { restaurantId: 1, status: 1 } },
@@ -130,7 +131,7 @@ export const COLLECTIONS: CollectionSchema[] = [
         validator: {
             $jsonSchema: {
                 bsonType: 'object',
-                required: ['type', 'status', 'platforms'],
+                required: ['type', 'status', 'platform'],
                 properties: {
                     type: { enum: ['IMAGE', 'VIDEO', 'CAROUSEL', 'REEL', 'STORY'] },
                     status: { enum: ['PENDING_CONTENT', 'PENDING_APPROVAL', 'CHANGES_REQUESTED', 'SCHEDULED', 'PUBLISHING', 'POSTED', 'MISSED_DEADLINE'] },
@@ -138,7 +139,8 @@ export const COLLECTIONS: CollectionSchema[] = [
                     videoUrl: { bsonType: 'string' },
                     mediaUrls: { bsonType: 'array', items: { bsonType: 'string' } },
                     caption: { bsonType: 'string' },
-                    platforms: { bsonType: 'array', items: { enum: ['INSTAGRAM', 'FACEBOOK'] } },
+                    platform: { enum: ['INSTAGRAM', 'FACEBOOK'] },
+                    groupId: { bsonType: 'string' },
                     scheduledFor: { bsonType: 'string' },
                     postedAt: { bsonType: 'string' },
                     duration: { bsonType: 'string' },

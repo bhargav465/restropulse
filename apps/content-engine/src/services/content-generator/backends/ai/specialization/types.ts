@@ -45,7 +45,7 @@ export interface SpecializationContext {
 
 export interface ImageGenInput {
   postType: PostType;
-  platforms: Platform[];
+  platform: Platform;
   concept: string;
   themes?: string[];
   caption?: string;

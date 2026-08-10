@@ -93,7 +93,7 @@ describe('AIContentGenerator (phase 2 complete)', () => {
 
   it('generatePost produces caption + thumbnail for IMAGE', async () => {
     const { gen } = makeGen();
-    const out = await gen.generatePost({ concept: 'parotta', type: 'IMAGE', platforms: ['INSTAGRAM'] });
+    const out = await gen.generatePost({ concept: 'parotta', type: 'IMAGE', platform: 'INSTAGRAM' });
     expect(out.caption).toContain('parotta');
     expect(out.thumbnail).toMatch(/^http:\/\//);
   });
@@ -101,7 +101,7 @@ describe('AIContentGenerator (phase 2 complete)', () => {
   it('revisePost regenerates caption only when feedback does not request media', async () => {
     const { gen, generateImage } = makeGen();
     await gen.revisePost({
-      existingPost: { type: 'IMAGE', platforms: ['INSTAGRAM'], caption: 'old', thumbnail: 'http://existing/t.jpg' },
+      existingPost: { type: 'IMAGE', platform: 'INSTAGRAM', caption: 'old', thumbnail: 'http://existing/t.jpg' },
       feedback: { tags: ['voice'], details: {}, note: 'warmer please' },
     });
     expect(generateImage).not.toHaveBeenCalled();
@@ -136,7 +136,7 @@ describe('AIContentGenerator currentAffairs auto-enrichment', () => {
       currentAffairs: currentAffairs as any,
     });
 
-    await gen.generatePost({ concept: 'cricket match-day biryani', type: 'IMAGE', platforms: ['INSTAGRAM'] });
+    await gen.generatePost({ concept: 'cricket match-day biryani', type: 'IMAGE', platform: 'INSTAGRAM' });
 
     expect(fetchHints).toHaveBeenCalledTimes(1);
     const prompt = (generateObject.mock.calls[0][0] as any).prompt;
@@ -163,7 +163,7 @@ describe('AIContentGenerator currentAffairs auto-enrichment', () => {
     await gen.generatePost({
       concept: 'plain biryani',
       type: 'IMAGE',
-      platforms: ['INSTAGRAM'],
+      platform: 'INSTAGRAM',
       currentAffairsHints: ['caller-supplied hint'],
     });
 

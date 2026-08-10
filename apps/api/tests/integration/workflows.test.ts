@@ -138,7 +138,7 @@ describe('Integration Tests - Complete Workflows', () => {
                 });
 
             expect(createResponse.status).toBe(201);
-            const postId = createResponse.body.data.id;
+            const postId = createResponse.body.data[0].id;
 
             // 2. Get the created post
             const getResponse = await request(app)
@@ -186,7 +186,7 @@ describe('Integration Tests - Complete Workflows', () => {
                     platforms: ['FACEBOOK']
                 });
 
-            const postId = createResponse.body.data.id;
+            const postId = createResponse.body.data[0].id;
 
             // Request changes
             await request(app)

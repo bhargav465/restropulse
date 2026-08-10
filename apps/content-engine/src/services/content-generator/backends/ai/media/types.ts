@@ -35,7 +35,7 @@ export interface MediaGenJob {
 
 export interface ImageGenInput {
   postType: PostType;          // IMAGE | CAROUSEL | STORY (this method's domain)
-  platforms: Platform[];
+  platform: Platform;
   concept: string;
   themes?: string[];
   caption?: string;
@@ -51,7 +51,7 @@ export interface ImageGenInput {
 
 export interface VideoGenInput {
   postType: 'REEL' | 'VIDEO' | 'STORY';
-  platforms: Platform[];
+  platform: Platform;
   concept: string;
   themes?: string[];
   caption?: string;
@@ -62,7 +62,7 @@ export interface VideoGenInput {
 }
 
 export interface CarouselGenInput {
-  platforms: Platform[];
+  platform: Platform;
   concept: string;
   themes?: string[];
   caption?: string;

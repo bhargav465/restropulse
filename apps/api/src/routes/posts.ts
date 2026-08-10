@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
-import { findAllPosts, findPostById, createPost, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
-import { publishPost, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
+import { randomUUID } from 'node:crypto';
+import { findAllPosts, findPostById, createPosts, deletePostsByGroupId, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
+import { publishPost, applyPublishResult, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
 import { ApiResponse, Post, isPostPastApprovalDeadline, Platform } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -66,8 +67,11 @@ router.get('/:id', handle(async (req: Request, res: Response<ApiResponse<Post>>)
     }
 }));
 
-// Create new post (supports both strategy-generated and adhoc posts)
-router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
+// Create new post(s) (supports both strategy-generated and adhoc posts).
+// A request may target multiple platforms; each platform becomes its own
+// single-platform Post document, sharing a groupId for traceability and a
+// single credit charge (charged once per request, not per resulting post).
+router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post[]>>) => {
     const postData = req.body;
 
     // Validate required fields
@@ -81,23 +85,33 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
     // Set defaults for adhoc posts
     // Use picsum for placeholder images when no thumbnail provided
     const placeholderImage = `https://picsum.photos/seed/${Date.now()}/400/400`;
+    const targetPlatforms: Platform[] = postData.platforms || getDefaultPlatforms();
+    const groupId = randomUUID();
+    const { platforms: _requestPlatforms, ...postDataWithoutPlatforms } = postData;
 
-    const postWithDefaults = {
+    const docs = targetPlatforms.map((platform) => ({
         type: postData.type || 'IMAGE',
         status: postData.status || 'PENDING_APPROVAL',
         thumbnail: postData.thumbnail || placeholderImage,
-        ...postData,
-        // Ensure platforms is always an array
-        platforms: postData.platforms || getDefaultPlatforms(),
+        ...postDataWithoutPlatforms,
+        platform,
+        groupId,
         // Ensure restaurantId is always set from auth context
         restaurantId: req.user!.restaurantId,
         // Mark as adhoc if no cycleId
         isAdhoc: !postData.cycleId,
-    };
+    }));
 
-    const newPost = await createPost(postWithDefaults);
+    let newPosts: Post[];
+    try {
+        newPosts = await createPosts(docs);
+    } catch (err) {
+        await deletePostsByGroupId(groupId);
+        throw err;
+    }
 
-    // Deduct credits if middleware flagged it
+    // Deduct credits if middleware flagged it -- once per request, regardless
+    // of how many platform-posts were created.
     if (req.creditCost) {
         const sub = await findActiveSubscription(req.user!.restaurantId);
         if (sub) {
@@ -107,16 +121,17 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
 
     res.status(201).json({
         success: true,
-        data: newPost,
-        message: 'Post created successfully'
+        data: newPosts,
+        message: `${newPosts.length} post${newPosts.length === 1 ? '' : 's'} created successfully`
     });
 }));
 
-// Create an adhoc post stub for content generation by the content-engine.
-// The post is stored as PENDING_CONTENT; the content-engine picks it up and
-// calls generator.generatePost(concept, type, platforms) to fill caption + media,
-// then advances the post to PENDING_APPROVAL for user review.
-router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post>>) => {
+// Create adhoc post stub(s) for content generation by the content-engine.
+// A request may target multiple platforms; each becomes its own single-platform
+// PENDING_CONTENT post sharing a groupId. The content-engine picks up each one
+// independently and calls generator.generatePost(concept, type, platform) to
+// fill caption + media, then advances it to PENDING_APPROVAL for user review.
+router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Request, res: Response<ApiResponse<Post[]>>) => {
     const { concept, type, platforms, scheduledFor, asap } = req.body;
 
     if (!concept || concept.trim().length === 0) {
@@ -152,23 +167,34 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         resolvedScheduledFor = provided.toISOString();
     }
 
-    log.info({ type, concept: concept.substring(0, 50) }, 'Queueing adhoc post for content generation');
+    const targetPlatforms: Platform[] = platforms || getDefaultPlatforms();
+    const groupId = randomUUID();
 
-    const postData = {
+    log.info({ type, concept: concept.substring(0, 50), platformCount: targetPlatforms.length }, 'Queueing adhoc post(s) for content generation');
+
+    const docs = targetPlatforms.map((platform) => ({
         type: type as Post['type'],
         status: 'PENDING_CONTENT' as const,
-        platforms: platforms || getDefaultPlatforms(),
+        platform,
+        groupId,
         concept: concept.trim(),
         caption: '',
         thumbnail: '',
         restaurantId: req.user!.restaurantId,
         scheduledFor: resolvedScheduledFor,
         isAdhoc: true,
-    };
+    }));
 
-    const newPost = await createPost(postData);
+    let newPosts: Post[];
+    try {
+        newPosts = await createPosts(docs);
+    } catch (err) {
+        await deletePostsByGroupId(groupId);
+        throw err;
+    }
 
-    // Deduct credits if middleware flagged it
+    // Deduct credits if middleware flagged it -- once per request, regardless
+    // of how many platform-posts were created.
     if (req.creditCost) {
         const sub = await findActiveSubscription(req.user!.restaurantId);
         if (sub) {
@@ -176,12 +202,12 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         }
     }
 
-    log.info({ postId: newPost.id }, 'Adhoc post stub created, queued for content-engine');
+    log.info({ postIds: newPosts.map(p => p.id), groupId }, 'Adhoc post stub(s) created, queued for content-engine');
 
     res.status(201).json({
         success: true,
-        data: newPost,
-        message: 'Post queued for content generation',
+        data: newPosts,
+        message: `${newPosts.length} post${newPosts.length === 1 ? '' : 's'} queued for content generation`,
     });
 }));
 
@@ -255,7 +281,7 @@ router.post('/:id/test-publish', async (req: Request, res: Response) => {
             thumbnail: post.thumbnail,
             mediaUrls: post.mediaUrls,
             videoUrl: post.videoUrl,
-            platforms: post.platforms
+            platform: post.platform
         };
 
         log.info({ postId: id }, 'Starting diagnostic publish');
@@ -263,19 +289,19 @@ router.post('/:id/test-publish', async (req: Request, res: Response) => {
         log.debug({ userId: credentials.userId, pageId: credentials.pageId, tokenLength: credentials.accessToken?.length || 0 }, 'Test publish credentials');
 
         const startTime = Date.now();
-        const results = await publishPost(publishablePost, credentials);
+        const result = await publishPost(publishablePost, credentials);
         const duration = Date.now() - startTime;
 
-        log.debug({ results }, 'Test publish results');
+        log.debug({ result }, 'Test publish result');
         log.info({ postId: id, durationMs: duration }, 'Test publish completed');
 
-        // Return full raw results -- do NOT update the DB
+        // Return full raw result -- do NOT update the DB
         return res.json({
             success: true,
             message: 'Diagnostic publish complete (DB NOT updated)',
             duration: `${duration}ms`,
             post: publishablePost,
-            results
+            result
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -411,27 +437,23 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
             thumbnail: post.thumbnail,
             mediaUrls: post.mediaUrls,
             videoUrl: post.videoUrl,
-            platforms: post.platforms
+            platform: post.platform
         };
 
         // Publish the post
-        const results = await publishPost(publishablePost, credentials);
+        const result = await publishPost(publishablePost, credentials);
+        const applied = applyPublishResult(result);
 
-        const igSuccess = !results.instagram || results.instagram.success;
-        const fbSuccess = !results.facebook || results.facebook.success;
-        const overallSuccess = igSuccess && fbSuccess;
-
-        if (overallSuccess) {
+        if (result.success) {
             // Update post status to POSTED
             await postsCol.updateOne(
                 { _id: toObjectId(id) as any },
                 {
                     $set: {
-                        status: 'POSTED',
+                        status: applied.status,
                         postedAt: new Date().toISOString(),
-                        publishError: null,
-                        instagramMediaId: results.instagram?.instagramMediaId || null,
-                        facebookPostId: results.facebook?.facebookPostId || null,
+                        publishError: applied.publishError,
+                        externalPostId: applied.externalPostId,
                         updatedAt: new Date()
                     },
                     $inc: { publishAttempts: 1 }
@@ -446,29 +468,13 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
                 message: 'Post published successfully'
             });
         } else {
-            // Publishing failed - check if retryable
-            const errors: string[] = [];
-            const retryableFailures: boolean[] = [];
-
-            if (results.instagram && !results.instagram.success) {
-                errors.push(`Instagram: ${results.instagram.error}`);
-                retryableFailures.push(results.instagram.retryable || false);
-            }
-            if (results.facebook && !results.facebook.success) {
-                errors.push(`Facebook: ${results.facebook.error}`);
-                retryableFailures.push(results.facebook.retryable || false);
-            }
-
-            const anyRetryable = retryableFailures.some(r => r);
-            const combinedError = errors.join('; ');
-
             // Update DB with failure status
             await postsCol.updateOne(
                 { _id: toObjectId(id) as any },
                 {
                     $set: {
-                        status: anyRetryable ? 'SCHEDULED' : 'MISSED_DEADLINE',
-                        publishError: combinedError,
+                        status: applied.status,
+                        publishError: applied.publishError,
                         updatedAt: new Date()
                     },
                     $inc: { publishAttempts: 1 }
@@ -477,7 +483,7 @@ router.post('/:id/publish', async (req: Request, res: Response<ApiResponse>) => 
 
             return res.status(502).json({
                 success: false,
-                error: `Publishing failed: ${combinedError}. ${anyRetryable ? 'Will retry automatically.' : 'Manual intervention required.'}`
+                error: `Publishing failed: ${result.error}. ${applied.status === 'SCHEDULED' ? 'Will retry automatically.' : 'Manual intervention required.'}`
             });
         }
     } catch (error) {

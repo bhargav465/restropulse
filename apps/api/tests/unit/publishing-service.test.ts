@@ -70,7 +70,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'Delicious food!',
                 thumbnail: 'https://example.com/food.jpg',
-                platforms: ['INSTAGRAM'] as Platform[]
+                platform: 'INSTAGRAM' as Platform
             };
 
             it('should publish an image post successfully', async () => {
@@ -95,7 +95,7 @@ describe('Publishing Service', () => {
                 const result = await publishToInstagram(imagePost, mockCredentials);
 
                 expect(result.success).toBe(true);
-                expect(result.instagramMediaId).toBe('media-999');
+                expect(result.externalPostId).toBe('media-999');
                 expect(result.retryable).toBe(false);
 
                 // Verify the flow: download -> upload -> get CDN -> create container -> publish
@@ -155,7 +155,7 @@ describe('Publishing Service', () => {
                 caption: 'Multi-photo post!',
                 thumbnail: 'https://example.com/img1.jpg',
                 mediaUrls: ['https://example.com/img1.jpg', 'https://example.com/img2.jpg', 'https://example.com/img3.jpg'],
-                platforms: ['INSTAGRAM'] as Platform[]
+                platform: 'INSTAGRAM' as Platform
             };
 
             it('should publish a carousel post successfully', async () => {
@@ -182,7 +182,7 @@ describe('Publishing Service', () => {
                 const result = await publishToInstagram(carouselPost, mockCredentials);
 
                 expect(result.success).toBe(true);
-                expect(result.instagramMediaId).toBe('media-carousel');
+                expect(result.externalPostId).toBe('media-carousel');
             });
 
             it('should publish carousel with a single item', async () => {
@@ -206,7 +206,7 @@ describe('Publishing Service', () => {
                 const result = await publishToInstagram(singleItemCarousel, mockCredentials);
 
                 expect(result.success).toBe(true);
-                expect(result.instagramMediaId).toBe('media-carousel');
+                expect(result.externalPostId).toBe('media-carousel');
             });
 
             it('should reject carousel with more than 10 items', async () => {
@@ -230,7 +230,7 @@ describe('Publishing Service', () => {
                 caption: 'Check out this reel!',
                 thumbnail: 'https://example.com/thumb.jpg',
                 videoUrl: 'https://example.com/reel.mp4',
-                platforms: ['INSTAGRAM'] as Platform[]
+                platform: 'INSTAGRAM' as Platform
             };
 
             it('should publish a reel successfully', async () => {
@@ -252,7 +252,7 @@ describe('Publishing Service', () => {
                 const result = await resultPromise;
 
                 expect(result.success).toBe(true);
-                expect(result.instagramMediaId).toBe('media-999');
+                expect(result.externalPostId).toBe('media-999');
 
                 // Verify video container creation
                 expect((mockPost.mock.calls[0] as any[])[2].params.video_url).toBe('https://example.com/reel.mp4');
@@ -278,7 +278,7 @@ describe('Publishing Service', () => {
                 const result = await publishToInstagram(noVideoReel, mockCredentials);
 
                 expect(result.success).toBe(true);
-                expect(result.instagramMediaId).toBe('media-999');
+                expect(result.externalPostId).toBe('media-999');
             });
 
             it('should fail when video processing errors out', async () => {
@@ -299,7 +299,7 @@ describe('Publishing Service', () => {
                     type: 'STORY' as const,
                     caption: '',
                     thumbnail: 'https://example.com/story.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[]
+                    platform: 'INSTAGRAM' as Platform
                 };
 
                 // CDN upload flow for story image
@@ -319,7 +319,7 @@ describe('Publishing Service', () => {
                 const result = await publishToInstagram(storyPost, mockCredentials);
 
                 expect(result.success).toBe(true);
-                expect(result.instagramMediaId).toBe('media-story');
+                expect(result.externalPostId).toBe('media-story');
             });
 
             it('should publish a video story successfully', async () => {
@@ -329,7 +329,7 @@ describe('Publishing Service', () => {
                     caption: '',
                     thumbnail: 'https://example.com/thumb.jpg',
                     videoUrl: 'https://example.com/story.mp4',
-                    platforms: ['INSTAGRAM'] as Platform[]
+                    platform: 'INSTAGRAM' as Platform
                 };
 
                 // Create video story container
@@ -342,7 +342,7 @@ describe('Publishing Service', () => {
                 const result = await publishToInstagram(videoStory, mockCredentials);
 
                 expect(result.success).toBe(true);
-                expect(result.instagramMediaId).toBe('media-999');
+                expect(result.externalPostId).toBe('media-999');
             });
         });
 
@@ -354,7 +354,7 @@ describe('Publishing Service', () => {
                     caption: 'Video post',
                     thumbnail: 'https://example.com/thumb.jpg',
                     videoUrl: 'https://example.com/video.mp4',
-                    platforms: ['INSTAGRAM'] as Platform[]
+                    platform: 'INSTAGRAM' as Platform
                 };
 
                 mockPost.mockResolvedValueOnce({ data: { id: 'video-container' } });
@@ -377,7 +377,7 @@ describe('Publishing Service', () => {
                     type: 'IMAGE' as const,
                     caption: 'Test',
                     thumbnail: 'https://example.com/img.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[]
+                    platform: 'INSTAGRAM' as Platform
                 };
 
                 const result = await publishToInstagram(post, mockCredentials);
@@ -397,7 +397,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'IG only',
                 thumbnail: 'https://example.com/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[]
+                platform: 'INSTAGRAM' as Platform
             };
 
             // CDN upload flow
@@ -413,11 +413,10 @@ describe('Publishing Service', () => {
             mockPost.mockResolvedValueOnce({ data: { id: 'container-1' } });
             mockPost.mockResolvedValueOnce({ data: { id: 'media-1' } });
 
-            const results = await publishPost(post, mockCredentials);
+            const result = await publishPost(post, mockCredentials);
 
-            expect(results.instagram).toBeDefined();
-            expect(results.instagram?.success).toBe(true);
-            expect(results.facebook).toBeUndefined();
+            expect(result.success).toBe(true);
+            expect(result.externalPostId).toBe('media-1');
         });
 
         it('should publish to Facebook only for FACEBOOK platform', async () => {
@@ -426,7 +425,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'FB only',
                 thumbnail: 'https://example.com/img.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // Facebook image download and upload
@@ -436,45 +435,10 @@ describe('Publishing Service', () => {
             });
             mockPost.mockResolvedValueOnce({ data: { post_id: 'fb-post-1' } });
 
-            const results = await publishPost(post, mockCredentials);
+            const result = await publishPost(post, mockCredentials);
 
-            expect(results.facebook).toBeDefined();
-            expect(results.facebook?.success).toBe(true);
-            expect(results.instagram).toBeUndefined();
-        });
-
-        it('should publish to both platforms for BOTH platform', async () => {
-            const post = {
-                id: 'post-both',
-                type: 'IMAGE' as const,
-                caption: 'Both platforms',
-                thumbnail: 'https://example.com/img.jpg',
-                platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[]
-            };
-
-            // Instagram: CDN upload + container + publish
-            mockGet.mockResolvedValueOnce({
-                data: Buffer.from('fake-image-data'),
-                headers: { 'content-type': 'image/jpeg' }
-            });
-            mockPost.mockResolvedValueOnce({ data: { id: 'fb-photo-ig' } });
-            mockGet.mockResolvedValueOnce({
-                data: { images: [{ source: 'https://fbcdn.net/img.jpg' }] }
-            });
-            mockPost.mockResolvedValueOnce({ data: { id: 'container-ig' } });
-            mockPost.mockResolvedValueOnce({ data: { id: 'media-ig' } });
-
-            // Facebook: download + upload
-            mockGet.mockResolvedValueOnce({
-                data: Buffer.from('fake-image-data'),
-                headers: { 'content-type': 'image/jpeg' }
-            });
-            mockPost.mockResolvedValueOnce({ data: { post_id: 'fb-post' } });
-
-            const results = await publishPost(post, mockCredentials);
-
-            expect(results.instagram?.success).toBe(true);
-            expect(results.facebook?.success).toBe(true);
+            expect(result.success).toBe(true);
+            expect(result.externalPostId).toBe('fb-post-1');
         });
     });
 
@@ -485,7 +449,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'FB image',
                 thumbnail: 'https://example.com/img.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // Download image
@@ -499,7 +463,7 @@ describe('Publishing Service', () => {
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(result.facebookPostId).toBe('fb-123');
+            expect(result.externalPostId).toBe('fb-123');
         });
 
         it('should publish carousel with multiple photos to Facebook', async () => {
@@ -509,7 +473,7 @@ describe('Publishing Service', () => {
                 caption: 'FB carousel',
                 thumbnail: 'https://example.com/img1.jpg',
                 mediaUrls: ['https://example.com/img1.jpg', 'https://example.com/img2.jpg', 'https://example.com/img3.jpg'],
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // Download each image and upload as unpublished photo
@@ -526,7 +490,7 @@ describe('Publishing Service', () => {
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(result.facebookPostId).toBe('feed-post-1');
+            expect(result.externalPostId).toBe('feed-post-1');
         });
 
         it('should publish single-image carousel as regular photo', async () => {
@@ -536,7 +500,7 @@ describe('Publishing Service', () => {
                 caption: 'Single carousel',
                 thumbnail: 'https://example.com/img1.jpg',
                 mediaUrls: ['https://example.com/img1.jpg'],
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // Download and upload as regular photo
@@ -549,7 +513,7 @@ describe('Publishing Service', () => {
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(result.facebookPostId).toBe('fb-single-123');
+            expect(result.externalPostId).toBe('fb-single-123');
         });
 
         it('should publish video to Facebook page', async () => {
@@ -559,7 +523,7 @@ describe('Publishing Service', () => {
                 caption: 'FB video',
                 thumbnail: 'https://example.com/thumb.jpg',
                 videoUrl: 'https://example.com/video.mp4',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // downloadVideoBuffer: fetch video binary
@@ -570,7 +534,7 @@ describe('Publishing Service', () => {
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(result.facebookPostId).toBe('fb-vid-123');
+            expect(result.externalPostId).toBe('fb-vid-123');
             expect(mockPost.mock.calls[0][0]).toBe('https://graph.facebook.com/v18.0/page-456/videos');
         });
 
@@ -581,7 +545,7 @@ describe('Publishing Service', () => {
                 caption: 'FB reel',
                 thumbnail: 'https://example.com/thumb.jpg',
                 videoUrl: 'https://example.com/reel.mp4',  // already public — no rewrite
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // Phase 1: start upload → returns video_id
@@ -592,7 +556,7 @@ describe('Publishing Service', () => {
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(result.facebookPostId).toBe('reel-vid-1');
+            expect(result.externalPostId).toBe('reel-vid-1');
             expect(mockPost.mock.calls[0][0]).toBe('/page-456/video_reels');
         });
 
@@ -602,7 +566,7 @@ describe('Publishing Service', () => {
                 type: 'REEL' as const,
                 caption: 'FB reel fallback',
                 thumbnail: 'https://example.com/fallback.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // uploadImageToFacebook: download image
@@ -622,7 +586,7 @@ describe('Publishing Service', () => {
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(result.facebookPostId).toBe('fb-fallback-1');
+            expect(result.externalPostId).toBe('fb-fallback-1');
             expect(mockPost.mock.calls.some((call) => String(call[0]).includes('/photos'))).toBe(true);
         });
 
@@ -632,7 +596,7 @@ describe('Publishing Service', () => {
                 type: 'VIDEO' as const,
                 caption: 'FB video no url',
                 thumbnail: 'https://example.com/thumb.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             const result = await publishToFacebook(post, mockCredentials);
@@ -647,7 +611,7 @@ describe('Publishing Service', () => {
                 type: 'STORY' as const,
                 caption: '',
                 thumbnail: 'https://example.com/story.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // uploadImageToFacebook: download image
@@ -667,7 +631,7 @@ describe('Publishing Service', () => {
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(result.facebookPostId).toBe('story-fb-1');
+            expect(result.externalPostId).toBe('story-fb-1');
         });
 
         it('should publish video story to Facebook page', async () => {
@@ -677,7 +641,7 @@ describe('Publishing Service', () => {
                 caption: 'Video story',
                 thumbnail: 'https://example.com/story-thumb.jpg',
                 videoUrl: 'https://example.com/story.mp4',  // already public — no rewrite
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // video_stories endpoint: POST with file_url (no binary download needed)
@@ -686,7 +650,7 @@ describe('Publishing Service', () => {
             const result = await publishToFacebook(post, mockCredentials);
 
             expect(result.success).toBe(true);
-            expect(result.facebookPostId).toBe('story-video-fb-1');
+            expect(result.externalPostId).toBe('story-video-fb-1');
             expect(mockPost.mock.calls[0][0]).toBe('/page-456/video_stories');
         });
 
@@ -696,7 +660,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'No page',
                 thumbnail: 'https://example.com/img.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             const noPageCredentials = {
@@ -719,7 +683,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'Test',
                 thumbnail: 'https://example.com/img.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             const result = await publishToFacebook(post, mockCredentials);
@@ -734,7 +698,7 @@ describe('Publishing Service', () => {
                 type: 'IMAGE' as const,
                 caption: 'Error test',
                 thumbnail: 'https://example.com/img.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             // Download fails
@@ -752,7 +716,7 @@ describe('Publishing Service', () => {
                 type: 'UNKNOWN' as any,
                 caption: 'Unknown type',
                 thumbnail: 'https://example.com/img.jpg',
-                platforms: ['FACEBOOK'] as Platform[]
+                platform: 'FACEBOOK' as Platform
             };
 
             const result = await publishToFacebook(post, mockCredentials);

@@ -60,7 +60,7 @@ describe('Video flow end-to-end (submit -> poll -> COMPLETED)', () => {
       status: 'PENDING_CONTENT',
       thumbnail: '',
       caption: 'kitchen close-up',
-      platforms: ['INSTAGRAM'],
+      platform: 'INSTAGRAM',
       restaurantId: 'r-vid',
     });
 
@@ -105,7 +105,7 @@ describe('Video flow end-to-end (submit -> poll -> COMPLETED)', () => {
 
     // 1. Submit (caption + queue)
     const result = await gen.generatePost(
-      { concept: 'kitchen close-up', type: 'REEL', platforms: ['INSTAGRAM'], cycleId: undefined },
+      { concept: 'kitchen close-up', type: 'REEL', platform: 'INSTAGRAM', cycleId: undefined },
       { restaurantId: 'r-vid' },
     );
     expect(result.pendingMedia).toBe(true);

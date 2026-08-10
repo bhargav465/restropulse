@@ -374,7 +374,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onPublishNow,
                     {getTypeIcon()}
                     <span>{post.type}</span>
                     <span className="w-px h-3 bg-slate-300 mx-0.5"></span>
-                    <span>{post.platforms.join('+')}</span>
+                    <span>{post.platform}</span>
                 </div>
 
                 {/* Status Overlay for Scheduled */}
@@ -539,9 +539,33 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onPublishNow,
                 {tab === 'SCHEDULED' && (
                     <div className="pt-3 border-t border-slate-50">
                         {isLocked ? (
-                            <div className="flex items-center justify-center gap-2 text-xs text-slate-400 italic bg-slate-50 py-3 rounded-xl">
-                                <Lock size={14} />
-                                Publishing soon. Changes locked.
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 italic bg-slate-50 py-3 rounded-xl">
+                                    <Lock size={14} />
+                                    Publishing soon. Changes locked.
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onPublishNow(post.id);
+                                    }}
+                                    disabled={publishing === post.id || !instagramConnected}
+                                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs transition-all ${
+                                        !instagramConnected
+                                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                            : publishing === post.id
+                                                ? 'bg-orange-400 text-white/80 cursor-wait'
+                                                : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'
+                                    }`}
+                                    title={!instagramConnected ? 'Connect Instagram first' : undefined}
+                                >
+                                    {publishing === post.id ? (
+                                        <><RefreshCw size={14} className="animate-spin" /> Publishing...</>
+                                    ) : (
+                                        <><Send size={14} /> Publish Now</>
+                                    )}
+                                </button>
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 gap-2">

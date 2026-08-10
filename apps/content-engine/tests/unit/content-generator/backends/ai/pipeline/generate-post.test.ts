@@ -67,7 +67,7 @@ describe('runGeneratePost', () => {
   it('produces caption + thumbnail for an IMAGE post', async () => {
     const deps = makeDeps();
     const out = await runGeneratePost(
-      { concept: 'parotta', type: 'IMAGE', platforms: ['INSTAGRAM'] },
+      { concept: 'parotta', type: 'IMAGE', platform: 'INSTAGRAM' },
       deps,
       { restaurantId: 'r1', restaurantName: 'Spice Route', locale: 'en-IN' },
     );
@@ -82,7 +82,7 @@ describe('runGeneratePost', () => {
       jobId: 'jobV1', status: 'RUNNING',
     });
     const out = await runGeneratePost(
-      { concept: 'kitchen reel', type: 'REEL', platforms: ['INSTAGRAM'] },
+      { concept: 'kitchen reel', type: 'REEL', platform: 'INSTAGRAM' },
       deps,
       {},
     );
@@ -95,7 +95,7 @@ describe('runGeneratePost', () => {
   it('routes CAROUSEL through generateCarousel and returns mediaUrls', async () => {
     const deps = makeDeps();
     const out = await runGeneratePost(
-      { concept: 'menu', type: 'CAROUSEL', platforms: ['INSTAGRAM'] },
+      { concept: 'menu', type: 'CAROUSEL', platform: 'INSTAGRAM' },
       deps,
       {},
     );
@@ -109,7 +109,7 @@ describe('runGeneratePost', () => {
   it('routes STORY through generateImage and returns a single mediaUrl', async () => {
     const deps = makeDeps();
     const out = await runGeneratePost(
-      { concept: 'story post', type: 'STORY', platforms: ['INSTAGRAM'] },
+      { concept: 'story post', type: 'STORY', platform: 'INSTAGRAM' },
       deps,
       {},
     );
@@ -127,7 +127,7 @@ describe('runGeneratePost', () => {
       jobId: 'jobV2', status: 'RUNNING',
     });
     const out = await runGeneratePost(
-      { concept: 'video post', type: 'VIDEO', platforms: ['FACEBOOK'] },
+      { concept: 'video post', type: 'VIDEO', platform: 'FACEBOOK' },
       deps,
       {},
     );
@@ -143,7 +143,7 @@ describe('runGeneratePost', () => {
       suggestedHashtags: ['#parotta', '#like4like', '#ghee'],  // like4like is on the denylist
     });
     const out = await runGeneratePost(
-      { concept: 'parotta', type: 'IMAGE', platforms: ['INSTAGRAM'] },
+      { concept: 'parotta', type: 'IMAGE', platform: 'INSTAGRAM' },
       deps,
       { restaurantId: 'r1', locale: 'en-IN' },
     );
@@ -156,7 +156,7 @@ describe('runGeneratePost', () => {
     const { insertCostEvent } = await import('@restropulse/db');
     (insertCostEvent as any).mockClear();
     const deps = makeDeps();
-    await runGeneratePost({ concept: 'x', type: 'IMAGE', platforms: ['INSTAGRAM'] }, deps, { restaurantId: 'r1' });
+    await runGeneratePost({ concept: 'x', type: 'IMAGE', platform: 'INSTAGRAM' }, deps, { restaurantId: 'r1' });
     expect(insertCostEvent).toHaveBeenCalledTimes(2);
     const surfaces = (insertCostEvent as any).mock.calls.map((c: any) => c[0].surface);
     expect(surfaces).toContain('llm');
@@ -166,7 +166,7 @@ describe('runGeneratePost', () => {
   it('throws ContentGenerationError on missing concept and type', async () => {
     const deps = makeDeps();
     await expect(
-      runGeneratePost({ concept: '', type: 'IMAGE', platforms: ['INSTAGRAM'] }, deps, {}),
+      runGeneratePost({ concept: '', type: 'IMAGE', platform: 'INSTAGRAM' }, deps, {}),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 
@@ -174,7 +174,7 @@ describe('runGeneratePost', () => {
     const deps = makeDeps();
     // Should not throw -- themes[0] is the archetype, concept is empty
     const out = await runGeneratePost(
-      { concept: '', type: 'IMAGE', platforms: ['INSTAGRAM'], themes: ['CRAVING_CUE'] },
+      { concept: '', type: 'IMAGE', platform: 'INSTAGRAM', themes: ['CRAVING_CUE'] },
       deps,
     );
     expect(out.caption).toBeTruthy();
@@ -183,14 +183,14 @@ describe('runGeneratePost', () => {
   it('throws INVALID_INPUT when concept, themes, and archetype are all absent', async () => {
     const deps = makeDeps();
     await expect(
-      runGeneratePost({ concept: '', type: 'IMAGE', platforms: ['INSTAGRAM'] }, deps),
+      runGeneratePost({ concept: '', type: 'IMAGE', platform: 'INSTAGRAM' }, deps),
     ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
   });
 
   it('accepts archetype field as standalone input without concept', async () => {
     const deps = makeDeps();
     const out = await runGeneratePost(
-      { concept: '', type: 'REEL', platforms: ['INSTAGRAM'], archetype: 'CRAVING_CUE' },
+      { concept: '', type: 'REEL', platform: 'INSTAGRAM', archetype: 'CRAVING_CUE' },
       deps,
     );
     expect(out.caption).toBeTruthy();
@@ -199,7 +199,7 @@ describe('runGeneratePost', () => {
   it('calls generateObject twice when selectedDish is set and uses visual description as image concept', async () => {
     const deps = makeDeps();
     await runGeneratePost(
-      { concept: 'Charred Cauliflower with Achaar Emulsion', type: 'IMAGE', platforms: ['INSTAGRAM'], selectedDish: 'Charred Cauliflower with Achaar Emulsion' },
+      { concept: 'Charred Cauliflower with Achaar Emulsion', type: 'IMAGE', platform: 'INSTAGRAM', selectedDish: 'Charred Cauliflower with Achaar Emulsion' },
       deps,
       { restaurantId: 'r1', restaurantName: 'Saffron & Smoke' },
     );
@@ -214,7 +214,7 @@ describe('runGeneratePost', () => {
   it('does not call generateObject for dish description when selectedDish is absent', async () => {
     const deps = makeDeps();
     await runGeneratePost(
-      { concept: 'weekend brunch', type: 'IMAGE', platforms: ['INSTAGRAM'] },
+      { concept: 'weekend brunch', type: 'IMAGE', platform: 'INSTAGRAM' },
       deps,
       { restaurantId: 'r1' },
     );
@@ -230,7 +230,7 @@ describe('runGeneratePost', () => {
     const deps = makeDeps();
     (deps.media.generateVideo as any).mockResolvedValueOnce({ jobId: 'jv', status: 'RUNNING' });
     await runGeneratePost(
-      { concept: 'Biryani Reel', type: 'REEL', platforms: ['INSTAGRAM'], selectedDish: 'Biryani' },
+      { concept: 'Biryani Reel', type: 'REEL', platform: 'INSTAGRAM', selectedDish: 'Biryani' },
       deps,
       { restaurantId: 'r1' },
     );

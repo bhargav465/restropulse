@@ -221,7 +221,11 @@ export interface Post {
   mediaUrls?: string[];
   videoUrl?: string;
   caption: string;
-  platforms: Platform[];
+  platform: Platform;
+  // Links posts created from the same request (e.g. one adhoc submission
+  // targeting both platforms fans out into N single-platform documents that
+  // share a groupId). Always assigned at creation; not used for UI grouping.
+  groupId?: string;
   restaurantId?: string;
   scheduledFor?: string;
   postedAt?: string;
@@ -235,8 +239,8 @@ export interface Post {
   generationStep?: GenerationStep;
   lastStepAt?: string;          // ISO; updated when generationStep advances
   isAdhoc?: boolean;
-  instagramMediaId?: string;
-  facebookPostId?: string;
+  // Set once published: Instagram media ID or Facebook post ID, depending on `platform`.
+  externalPostId?: string;
   stats?: PostStats;
   themes?: string[];
   archetype?: string;    // archetype ID this post was generated from (e.g. 'CRAVING_CUE')

@@ -107,7 +107,7 @@ export async function processRevisions(): Promise<{
         {
           existingPost: {
             type: (postDoc.type as PostType) || 'IMAGE',
-            platforms: (postDoc.platforms as Platform[]) || ['INSTAGRAM'],
+            platform: (postDoc.platform as Platform) || 'INSTAGRAM',
             caption: postDoc.caption || '',
             themes,
             archetype,

@@ -152,11 +152,11 @@ export async function validateStateToken(state: string): Promise<{ valid: boolea
 /**
  * Parse Meta API error for better error messages
  */
-function parseMetaApiError(error: unknown): { code: number | null; message: string; isRateLimit: boolean; isTimeout: boolean } {
+function parseMetaApiError(error: unknown): { code: number | null; subcode: string | null; fbtraceId: string | null; message: string; isRateLimit: boolean; isTimeout: boolean } {
     if (error instanceof AxiosError) {
         // Timeout error
         if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-            return { code: null, message: 'Request timed out', isRateLimit: false, isTimeout: true };
+            return { code: null, subcode: null, fbtraceId: null, message: 'Request timed out', isRateLimit: false, isTimeout: true };
         }
 
         const metaError = error.response?.data?.error;
@@ -165,6 +165,8 @@ function parseMetaApiError(error: unknown): { code: number | null; message: stri
             const isRateLimit = [4, 17, 32].includes(metaError.code);
             return {
                 code: metaError.code,
+                subcode: metaError.error_subcode != null ? String(metaError.error_subcode) : null,
+                fbtraceId: metaError.fbtrace_id ?? null,
                 message: metaError.message || 'Unknown Meta API error',
                 isRateLimit,
                 isTimeout: false
@@ -173,13 +175,15 @@ function parseMetaApiError(error: unknown): { code: number | null; message: stri
 
         return {
             code: error.response?.status || null,
+            subcode: null,
+            fbtraceId: null,
             message: error.message,
             isRateLimit: error.response?.status === 429,
             isTimeout: false
         };
     }
 
-    return { code: null, message: String(error), isRateLimit: false, isTimeout: false };
+    return { code: null, subcode: null, fbtraceId: null, message: String(error), isRateLimit: false, isTimeout: false };
 }
 
 /**
@@ -362,7 +366,7 @@ async function getUserPages(accessToken: string): Promise<Array<{ id: string; na
         return pages;
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        log.error({ step: 3, error: parsed.message, code: parsed.code, fullError: error instanceof AxiosError ? error.response?.data : undefined }, 'Get pages failed');
+        log.error({ step: 3, error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId, fullError: error instanceof AxiosError ? error.response?.data : undefined }, 'Get pages failed');
         return [];
     }
 }
@@ -412,7 +416,7 @@ async function getInstagramBusinessAccount(pageId: string, pageAccessToken: stri
         };
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        log.error({ error: parsed.message, code: parsed.code, fullError: error instanceof AxiosError ? error.response?.data : undefined }, 'Get IG account failed');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId, fullError: error instanceof AxiosError ? error.response?.data : undefined }, 'Get IG account failed');
         return null;
     }
 }
@@ -443,7 +447,7 @@ async function validatePermissions(accessToken: string): Promise<boolean> {
         return hasAll;
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        log.error({ error: parsed.message }, 'Permission validation failed');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId }, 'Permission validation failed');
         return false;
     }
 }
@@ -583,7 +587,7 @@ export async function refreshAccessToken(encryptedToken: string): Promise<{ acce
         };
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        log.error({ error: parsed.message, code: parsed.code, isRateLimit: parsed.isRateLimit }, 'Token refresh error');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId, isRateLimit: parsed.isRateLimit }, 'Token refresh error');
         if (parsed.isRateLimit) {
             log.warn('Rate limited during token refresh - will retry later');
         }
@@ -627,7 +631,7 @@ export async function getInstagramProfile(encryptedToken: string, igUserId: stri
         return response.data;
     } catch (error) {
         const parsed = parseMetaApiError(error);
-        log.error({ error: parsed.message }, 'Get profile error');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId }, 'Get profile error');
         return null;
     }
 }

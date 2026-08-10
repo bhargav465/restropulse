@@ -15,7 +15,8 @@
  *   - STORY: POST /{page-id}/photo_stories or /{page-id}/video_stories
  *   - VIDEO: POST /{page-id}/videos
  *
- * Platform routing is controlled by the post's `platforms` array (e.g. ['INSTAGRAM'], ['INSTAGRAM', 'FACEBOOK']).
+ * Platform routing is controlled by the post's `platform` field ('INSTAGRAM' or 'FACEBOOK').
+ * A post targeting both platforms is represented as two separate Post documents upstream.
  *
  * See: https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/content-publishing
  * See: https://developers.facebook.com/docs/pages-api/posts
@@ -299,7 +300,7 @@ export interface PublishablePost {
     thumbnail: string;
     mediaUrls?: string[];
     videoUrl?: string;
-    platforms: ('INSTAGRAM' | 'FACEBOOK')[];
+    platform: 'INSTAGRAM' | 'FACEBOOK';
 }
 
 export interface InstagramCredentialsForPublishing {
@@ -310,8 +311,7 @@ export interface InstagramCredentialsForPublishing {
 
 export interface PublishResult {
     success: boolean;
-    instagramMediaId?: string;
-    facebookPostId?: string;
+    externalPostId?: string;
     error?: string;
     errorCode?: string;
     retryable: boolean;
@@ -325,10 +325,18 @@ interface ContainerStatusResult {
 
 // -- Error Helpers --
 
-function parsePublishError(error: unknown): { message: string; code: string | null; retryable: boolean } {
+interface ParsedPublishError {
+    message: string;
+    code: string | null;
+    subcode: string | null;
+    fbtraceId: string | null;
+    retryable: boolean;
+}
+
+function parsePublishError(error: unknown): ParsedPublishError {
     if (error instanceof AxiosError) {
         if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-            return { message: 'Request timed out', code: 'TIMEOUT', retryable: true };
+            return { message: 'Request timed out', code: 'TIMEOUT', subcode: null, fbtraceId: null, retryable: true };
         }
 
         const metaError = error.response?.data?.error;
@@ -344,6 +352,8 @@ function parsePublishError(error: unknown): { message: string; code: string | nu
             return {
                 message: metaError.message || 'Unknown Meta API error',
                 code: String(metaError.code),
+                subcode: metaError.error_subcode != null ? String(metaError.error_subcode) : null,
+                fbtraceId: metaError.fbtrace_id ?? null,
                 retryable: isRateLimit || isTransient || isMediaUploadFailure
             };
         }
@@ -351,11 +361,13 @@ function parsePublishError(error: unknown): { message: string; code: string | nu
         return {
             message: error.message,
             code: error.response?.status ? String(error.response.status) : null,
+            subcode: null,
+            fbtraceId: null,
             retryable: error.response?.status === 429 || (error.response?.status ?? 0) >= 500
         };
     }
 
-    return { message: String(error), code: null, retryable: false };
+    return { message: String(error), code: null, subcode: null, fbtraceId: null, retryable: false };
 }
 
 // -- Container Creation --
@@ -536,10 +548,10 @@ async function publishImagePost(
         const containerId = await createImageContainer(igUserId, accessToken, cdnUrl, post.caption);
         const mediaId = await publishContainer(igUserId, accessToken, containerId);
 
-        return { success: true, instagramMediaId: mediaId, retryable: false };
+        return { success: true, externalPostId: mediaId, retryable: false };
     } catch (error) {
         const parsed = parsePublishError(error);
-        log.error({ error: parsed.message }, 'Image post failed');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId, retryable: parsed.retryable }, 'Image post failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
@@ -580,10 +592,10 @@ async function publishCarouselPost(
         // Step 3: Publish
         const mediaId = await publishContainer(igUserId, accessToken, carouselId);
 
-        return { success: true, instagramMediaId: mediaId, retryable: false };
+        return { success: true, externalPostId: mediaId, retryable: false };
     } catch (error) {
         const parsed = parsePublishError(error);
-        log.error({ error: parsed.message }, 'Carousel post failed');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId, retryable: parsed.retryable }, 'Carousel post failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
@@ -623,10 +635,10 @@ async function publishReelPost(
         // Step 3: Publish
         const mediaId = await publishContainer(igUserId, accessToken, containerId);
 
-        return { success: true, instagramMediaId: mediaId, retryable: false };
+        return { success: true, externalPostId: mediaId, retryable: false };
     } catch (error) {
         const parsed = parsePublishError(error);
-        log.error({ error: parsed.message }, 'Reel post failed');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId, retryable: parsed.retryable }, 'Reel post failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
@@ -679,10 +691,10 @@ async function publishStoryPost(
         // Step 3: Publish
         const mediaId = await publishContainer(igUserId, accessToken, containerId);
 
-        return { success: true, instagramMediaId: mediaId, retryable: false };
+        return { success: true, externalPostId: mediaId, retryable: false };
     } catch (error) {
         const parsed = parsePublishError(error);
-        log.error({ error: parsed.message }, 'Story post failed');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId, retryable: parsed.retryable }, 'Story post failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
@@ -810,7 +822,7 @@ export async function publishToFacebook(
             log.info({ facebookPostId: response.data.post_id || response.data.id }, 'Facebook photo posted');
             return {
                 success: true,
-                facebookPostId: response.data.post_id || response.data.id,
+                externalPostId: response.data.post_id || response.data.id,
                 retryable: false
             };
         }
@@ -843,7 +855,7 @@ export async function publishToFacebook(
                 log.info({ facebookPostId: response.data.post_id || response.data.id }, 'Facebook single-photo carousel posted');
                 return {
                     success: true,
-                    facebookPostId: response.data.post_id || response.data.id,
+                    externalPostId: response.data.post_id || response.data.id,
                     retryable: false
                 };
             }
@@ -896,7 +908,7 @@ export async function publishToFacebook(
             log.info({ facebookPostId: feedResponse.data.id }, 'Facebook multi-photo carousel posted');
             return {
                 success: true,
-                facebookPostId: feedResponse.data.id,
+                externalPostId: feedResponse.data.id,
                 retryable: false
             };
         }
@@ -920,7 +932,7 @@ export async function publishToFacebook(
                     log.info({ facebookPostId: response.data.post_id || response.data.id }, 'Facebook photo posted (REEL fallback)');
                     return {
                         success: true,
-                        facebookPostId: response.data.post_id || response.data.id,
+                        externalPostId: response.data.post_id || response.data.id,
                         retryable: false
                     };
                 }
@@ -955,7 +967,7 @@ export async function publishToFacebook(
             log.info({ facebookPostId: videoId }, 'Facebook Reel posted');
             return {
                 success: true,
-                facebookPostId: videoId,
+                externalPostId: videoId,
                 retryable: false
             };
         }
@@ -977,7 +989,7 @@ export async function publishToFacebook(
                 log.info({ facebookPostId: response.data.id }, 'Facebook video story posted');
                 return {
                     success: true,
-                    facebookPostId: response.data.id,
+                    externalPostId: response.data.id,
                     retryable: false
                 };
             } else {
@@ -994,7 +1006,7 @@ export async function publishToFacebook(
                 log.info({ facebookPostId: response.data.id }, 'Facebook photo story posted');
                 return {
                     success: true,
-                    facebookPostId: response.data.id,
+                    externalPostId: response.data.id,
                     retryable: false
                 };
             }
@@ -1017,7 +1029,7 @@ export async function publishToFacebook(
             log.info({ facebookPostId: videoId }, 'Facebook video posted');
             return {
                 success: true,
-                facebookPostId: videoId,
+                externalPostId: videoId,
                 retryable: false
             };
         }
@@ -1030,27 +1042,19 @@ export async function publishToFacebook(
         };
     } catch (error) {
         const parsed = parsePublishError(error);
-        log.error({ error: parsed.message }, 'Facebook publish failed');
+        log.error({ error: parsed.message, code: parsed.code, subcode: parsed.subcode, fbtraceId: parsed.fbtraceId, retryable: parsed.retryable }, 'Facebook publish failed');
         return { success: false, error: parsed.message, errorCode: parsed.code ?? undefined, retryable: parsed.retryable };
     }
 }
 
 /**
- * Main entry point: publish a post to the configured platform(s).
+ * Main entry point: publish a post to its configured platform.
  */
 export async function publishPost(
     post: PublishablePost,
     credentials: InstagramCredentialsForPublishing
-): Promise<{ instagram?: PublishResult; facebook?: PublishResult }> {
-    const results: { instagram?: PublishResult; facebook?: PublishResult } = {};
-
-    if (post.platforms.includes('INSTAGRAM')) {
-        results.instagram = await publishToInstagram(post, credentials);
-    }
-
-    if (post.platforms.includes('FACEBOOK')) {
-        results.facebook = await publishToFacebook(post, credentials);
-    }
-
-    return results;
+): Promise<PublishResult> {
+    return post.platform === 'INSTAGRAM'
+        ? publishToInstagram(post, credentials)
+        : publishToFacebook(post, credentials);
 }

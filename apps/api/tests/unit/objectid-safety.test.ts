@@ -28,7 +28,13 @@ const SCAN_DIRS = [
 ];
 
 // Files legitimately allowed to use raw _id (e.g. seed data with string IDs).
-const ALLOWED_FILES: string[] = [];
+// intelligenceScans uses a randomUUID() string as its _id by design (see
+// routes/intelligence.ts insertOne), never an ObjectId -- toObjectId() would
+// break these lookups, not fix them.
+const ALLOWED_FILES: string[] = [
+    'apps/api/src/routes/intelligence.ts',
+    'apps/api/src/services/intelligence/pipeline.ts',
+];
 
 function walk(dir: string): string[] {
     const results: string[] = [];

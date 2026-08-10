@@ -234,23 +234,25 @@ export const postsAPI = {
         return response.data!;
     },
 
-    create: async (post: Omit<Post, 'id'>): Promise<Post> => {
-        const response = await fetchAPI<ApiResponse<Post>>('/posts', {
+    // A request may target multiple platforms; the API fans it out into one
+    // single-platform Post per platform, sharing a groupId.
+    create: async (post: Omit<Post, 'id' | 'platform'> & { platforms: Platform[] }): Promise<Post[]> => {
+        const response = await fetchAPI<ApiResponse<Post[]>>('/posts', {
             method: 'POST',
             body: JSON.stringify(post),
         });
         return response.data!;
     },
 
-    // Generate post with AI-created content
+    // Generate post(s) with AI-created content -- one per requested platform.
     generate: async (params: {
         concept: string;
         type: Post['type'];
-        platforms: Post['platforms'];
+        platforms: Platform[];
         scheduledFor?: string;
         asap?: boolean;
-    }): Promise<Post> => {
-        const response = await fetchAPI<ApiResponse<Post>>('/posts/generate', {
+    }): Promise<Post[]> => {
+        const response = await fetchAPI<ApiResponse<Post[]>>('/posts/generate', {
             method: 'POST',
             body: JSON.stringify(params),
         });

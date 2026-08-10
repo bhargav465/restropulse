@@ -36,10 +36,10 @@ export abstract class BaseContentGenerator implements IContentGenerator {
 
   async generatePost(input: GeneratePostInput, ctx?: GenerationContext): Promise<GeneratedPost> {
     const post = await this.generatePostContent(input, ctx);
-    const issues = validateGeneratedPost(post, input.type, input.platforms ?? []);
+    const issues = validateGeneratedPost(post, input.type, input.platform);
     if (issues.length > 0) {
       log.warn(
-        { issues, type: input.type, platforms: input.platforms, correlationId: ctx?.correlationId },
+        { issues, type: input.type, platform: input.platform, correlationId: ctx?.correlationId },
         'Generated post has constraint violations',
       );
     }
@@ -48,10 +48,10 @@ export abstract class BaseContentGenerator implements IContentGenerator {
 
   async revisePost(input: RevisePostInput, ctx?: GenerationContext): Promise<GeneratedPost> {
     const post = await this.revisePostContent(input, ctx);
-    const issues = validateGeneratedPost(post, input.existingPost.type, input.existingPost.platforms ?? []);
+    const issues = validateGeneratedPost(post, input.existingPost.type, input.existingPost.platform);
     if (issues.length > 0) {
       log.warn(
-        { issues, type: input.existingPost.type, platforms: input.existingPost.platforms, correlationId: ctx?.correlationId },
+        { issues, type: input.existingPost.type, platform: input.existingPost.platform, correlationId: ctx?.correlationId },
         'Revised post has constraint violations',
       );
     }

@@ -47,7 +47,7 @@ function isVideoType(t: PostType): boolean {
   return t === 'REEL' || t === 'VIDEO';
 }
 
-function isStoryVideoCandidate(_t: PostType, _platforms: Platform[]): boolean {
+function isStoryVideoCandidate(_t: PostType, _platform: Platform): boolean {
   // Phase 2 keeps STORY on the image path (matches placeholder behavior).
   // ReplicateMediaGenerator in phase 4 may revisit.
   return false;
@@ -158,7 +158,7 @@ async function runMediaForPost(
   slideDirections?: string[],
 ): Promise<MediaGenJob> {
   const isCarousel = input.type === 'CAROUSEL';
-  const isVideo = isVideoType(input.type) || isStoryVideoCandidate(input.type, input.platforms);
+  const isVideo = isVideoType(input.type) || isStoryVideoCandidate(input.type, input.platform);
   const surface = isVideo ? 'video' : 'image';
 
   const labels = {
@@ -171,7 +171,7 @@ async function runMediaForPost(
 
   const specCtx = toSpecializationContext(ctx);
   const visualDirection = buildImagePromptFragment(
-    { postType: input.type, platforms: input.platforms, concept: input.concept, themes: input.themes },
+    { postType: input.type, platform: input.platform, concept: input.concept, themes: input.themes },
     specCtx,
   );
 
@@ -213,7 +213,7 @@ async function runMediaForPost(
         const job = isVideo
           ? await deps.media.generateVideo({
               postType: input.type as 'REEL' | 'VIDEO' | 'STORY',
-              platforms: input.platforms,
+              platform: input.platform,
               concept: input.concept,
               themes: visualThemes,
               ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
@@ -221,7 +221,7 @@ async function runMediaForPost(
             })
           : isCarousel
           ? await deps.media.generateCarousel({
-              platforms: input.platforms,
+              platform: input.platform,
               concept: imageConcept,
               themes: visualThemes,
               promptSuffix: visualDirection,
@@ -231,7 +231,7 @@ async function runMediaForPost(
             })
           : await deps.media.generateImage({
               postType: input.type,
-              platforms: input.platforms,
+              platform: input.platform,
               concept: imageConcept,
               themes: visualThemes,
               promptSuffix: visualDirection,
@@ -368,8 +368,8 @@ export async function runGeneratePost(
   if (!input.type) {
     throw new ContentGenerationError('INVALID_INPUT', 'generatePost requires a post type');
   }
-  if (!input.platforms || input.platforms.length === 0) {
-    throw new ContentGenerationError('INVALID_INPUT', 'generatePost requires at least one platform');
+  if (!input.platform) {
+    throw new ContentGenerationError('INVALID_INPUT', 'generatePost requires a platform');
   }
 
   // Pre-select a real dish from the restaurant menu (when available) so both

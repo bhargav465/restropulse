@@ -18,24 +18,24 @@ describe('AdhocPostModal Component', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        vi.mocked(postsAPI.generate).mockResolvedValue({
+        vi.mocked(postsAPI.generate).mockResolvedValue([{
             id: 'new-post-1',
             type: 'IMAGE',
             status: 'PENDING_APPROVAL',
             thumbnail: '/api/placeholder/400/400',
             caption: 'Test caption',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             isAdhoc: true,
-        });
-        vi.mocked(postsAPI.create).mockResolvedValue({
+        }]);
+        vi.mocked(postsAPI.create).mockResolvedValue([{
             id: 'new-post-1',
             type: 'IMAGE',
             status: 'PENDING_APPROVAL',
             thumbnail: '/api/placeholder/400/400',
             caption: 'Test caption',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             isAdhoc: true,
-        });
+        }]);
 
         // Mock URL.createObjectURL
         global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
@@ -431,15 +431,15 @@ describe('AdhocPostModal Component', () => {
         it('should show loading state while submitting', async () => {
             // Make the API call take some time
             vi.mocked(postsAPI.generate).mockImplementation(
-                () => new Promise(resolve => setTimeout(() => resolve({
+                () => new Promise(resolve => setTimeout(() => resolve([{
                     id: 'new-post-1',
                     type: 'IMAGE',
                     status: 'PENDING_APPROVAL',
                     thumbnail: '/api/placeholder/400/400',
                     caption: 'Test caption',
-                    platforms: ['INSTAGRAM'],
+                    platform: 'INSTAGRAM',
                     isAdhoc: true,
-                }), 100))
+                }]), 100))
             );
 
             render(

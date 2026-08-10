@@ -13,8 +13,9 @@
 
 import cron from 'node-cron';
 import { getPostsCollection, getRestaurantsCollection, toApiFormat, toObjectId } from '@restropulse/db';
-import { publishPost, PublishResult } from './publishing-service.js';
-import { Post, POST_PUBLISH_GRACE_HOURS } from '@restropulse/shared';
+import { publishPost } from './publishing-service.js';
+import { applyPublishResult } from './publish-result.js';
+import { POST_PUBLISH_GRACE_HOURS } from '@restropulse/shared';
 import { createLogger, tracedCronJob, trackEvent } from '@restropulse/telemetry/server';
 
 const log = createLogger('publishing-cron');
@@ -32,8 +33,7 @@ interface PublishAttempt {
     success: boolean;
     platform: string;
     error?: string;
-    instagramMediaId?: string;
-    facebookPostId?: string;
+    externalPostId?: string;
 }
 
 const publishAttempts: PublishAttempt[] = [];
@@ -180,7 +180,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
             restaurantId,
             timestamp: new Date(),
             success: false,
-            platform: (postDoc.platforms || ['INSTAGRAM']).join(','),
+            platform: postDoc.platform || 'INSTAGRAM',
             error: 'No Instagram credentials'
         });
 
@@ -195,7 +195,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
         thumbnail: postDoc.thumbnail || '',
         mediaUrls: postDoc.mediaUrls,
         videoUrl: postDoc.videoUrl,
-        platforms: postDoc.platforms || ['INSTAGRAM']
+        platform: postDoc.platform || 'INSTAGRAM'
     };
 
     const credentials = {
@@ -205,37 +205,26 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
     };
 
     // Publish the post
-    const results = await publishPost(publishablePost, credentials);
-
-    // Determine overall success
-    const igSuccess = !results.instagram || results.instagram.success;
-    const fbSuccess = !results.facebook || results.facebook.success;
-    const overallSuccess = igSuccess && fbSuccess;
-
-    // Check if any failures are retryable
-    const igRetryable = results.instagram && !results.instagram.success && results.instagram.retryable;
-    const fbRetryable = results.facebook && !results.facebook.success && results.facebook.retryable;
-    const anyRetryable = igRetryable || fbRetryable;
+    const result = await publishPost(publishablePost, credentials);
 
     const newAttempts = currentAttempts + 1;
     const isFinalAttempt = newAttempts >= MAX_PUBLISH_ATTEMPTS;
+    const applied = applyPublishResult(result, { isFinalAttempt });
 
-    if (overallSuccess) {
-        // Success - update post status
-        log.info({ postId, platforms: publishablePost.platforms }, 'Post published successfully');
-        trackEvent('post.published', { postId, postType: publishablePost.type, platforms: publishablePost.platforms.join(',') });
+    if (result.success) {
+        log.info({ postId, platform: publishablePost.platform }, 'Post published successfully');
+        trackEvent('post.published', { postId, postType: publishablePost.type, platform: publishablePost.platform });
 
         // Ensure database update completes before returning
         const updateResult = await postsCol.updateOne(
             { _id: postDoc._id },
             {
                 $set: {
-                    status: 'POSTED',
+                    status: applied.status,
                     postedAt: new Date().toISOString(),
                     publishAttempts: newAttempts,
-                    publishError: null,
-                    instagramMediaId: results.instagram?.instagramMediaId || null,
-                    facebookPostId: results.facebook?.facebookPostId || null,
+                    publishError: applied.publishError,
+                    externalPostId: applied.externalPostId,
                     updatedAt: new Date()
                 }
             }
@@ -250,36 +239,22 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
             restaurantId,
             timestamp: new Date(),
             success: true,
-            platform: publishablePost.platforms.join(','),
-            instagramMediaId: results.instagram?.instagramMediaId,
-            facebookPostId: results.facebook?.facebookPostId
+            platform: publishablePost.platform,
+            externalPostId: applied.externalPostId ?? undefined
         });
 
         return true;
     } else {
-        // Failure
-        const errorMessages: string[] = [];
-        if (results.instagram && !results.instagram.success) {
-            errorMessages.push(`Instagram: ${results.instagram.error}`);
-        }
-        if (results.facebook && !results.facebook.success) {
-            errorMessages.push(`Facebook: ${results.facebook.error}`);
-        }
-        const combinedError = errorMessages.join('; ');
-
-        log.error({ postId, error: combinedError }, 'Post publish failed');
-        trackEvent('post.publish_failed', { postId, error: combinedError });
-
-        // If not retryable or final attempt, mark as MISSED_DEADLINE
-        const shouldFail = isFinalAttempt || !anyRetryable;
+        log.error({ postId, error: result.error }, 'Post publish failed');
+        trackEvent('post.publish_failed', { postId, error: result.error ?? 'unknown' });
 
         // Ensure database update completes before returning
         const updateResult = await postsCol.updateOne(
             { _id: postDoc._id },
             {
                 $set: {
-                    status: shouldFail ? 'MISSED_DEADLINE' : 'SCHEDULED',
-                    publishError: combinedError,
+                    status: applied.status,
+                    publishError: applied.publishError,
                     updatedAt: new Date()
                 },
                 $inc: { publishAttempts: 1 }
@@ -290,7 +265,7 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
             log.warn({ postId }, 'Post failure status update may have failed');
         }
 
-        if (shouldFail) {
+        if (applied.status === 'MISSED_DEADLINE') {
             log.error({ postId, attempts: newAttempts }, 'Post permanently failed after max attempts');
         } else {
             log.info({ postId, attempt: newAttempts, maxAttempts: MAX_PUBLISH_ATTEMPTS }, 'Post will be retried');
@@ -301,8 +276,8 @@ export async function processPostForPublishing(postDoc: any): Promise<boolean> {
             restaurantId,
             timestamp: new Date(),
             success: false,
-            platform: publishablePost.platforms.join(','),
-            error: combinedError
+            platform: publishablePost.platform,
+            error: result.error
         });
 
         return false;

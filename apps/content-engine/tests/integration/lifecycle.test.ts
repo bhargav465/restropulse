@@ -30,7 +30,7 @@ beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
   client = await MongoClient.connect(mongod.getUri());
   setDB(client.db(DB_NAME));
-  await client.db(DB_NAME).collection('posts').createIndex({ cycleId: 1, scheduledFor: 1 });
+  await client.db(DB_NAME).collection('posts').createIndex({ cycleId: 1, scheduledFor: 1, platform: 1 });
 }, 60_000);
 
 afterAll(async () => {
@@ -91,7 +91,7 @@ async function seedPost(fields: Record<string, unknown>): Promise<ObjectId> {
   await db().collection('posts').insertOne({
     _id: id,
     type: 'IMAGE',
-    platforms: ['INSTAGRAM'],
+    platform: 'INSTAGRAM',
     isAdhoc: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -170,7 +170,7 @@ describe('lifecycle integration tests', () => {
       // scheduledFor = 1h from FAKE_NOW; default postApprovalBufferHours = 2h -> deadline = now - 1h (past)
       const postId = await seedPost({ status: 'PENDING_APPROVAL', scheduledFor: msFromAnchor(1) });
       const result = await processDeadlines();
-      expect(result).toEqual({ postsAdvanced: 1, cyclesAdvanced: 0, failed: 0 });
+      expect(result).toEqual({ postsAdvanced: 1, postsMissed: 0, cyclesAdvanced: 0, failed: 0 });
       expect((await getPost(postId))?.status).toBe('SCHEDULED');
     });
 
@@ -235,7 +235,7 @@ describe('lifecycle integration tests', () => {
       // startDate = 24h from now; default cycleApprovalBufferHours = 48h -> deadline = now - 24h (past)
       const cycleId = await seedCycle({ status: 'PENDING_APPROVAL', startDate: msFromAnchor(24) });
       const result = await processDeadlines();
-      expect(result).toEqual({ postsAdvanced: 0, cyclesAdvanced: 1, failed: 0 });
+      expect(result).toEqual({ postsAdvanced: 0, postsMissed: 0, cyclesAdvanced: 1, failed: 0 });
       expect((await getCycle(cycleId))?.status).toBe('APPROVED');
     });
 
@@ -376,14 +376,16 @@ describe('lifecycle integration tests', () => {
 
       const WINDOW = 48;
       const horizon = new Date(new Date(FAKE_NOW).getTime() + WINDOW * 3_600_000);
-      const expectedSlots = deriveCycleSlots({
+      const dueSlots = deriveCycleSlots({
         cycle: {
           startDate: msFromAnchor(-6),
           endDate: msFromAnchor(14 * 24),
           plannedPosts: [{ category: 'Food & Menu', count: 1 }],
         },
         strategy: { postsPerWeek: 7, bestTime: '10:00' },
-      }).filter(s => s.scheduledFor <= horizon).length;
+      }).filter(s => s.scheduledFor <= horizon);
+      // Each slot fans out into one post per target platform.
+      const expectedPosts = dueSlots.reduce((sum, s) => sum + s.platforms.length, 0);
 
       const results = await Promise.all([
         processRollingWindow({ rollingWindowHours: WINDOW }),
@@ -392,10 +394,10 @@ describe('lifecycle integration tests', () => {
       ]);
 
       const totalCreated = results.reduce((s, r) => s + r.slotsCreated, 0);
-      expect(totalCreated).toBe(expectedSlots);
+      expect(totalCreated).toBe(expectedPosts);
 
       const posts = await db().collection('posts').find({ cycleId: cycleId.toString() }).toArray();
-      expect(posts).toHaveLength(expectedSlots);
+      expect(posts).toHaveLength(expectedPosts);
       expect(posts.every(p => p.status === 'PENDING_CONTENT')).toBe(true);
     });
   });
@@ -418,14 +420,14 @@ describe('lifecycle integration tests', () => {
     it('E2: post with no scheduledFor is never auto-approved', async () => {
       const postId = await seedPost({ status: 'PENDING_APPROVAL' });  // no scheduledFor
       const result = await processDeadlines({ postApprovalBufferHours: 2 });
-      expect(result).toEqual({ postsAdvanced: 0, cyclesAdvanced: 0, failed: 0 });
+      expect(result).toEqual({ postsAdvanced: 0, postsMissed: 0, cyclesAdvanced: 0, failed: 0 });
       expect((await getPost(postId))?.status).toBe('PENDING_APPROVAL');
     });
 
     it('E3: cycle with no startDate is never auto-approved', async () => {
       const cycleId = await seedCycle({ status: 'PENDING_APPROVAL' });  // no startDate
       const result = await processDeadlines({ cycleApprovalBufferHours: 48 });
-      expect(result).toEqual({ postsAdvanced: 0, cyclesAdvanced: 0, failed: 0 });
+      expect(result).toEqual({ postsAdvanced: 0, postsMissed: 0, cyclesAdvanced: 0, failed: 0 });
       expect((await getCycle(cycleId))?.status).toBe('PENDING_APPROVAL');
     });
 

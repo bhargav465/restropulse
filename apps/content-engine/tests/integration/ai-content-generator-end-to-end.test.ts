@@ -76,7 +76,7 @@ describe('AIContentGenerator end-to-end (mocked external, real Mongo cost events
     const gen = makeGen();
     await gen.draftCycle({ period: 'w1' }, { restaurantId: 'r-end-to-end' });
     await gen.generatePost(
-      { concept: 'parotta', type: 'IMAGE', platforms: ['INSTAGRAM'] },
+      { concept: 'parotta', type: 'IMAGE', platform: 'INSTAGRAM' },
       { restaurantId: 'r-end-to-end' },
     );
 

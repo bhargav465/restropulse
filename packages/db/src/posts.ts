@@ -29,6 +29,35 @@ export async function createPost(post: Omit<Post, 'id'>): Promise<Post> {
   return { ...post, id: result.insertedId.toString() } as Post;
 }
 
+/**
+ * Insert multiple posts in one round-trip (e.g. fanning one creation request
+ * out into N single-platform posts sharing a groupId). Ordered insert fails
+ * fast on the first error; callers should compensate (e.g. via
+ * `deletePostsByGroupId`) on partial failure rather than relying on a
+ * transaction -- the codebase does not use Mongo sessions/transactions elsewhere.
+ */
+export async function createPosts(posts: Omit<Post, 'id'>[]): Promise<Post[]> {
+  const col = getPostsCollection();
+  const now = new Date();
+  const docsWithTimestamps = posts.map((post) => ({
+    ...post,
+    createdAt: now,
+    updatedAt: now,
+  }));
+  const result = await col.insertMany(docsWithTimestamps, { ordered: true });
+  return posts.map((post, index) => ({
+    ...post,
+    id: result.insertedIds[index]!.toString(),
+  } as Post));
+}
+
+/** Compensation helper for a failed multi-document create -- see createPosts. */
+export async function deletePostsByGroupId(groupId: string): Promise<number> {
+  const col = getPostsCollection();
+  const result = await col.deleteMany({ groupId } as any);
+  return result.deletedCount;
+}
+
 export async function updatePost(id: string, updates: Partial<Post>): Promise<Post | null> {
   const col = getPostsCollection();
   const result = await col.findOneAndUpdate(

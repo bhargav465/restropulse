@@ -12,11 +12,15 @@
  * Archival rule: any ACTIVE or APPROVED cycle whose endDate has passed is
  * transitioned to HISTORY here rather than silently skipped.
  *
- * Idempotency: each stub is keyed by the compound { cycleId, scheduledFor }.
- * The migration adds a matching compound index; we use findOneAndUpdate with
- * $setOnInsert + upsert:true so concurrent ticks never produce duplicates.
+ * Idempotency: each stub is keyed by the compound { cycleId, scheduledFor, platform }
+ * -- one slot fans out into one post per target platform, each upserted
+ * independently so a platform added after a prior tick doesn't collide with
+ * the platform(s) already materialised for that slot. The migration adds a
+ * matching compound index; we use updateOne with $setOnInsert + upsert:true
+ * so concurrent ticks never produce duplicates.
  */
 
+import { randomUUID } from 'node:crypto';
 import {
   getStrategyCyclesCollection,
   getPostsCollection,
@@ -136,30 +140,40 @@ export async function processRollingWindow(config: RollingWindowConfig = {}): Pr
 
       for (const slot of dueSlots) {
         const scheduledForIso = slot.scheduledFor.toISOString();
-        const updateResult = await postsCol.updateOne(
-          { cycleId, scheduledFor: scheduledForIso },
-          {
-            $setOnInsert: {
-              cycleId,
-              scheduledFor: scheduledForIso,
-              type: slot.type,
-              platforms: slot.platforms,
-              themes: slot.themes ?? [],          // additional context only, archetype excluded
-              archetype: slot.archetype,          // was: slot.themes[0] ?? null
-              status: 'PENDING_CONTENT',
-              restaurantId: cycle.restaurantId ?? null,
-              isAdhoc: false,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-          },
-          { upsert: true },
-        );
+        // One slot fans out into one post per target platform. groupId links
+        // the platform-posts created together for this slot (traceability +
+        // a single credit charge upstream where applicable); each platform is
+        // upserted independently so a platform added on a later tick doesn't
+        // collide with ones already materialised for this slot.
+        const groupId = randomUUID();
 
-        if (updateResult.upsertedCount === 1) {
-          created++;
-        } else {
-          skipped++;
+        for (const platform of slot.platforms) {
+          const updateResult = await postsCol.updateOne(
+            { cycleId, scheduledFor: scheduledForIso, platform },
+            {
+              $setOnInsert: {
+                cycleId,
+                scheduledFor: scheduledForIso,
+                type: slot.type,
+                platform,
+                groupId,
+                themes: slot.themes ?? [],          // additional context only, archetype excluded
+                archetype: slot.archetype,          // was: slot.themes[0] ?? null
+                status: 'PENDING_CONTENT',
+                restaurantId: cycle.restaurantId ?? null,
+                isAdhoc: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            },
+            { upsert: true },
+          );
+
+          if (updateResult.upsertedCount === 1) {
+            created++;
+          } else {
+            skipped++;
+          }
         }
       }
 
