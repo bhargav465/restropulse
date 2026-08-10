@@ -247,7 +247,10 @@ export const COLLECTIONS: CollectionSchema[] = [
     {
         name: 'oauthSessions',
         indexes: [
-            { spec: { sessionId: 1 }, options: { unique: true } },
+            // sparse: this collection also stores { type: 'oauth_state', state, ... }
+            // documents that have no sessionId field -- a non-sparse unique index
+            // treats every one of those as sessionId: null and rejects all but the first.
+            { spec: { sessionId: 1 }, options: { unique: true, sparse: true } },
             { spec: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
         ],
     },

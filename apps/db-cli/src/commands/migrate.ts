@@ -19,6 +19,7 @@ export async function migrateCommand(options: { migration: string }): Promise<vo
     const migrations: Record<string, () => Promise<void>> = {
         'subscription-history': migrateSubscriptionHistory,
         'rename-strategy-id-to-cycle-id': migrateRenameStrategyIdToCycleId,
+        'sparse-oauth-session-id-index': migrateSparseOauthSessionIdIndex,
     };
 
     const run = migrations[options.migration];
@@ -32,6 +33,64 @@ export async function migrateCommand(options: { migration: string }): Promise<vo
     }
 
     await run();
+}
+
+/**
+ * Migration: sparse-oauth-session-id-index
+ *
+ * The oauthSessions collection stores two document shapes: { type:
+ * 'oauth_state', state, ... } (Instagram OAuth CSRF tokens, no sessionId
+ * field) and { type: 'pending_selection', sessionId, ... } (multi-account
+ * picker sessions). The original unique index on sessionId was not sparse,
+ * so every oauth_state document (missing sessionId) collided on the implicit
+ * sessionId: null value -- only the very first insert ever succeeded, and
+ * every OAuth connection attempt since has failed with E11000.
+ *
+ * Steps:
+ *   1. Drop the old non-sparse unique index
+ *   2. Create the new sparse unique index (only enforced where sessionId exists)
+ */
+async function migrateSparseOauthSessionIdIndex(): Promise<void> {
+    const config = getConfig();
+    const spinner = ora();
+
+    try {
+        spinner.start('Connecting to MongoDB...');
+        const client = await connect();
+        spinner.succeed('Connected to MongoDB');
+
+        const db = client.db(config.database);
+        const col = db.collection('oauthSessions');
+
+        spinner.start('Dropping old non-sparse unique index on sessionId...');
+        try {
+            await col.dropIndex('sessionId_1');
+            spinner.succeed('Dropped old sessionId_1 index');
+        } catch (err: any) {
+            if (err.codeName === 'IndexNotFound' || err.code === 27) {
+                spinner.warn('Old sessionId_1 index not found -- already dropped or never created');
+            } else {
+                throw err;
+            }
+        }
+
+        spinner.start('Creating sparse unique index on sessionId...');
+        await col.createIndex(
+            { sessionId: 1 },
+            { unique: true, sparse: true, name: 'sessionId_1' },
+        );
+        spinner.succeed('Created sparse unique index: sessionId_1');
+
+        console.log(chalk.green('\nMigration sparse-oauth-session-id-index complete!'));
+        console.log(chalk.gray('  Run "npm run validate" to confirm indexes are in place.'));
+
+    } catch (err: any) {
+        spinner.fail('Migration failed');
+        console.error(chalk.red(`Error: ${err.message}`));
+        process.exit(1);
+    } finally {
+        await disconnect();
+    }
 }
 
 async function migrateRenameStrategyIdToCycleId(): Promise<void> {
