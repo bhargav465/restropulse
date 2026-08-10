@@ -12,6 +12,8 @@ import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
 import Landing from './components/Landing';
 import Paywall from './components/Paywall';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
 import { ViewState, Restaurant, User, Post, FeatureFlags, Platform, WebThemeName, EntitlementState } from '@restropulse/shared';
 import { authAPI, restaurantAPI, postsAPI, configAPI, subscriptionAPI } from './api';
 import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
@@ -31,7 +33,21 @@ function readViewFromUrl(): ViewState | null {
     return RESTORABLE_VIEWS.includes(view) ? view : null;
 }
 
+// Public, unauthenticated static pages (Meta app review requires these to be
+// reachable without login). Checked once per page load, not part of the
+// SPA's view-state routing.
+type StaticPage = 'privacy-policy' | 'terms' | null;
+function readStaticPageFromUrl(): StaticPage {
+    const path = window.location.pathname.replace(/\/$/, '') || '/';
+    if (path === '/privacy-policy') return 'privacy-policy';
+    if (path === '/terms') return 'terms';
+    return null;
+}
+
 const App: React.FC = () => {
+    // Computed once per page load -- these are plain server-style pages reached
+    // by direct navigation (e.g. Meta's app-review crawler), not SPA routes.
+    const [staticPage] = useState<StaticPage>(() => readStaticPageFromUrl());
     const [currentView, setCurrentView] = useState<ViewState>('LANDING');
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     // Plan slug chosen from the landing pricing cards, remembered across the
@@ -333,6 +349,14 @@ const App: React.FC = () => {
             default: return 'RestroPulse';
         }
     };
+
+    // Public static pages render immediately, independent of auth/session state.
+    if (staticPage === 'privacy-policy') {
+        return <PrivacyPolicy onBack={() => { window.location.href = '/'; }} />;
+    }
+    if (staticPage === 'terms') {
+        return <TermsOfService onBack={() => { window.location.href = '/'; }} />;
+    }
 
     if (loading) {
         return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>

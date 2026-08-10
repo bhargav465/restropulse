@@ -423,7 +423,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                 )}
 
                 <p className="mt-8 text-xs text-slate-500 text-center">
-                    By continuing, you agree to our Terms of Service & Privacy Policy.
+                    By continuing, you agree to our{' '}
+                    <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline">Terms of Service</a>
+                    {' '}&amp;{' '}
+                    <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline">Privacy Policy</a>.
                 </p>
             </div>
         </div>
