@@ -26,7 +26,7 @@ import {
   getPostsCollection,
   getContentStrategiesCollection,
 } from '@restropulse/db';
-import { ROLLING_WINDOW_HOURS as DEFAULT_ROLLING_WINDOW_HOURS } from '@restropulse/shared';
+import { ROLLING_WINDOW_HOURS as DEFAULT_ROLLING_WINDOW_HOURS, PLATFORM_POST_TYPES } from '@restropulse/shared';
 import { createLogger } from '@restropulse/telemetry/server';
 import { deriveCycleSlots, DEFAULT_PLATFORMS, type CycleSlot } from './slots.js';
 
@@ -148,6 +148,16 @@ export async function processRollingWindow(config: RollingWindowConfig = {}): Pr
         const groupId = randomUUID();
 
         for (const platform of slot.platforms) {
+          // Skip a (platform, type) combination that isn't supported (e.g.
+          // FACEBOOK + STORY is currently disabled -- see PLATFORM_POST_TYPES).
+          if (!PLATFORM_POST_TYPES[platform].includes(slot.type)) {
+            logger.debug(
+              { cycleId, platform, type: slot.type, scheduledFor: scheduledForIso },
+              'Skipping unsupported platform/type combination for this slot',
+            );
+            continue;
+          }
+
           const updateResult = await postsCol.updateOne(
             { cycleId, scheduledFor: scheduledForIso, platform },
             {

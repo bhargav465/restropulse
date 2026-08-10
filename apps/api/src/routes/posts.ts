@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { findAllPosts, findPostById, createPosts, deletePostsByGroupId, updatePost, deletePost, getPostsCollection, getRestaurantsCollection, toObjectId, findActiveSubscription, deductCredits } from '@restropulse/db';
 import { publishPost, applyPublishResult, triggerManualPublish, getRecentPublishAttempts } from '@restropulse/publishing';
-import { ApiResponse, Post, isPostPastApprovalDeadline, Platform } from '@restropulse/shared';
+import { ApiResponse, Post, isPostPastApprovalDeadline, Platform, PLATFORM_POST_TYPES } from '@restropulse/shared';
 import { handle } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { enforcePlanLimits } from '../middleware/enforce-plan-limits.js';
@@ -85,12 +85,22 @@ router.post('/', requireAuth, enforcePlanLimits, handle(async (req: Request, res
     // Set defaults for adhoc posts
     // Use picsum for placeholder images when no thumbnail provided
     const placeholderImage = `https://picsum.photos/seed/${Date.now()}/400/400`;
-    const targetPlatforms: Platform[] = postData.platforms || getDefaultPlatforms();
+    const postType = postData.type || 'IMAGE';
+    const requestedPlatforms: Platform[] = postData.platforms || getDefaultPlatforms();
+    // Drop platforms that don't support this post type (e.g. FACEBOOK + STORY
+    // is currently disabled -- see PLATFORM_POST_TYPES).
+    const targetPlatforms = requestedPlatforms.filter((platform) => PLATFORM_POST_TYPES[platform].includes(postType));
+    if (targetPlatforms.length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: `Post type ${postType} is not supported on any of the requested platforms (${requestedPlatforms.join(', ')})`
+        });
+    }
     const groupId = randomUUID();
     const { platforms: _requestPlatforms, ...postDataWithoutPlatforms } = postData;
 
     const docs = targetPlatforms.map((platform) => ({
-        type: postData.type || 'IMAGE',
+        type: postType,
         status: postData.status || 'PENDING_APPROVAL',
         thumbnail: postData.thumbnail || placeholderImage,
         ...postDataWithoutPlatforms,
@@ -167,7 +177,16 @@ router.post('/generate', requireAuth, enforcePlanLimits, handle(async (req: Requ
         resolvedScheduledFor = provided.toISOString();
     }
 
-    const targetPlatforms: Platform[] = platforms || getDefaultPlatforms();
+    const requestedPlatforms: Platform[] = platforms || getDefaultPlatforms();
+    // Drop platforms that don't support this post type (e.g. FACEBOOK + STORY
+    // is currently disabled -- see PLATFORM_POST_TYPES).
+    const targetPlatforms = requestedPlatforms.filter((platform) => PLATFORM_POST_TYPES[platform].includes(type));
+    if (targetPlatforms.length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: `Post type ${type} is not supported on any of the requested platforms (${requestedPlatforms.join(', ')})`
+        });
+    }
     const groupId = randomUUID();
 
     log.info({ type, concept: concept.substring(0, 50), platformCount: targetPlatforms.length }, 'Queueing adhoc post(s) for content generation');

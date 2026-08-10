@@ -293,9 +293,17 @@ export const POST_TYPE_CREDIT_COSTS: Record<PostType, number> = {
   REEL: 4,
 };
 
+// FACEBOOK excludes STORY: Facebook Page photo/video Stories publishing
+// requires Stories eligibility that isn't enabled for this Page, and every
+// attempt fails with Meta's generic error code 1 ("An unknown error has
+// occurred"). Disabled here (the single source of truth for platform/type
+// validity) until that's resolved -- remove once Facebook Stories work again.
+// REEL is included for FACEBOOK -- publishToFacebook() has a full two-phase
+// video_reels implementation (packages/publishing/src/publishing-service.ts);
+// this constant was just missing it previously.
 export const PLATFORM_POST_TYPES: Record<Platform, PostType[]> = {
   INSTAGRAM: ['IMAGE', 'CAROUSEL', 'VIDEO', 'REEL', 'STORY'],
-  FACEBOOK: ['IMAGE', 'VIDEO', 'CAROUSEL', 'STORY'],
+  FACEBOOK: ['IMAGE', 'VIDEO', 'CAROUSEL', 'REEL'],
 };
 
 export type PostTypeLimits = Partial<Record<PostType, number>>;

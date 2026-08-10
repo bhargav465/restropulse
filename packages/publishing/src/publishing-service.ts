@@ -959,6 +959,7 @@ export async function publishToFacebook(
                 params: {
                     file_url: publicVideoUrl,
                     upload_phase: 'finish',
+                    video_state: 'PUBLISHED',
                     description: post.caption,
                     access_token: accessToken
                 }

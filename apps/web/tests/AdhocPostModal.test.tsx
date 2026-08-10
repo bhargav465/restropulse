@@ -868,16 +868,17 @@ describe('AdhocPostModal Component', () => {
                 />
             );
 
-            // Select REEL (valid for INSTAGRAM but not in FACEBOOK-only intersection)
-            fireEvent.click(screen.getByTestId('type-reel'));
-            expect(screen.getByTestId('type-reel')).toHaveClass('border-orange-500');
+            // Select STORY (valid for INSTAGRAM but not in FACEBOOK-only intersection --
+            // Facebook Stories publishing is currently disabled, see PLATFORM_POST_TYPES)
+            fireEvent.click(screen.getByTestId('type-story'));
+            expect(screen.getByTestId('type-story')).toHaveClass('border-orange-500');
 
-            // Add FACEBOOK -- intersection of INSTAGRAM and FACEBOOK does not include REEL,
+            // Add FACEBOOK -- intersection of INSTAGRAM and FACEBOOK does not include STORY,
             // so postType should reset to the first valid type (IMAGE)
             fireEvent.click(screen.getByTestId('platform-facebook'));
 
-            // REEL button should no longer be selected
-            expect(screen.getByTestId('type-reel')).not.toHaveClass('border-orange-500');
+            // STORY button should no longer be selected
+            expect(screen.getByTestId('type-story')).not.toHaveClass('border-orange-500');
             // IMAGE should be selected as the reset fallback
             expect(screen.getByTestId('type-image')).toHaveClass('border-orange-500');
         });
