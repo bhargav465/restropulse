@@ -11,7 +11,7 @@
  * `onNavigate(target)` callback the shell passes into IntelligenceDashboard.
  */
 
-import type { ActionPlanItem } from '@restropulse/shared';
+import type { ActionPlanItem, ViewState } from '@restropulse/shared';
 
 /** Shell-level buckets — mirror of the shell's Bucket union. */
 export type ShellBucketId = 'DASHBOARD' | 'GET_STARTED' | 'CONTENT' | 'ORDERING' | 'INTELLIGENCE' | 'DESIGN';
@@ -59,6 +59,29 @@ export function resolveDeepLink(deepLink?: DeepLink): DeepLinkTarget {
  * onto a shell destination for the "Fix" affordance. Kept tolerant: paths the
  * shell doesn't own resolve to their nearest bucket.
  */
+/**
+ * Shell bucket -> the shell's own `ViewState` (RP-001).
+ *
+ * `ShellBucketId` was ported from the `restropulse-v2` shell, which has buckets
+ * this app does not (Get-started, Ordering/Campaigns, Design). Those map to
+ * `null`: the CTA resolves, but there is nowhere to send the user, so the shell
+ * leaves them where they are rather than bouncing them somewhere wrong.
+ * Retargeting or removing those CTAs is RP-002, gated on RP-014.
+ */
+export const SHELL_BUCKET_TO_VIEW: Record<ShellBucketId, ViewState | null> = {
+    DASHBOARD: 'DASHBOARD',
+    INTELLIGENCE: 'INTELLIGENCE',
+    CONTENT: 'STUDIO',
+    GET_STARTED: null,
+    ORDERING: null,
+    DESIGN: null,
+};
+
+/** Resolve a shell bucket to a view this shell owns, or null when it has none. */
+export function shellBucketToView(bucket: ShellBucketId): ViewState | null {
+    return SHELL_BUCKET_TO_VIEW[bucket] ?? null;
+}
+
 export function resolveActionHref(actionHref?: string): DeepLinkTarget | null {
     if (!actionHref) return null;
     if (actionHref.includes('/content')) return { bucket: 'CONTENT', href: actionHref, cta: 'Fix' };

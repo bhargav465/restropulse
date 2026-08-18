@@ -75,11 +75,21 @@ export const TopThreatsView: React.FC<{
     max: number;
     error: string | null;
     onAdd: (c: CompetitorProfile) => void;
-}> = ({ buckets, watchlist, max, error, onAdd }) => {
+    /** The merchant's own Places id, filtered out of both buckets (RP-011). */
+    selfPlaceId?: string;
+}> = ({ buckets, watchlist, max, error, onAdd, selfPlaceId }) => {
     const [tab, setTab] = useState<BucketKey>('DIRECT');
     const [expanded, setExpanded] = useState<string | null>(null);
 
-    const rows = tab === 'DIRECT' ? buckets.directTop10 : buckets.overallTop10;
+    // RP-011: reports written before the report-builder fix still carry the
+    // merchant inside its own buckets. Filter here too so old reports render
+    // correctly without forcing a re-scan.
+    const dropSelf = (rows: CompetitorProfile[]) =>
+        selfPlaceId ? rows.filter((c) => c.placeId !== selfPlaceId) : rows;
+    const directTop10 = dropSelf(buckets.directTop10);
+    const overallTop10 = dropSelf(buckets.overallTop10);
+
+    const rows = tab === 'DIRECT' ? directTop10 : overallTop10;
     const tracked = new Set(watchlist.map((w) => w.placeId));
     const atCapacity = watchlist.length >= max;
 
@@ -92,8 +102,8 @@ export const TopThreatsView: React.FC<{
                         setTab(k);
                         setExpanded(null);
                     }}
-                    directCount={buckets.directTop10.length}
-                    overallCount={buckets.overallTop10.length}
+                    directCount={directTop10.length}
+                    overallCount={overallTop10.length}
                 />
                 <p className="text-xs text-muted">
                     Your AOV band: <span className="font-semibold text-ink">{buckets.aovBand.label}</span>
@@ -191,7 +201,7 @@ export const TopThreatsView: React.FC<{
 };
 
 /** Container: pulls buckets from the report and manages watchlist adds (≤5 cap). */
-const TopThreats: React.FC<{ buckets?: CompetitionBuckets }> = ({ buckets }) => {
+const TopThreats: React.FC<{ buckets?: CompetitionBuckets; selfPlaceId?: string }> = ({ buckets, selfPlaceId }) => {
     const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
     const [max, setMax] = useState(5);
     const [error, setError] = useState<string | null>(null);
@@ -243,7 +253,7 @@ const TopThreats: React.FC<{ buckets?: CompetitionBuckets }> = ({ buckets }) => 
         );
     }
 
-    return <TopThreatsView buckets={buckets} watchlist={watchlist} max={max} error={error} onAdd={onAdd} />;
+    return <TopThreatsView buckets={buckets} watchlist={watchlist} max={max} error={error} onAdd={onAdd} selfPlaceId={selfPlaceId} />;
 };
 
 export default TopThreats;

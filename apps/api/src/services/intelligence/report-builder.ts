@@ -55,8 +55,17 @@ export interface AssembleReportInput {
 }
 
 export function assembleReport(input: AssembleReportInput): IntelligenceReport {
-    const { base, competitors, classification, analysis, seo, previous, generatedAt } = input;
+    const { base, classification, analysis, seo, previous, generatedAt } = input;
     const baseCuisineLower = classification.baseCuisine.toLowerCase();
+
+    // RP-011: the nearby search is centred on the merchant, so Places returns the
+    // merchant itself in the results. Left in, it ranked as its own #1 threat in
+    // Top Threats / topCompetitors / the buckets, and was counted twice in the
+    // leaderboard (inflating `ranking.total` by one). Drop it once, here, so
+    // every downstream slice is clean.
+    const competitors = base.placeId
+        ? input.competitors.filter((c) => c.placeId !== base.placeId)
+        : input.competitors;
 
     // 1. Cuisine + same-cuisine threat + qualitative enhancement per competitor.
     const profiles: CompetitorProfile[] = competitors.map((c) => {

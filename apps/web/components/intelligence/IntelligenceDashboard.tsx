@@ -53,8 +53,12 @@ function initialBucket(): BucketId {
 
 interface IntelligenceDashboardProps {
     restaurantData: Restaurant;
-    /** Deep-link navigation into other buckets (wired by the shell). */
-    onNavigate?: (target: DeepLinkTarget) => void;
+    /**
+     * Deep-link navigation into other buckets (wired by the shell). Required:
+     * see RP-001 — the previous `onNavigate?` + `?? (() => {})` default meant a
+     * shell that forgot to pass it got silently dead CTAs, with no type error.
+     */
+    onNavigate: (target: DeepLinkTarget) => void;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -126,7 +130,7 @@ const HeaderBand: React.FC<{
 const PillarChecks: React.FC<{
     report: IntelligenceReport;
     pillarKey: PillarScore['key'];
-    onNavigate?: (t: DeepLinkTarget) => void;
+    onNavigate: (t: DeepLinkTarget) => void;
 }> = ({ report, pillarKey, onNavigate }) => {
     const pillar = report.pillars.find((p) => p.key === pillarKey);
     if (!pillar) return null;
@@ -147,7 +151,7 @@ const PillarChecks: React.FC<{
                             label={chk.label}
                             pass={chk.pass}
                             note={chk.note}
-                            action={!chk.pass && target && onNavigate ? { label: target.cta, href: target.href, onClick: () => onNavigate(target) } : undefined}
+                            action={!chk.pass && target ? { label: target.cta, href: target.href, onClick: () => onNavigate(target) } : undefined}
                         />
                     );
                 })}
@@ -202,7 +206,6 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
         };
     }, [restaurantData.id]);
 
-    const nav = onNavigate ?? (() => {});
     const scanDefaults = useMemo(
         () => ({ name: restaurantData.name, city: restaurantData.sourceCity ?? '' }),
         [restaurantData.name, restaurantData.sourceCity],
@@ -266,7 +269,7 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
                 selectedPillar={selectedPillar}
                 onSelectPillar={(k) => setSelectedPillar((cur) => (cur === k ? null : k))}
                 onRescan={() => setRescanning(true)}
-                onNavigate={nav}
+                onNavigate={onNavigate}
             />
 
             {/* Bucket switch + bucket-scoped period filter. Stacks full-width on
@@ -283,19 +286,19 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
             {bucket === 'MINE' ? (
                 <>
                     <SubNav tabs={mineTabs} active={mineTab} onChange={setMineTab} label="My Restaurant sections" />
-                    {mineTab === 'OVERVIEW' && <MyOverview report={report} metrics={selfMetrics} onNavigate={nav} />}
+                    {mineTab === 'OVERVIEW' && <MyOverview report={report} metrics={selfMetrics} onNavigate={onNavigate} />}
                     {mineTab === 'TRENDS' && <DailyTrends query={minePeriod} />}
-                    {mineTab === 'FEEDBACK' && <FeedbackChanges query={minePeriod} onNavigate={nav} />}
-                    {mineTab === 'SEARCH' && <SearchSEO report={report} onNavigate={nav} />}
+                    {mineTab === 'FEEDBACK' && <FeedbackChanges query={minePeriod} onNavigate={onNavigate} />}
+                    {mineTab === 'SEARCH' && <SearchSEO report={report} onNavigate={onNavigate} />}
                 </>
             ) : (
                 <>
                     <SubNav tabs={compTabs} active={compTab} onChange={setCompTab} label="Competition sections" />
-                    {compTab === 'THREATS' && <TopThreats buckets={report.buckets} />}
+                    {compTab === 'THREATS' && <TopThreats buckets={report.buckets} selfPlaceId={report.base.placeId} />}
                     {compTab === 'WATCHLIST' && <Watchlist />}
                     {compTab === 'COMPARE' && <Compare query={compPeriod} />}
-                    {compTab === 'BEAT' && <WhereTheyBeatYou query={compPeriod} report={report} onNavigate={nav} />}
-                    {compTab === 'OPENINGS' && <NewOpenings onNavigate={nav} />}
+                    {compTab === 'BEAT' && <WhereTheyBeatYou query={compPeriod} report={report} onNavigate={onNavigate} />}
+                    {compTab === 'OPENINGS' && <NewOpenings onNavigate={onNavigate} />}
                 </>
             )}
         </div>

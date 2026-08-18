@@ -152,6 +152,21 @@ export const DailyTrendsView: React.FC<{
         );
     }
 
+    // ---- Range mode with no snapshots: an honest empty state (RP-003a). ----
+    // Previously only 'date' mode guarded this, so an empty series fell through
+    // to TrendChart and rendered a blank, oversized SVG frame.
+    if (google.length === 0) {
+        return (
+            <Card>
+                <h3 className="text-base font-semibold text-ink">No snapshots for this period yet</h3>
+                <p className="text-sm text-muted mt-1">
+                    Daily trends are built from a nightly capture of your Google profile. They start filling in from
+                    the day after your first scan — pick a wider period, or check back tomorrow.
+                </p>
+            </Card>
+        );
+    }
+
     return (
         <div className="space-y-4 sm:space-y-6">
             {/* Rating trend */}

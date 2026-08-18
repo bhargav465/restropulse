@@ -77,7 +77,7 @@ export const CompareView: React.FC<{
             </div>
 
             {/* Overlaid rating trend */}
-            {trend && trend.series.length > 0 && (
+            {trend && trend.labels.length > 0 && trend.series.length > 0 && (
                 <Card>
                     <h3 className="text-sm font-semibold text-ink mb-2">Rating trend</h3>
                     <TrendChart labels={trend.labels} series={trend.series} ariaLabel="Rating comparison trend" format={(n) => n.toFixed(1)} />

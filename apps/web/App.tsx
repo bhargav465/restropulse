@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import ContentStudio from './components/ContentStudio';
 import Intelligence from './components/Intelligence';
+import { shellBucketToView, type DeepLinkTarget } from './components/intelligence/sections/deep-links';
 import Inputs from './components/Inputs';
 import Strategy from './components/Strategy';
 import ProfileSheet from './components/ProfileSheet';
@@ -218,6 +219,20 @@ const App: React.FC = () => {
         window.history.pushState({ level: 'view', view }, '', `?view=${view.toLowerCase()}`);
     };
 
+    /**
+     * RP-001 — deep-link handler for Restaurant Intelligence.
+     *
+     * Every action-plan CTA, Search & SEO "Fix →", pillar drilldown and
+     * "Close this gap →" resolves to a `DeepLinkTarget`; this maps its shell
+     * bucket onto the `ViewState` this shell owns and navigates. Buckets this
+     * app has no home for (Ordering / Campaigns / Design / Get-started) map to
+     * null and are left alone — retargeting them is RP-002, gated on RP-014.
+     */
+    const handleIntelligenceNavigate = (target: DeepLinkTarget) => {
+        const view = shellBucketToView(target.bucket);
+        if (view) navigateTo(view);
+    };
+
     const onLoginSuccess = async (response: { success: boolean; message?: string }) => {
         if (!response.success) throw new Error(response.message || 'Login failed');
         localStorage.setItem('rp_session', 'true');
@@ -324,18 +339,18 @@ const App: React.FC = () => {
             // Restaurant Intelligence replaces the old Dashboard as the home view.
             case 'INTELLIGENCE':
             case 'DASHBOARD':
-                return <Intelligence restaurant={restaurantData} />;
+                return <Intelligence restaurant={restaurantData} onNavigate={handleIntelligenceNavigate} />;
             case 'STUDIO':
                 return <ContentStudio onCreatePost={metaConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={metaConnected} onConnectInstagram={handleConnectInstagram} postApprovalBufferMins={featureFlags?.postApprovalBufferMins} instagramEnabled={instagramEnabled} facebookEnabled={facebookEnabled} />;
             case 'INPUTS':
                 if (featureFlags?.updatesSection === false) {
-                    return <Intelligence restaurant={restaurantData} />;
+                    return <Intelligence restaurant={restaurantData} onNavigate={handleIntelligenceNavigate} />;
                 }
                 return <Inputs restaurantData={restaurantData} onRefresh={refreshRestaurantData} />;
             case 'STRATEGY':
                 return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} cycleApprovalBufferMins={featureFlags?.cycleApprovalBufferMins} instagramEnabled={instagramEnabled} />;
             default:
-                return <Intelligence restaurant={restaurantData} />;
+                return <Intelligence restaurant={restaurantData} onNavigate={handleIntelligenceNavigate} />;
         }
     };
 

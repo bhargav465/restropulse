@@ -75,7 +75,11 @@ const Overview: React.FC<{
         </p>
         <RevenueCard report={report} />
         <V1Overview report={report} onNavigate={onNavigate} />
-        {metrics && <OpsStrip metrics={metrics} />}
+        {/* RP-006: this app has no ordering module, so /self-metrics returns an
+            all-zero payload for most accounts. Never pair a green "Measured"
+            provenance chip with a dataset that is entirely zero — hide the strip
+            until there is at least one completed order behind it. */}
+        {metrics && metrics.orderCount > 0 && <OpsStrip metrics={metrics} />}
     </div>
 );
 
