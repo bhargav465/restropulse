@@ -187,6 +187,7 @@ export function buildTaskPrompt(
         `Caption requirements (tuned for ${platform}):`,
         `- First ${tactics.captionLength.aboveFoldChars} characters must hook the reader above the fold.`,
         `- Use sensory-first language — name the texture, aroma, temperature.`,
+        `- If the concept is NOT about a dish (ambience, décor, the space, team, hiring, an event or an announcement) — or explicitly says no dish/no food — write about THAT. Do not centre the caption on a dish or on eating; food may be mentioned only in passing.`,
         `- Keep the full caption under ${tactics.captionLength.totalChars} characters.`,
         `- End with ${tactics.hashtagCount.min}-${tactics.hashtagCount.max} relevant hashtags on a new line.`,
         archetype?.fssaiSensitive
@@ -198,7 +199,7 @@ export function buildTaskPrompt(
           `DISH CONSTRAINT: Only reference dishes from the MENU listed in the system prompt. Do not describe or feature any dish not on that menu.`,
           inp.selectedDish
             ? `FEATURED DISH: ${inp.selectedDish} — create this post specifically about this dish. The visual should depict this exact dish.`
-            : '',
+            : `SELECTED DISH: if the concept calls for a dish, pick the ONE menu item that best fits the concept and return it as selectedDish. If the concept is not dish-specific (ambience, hiring, an announcement), leave selectedDish empty rather than forcing a dish in.`,
         ] : []),
         // Carousel-specific slide briefs
         ...(inp.type === 'CAROUSEL' ? [

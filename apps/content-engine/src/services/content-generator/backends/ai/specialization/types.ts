@@ -49,6 +49,8 @@ export interface ImageGenInput {
   concept: string;
   themes?: string[];
   caption?: string;
+  /** Art-director shot type; drives which style tail is used. Defaults to DISH. */
+  shotType?: 'DISH' | 'AMBIENCE' | 'PEOPLE' | 'ANNOUNCEMENT';
 }
 
 export interface ValidationIssue {

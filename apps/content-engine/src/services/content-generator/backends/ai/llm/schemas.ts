@@ -45,3 +45,41 @@ export const PostCaptionSchema = z.object({
 });
 
 export type PostCaptionSchemaType = z.infer<typeof PostCaptionSchema>;
+
+/**
+ * Art-director output (IG-3). One short structured shot brief produced AFTER the
+ * caption, from (user concept + caption + selected dish + cuisine). Rendered by
+ * generate-post.ts into the image prompt so the picture matches the post, not a
+ * random dish. Every field is a positive visual statement -- no "avoid" language.
+ */
+export const ShotTypeSchema = z.enum(['DISH', 'AMBIENCE', 'PEOPLE', 'ANNOUNCEMENT']);
+export type ShotType = z.infer<typeof ShotTypeSchema>;
+
+export const ShotBriefSchema = z.object({
+  /**
+   * What kind of frame this is. DISH = a plated dish is the hero. AMBIENCE = the
+   * space itself (interior, tables, lighting, façade) is the hero and no plated
+   * food is the subject. PEOPLE = staff/guests/hands at work. ANNOUNCEMENT =
+   * an offer/event/hiring visual (still photographic; text is added later).
+   * When the user concept excludes food ("no dish", "ambience only") this MUST
+   * NOT be DISH.
+   */
+  shotType: ShotTypeSchema,
+  /** The hero of the frame -- for DISH: form, colour, texture, garnish, vessel; for AMBIENCE: the room, tables, walls, light; for PEOPLE: who and what they are doing. */
+  subject: z.string().min(1),
+  /** Where the subject sits: table, counter, kitchen, street stall, home dining -- one clause. */
+  setting: z.string().min(1),
+  /** 2-4 supporting objects that reinforce the concept (e.g. "brass diya, marigold petals"). */
+  props: z.string().min(1),
+  /** Light quality and direction, one clause. */
+  lighting: z.string().min(1),
+  /** Overall mood in 2-5 words. */
+  mood: z.string().min(1),
+  /**
+   * When the concept is tied to an occasion/event (festival, match night, weather),
+   * a SMALL prop-level cue that signals it without replacing the dish as hero.
+   */
+  occasionCue: z.string().optional(),
+});
+
+export type ShotBriefSchemaType = z.infer<typeof ShotBriefSchema>;

@@ -9,7 +9,7 @@ vi.mock('@restropulse/db', () => ({
   insertCostEvent: vi.fn().mockResolvedValue({ id: 'ce_test' }),
 }));
 
-const { runGeneratePost } = await import(
+const { runGeneratePost, renderShotBrief, inferShotTypeHint } = await import(
   '../../../../../../src/services/content-generator/backends/ai/pipeline/generate-post.js'
 );
 const { RestaurantSpecialization } = await import(
@@ -20,17 +20,25 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const MOCK_DISH_VISUAL = 'Golden-bronze cauliflower florets with char marks, drizzled with herb-flecked achaar emulsion on a copper plate.';
+const MOCK_SUBJECT = 'Golden-bronze cauliflower florets with char marks, drizzled with herb-flecked achaar emulsion on a copper plate';
+const MOCK_SHOT = {
+  shotType: 'DISH',
+  subject: MOCK_SUBJECT,
+  setting: 'a dark teak table by a window',
+  props: 'brass tumbler, scattered curry leaves',
+  lighting: 'soft warm side light',
+  mood: 'intimate, unhurried',
+};
 
 function makeDeps(captionOverrides: Partial<{ caption: string; suggestedHashtags: string[] }> = {}) {
-  // Single mock satisfies both PostCaptionSchema calls (uses caption/suggestedHashtags) and
-  // DishVisualDescriptionSchema calls (uses visualDescription). Zod is not invoked on mocks.
+  // Single mock satisfies both PostCaptionSchema calls (caption/suggestedHashtags) and
+  // ShotBriefSchema calls (subject/setting/props/lighting/mood). Zod is not invoked on mocks.
   const generateObject = vi.fn().mockResolvedValue({
     object: {
       caption: captionOverrides.caption ?? 'Soft, flaky, ghee-laced parotta straight off the tawa.',
       suggestedHashtags: captionOverrides.suggestedHashtags ?? ['#parotta', '#ghee'],
       archetype: 'CHEFS_PICK',
-      visualDescription: MOCK_DISH_VISUAL,
+      ...MOCK_SHOT,
     },
     usage: { inputTokens: 80, outputTokens: 40 },
     modelId: 'claude-haiku-4-5-20251001',
@@ -152,15 +160,16 @@ describe('runGeneratePost', () => {
     expect(out.caption).toMatch(/#parotta|#ghee/);
   });
 
-  it('writes two cost events: one llm, one image', async () => {
+  it('writes three cost events for an IMAGE post: caption llm, shot-brief llm, image', async () => {
     const { insertCostEvent } = await import('@restropulse/db');
     (insertCostEvent as any).mockClear();
     const deps = makeDeps();
     await runGeneratePost({ concept: 'x', type: 'IMAGE', platform: 'INSTAGRAM' }, deps, { restaurantId: 'r1' });
-    expect(insertCostEvent).toHaveBeenCalledTimes(2);
-    const surfaces = (insertCostEvent as any).mock.calls.map((c: any) => c[0].surface);
-    expect(surfaces).toContain('llm');
-    expect(surfaces).toContain('image');
+    expect(insertCostEvent).toHaveBeenCalledTimes(3);
+    const steps = (insertCostEvent as any).mock.calls.map((c: any) => `${c[0].surface}:${c[0].step}`);
+    expect(steps).toContain('llm:caption');
+    expect(steps).toContain('llm:shot-brief');
+    expect(steps).toContain('image:image');
   });
 
   it('throws ContentGenerationError on missing concept and type', async () => {
@@ -196,37 +205,100 @@ describe('runGeneratePost', () => {
     expect(out.caption).toBeTruthy();
   });
 
-  it('calls generateObject twice when selectedDish is set and uses visual description as image concept', async () => {
+  it('runs the art director after the caption and hands the rendered shot brief to the image model', async () => {
     const deps = makeDeps();
     await runGeneratePost(
       { concept: 'Charred Cauliflower with Achaar Emulsion', type: 'IMAGE', platform: 'INSTAGRAM', selectedDish: 'Charred Cauliflower with Achaar Emulsion' },
       deps,
       { restaurantId: 'r1', restaurantName: 'Saffron & Smoke' },
     );
-    // Caption call + dish visual description call
+    // Caption call + shot-brief call
     expect(deps.llm.generateObject).toHaveBeenCalledTimes(2);
-    // Image received the visual description, not the raw dish name
-    expect(deps.media.generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({ concept: MOCK_DISH_VISUAL }),
-    );
+    const [captionCall, briefCall] = (deps.llm.generateObject as any).mock.calls;
+    expect(captionCall[0].telemetryAttributes.step).toBe('caption');
+    expect(briefCall[0].telemetryAttributes.step).toBe('shot-brief');
+    // The brief prompt sees the dish, the concept AND the caption that was just written
+    expect(briefCall[0].prompt).toContain('Charred Cauliflower with Achaar Emulsion');
+    expect(briefCall[0].prompt).toContain('ghee-laced parotta');
+    // Image received the rendered brief (subject first), not the raw dish name
+    const imgInput = (deps.media.generateImage as any).mock.calls[0][0];
+    expect(imgInput.concept.startsWith(MOCK_SUBJECT)).toBe(true);
+    expect(imgInput.concept).toContain('Setting: a dark teak table');
+    expect(imgInput.concept).toContain('Mood: intimate, unhurried');
   });
 
-  it('does not call generateObject for dish description when selectedDish is absent', async () => {
+  it('passes the user concept into the shot brief even when no dish is selected', async () => {
     const deps = makeDeps();
     await runGeneratePost(
       { concept: 'weekend brunch', type: 'IMAGE', platform: 'INSTAGRAM' },
       deps,
       { restaurantId: 'r1' },
     );
-    // Only the caption call; no dish description call
-    expect(deps.llm.generateObject).toHaveBeenCalledTimes(1);
-    // Image received the original concept unchanged
+    // Caption + shot brief -- the art director always runs for the image family
+    expect(deps.llm.generateObject).toHaveBeenCalledTimes(2);
+    const briefCall = (deps.llm.generateObject as any).mock.calls[1][0];
+    expect(briefCall.prompt).toContain('User concept: "weekend brunch"');
     expect(deps.media.generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({ concept: 'weekend brunch' }),
+      expect.objectContaining({ concept: expect.stringContaining(MOCK_SUBJECT) }),
     );
   });
 
-  it('does not call dish visual description for video posts even with selectedDish', async () => {
+  it('honours an explicit "no dish / ambience" concept: no dish handed to the art director, AMBIENCE style tail, no reference photo', async () => {
+    const deps = makeDeps();
+    // Model tries to answer DISH anyway -- the explicit exclusion must win.
+    (deps.llm.generateObject as any)
+      .mockResolvedValueOnce({ object: { caption: 'Our biryani ritual…', motivation: 'm', selectedDish: 'Chicken Biryani' }, usage: { inputTokens: 1, outputTokens: 1 }, modelId: 'claude-haiku-4-5-20251001' })
+      .mockResolvedValueOnce({ object: { ...MOCK_SHOT, shotType: 'DISH', subject: 'Warm dining room with brass lamps and set tables' }, usage: { inputTokens: 1, outputTokens: 1 }, modelId: 'claude-haiku-4-5-20251001' });
+    await runGeneratePost(
+      { concept: 'No dish image, only my restaurant ambience image', type: 'IMAGE', platform: 'INSTAGRAM' },
+      deps,
+      { restaurantId: 'r1', restaurantProfile: { menu: [{ name: 'Chicken Biryani' } as any], dishImages: { 'Chicken Biryani': ['https://cdn.example/biryani.jpg'] } } },
+    );
+    const briefCall = (deps.llm.generateObject as any).mock.calls[1][0];
+    expect(briefCall.prompt).toContain('Shot type hint from the concept: AMBIENCE');
+    expect(briefCall.prompt).toContain('Featured dish: none — this is not a dish post.');
+    const imgInput = (deps.media.generateImage as any).mock.calls[0][0];
+    expect(imgInput.promptSuffix).toContain('interior photography');
+    expect(imgInput.promptSuffix).not.toContain('of the dish');
+    expect(imgInput.baseImageUrl).toBeUndefined();
+  });
+
+  it('generates media strictly AFTER the caption (no parallel race)', async () => {
+    const deps = makeDeps();
+    await runGeneratePost({ concept: 'x', type: 'IMAGE', platform: 'INSTAGRAM' }, deps, { restaurantId: 'r1' });
+    const captionOrder = (deps.llm.generateObject as any).mock.invocationCallOrder[0];
+    const imageOrder = (deps.media.generateImage as any).mock.invocationCallOrder[0];
+    expect(captionOrder).toBeLessThan(imageOrder);
+  });
+
+  it('forwards an owner-uploaded dish photo as baseImageUrl for img2img', async () => {
+    const deps = makeDeps();
+    await runGeneratePost(
+      { concept: 'our biryani', type: 'IMAGE', platform: 'INSTAGRAM', selectedDish: 'Chicken Biryani' },
+      deps,
+      { restaurantId: 'r1', restaurantProfile: { menu: [{ name: 'Chicken Biryani' } as any], dishImages: { 'Chicken Biryani': ['https://cdn.example/biryani.jpg'] } } },
+    );
+    expect(deps.media.generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({ baseImageUrl: 'https://cdn.example/biryani.jpg' }),
+    );
+  });
+
+  it('falls back to "dish — concept" when the shot-brief call throws', async () => {
+    const deps = makeDeps();
+    (deps.llm.generateObject as any)
+      .mockResolvedValueOnce({ object: { caption: 'cap', motivation: 'm' }, usage: { inputTokens: 1, outputTokens: 1 }, modelId: 'claude-haiku-4-5-20251001' })
+      .mockRejectedValue(new Error('boom'));
+    await runGeneratePost(
+      { concept: 'monsoon special', type: 'IMAGE', platform: 'INSTAGRAM', selectedDish: 'Pakora' },
+      deps,
+      { restaurantId: 'r1' },
+    );
+    expect(deps.media.generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({ concept: 'Pakora — monsoon special' }),
+    );
+  });
+
+  it('does not run the art director for video posts (Kling path unchanged)', async () => {
     const deps = makeDeps();
     (deps.media.generateVideo as any).mockResolvedValueOnce({ jobId: 'jv', status: 'RUNNING' });
     await runGeneratePost(
@@ -234,7 +306,40 @@ describe('runGeneratePost', () => {
       deps,
       { restaurantId: 'r1' },
     );
-    // Only the caption call; dish description is skipped for video (no image model)
+    // Only the caption call; the shot brief is image-family only in this pass
     expect(deps.llm.generateObject).toHaveBeenCalledTimes(1);
+  });
+
+  describe('renderShotBrief', () => {
+    it('renders subject first, then setting/props/lighting/mood, folding occasionCue into props', () => {
+      const out = renderShotBrief({
+        subject: 'Steaming dum biryani in a sealed clay handi',
+        setting: 'a family dining table',
+        props: 'brass bowls of raita',
+        lighting: 'warm evening window light',
+        mood: 'festive, generous',
+        occasionCue: 'a small saffron-white-green marigold garland',
+      });
+      expect(out.startsWith('Steaming dum biryani')).toBe(true);
+      expect(out).toContain('Props: brass bowls of raita, a small saffron-white-green marigold garland.');
+      expect(out).toContain('Mood: festive, generous.');
+    });
+
+    it('caps the rendered brief so it can never crowd out the style tail', () => {
+      const out = renderShotBrief({ subject: 'x'.repeat(2000), setting: 's', props: 'p', lighting: 'l', mood: 'm' });
+      expect(out.length).toBeLessThanOrEqual(480);
+    });
+  });
+
+  describe('inferShotTypeHint', () => {
+    it('detects explicit exclusions and non-dish intents', () => {
+      expect(inferShotTypeHint('No dish image only my restaurant ambience image')).toBe('AMBIENCE');
+      expect(inferShotTypeHint('just the interior, no food')).toBe('AMBIENCE');
+      expect(inferShotTypeHint('We are hiring — join our team')).toBe('PEOPLE');
+      expect(inferShotTypeHint('Closed on Diwali — new timings')).toBe('ANNOUNCEMENT');
+    });
+    it('returns undefined for ordinary dish concepts so the model decides', () => {
+      expect(inferShotTypeHint('Independence Day dum biryani in a clay handi')).toBeUndefined();
+    });
   });
 });

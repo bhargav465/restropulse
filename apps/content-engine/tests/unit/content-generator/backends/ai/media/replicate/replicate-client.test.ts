@@ -5,7 +5,7 @@ vi.mock('@restropulse/telemetry/server', () => ({
 }));
 
 const { ReplicateClient } = await import(
-  '../../../../../../../../src/services/content-generator/backends/ai/media/replicate/replicate-client.js'
+  '../../../../../../../src/services/content-generator/backends/ai/media/replicate/replicate-client.js'
 );
 
 const mockFetch = vi.fn();
