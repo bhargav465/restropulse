@@ -103,7 +103,7 @@ const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkT
                     className="w-full flex items-center justify-between gap-3 text-left sm:pointer-events-none mb-0 sm:mb-4"
                 >
                     <h3 className="text-base font-semibold text-ink">Your action plan</h3>
-                    <span className="hidden sm:inline text-xs text-muted">Prioritized · act inside RestroPulse</span>
+                    <span className="hidden sm:inline text-xs text-muted">Most important first · do it inside RestroPulse</span>
                     <Chevron open={actionOpen} />
                 </button>
                 <div className={`${actionOpen ? 'grid' : 'hidden sm:grid'} gap-3 mt-4 sm:mt-0`}>
@@ -116,11 +116,11 @@ const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkT
             {/* Threats vs opportunities -- also surfaced in the Competition bucket; hidden on mobile. */}
             <div className="hidden sm:grid md:grid-cols-2 gap-4">
                 <div className="bg-surface rounded-2xl p-6 border border-line border-l-[3px] border-l-danger">
-                    <h3 className="text-sm font-semibold text-ink">Immediate threats</h3>
+                    <h3 className="text-sm font-semibold text-ink">Watch out for</h3>
                     <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.immediateThreats}</p>
                 </div>
                 <div className="bg-surface rounded-2xl p-6 border border-line border-l-[3px] border-l-success">
-                    <h3 className="text-sm font-semibold text-ink">Growth opportunities</h3>
+                    <h3 className="text-sm font-semibold text-ink">Where you can win</h3>
                     <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.growthOpportunities}</p>
                 </div>
             </div>
@@ -133,7 +133,7 @@ const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkT
                     aria-expanded={verdictOpen}
                     className="w-full flex items-center justify-between gap-3 text-left"
                 >
-                    <h3 className="text-base font-semibold text-ink">90-day verdict</h3>
+                    <h3 className="text-base font-semibold text-ink">The next 90 days</h3>
                     <span className={`text-muted transition-transform ${verdictOpen ? 'rotate-180' : ''}`} aria-hidden="true">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M6 9l6 6 6-6" />

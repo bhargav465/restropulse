@@ -67,16 +67,19 @@ const SearchSEO: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLink
                 className="sm:hidden w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-sm font-semibold text-primary-strong"
                 aria-expanded={showDetail}
             >
-                {showDetail ? 'Hide search rankings & keywords' : 'Show search rankings & keywords'}
+                {showDetail ? 'Hide search positions & keywords' : 'Show search positions & keywords'}
             </button>
 
             <div className={showDetail ? 'space-y-6' : 'space-y-6 hidden sm:block'}>
             {/* Simulated search rankings */}
             <Card>
                 <div className="flex items-center justify-between gap-2 mb-3">
-                    <h3 className="text-base font-semibold text-ink">Local search rankings</h3>
-                    <span title="These positions are simulated from ratings, review volume and distance — not live Google rankings.">
-                        <ProvenanceChip provenance="computed" source="simulation" />
+                    <div>
+                        <h3 className="text-base font-semibold text-ink">Where you show up when people search</h3>
+                        <p className="text-xs text-muted mt-0.5">Our estimate from ratings, review counts and distance — not live Google results.</p>
+                    </div>
+                    <span title="These positions are estimated from ratings, review volume and distance — not live Google rankings.">
+                        <ProvenanceChip provenance="computed" source="estimate" />
                     </span>
                 </div>
                 <div className="grid sm:grid-cols-2 gap-3">
@@ -90,7 +93,7 @@ const SearchSEO: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLink
                                 </span>
                             </div>
                             <p className={`text-[11px] mt-1 font-semibold ${s.inMapPack ? 'text-success' : 'text-muted'}`}>
-                                {s.inMapPack ? 'In the map pack' : 'Outside the map pack'}
+                                {s.inMapPack ? 'In the top 3 on the map' : 'Not in the top 3 on the map'}
                             </p>
                         </div>
                     ))}
@@ -100,15 +103,15 @@ const SearchSEO: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLink
             {/* Keyword clusters */}
             <Card>
                 <div className="flex items-center justify-between gap-2 mb-4">
-                    <h3 className="text-base font-semibold text-ink">Keyword clusters</h3>
+                    <h3 className="text-base font-semibold text-ink">Words people search for</h3>
                     <ProvenanceChip provenance="ai-inferred" />
                 </div>
                 <div className="space-y-5">
-                    <KeywordChips title="Primary" keywords={keywords.primary} onDraft={draft} />
-                    <KeywordChips title="Long-tail" keywords={keywords.longTail} onDraft={draft} />
-                    <KeywordChips title="Trending" keywords={keywords.trending} onDraft={draft} />
-                    <KeywordChips title="Competitor" keywords={keywords.competitor} onDraft={draft} />
-                    <KeywordChips title="Negative — monitor" keywords={keywords.negativeToMonitor} tone="negative" />
+                    <KeywordChips title="Most searched" keywords={keywords.primary} onDraft={draft} />
+                    <KeywordChips title="Specific searches" keywords={keywords.longTail} onDraft={draft} />
+                    <KeywordChips title="Trending now" keywords={keywords.trending} onDraft={draft} />
+                    <KeywordChips title="Searches for your rivals" keywords={keywords.competitor} onDraft={draft} />
+                    <KeywordChips title="Complaints to watch" keywords={keywords.negativeToMonitor} tone="negative" />
                 </div>
             </Card>
             </div>

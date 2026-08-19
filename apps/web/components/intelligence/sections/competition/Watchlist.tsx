@@ -60,7 +60,7 @@ export const WatchlistView: React.FC<{
     return (
         <div className="space-y-4 sm:space-y-6">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-                <h3 className="text-base font-semibold text-ink">Your watchlist</h3>
+                <h3 className="text-base font-semibold text-ink">Rivals you track</h3>
                 <span className={`text-sm font-semibold tabular-nums ${atCapacity ? 'text-warning' : 'text-muted'}`} data-testid="watchlist-counter">
                     {count}/{max}
                 </span>
@@ -73,7 +73,7 @@ export const WatchlistView: React.FC<{
             )}
 
             {atCapacity && (
-                <p className="text-xs text-muted">Watchlist full — remove a competitor to swap in a new one.</p>
+                <p className="text-xs text-muted">You’re tracking the maximum — remove one to add another.</p>
             )}
 
             {/* Tracked cards */}
@@ -108,7 +108,7 @@ export const WatchlistView: React.FC<{
 
             {/* Picker */}
             <Card>
-                <h3 className="text-base font-semibold text-ink mb-2">Add a competitor</h3>
+                <h3 className="text-base font-semibold text-ink mb-2">Track another restaurant</h3>
                 <input
                     type="text"
                     value={search}
@@ -130,7 +130,7 @@ export const WatchlistView: React.FC<{
                                 type="button"
                                 onClick={() => onAdd(c)}
                                 disabled={atCapacity}
-                                title={atCapacity ? `Watchlist is full (${max}/${max}) — remove one to add another` : 'Add to watchlist'}
+                                title={atCapacity ? `You’re tracking the maximum (${max}) — remove one to add another` : 'Track this restaurant'}
                                 className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-strong text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 Add
@@ -203,20 +203,20 @@ const Watchlist: React.FC = () => {
             setMax(res.max);
             await load();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Could not update your watchlist.');
+            setError(err instanceof Error ? err.message : 'Could not update the restaurants you track.');
         }
     };
 
     const onAdd = (c: WatchlistCandidate) => {
         if (entries.length >= max) {
-            setError(`Watchlist exceeds the maximum of ${max} competitors.`);
+            setError(`You can track at most ${max} restaurants.`);
             return;
         }
         persist([...entries, { placeId: c.placeId, name: c.name, addedAt: new Date() }]);
     };
     const onRemove = (placeId: string) => persist(entries.filter((e) => e.placeId !== placeId));
 
-    if (loading) return <p className="text-sm text-muted">Loading your watchlist…</p>;
+    if (loading) return <p className="text-sm text-muted">Loading the rivals you track…</p>;
 
     const cards: WatchlistCardData[] = entries.map((entry) => {
         const p = profiles[entry.name];

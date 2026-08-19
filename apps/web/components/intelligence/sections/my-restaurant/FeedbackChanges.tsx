@@ -72,7 +72,7 @@ export const FeedbackChangesView: React.FC<{
             {/* Negative-trend alert */}
             {negatives.length > 0 && (
                 <div className="bg-surface rounded-2xl p-5 border border-line border-l-[3px] border-l-danger" data-testid="negative-trend-alert">
-                    <h3 className="text-sm font-semibold text-danger">Sentiment turning negative</h3>
+                    <h3 className="text-sm font-semibold text-danger">Reviews are turning negative</h3>
                     <p className="text-sm text-muted mt-1">
                         {negatives.map((t) => `#${t}`).join(', ')} mentioned in multiple low-star reviews this week. Reply and address it before it drags your rating.
                     </p>
@@ -85,7 +85,7 @@ export const FeedbackChangesView: React.FC<{
             {/* Theme filter chips */}
             <Card>
                 <div className="flex items-center justify-between gap-2 mb-3">
-                    <h3 className="text-base font-semibold text-ink">Filter by theme</h3>
+                    <h3 className="text-base font-semibold text-ink">What guests are talking about</h3>
                     <ProvenanceChip provenance="ai-inferred" />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -173,7 +173,7 @@ const FeedbackChanges: React.FC<{ query: PeriodQuery; onNavigate: (t: DeepLinkTa
         };
     }, [query.from, query.to]);
 
-    if (days === null) return <p className="text-sm text-muted">Loading what changed…</p>;
+    if (days === null) return <p className="text-sm text-muted">Loading recent reviews…</p>;
     if (days.length === 0) return <p className="text-sm text-muted">No new reviews in this period.</p>;
     return <FeedbackChangesView days={days} onNavigate={onNavigate} />;
 };

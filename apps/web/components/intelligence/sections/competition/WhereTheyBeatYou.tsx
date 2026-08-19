@@ -51,8 +51,8 @@ function closeGapTarget(gaps: MetricGap[]): DeepLinkTarget {
 
 const GAP_LABEL: Record<MetricGap['metric'], (g: MetricGap) => string> = {
     rating: (g) => `+${g.gap.toFixed(1)} rating (${g.source})`,
-    reviewVelocity: (g) => `${(g.theirs / (g.yours || 1)).toFixed(1)}× review velocity (${g.source})`,
-    responseRate: (g) => `responds ${g.theirs}% vs your ${g.yours}% (${g.source})`,
+    reviewVelocity: (g) => `${(g.theirs / (g.yours || 1)).toFixed(1)}× more new reviews (${g.source})`,
+    responseRate: (g) => `replies to ${g.theirs}% of reviews vs your ${g.yours}% (${g.source})`,
     photoCount: (g) => `+${g.gap} photos (${g.source})`,
 };
 
@@ -70,28 +70,86 @@ const AiList: React.FC<{ title: string; items?: string[]; tone: 'good' | 'bad' }
     );
 };
 
+/**
+ * Day-0 rows built from the scan report itself (RP-004).
+ *
+ * The daily-check layer that normally feeds this tab is empty until the worker's
+ * first nightly run, which used to make the tab say "no competitor is beating
+ * you" on the very day the report said three of them were. The report already
+ * carries today's rating and photo count for you and every nearby rival, so we
+ * derive the same gap rows from it and label them as coming from the scan.
+ * Review velocity / reply rate need history, so they only appear once the daily
+ * checks exist.
+ */
+export function rowsFromReport(report: IntelligenceReport): CompareRow[] {
+    const pool = report.buckets?.overallTop10 ?? report.topCompetitors ?? [];
+    const yoursRating = report.base.rating;
+    const yoursPhotos = report.base.photoCount;
+    return pool.map((c) => {
+        const beatsYou: MetricGap[] = [];
+        if (c.rating - yoursRating >= 0.1) {
+            beatsYou.push({ metric: 'rating', source: 'google', yours: yoursRating, theirs: c.rating, gap: Number((c.rating - yoursRating).toFixed(1)) });
+        }
+        if (c.photoCount > yoursPhotos) {
+            beatsYou.push({ metric: 'photoCount', source: 'google', yours: yoursPhotos, theirs: c.photoCount, gap: c.photoCount - yoursPhotos });
+        }
+        return {
+            placeId: c.placeId,
+            name: c.name,
+            isSelf: false,
+            google: { rating: c.rating, reviewCount: c.totalRatings, newReviews: 0, photoCount: c.photoCount },
+            beatsYou,
+        };
+    });
+}
+
 export const WhereTheyBeatYouView: React.FC<{
     rows: CompareRow[];
     profilesByName: Record<string, CompetitorProfile>;
     radar?: { base: { lat: number; lng: number; name: string }; competitors: CompetitorProfile[] };
     onNavigate: (t: DeepLinkTarget) => void;
-}> = ({ rows, profilesByName, radar, onNavigate }) => {
+    /** 'daily' = from the nightly checks for this period; 'scan' = seeded from the latest report (day 0). */
+    source?: 'daily' | 'scan';
+}> = ({ rows, profilesByName, radar, onNavigate, source = 'daily' }) => {
     const cards = rows
         .filter((r) => !r.isSelf && r.beatsYou.length > 0)
         .sort((a, b) => rowSeverity(b) - rowSeverity(a));
 
     if (cards.length === 0) {
-        return <p className="text-sm text-muted">No competitor is beating you on any tracked metric right now. Keep it up.</p>;
+        // Two different truths that used to share one sentence: "we have data and
+        // nobody is ahead" vs "we have no data for this period yet".
+        if (rows.length === 0) {
+            return (
+                <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line" data-testid="wtby-no-data">
+                    <p className="text-sm font-semibold text-ink">Nothing recorded for this period yet</p>
+                    <p className="text-sm text-muted mt-1">
+                        Every night we note the rating, reviews and photos of you and the rivals you track. Comparisons for this
+                        period will appear once those checks exist — try “Overall”, or check back tomorrow.
+                    </p>
+                </div>
+            );
+        }
+        return (
+            <p className="text-sm text-muted" data-testid="wtby-no-gaps">
+                None of these restaurants is ahead of you on rating, reviews, replies or photos right now. Keep it up.
+            </p>
+        );
     }
 
     return (
         <div className="space-y-4 sm:space-y-6">
+            {source === 'scan' && (
+                <p className="text-xs text-muted" data-testid="wtby-from-scan">
+                    From your latest scan. Day-by-day comparisons — including who is gaining reviews faster and who replies more —
+                    start after tonight’s first check.
+                </p>
+            )}
             {/* Threat radar: hidden on mobile (visual-only; the gap cards below carry
                 the same comparison as text). */}
             {radar && (
                 <div className="hidden sm:flex bg-surface rounded-2xl p-4 sm:p-6 border border-line flex-col items-center">
-                    <h3 className="text-base font-semibold text-ink self-start">Threat radar</h3>
-                    <p className="text-xs text-muted self-start mb-2">Closer to the centre = a bigger threat to you.</p>
+                    <h3 className="text-base font-semibold text-ink self-start">Who’s closest on your heels</h3>
+                    <p className="text-xs text-muted self-start mb-2">Closer to the centre = a stronger rival.</p>
                     <ThreatRadar base={radar.base} competitors={radar.competitors} />
                 </div>
             )}
@@ -169,6 +227,15 @@ const WhereTheyBeatYou: React.FC<{
     const radar = report
         ? { base: { lat: report.base.location.lat, lng: report.base.location.lng, name: report.base.name }, competitors: report.topCompetitors }
         : undefined;
+
+    // The daily layer has nothing usable for this period (no rows, or rows with no
+    // Google data — the self row alone is common on day 0): seed from the report.
+    const dailyHasData = rows.some((r) => !r.isSelf && (r.google || r.zomato));
+    if (!dailyHasData && report) {
+        return (
+            <WhereTheyBeatYouView rows={rowsFromReport(report)} profilesByName={profilesByName} radar={radar} onNavigate={onNavigate} source="scan" />
+        );
+    }
     return <WhereTheyBeatYouView rows={rows} profilesByName={profilesByName} radar={radar} onNavigate={onNavigate} />;
 };
 

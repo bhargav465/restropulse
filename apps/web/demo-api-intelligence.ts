@@ -10,6 +10,7 @@
 import type {
     IntelligenceScan,
     ScanStatus,
+    PlaceCandidate,
     IntelligenceReport,
     IntelligenceReportSummary,
     IntelligenceSelfMetrics,
@@ -43,6 +44,20 @@ const intelScanPolls = new Map<string, number>();
 const intelFixtures = () => import('./lib/demo-fixtures-intelligence');
 
 export const intelligenceAPI = {
+    searchPlaces: async (query: { name?: string; city?: string } = {}): Promise<PlaceCandidate[]> => {
+        await delay();
+        const q = (query.name ?? '').trim().toLowerCase();
+        // Three plausible matches so the "Is this you?" step has something to choose
+        // between; a free-text search that mentions "kitchen" keeps them, anything
+        // else returns a single generic match so "search again" visibly does something.
+        const all: PlaceCandidate[] = [
+            { placeId: 'sample-place-demo-kitchen', name: '[SAMPLE] RestroPulse Demo Kitchen', address: '100 Feet Rd, Indiranagar, Bengaluru', rating: 4.6, totalRatings: 820 },
+            { placeId: 'sample-place-demo-kitchen-koramangala', name: '[SAMPLE] RestroPulse Demo Kitchen — Koramangala', address: '5th Block, Koramangala, Bengaluru', rating: 4.3, totalRatings: 212 },
+            { placeId: 'sample-place-demo-kitchen-cloud', name: '[SAMPLE] Demo Kitchen Cloud (delivery only)', address: 'CMH Rd, Indiranagar, Bengaluru', rating: 3.9, totalRatings: 64 },
+        ];
+        if (!q || q.includes('kitchen') || q.includes('demo')) return all;
+        return [{ placeId: `sample-place-${q.replace(/\W+/g, '-')}`, name: `[SAMPLE] ${query.name}`, address: `${query.city ?? 'Bengaluru'}`, rating: 4.1, totalRatings: 138 }];
+    },
     startScan: async (_body: { name?: string; city?: string; force?: boolean; placeId?: string }): Promise<{ scanId: string }> => {
         await delay();
         notifyDemoBackendAction();

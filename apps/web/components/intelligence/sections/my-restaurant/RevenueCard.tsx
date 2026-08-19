@@ -42,6 +42,10 @@ const RevenueCard: React.FC<{ report: IntelligenceReport }> = ({ report }) => {
     const [guests, setGuests] = useState<number>(defaultGuests(report.base.totalRatings));
     const [avgSpend, setAvgSpend] = useState<number>(DEFAULT_AVG_SPEND);
 
+    // RP-012: with 85k reviews the default hits the 8,000 cap and the projection
+    // is really cap × 9% × ₹400 — a number about the cap, not the restaurant. Say
+    // so and ask for the real figure instead of presenting the clamp as a fact.
+    const capped = report.base.totalRatings * 2 > GUESTS_MAX && guests === GUESTS_MAX;
     const extraGuests = Math.round(guests * UPLIFT_PCT);
     const extraPerMonth = extraGuests * avgSpend;
     const extraPerYear = extraPerMonth * 12;
@@ -52,18 +56,24 @@ const RevenueCard: React.FC<{ report: IntelligenceReport }> = ({ report }) => {
     return (
         <div className="bg-banner rounded-2xl p-6 text-white" data-testid="revenue-card">
             <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-base font-semibold text-white">Revenue-growth projection</h3>
+                <h3 className="text-base font-semibold text-white">What fixing this could be worth</h3>
                 <ProvenanceChip provenance="computed" />
             </div>
             <p className="text-sidebar-ink text-sm max-w-2xl leading-relaxed">
-                A conservative {Math.round(UPLIFT_PCT * 100)}% lift in monthly guests — the kind restaurants see after
-                fixing their profile, reviews and website — modelled on your assumptions below. This is a projection, not
-                a guarantee.
+                If fixing your profile, reviews and website brought in {Math.round(UPLIFT_PCT * 100)}% more guests a month —
+                a modest lift restaurants commonly see — this is what it adds up to at your numbers below. An estimate,
+                not a promise.
             </p>
+            {capped && (
+                <p className="mt-2 text-xs text-white/90 leading-relaxed" data-testid="revenue-capped-note">
+                    We don’t know how many guests you serve, so we started at {GUESTS_MAX.toLocaleString('en-IN')} a month —
+                    the highest we assume without being told. Enter your real monthly guests to make this yours.
+                </p>
+            )}
 
             <div className="mt-4 flex flex-wrap items-end gap-5">
                 <label className="text-xs font-semibold text-sidebar-ink">
-                    <span className="block mb-1 uppercase tracking-wider">Guests / month</span>
+                    <span className="block mb-1 uppercase tracking-wider">Guests a month</span>
                     <input
                         type="number"
                         value={guests}
@@ -75,7 +85,7 @@ const RevenueCard: React.FC<{ report: IntelligenceReport }> = ({ report }) => {
                     />
                 </label>
                 <label className="text-xs font-semibold text-sidebar-ink">
-                    <span className="block mb-1 uppercase tracking-wider">Avg spend (₹)</span>
+                    <span className="block mb-1 uppercase tracking-wider">Spend per guest (₹)</span>
                     <input
                         type="number"
                         value={avgSpend}
@@ -88,15 +98,15 @@ const RevenueCard: React.FC<{ report: IntelligenceReport }> = ({ report }) => {
             </div>
 
             <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-white/15 pt-4">
-                <Metric label="Extra guests / month" value={`+${extraGuests.toLocaleString('en-IN')}`} />
-                <Metric label="Extra revenue / month" value={inr(extraPerMonth)} />
-                <Metric label="Extra revenue / year" value={inr(extraPerYear)} />
+                <Metric label="Extra guests a month" value={`+${extraGuests.toLocaleString('en-IN')}`} />
+                <Metric label="Extra revenue a month" value={inr(extraPerMonth)} />
+                <Metric label="Extra revenue a year" value={inr(extraPerYear)} />
             </div>
 
             <p className="text-[11px] text-sidebar-ink mt-3 leading-relaxed hidden sm:block">
-                Assumes {guests.toLocaleString('en-IN')} guests/month × {Math.round(UPLIFT_PCT * 100)}% uplift ×{' '}
-                {inr(avgSpend)} average spend. Default guests = review count × 2, capped {GUESTS_MIN.toLocaleString('en-IN')}–
-                {GUESTS_MAX.toLocaleString('en-IN')}. Edit the inputs to match your numbers.
+                Assumes {guests.toLocaleString('en-IN')} guests a month × {Math.round(UPLIFT_PCT * 100)}% more guests ×{' '}
+                {inr(avgSpend)} per guest. Our starting guess for guests is your Google review count × 2, kept between{' '}
+                {GUESTS_MIN.toLocaleString('en-IN')} and {GUESTS_MAX.toLocaleString('en-IN')}. Edit the numbers to match your restaurant.
             </p>
         </div>
     );

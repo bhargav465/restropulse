@@ -5,6 +5,7 @@ import { SubNav, SubNavTab } from './primitives';
 import { ScoreDial, PillarBar, CheckRow, type Grade, PILLAR_LABELS, gradeTextClass } from './sections/primitives';
 import { ProvenanceChip, ProvenanceLegend } from './sections/provenance';
 import { resolveActionHref, type DeepLinkTarget } from './sections/deep-links';
+import { humanCity, whatChangedLine } from './sections/copy';
 import ScanFlow from './sections/ScanFlow';
 import { BucketSwitch } from './sections/BucketSwitch';
 import { PeriodFilter } from './sections/PeriodFilter';
@@ -77,14 +78,35 @@ const HeaderBand: React.FC<{
     selectedPillar: PillarScore['key'] | null;
     onSelectPillar: (key: PillarScore['key']) => void;
     onRescan: () => void;
+    /** "Not your restaurant?" — reopen the Google-listing picker and rescan. */
+    onChangeRestaurant: () => void;
     onNavigate: (t: DeepLinkTarget) => void;
-}> = ({ report, selectedPillar, onSelectPillar, onRescan, onNavigate }) => {
+}> = ({ report, selectedPillar, onSelectPillar, onRescan, onChangeRestaurant, onNavigate }) => {
     const grade: Grade = restroGrade(report.restroScore);
     const scannedAt = new Date(report.generatedAt);
     const withinWindow = Date.now() - scannedAt.getTime() < DAY_MS;
+    const changed = whatChangedLine(report);
+    const where = report.base.zone || report.base.city;
 
     return (
         <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
+            {/* Which listing this report is about — the owner must be able to see, at a
+                glance, that we scored the right restaurant, and fix it if we didn't. */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-4">
+                <p className="text-sm text-ink" data-testid="report-identity">
+                    Report for <span className="font-semibold">{report.base.name}</span>
+                    {where ? <span className="text-muted"> · {where}</span> : null}
+                    {' '}
+                    <button type="button" onClick={onChangeRestaurant} className="text-xs font-semibold text-primary-strong hover:underline">
+                        Not your restaurant?
+                    </button>
+                </p>
+                {changed ? (
+                    <p className="text-sm text-muted" data-testid="what-changed">{changed}</p>
+                ) : (
+                    <p className="text-sm text-muted">This is your first report — changes will show here from the next scan.</p>
+                )}
+            </div>
             <div className="grid gap-6 md:grid-cols-[auto_1fr_auto] md:items-center">
                 {/* Dial */}
                 <div className="flex justify-center lg:justify-start">
@@ -103,15 +125,15 @@ const HeaderBand: React.FC<{
                     <p className="text-sm text-ink font-semibold">
                         Rank #{report.ranking.rank} <span className="text-muted font-normal">of {report.ranking.total} nearby</span>
                     </p>
-                    <p className="text-xs text-muted">Scanned {relativeDays(scannedAt)}</p>
+                    <p className="text-xs text-muted">Report from {relativeDays(scannedAt)}</p>
                     <button
                         type="button"
                         onClick={onRescan}
                         disabled={withinWindow}
-                        title={withinWindow ? 'You can re-scan once every 24 hours' : 'Run a fresh scan'}
+                        title={withinWindow ? 'You can refresh once every 24 hours' : 'Run a fresh scan'}
                         className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line text-primary-strong hover:bg-primary-soft transition-colors disabled:opacity-50 disabled:hover:bg-surface"
                     >
-                        Re-scan
+                        Refresh report
                     </button>
                 </div>
             </div>
@@ -172,7 +194,8 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
     const [report, setReport] = useState<IntelligenceReport | null | undefined>(undefined);
     const [selfMetrics, setSelfMetrics] = useState<IntelligenceSelfMetrics | null>(null);
     const [selectedPillar, setSelectedPillar] = useState<PillarScore['key'] | null>(null);
-    const [rescanning, setRescanning] = useState(false);
+    // Rescan state: `pick` reopens the "Is this you?" step ("Not your restaurant?").
+    const [rescan, setRescan] = useState<{ active: boolean; pick: boolean }>({ active: false, pick: false });
 
     // Two-bucket state (persisted per session + ?bucket= param).
     const [bucket, setBucket] = useState<BucketId>(initialBucket);
@@ -207,22 +230,27 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
     }, [restaurantData.id]);
 
     const scanDefaults = useMemo(
-        () => ({ name: restaurantData.name, city: restaurantData.sourceCity ?? '' }),
-        [restaurantData.name, restaurantData.sourceCity],
+        () => ({
+            name: restaurantData.name,
+            city: humanCity(restaurantData.sourceCity),
+            ...(restaurantData.googlePlaceId ? { placeId: restaurantData.googlePlaceId } : {}),
+        }),
+        [restaurantData.name, restaurantData.sourceCity, restaurantData.googlePlaceId],
     );
 
+    // Owner-facing labels (sections/copy.ts): plain words, no jargon.
     const mineTabs: Array<SubNavTab<MineTab>> = [
         { id: 'OVERVIEW', label: 'Overview' },
-        { id: 'TRENDS', label: 'Daily Trends', shortLabel: 'Trends' },
-        { id: 'FEEDBACK', label: 'Feedback Changes', shortLabel: 'Feedback' },
-        { id: 'SEARCH', label: 'Search & SEO', shortLabel: 'SEO' },
+        { id: 'TRENDS', label: 'Day by day', shortLabel: 'Trends' },
+        { id: 'FEEDBACK', label: 'What guests say', shortLabel: 'Guests' },
+        { id: 'SEARCH', label: 'Google search', shortLabel: 'Search' },
     ];
     const compTabs: Array<SubNavTab<CompTab>> = [
-        { id: 'THREATS', label: 'Top Threats', shortLabel: 'Threats' },
-        { id: 'WATCHLIST', label: 'Watchlist' },
-        { id: 'COMPARE', label: 'Compare' },
-        { id: 'BEAT', label: 'Where They Beat You', shortLabel: 'Gaps' },
-        { id: 'OPENINGS', label: 'New Openings', shortLabel: 'New' },
+        { id: 'THREATS', label: 'Biggest rivals', shortLabel: 'Rivals' },
+        { id: 'WATCHLIST', label: 'Rivals you track', shortLabel: 'Tracked' },
+        { id: 'COMPARE', label: 'Side by side', shortLabel: 'Compare' },
+        { id: 'BEAT', label: 'Where they beat you', shortLabel: 'Gaps' },
+        { id: 'OPENINGS', label: 'New nearby', shortLabel: 'New' },
     ];
 
     const minePeriod = mineQuery(mineSel);
@@ -234,18 +262,19 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
     }
 
     // Re-scan in progress (report exists, running a fresh scan)
-    if (rescanning) {
+    if (rescan.active) {
         return (
             <ScanFlow
                 variant="rescan"
                 force
+                startWithPicker={rescan.pick}
                 defaults={scanDefaults}
                 api={intelligenceAPI}
                 onReport={(r) => {
                     setReport(r);
-                    setRescanning(false);
+                    setRescan({ active: false, pick: false });
                 }}
-                onCancel={() => setRescanning(false)}
+                onCancel={() => setRescan({ active: false, pick: false })}
             />
         );
     }
@@ -268,7 +297,8 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
                 report={report}
                 selectedPillar={selectedPillar}
                 onSelectPillar={(k) => setSelectedPillar((cur) => (cur === k ? null : k))}
-                onRescan={() => setRescanning(true)}
+                onRescan={() => setRescan({ active: true, pick: false })}
+                onChangeRestaurant={() => setRescan({ active: true, pick: true })}
                 onNavigate={onNavigate}
             />
 

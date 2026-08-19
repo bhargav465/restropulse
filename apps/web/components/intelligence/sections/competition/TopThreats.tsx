@@ -39,9 +39,9 @@ const Segmented: React.FC<{
         </button>
     );
     return (
-        <div className="inline-flex items-center gap-1 rounded-xl bg-canvas border border-line p-1" role="group" aria-label="Threat bucket">
-            {opt('DIRECT', 'Same cuisine & AOV', directCount)}
-            {opt('OVERALL', 'Overall', overallCount)}
+        <div className="inline-flex items-center gap-1 rounded-xl bg-canvas border border-line p-1" role="group" aria-label="Which rivals to show">
+            {opt('DIRECT', 'Same food & price', directCount)}
+            {opt('OVERALL', 'All nearby', overallCount)}
         </div>
     );
 };
@@ -58,13 +58,26 @@ const ExpandRow: React.FC<{ c: CompetitorProfile }> = ({ c }) => {
                 </ul>
             </div>
         ) : null;
+    const anything = c.strengths?.length || c.weaknesses?.length || c.whatTheyDoBetter?.length || c.whereYouWin?.length;
     return (
-        <div className="grid sm:grid-cols-2 gap-4 px-4 py-3 bg-canvas rounded-xl">
-            {list('Strengths', c.strengths)}
-            {list('Weaknesses', c.weaknesses)}
-            {!c.strengths?.length && !c.weaknesses?.length && (
-                <p className="text-xs text-muted">No qualitative breakdown for this competitor yet.</p>
+        <div className="px-4 py-3 bg-canvas rounded-xl space-y-4">
+            <div className="grid sm:grid-cols-2 gap-4">
+                {list('What they do better than you', c.whatTheyDoBetter)}
+                {list('Where you win', c.whereYouWin)}
+                {list('Their strengths', c.strengths)}
+                {list('Their weak spots', c.weaknesses)}
+            </div>
+            {(c.pricingInsight || c.marketingEdge) && (
+                <div className="grid sm:grid-cols-2 gap-4">
+                    {c.pricingInsight && (
+                        <p className="text-xs text-ink leading-relaxed"><span className="font-semibold">Pricing:</span> {c.pricingInsight}</p>
+                    )}
+                    {c.marketingEdge && (
+                        <p className="text-xs text-ink leading-relaxed"><span className="font-semibold">How they market:</span> {c.marketingEdge}</p>
+                    )}
+                </div>
             )}
+            {!anything && <p className="text-xs text-muted">No write-up for this restaurant yet — it will appear after your next scan.</p>}
         </div>
     );
 };
@@ -106,7 +119,7 @@ export const TopThreatsView: React.FC<{
                     overallCount={overallTop10.length}
                 />
                 <p className="text-xs text-muted">
-                    Your AOV band: <span className="font-semibold text-ink">{buckets.aovBand.label}</span>
+                    Your price range: <span className="font-semibold text-ink">{buckets.aovBand.label}</span>
                 </p>
             </div>
 
@@ -118,9 +131,9 @@ export const TopThreatsView: React.FC<{
 
             {tab === 'DIRECT' && rows.length === 0 ? (
                 <Card>
-                    <p className="text-sm text-ink font-semibold">No same-cuisine, same-AOV rivals in 5 km — you may own this niche.</p>
+                    <p className="text-sm text-ink font-semibold">No rivals within 5 km serve the same kind of food at your prices — you may own this niche.</p>
                     <p className="text-xs text-muted mt-1">
-                        If that looks off, verify your AOV (price level) on your Google profile — a missing price level is treated as mid-range.
+                        If that looks wrong, check the price level on your Google profile — when Google has none, we assume mid-range.
                     </p>
                 </Card>
             ) : (
@@ -131,12 +144,12 @@ export const TopThreatsView: React.FC<{
                                 <tr className="text-left text-[11px] uppercase tracking-wider text-muted">
                                     <th className="font-semibold py-2 pr-2 w-8">#</th>
                                     <th className="font-semibold py-2 pr-3">Restaurant</th>
-                                    <th className="font-semibold py-2 pr-3 hidden sm:table-cell">Cuisine</th>
-                                    <th className="font-semibold py-2 pr-3 hidden sm:table-cell">AOV</th>
+                                    <th className="font-semibold py-2 pr-3 hidden sm:table-cell">Food</th>
+                                    <th className="font-semibold py-2 pr-3 hidden sm:table-cell">Price</th>
                                     <th className="font-semibold py-2 pr-3 text-right">Rating</th>
                                     <th className="font-semibold py-2 pr-3 text-right">Reviews</th>
                                     <th className="font-semibold py-2 pr-3 text-right hidden sm:table-cell">Distance</th>
-                                    <th className="font-semibold py-2 pr-3">Threat</th>
+                                    <th className="font-semibold py-2 pr-3" title="How strongly this restaurant competes with you — closer, better-rated and busier means higher.">Rivalry</th>
                                     <th className="font-semibold py-2" />
                                 </tr>
                             </thead>
@@ -170,10 +183,10 @@ export const TopThreatsView: React.FC<{
                                                         disabled={isTracked || atCapacity}
                                                         title={
                                                             isTracked
-                                                                ? 'Already on your watchlist'
+                                                                ? 'You already track this restaurant'
                                                                 : atCapacity
-                                                                  ? `Watchlist is full (${max}/${max})`
-                                                                  : 'Add to watchlist'
+                                                                  ? `You’re tracking the maximum (${max})`
+                                                                  : 'Track this restaurant'
                                                         }
                                                         className="text-xs font-semibold text-primary-strong hover:underline disabled:text-muted disabled:no-underline disabled:cursor-not-allowed"
                                                     >
@@ -227,7 +240,7 @@ const TopThreats: React.FC<{ buckets?: CompetitionBuckets; selfPlaceId?: string 
     const onAdd = async (c: CompetitorProfile) => {
         setError(null);
         if (watchlist.length >= max) {
-            setError(`Watchlist exceeds the maximum of ${max} competitors.`);
+            setError(`You can track at most ${max} restaurants.`);
             return;
         }
         const next = [...watchlist, { placeId: c.placeId, name: c.name, addedAt: new Date() }];
@@ -238,7 +251,7 @@ const TopThreats: React.FC<{ buckets?: CompetitionBuckets; selfPlaceId?: string 
             setWatchlist(res.entries);
             setMax(res.max);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Could not update your watchlist.');
+            setError(err instanceof Error ? err.message : 'Could not update the restaurants you track.');
         }
     };
 
@@ -247,7 +260,7 @@ const TopThreats: React.FC<{ buckets?: CompetitionBuckets; selfPlaceId?: string 
         return (
             <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
                 <p className="text-sm text-muted">
-                    Top Threats appears after your next scan — re-scan to rank your closest same-cuisine and overall rivals.
+                    Your biggest rivals appear after your next scan — refresh the report to rank the restaurants closest to you.
                 </p>
             </div>
         );

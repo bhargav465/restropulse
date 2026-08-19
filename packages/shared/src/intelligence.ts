@@ -29,6 +29,19 @@ export type ScanStatus =
  * `status` and finally links `reportId` when COMPLETED.
  * Collection: `intelligence_scans`.
  */
+/**
+ * One Google Places match offered in the "Is this you?" step before a scan. The
+ * merchant confirms which listing is theirs; the confirmed `placeId` is saved to
+ * the restaurant profile so every later scan and daily check targets it.
+ */
+export interface PlaceCandidate {
+  placeId: string;
+  name: string;
+  address: string;
+  rating: number;
+  totalRatings: number;
+}
+
 export interface IntelligenceScan {
   _id: string;
   restaurantId: string; // tenant

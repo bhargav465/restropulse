@@ -15,6 +15,7 @@
  */
 
 import { getCompetitorCacheCollection } from '@restropulse/db';
+import type { PlaceCandidate } from '@restropulse/shared';
 import { createLogger } from '@restropulse/telemetry/server';
 import { StageError } from './errors.js';
 import { getDistanceKm, threatScore } from './scoring.js';
@@ -212,6 +213,62 @@ async function getPlaceCache(placeId: string): Promise<Record<string, unknown> |
  * Returns null if the restaurant cannot be found. Detail lookups hit
  * `competitor_cache` first (TTL 7 days).
  */
+/**
+ * Candidate listings for the "Is this you?" step. Text-search the merchant's
+ * name (biased to their saved coordinates when we have them, then plain
+ * "name, city"), merge unique by place id, and return the top few with the
+ * fields a person needs to recognise their own restaurant: name, address,
+ * rating, review count. Never throws for "no matches" — an empty list is a
+ * valid answer that the UI turns into "search again".
+ */
+export async function searchPlaceCandidates(
+    name: string,
+    city: string,
+    selfLocation?: { lat: number; lng: number },
+    limit = 5,
+): Promise<PlaceCandidate[]> {
+    const MASK =
+        'places.id,places.displayName,places.shortFormattedAddress,places.formattedAddress,places.rating,places.userRatingCount,places.location';
+    const hasValidLoc =
+        !!selfLocation &&
+        Number.isFinite(selfLocation.lat) && Number.isFinite(selfLocation.lng) &&
+        !(selfLocation.lat === 0 && selfLocation.lng === 0) &&
+        Math.abs(selfLocation.lat) <= 90 && Math.abs(selfLocation.lng) <= 180;
+
+    const seen = new Map<string, PlaceCandidate>();
+    const absorb = (res: PlacesTextSearchResponse | undefined) => {
+        for (const p of res?.places ?? []) {
+            if (!p.id || seen.has(p.id)) continue;
+            seen.set(p.id, {
+                placeId: p.id,
+                name: p.displayName?.text ?? '',
+                address: p.shortFormattedAddress ?? p.formattedAddress ?? '',
+                rating: p.rating ?? 0,
+                totalRatings: p.userRatingCount ?? 0,
+            });
+        }
+    };
+
+    if (hasValidLoc) {
+        absorb(
+            await placesTextSearch(
+                {
+                    textQuery: name,
+                    pageSize: limit,
+                    locationBias: {
+                        circle: { center: { latitude: selfLocation!.lat, longitude: selfLocation!.lng }, radius: 5000.0 },
+                    },
+                },
+                MASK,
+            ),
+        );
+    }
+    if (seen.size < limit) {
+        absorb(await placesTextSearch({ textQuery: `${name}, ${city}`, pageSize: limit }, MASK));
+    }
+    return [...seen.values()].filter((c) => c.name).slice(0, limit);
+}
+
 export async function getBaseRestaurantDetails(
     name: string,
     city: string,

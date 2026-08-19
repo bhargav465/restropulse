@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import {
     findRestaurantById,
     updateRestaurant,
+    getAllCities,
     getIntelligenceScansCollection,
     getIntelligenceReportsCollection,
     getIntelligenceSnapshotsCollection,
@@ -24,6 +25,7 @@ import {
 } from '@restropulse/db';
 import type {
     ApiResponse,
+    PlaceCandidate,
     IntelligenceReport,
     IntelligenceReportSummary,
     IntelligenceScan,
@@ -51,6 +53,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { requireRole } from '../middleware/require-role.js';
 import { requireEntitlement } from '../middleware/require-entitlement.js';
 import { runScanPipeline } from '../services/intelligence/pipeline.js';
+import { searchPlaceCandidates } from '../services/intelligence/places.js';
 import { createLogger } from '@restropulse/telemetry/server';
 
 const log = createLogger('admin-intelligence');
@@ -65,6 +68,45 @@ function restaurantId(req: Request): string {
 }
 
 const SCAN_THROTTLE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Human city name for a restaurant. `sourceCity` is a city *id* (`city-hyderabad`);
+ * sending that to Google as the search text ("Bawarchi, city-hyderabad") and
+ * showing it in the UI banner were both wrong. Resolve it through the cities
+ * collection, falling back to a de-slugged form, then to the saved address.
+ */
+async function cityDisplayName(restaurant: { sourceCity?: string; location?: { address?: string } } | null): Promise<string | undefined> {
+    const src = restaurant?.sourceCity;
+    if (src) {
+        const match = (await getAllCities().catch(() => [])).find((c) => c.id === src);
+        if (match?.name) return match.name;
+        const deslugged = src.replace(/^city-/, '').replace(/[-_]+/g, ' ').trim();
+        if (deslugged) return deslugged.replace(/\b\w/g, (ch) => ch.toUpperCase());
+    }
+    return restaurant?.location?.address || undefined;
+}
+
+function selfLocationOf(restaurant: { location?: { lat?: number; lng?: number } } | null): { lat: number; lng: number } | undefined {
+    const loc = restaurant?.location;
+    return loc && typeof loc.lat === 'number' && typeof loc.lng === 'number' ? { lat: loc.lat, lng: loc.lng } : undefined;
+}
+
+// ============================================================
+// GET /places/search — "Is this you?" candidates before a scan
+// ============================================================
+
+router.get('/places/search', handle(async (req: Request, res: Response<ApiResponse<PlaceCandidate[]>>) => {
+    const rid = restaurantId(req);
+    const restaurant = await findRestaurantById(rid);
+    const qName = typeof req.query.name === 'string' && req.query.name.trim() ? req.query.name.trim() : restaurant?.name;
+    const qCity =
+        typeof req.query.city === 'string' && req.query.city.trim() ? req.query.city.trim() : await cityDisplayName(restaurant);
+    if (!qName || !qCity) {
+        return res.status(400).json({ success: false, error: 'name and city are required.' });
+    }
+    const candidates = await searchPlaceCandidates(qName, qCity, selfLocationOf(restaurant));
+    res.json({ success: true, data: candidates });
+}));
 
 // ============================================================
 // POST /scan — start an async scan (async job, fire-and-forget)
@@ -85,7 +127,7 @@ router.post('/scan', handle(async (req: Request, res: Response<ApiResponse<{ sca
     const scanCity =
         typeof city === 'string' && city.trim()
             ? city.trim()
-            : (restaurant?.sourceCity ?? restaurant?.location?.address);
+            : await cityDisplayName(restaurant);
     // Brief 10: confirmed placeId from the picker (request) → else the saved profile id.
     const scanPlaceId =
         typeof placeId === 'string' && placeId.trim()
@@ -128,13 +170,17 @@ router.post('/scan', handle(async (req: Request, res: Response<ApiResponse<{ sca
     };
     await getIntelligenceScansCollection().insertOne(scan as unknown as Record<string, unknown>);
 
+    // An explicitly confirmed place ("Is this you?") is remembered on the profile
+    // so every later scan and daily check targets the same listing.
+    if (typeof placeId === 'string' && placeId.trim() && placeId.trim() !== restaurant?.googlePlaceId) {
+        await updateRestaurant(rid, { googlePlaceId: placeId.trim() }).catch((err) =>
+            log.warn({ err, restaurantId: rid }, 'Could not persist confirmed googlePlaceId'),
+        );
+    }
+
     // Bias the Places search to the restaurant's own coordinates (from onboarding)
     // when available -- far more reliable than matching a free-text name + city.
-    const loc = restaurant?.location;
-    const selfLocation =
-        loc && typeof loc.lat === 'number' && typeof loc.lng === 'number'
-            ? { lat: loc.lat, lng: loc.lng }
-            : undefined;
+    const selfLocation = selfLocationOf(restaurant);
 
     // Fire-and-forget: the pipeline writes status to the scan doc; the response
     // does not wait on it. runScanPipeline never throws (writes FAILED itself).

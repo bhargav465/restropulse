@@ -1,7 +1,7 @@
 import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags, Platform, EntitlementState } from '@restropulse/shared';
 import type {
     SnapshotSource, SnapshotReview, ReviewTheme, WatchlistEntry,
-    IntelligenceScan, IntelligenceReport, IntelligenceReportSummary, IntelligenceSelfMetrics, CompareRow,
+    IntelligenceScan, IntelligenceReport, IntelligenceReportSummary, IntelligenceSelfMetrics, CompareRow, PlaceCandidate,
 } from '@restropulse/shared';
 import { intelligenceAPI as demoIntelligenceAPI } from './demo-api-intelligence';
 import { isDemoMode } from './lib/demo';
@@ -685,6 +685,15 @@ export interface ZomatoManualInput {
 
 // Real fetch-backed client -> /api/intelligence (OWNER-scoped).
 const realIntelligenceAPI = {
+    /** "Is this you?" — Google listings matching the restaurant, before a scan. */
+    searchPlaces: async (query: { name?: string; city?: string } = {}): Promise<PlaceCandidate[]> => {
+        const params = new URLSearchParams();
+        if (query.name) params.set('name', query.name);
+        if (query.city) params.set('city', query.city);
+        const qs = params.toString();
+        const res = await fetchAPI<ApiResponse<PlaceCandidate[]>>(`/intelligence/places/search${qs ? `?${qs}` : ''}`);
+        return res.data ?? [];
+    },
     startScan: async (body: { name?: string; city?: string; force?: boolean; placeId?: string }): Promise<{ scanId: string }> => {
         const res = await fetchAPI<ApiResponse<{ scanId: string }>>('/intelligence/scan', {
             method: 'POST', body: JSON.stringify(body),

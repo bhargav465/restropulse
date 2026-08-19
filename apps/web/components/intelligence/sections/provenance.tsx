@@ -4,16 +4,17 @@ import type { Provenance } from '@restropulse/shared';
 /**
  * Provenance chips (DESIGN §3 legend + module CLAUDE.md §8): every metric is
  * honestly labeled by how it was obtained —
- *   ● Measured (Google)  — solid success dot, from Places
- *   ● Computed           — solid primary dot, our formulas
- *   ◌ AI estimate        — DASHED border chip, Sonnet inference (never a fact)
+ *   ● From Google     — solid success dot, measured from Places
+ *   ● We calculated   — solid primary dot, our formulas
+ *   ◌ AI estimate     — DASHED border chip, Sonnet inference (never a fact)
+ * Owner-facing wording lives here (see sections/copy.ts for the rationale).
  *
  * Tokens only: success / primary / muted via semantic classes.
  */
 
 const META: Record<Provenance, { label: string; dot: string; ring: string; text: string }> = {
-    measured: { label: 'Measured', dot: 'bg-success', ring: 'border-line', text: 'text-muted' },
-    computed: { label: 'Computed', dot: 'bg-primary', ring: 'border-line', text: 'text-muted' },
+    measured: { label: 'From Google', dot: 'bg-success', ring: 'border-line', text: 'text-muted' },
+    computed: { label: 'We calculated', dot: 'bg-primary', ring: 'border-line', text: 'text-muted' },
     // AI estimate is the only chip with a dashed border — the honest "don't
     // trust this as a fact" signal (CLAUDE.md §8).
     'ai-inferred': { label: 'AI estimate', dot: 'bg-orchid', ring: 'border-orchid/60 border-dashed', text: 'text-muted' },
@@ -25,14 +26,18 @@ export const ProvenanceChip: React.FC<{ provenance: Provenance; source?: string;
     className = '',
 }) => {
     const m = META[provenance];
+    // "Measured" reads as "From Google" / "From your orders" — the source *is* the
+    // label, so it is folded in rather than shown as a parenthetical.
+    const label = provenance === 'measured' ? `From ${source ?? 'Google'}` : m.label;
+    const suffix = provenance === 'measured' ? null : source;
     return (
         <span
             className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border ${m.ring} bg-surface text-[11px] font-semibold ${m.text} whitespace-nowrap ${className}`}
-            title={`${m.label}${source ? ` — ${source}` : ''}`}
+            title={`${label}${suffix ? ` — ${suffix}` : ''}`}
         >
             <span className={`w-1.5 h-1.5 rounded-full ${m.dot}`} aria-hidden="true" />
-            {m.label}
-            {source ? <span className="font-normal text-muted/80">({source})</span> : null}
+            {label}
+            {suffix ? <span className="font-normal text-muted/80">({suffix})</span> : null}
         </span>
     );
 };
@@ -41,7 +46,7 @@ export const ProvenanceChip: React.FC<{ provenance: Provenance; source?: string;
 export const ProvenanceLegend: React.FC<{ className?: string }> = ({ className = '' }) => (
     <div className={`flex items-center gap-2 flex-wrap ${className}`}>
         <span className="text-[11px] text-muted font-semibold uppercase tracking-wider">How we know</span>
-        <ProvenanceChip provenance="measured" source="Google" />
+        <ProvenanceChip provenance="measured" />
         <ProvenanceChip provenance="computed" />
         <ProvenanceChip provenance="ai-inferred" />
     </div>

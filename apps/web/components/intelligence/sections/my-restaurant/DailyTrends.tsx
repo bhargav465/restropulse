@@ -121,12 +121,12 @@ export const DailyTrendsView: React.FC<{
     if (mode === 'date') {
         const last = google[google.length - 1];
         const prev = google[google.length - 2];
-        if (!last) return <p className="text-sm text-muted">No snapshot captured for that day yet.</p>;
+        if (!last) return <p className="text-sm text-muted">We didn’t record anything for that day.</p>;
         return (
             <div className="space-y-4">
                 <div className="flex items-center gap-2">
                     <ProvenanceChip provenance="measured" source="Google" />
-                    <span className="text-xs text-muted">Snapshot for {last.date}.</span>
+                    <span className="text-xs text-muted">Your numbers on {last.date}.</span>
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
@@ -158,9 +158,9 @@ export const DailyTrendsView: React.FC<{
     if (google.length === 0) {
         return (
             <Card>
-                <h3 className="text-base font-semibold text-ink">No snapshots for this period yet</h3>
+                <h3 className="text-base font-semibold text-ink">No daily checks for this period yet</h3>
                 <p className="text-sm text-muted mt-1">
-                    Daily trends are built from a nightly capture of your Google profile. They start filling in from
+                    Every night we note your Google rating, reviews and photos. Day-by-day trends start filling in from
                     the day after your first scan — pick a wider period, or check back tomorrow.
                 </p>
             </Card>
@@ -179,7 +179,7 @@ export const DailyTrendsView: React.FC<{
                 <div className="flex items-center gap-4 mt-2 text-[11px] text-muted">
                     <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: SERIES[0] }} /> Google</span>
                     {hasZomato && <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: SERIES[1] }} /> Zomato</span>}
-                    <span>Hollow marker = backfilled · gaps = no snapshot that day</span>
+                    <span>Hollow dot = filled in later · gap = no check that day</span>
                 </div>
             </Card>
 
@@ -231,7 +231,7 @@ export const DailyTrendsView: React.FC<{
             {seoHasData && (
                 <Card className="hidden sm:block">
                     <div className="flex items-center justify-between gap-2 mb-2">
-                        <h3 className="text-base font-semibold text-ink">SEO score</h3>
+                        <h3 className="text-base font-semibold text-ink">Google search score</h3>
                         <ProvenanceChip provenance="computed" />
                     </div>
                     <Sparkline points={seoPoints} ariaLabel="SEO score trend" />
@@ -241,11 +241,11 @@ export const DailyTrendsView: React.FC<{
             {/* Computed metric chips -- derived numbers, hidden on mobile. */}
             <Card className="hidden sm:block">
                 <div className="flex items-center justify-between gap-2 mb-3">
-                    <h3 className="text-base font-semibold text-ink">Computed metrics</h3>
+                    <h3 className="text-base font-semibold text-ink">Quick numbers</h3>
                     <ProvenanceChip provenance="computed" />
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <Chip label="Rating velocity" value={`${ratingVelocity.toFixed(1)}/wk`} />
+                    <Chip label="New reviews per week" value={ratingVelocity.toFixed(1)} />
                     <Chip label="Net new reviews" value={netNewReviews.toLocaleString('en-IN')} />
                     <Chip label="Latest rating" value={lastRating.toFixed(1)} />
                 </div>
