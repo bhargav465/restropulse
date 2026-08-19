@@ -110,8 +110,11 @@ describe('deriveNotifications', () => {
             now: NOW,
         });
         expect(res.items.find((i) => i.kind === 'report_ready')!.unread).toBe(false);
-        expect(res.items.find((i) => i.kind === 'new_reviews')!.unread).toBe(true);
-        expect(res.unread).toBe(1);
+        // The 18 Aug reviews produce two items dated after seenAt: yesterday's
+        // reviews and the weekly summary — both unread; the report is not.
+        expect(res.items.filter((i) => i.kind === 'new_reviews')).toHaveLength(2);
+        expect(res.items.filter((i) => i.kind === 'new_reviews').every((i) => i.unread)).toBe(true);
+        expect(res.unread).toBe(2);
         expect(res.seenAt).toBe('2026-08-18T12:00:00.000Z');
     });
 
