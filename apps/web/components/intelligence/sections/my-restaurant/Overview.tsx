@@ -5,6 +5,7 @@ import { intensity } from '../../theme';
 import { ProvenanceChip } from '../provenance';
 import type { DeepLinkTarget } from '../deep-links';
 import RevenueCard from './RevenueCard';
+import Yesterday from './Yesterday';
 
 /**
  * My-Restaurant · Overview (Brief 09 §2). Re-homes the v1 Overview (narrative,
@@ -73,6 +74,7 @@ const Overview: React.FC<{
             You are ranked #{report.ranking.rank}{' '}
             <span className="text-muted font-normal">of {report.ranking.total} nearby</span>
         </p>
+        <Yesterday />
         <RevenueCard report={report} />
         <V1Overview report={report} onNavigate={onNavigate} />
         {/* RP-006: this app has no ordering module, so /self-metrics returns an

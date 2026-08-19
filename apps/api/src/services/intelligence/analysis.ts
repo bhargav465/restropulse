@@ -135,6 +135,63 @@ async function runForcedTool<T>(
     throw new StageError('AI analysis returned an unexpected response — please try again.', 502, 'ANALYZING');
 }
 
+// ---------------------------------------------------------------------------
+// Review reply drafting — the one-tap follow-through for the "negative review"
+// nudge. Draft-only: the owner copies it to Google today; once Business Profile
+// connect exists this becomes "post reply". Haiku: cheap, fast, good at tone.
+// ---------------------------------------------------------------------------
+
+export interface DraftReplyInput {
+    restaurantName: string;
+    review: { text: string; rating: number; author?: string };
+    /** Optional owner voice hints — cuisine, sign-off name. */
+    voice?: { cuisine?: string; signOff?: string };
+}
+
+export interface DraftReplyOutput {
+    reply: string;
+    /** What the draft is doing, for the UI label. */
+    stance: 'apology' | 'thanks' | 'clarify';
+}
+
+const DRAFT_REPLY_TOOL: Anthropic.Tool = {
+    name: 'draft_reply',
+    description: 'A short owner reply to one Google review.',
+    input_schema: {
+        type: 'object',
+        properties: {
+            reply: { type: 'string', description: '2-4 sentences, plain English, no emojis, no hashtags, no marketing.' },
+            stance: { type: 'string', enum: ['apology', 'thanks', 'clarify'] },
+        },
+        required: ['reply', 'stance'],
+    },
+};
+
+export async function draftReviewReply(input: DraftReplyInput, client: Anthropic = getClient()): Promise<DraftReplyOutput> {
+    const { restaurantName, review, voice } = input;
+    const stars = Math.max(1, Math.min(5, Math.round(review.rating)));
+    const system = [
+        `You write replies from the owner of "${restaurantName}"${voice?.cuisine ? ` (${voice.cuisine})` : ''} to Google reviews.`,
+        'Rules: 2-4 sentences. Warm, specific to what the guest actually wrote, never generic. No emojis, no hashtags, no discounts or offers, no promises you cannot keep, no arguing.',
+        'For 1-2 stars: acknowledge the specific problem, apologise once without excuses, say one concrete thing you will do, invite them back or to contact you. For 3 stars: thank, address the gap, invite back. For 4-5 stars: thank specifically, mention one detail they praised, invite back.',
+        `Sign off as ${voice?.signOff ? `"${voice.signOff}"` : 'the owner'} in one short line.`,
+    ].join(' ');
+    const guestLine = review.author ? `\nGuest: ${review.author}` : '';
+    const prompt = `Rating: ${stars}/5${guestLine}\nReview: <<<${review.text.slice(0, 1200)}>>>`;
+    const out = await runForcedTool<Partial<DraftReplyOutput>>(client, {
+        model: HAIKU_MODEL,
+        maxTokens: 400,
+        system,
+        prompt,
+        tool: DRAFT_REPLY_TOOL,
+    });
+    const reply = (out.reply ?? '').trim();
+    if (!reply) throw new StageError('AI returned an empty reply - please try again.', 502, 'ANALYZING');
+    const stance: DraftReplyOutput['stance'] =
+        out.stance === 'apology' || out.stance === 'thanks' || out.stance === 'clarify' ? out.stance : stars <= 2 ? 'apology' : 'thanks';
+    return { reply, stance };
+}
+
 interface ClassifyToolInput {
     baseCuisine?: string;
     classifications?: Array<{ name?: string; cuisine?: string }>;

@@ -330,6 +330,42 @@ export interface DailySnapshot {
 
 export const WATCHLIST_MAX = 5;
 
+/**
+ * One item in the owner's Intelligence notification feed — the "reason to open
+ * the app today". Derived on read from data the worker already produces (report
+ * deltas + competitor alerts, nightly self snapshots); nothing is stored except
+ * the "seen up to" timestamp on the restaurant. `id` is stable across reads so
+ * the client can dedupe / animate.
+ */
+export type IntelligenceNotificationKind =
+  | 'report_ready'
+  | 'score_change'
+  | 'rating_drop'
+  | 'competitor_surge'
+  | 'new_competitor'
+  | 'new_reviews'
+  | 'negative_review';
+
+export interface IntelligenceNotification {
+  id: string;
+  kind: IntelligenceNotificationKind;
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  body?: string;
+  /** ISO timestamp the event is dated to (report generatedAt, snapshot day). */
+  at: string;
+  unread: boolean;
+  /** Where in the app to go. `bucket`/`tab` are Intelligence dashboard hints. */
+  link: { view: 'INTELLIGENCE'; bucket?: 'MINE' | 'COMPETITION'; tab?: string };
+}
+
+export interface IntelligenceNotificationsResponse {
+  items: IntelligenceNotification[];
+  unread: number;
+  /** ISO of the last "mark seen", or null if never. */
+  seenAt: string | null;
+}
+
 export interface WatchlistEntry {
   placeId: string;
   name: string;

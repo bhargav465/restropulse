@@ -6,6 +6,10 @@ import { ScoreDial, PillarBar, CheckRow, type Grade, PILLAR_LABELS, gradeTextCla
 import { ProvenanceChip, ProvenanceLegend } from './sections/provenance';
 import { resolveActionHref, type DeepLinkTarget } from './sections/deep-links';
 import { humanCity, whatChangedLine } from './sections/copy';
+import WhileYouWereAway from './sections/WhileYouWereAway';
+import { announceNotificationsSeen, INTEL_NAV_EVENT, INTEL_NOTIFICATIONS_SEEN_EVENT, type IntelNavDetail } from './sections/notifications';
+import type { IntelligenceNotification } from '@restropulse/shared';
+import { track } from './sections/track';
 import ScanFlow from './sections/ScanFlow';
 import { BucketSwitch } from './sections/BucketSwitch';
 import { PeriodFilter } from './sections/PeriodFilter';
@@ -208,6 +212,47 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
         if (typeof window !== 'undefined') window.sessionStorage?.setItem('intel_bucket', bucket);
     }, [bucket]);
 
+    // Bell / landing-card navigation: jump to a bucket + tab.
+    const goTo = (link: IntelNavDetail) => {
+        if (link.bucket) setBucket(link.bucket);
+        if (link.bucket === 'MINE' && link.tab) setMineTab(link.tab as MineTab);
+        if (link.bucket === 'COMPETITION' && link.tab) setCompTab(link.tab as CompTab);
+    };
+    useEffect(() => {
+        const onNav = (e: Event) => goTo((e as CustomEvent<IntelNavDetail>).detail);
+        window.addEventListener(INTEL_NAV_EVENT, onNav);
+        return () => window.removeEventListener(INTEL_NAV_EVENT, onNav);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Notification feed for the "While you were away" card. Loaded here (not
+    // passed down) so the card also works in demo mode and after a rescan.
+    const [feed, setFeed] = useState<IntelligenceNotification[]>([]);
+    const loadFeed = async () => {
+        try {
+            const res = await intelligenceAPI.getNotifications();
+            setFeed(res.items);
+        } catch {
+            /* nudge only */
+        }
+    };
+    useEffect(() => {
+        void loadFeed();
+        const onSeen = () => void loadFeed();
+        window.addEventListener(INTEL_NOTIFICATIONS_SEEN_EVENT, onSeen);
+        return () => window.removeEventListener(INTEL_NOTIFICATIONS_SEEN_EVENT, onSeen);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [restaurantData.id, report?._id]);
+    // report_viewed — once per report id per mount.
+    useEffect(() => {
+        if (report) track.reportViewed({ reportId: report._id, score: report.restroScore, first: !report.deltas });
+    }, [report?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const dismissFeed = () => {
+        setFeed((items) => items.map((n) => ({ ...n, unread: false })));
+        intelligenceAPI.markNotificationsSeen().then(announceNotificationsSeen).catch(() => undefined);
+    };
+
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -293,12 +338,31 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
 
     return (
         <div className="space-y-4 sm:space-y-6">
+            <WhileYouWereAway
+                items={feed}
+                onOpen={(n) => {
+                    track.notificationClicked({ kind: n.kind, unread: n.unread, source: 'landing' });
+                    goTo(n.link);
+                    dismissFeed();
+                }}
+                onDismiss={dismissFeed}
+            />
             <HeaderBand
                 report={report}
                 selectedPillar={selectedPillar}
-                onSelectPillar={(k) => setSelectedPillar((cur) => (cur === k ? null : k))}
-                onRescan={() => setRescan({ active: true, pick: false })}
-                onChangeRestaurant={() => setRescan({ active: true, pick: true })}
+                onSelectPillar={(k) => {
+                    const p = report.pillars.find((x) => x.key === k);
+                    if (selectedPillar !== k && p) track.pillarOpened({ pillar: k, grade: p.grade });
+                    setSelectedPillar((cur) => (cur === k ? null : k));
+                }}
+                onRescan={() => {
+                    track.rescanClicked({ reason: 'refresh' });
+                    setRescan({ active: true, pick: false });
+                }}
+                onChangeRestaurant={() => {
+                    track.rescanClicked({ reason: 'change_restaurant' });
+                    setRescan({ active: true, pick: true });
+                }}
                 onNavigate={onNavigate}
             />
 
@@ -315,7 +379,7 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
 
             {bucket === 'MINE' ? (
                 <>
-                    <SubNav tabs={mineTabs} active={mineTab} onChange={setMineTab} label="My Restaurant sections" />
+                    <SubNav tabs={mineTabs} active={mineTab} onChange={(t) => { track.tabOpened({ bucket: 'MINE', tab: t }); setMineTab(t); }} label="My Restaurant sections" />
                     {mineTab === 'OVERVIEW' && <MyOverview report={report} metrics={selfMetrics} onNavigate={onNavigate} />}
                     {mineTab === 'TRENDS' && <DailyTrends query={minePeriod} />}
                     {mineTab === 'FEEDBACK' && <FeedbackChanges query={minePeriod} onNavigate={onNavigate} />}
@@ -323,7 +387,7 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
                 </>
             ) : (
                 <>
-                    <SubNav tabs={compTabs} active={compTab} onChange={setCompTab} label="Competition sections" />
+                    <SubNav tabs={compTabs} active={compTab} onChange={(t) => { track.tabOpened({ bucket: 'COMPETITION', tab: t }); setCompTab(t); }} label="Competition sections" />
                     {compTab === 'THREATS' && <TopThreats buckets={report.buckets} selfPlaceId={report.base.placeId} />}
                     {compTab === 'WATCHLIST' && <Watchlist />}
                     {compTab === 'COMPARE' && <Compare query={compPeriod} />}

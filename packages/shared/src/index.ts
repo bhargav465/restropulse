@@ -196,6 +196,14 @@ export interface Restaurant {
     watchlist?: WatchlistEntry[];
     /** Merchant-provided Zomato URL for the restaurant's own listing. */
     selfZomatoUrl?: string;
+    /** Last time the owner opened the Intelligence notification feed. */
+    notificationsSeenAt?: Date;
+    /**
+     * Action-plan progress, per report: which `priority` numbers the owner has
+     * ticked off. Kept for the last few reports so the next report can say
+     * "you did 3 of 5 last time".
+     */
+    actionProgress?: Array<{ reportId: string; done: number[]; updatedAt: Date }>;
   };
   /** Source of the data: acquisition script writes this; manual entries leave it absent. */
   dataSource?: 'kaggle-zomato' | 'osm' | 'merged' | 'manual';

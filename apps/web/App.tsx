@@ -3,6 +3,9 @@ import Layout from './components/Layout';
 import ContentStudio from './components/ContentStudio';
 import Intelligence from './components/Intelligence';
 import { shellBucketToView, type DeepLinkTarget } from './components/intelligence/sections/deep-links';
+import { announceNotificationsSeen, requestIntelNav, INTEL_NOTIFICATIONS_SEEN_EVENT } from './components/intelligence/sections/notifications';
+import type { IntelligenceNotification } from '@restropulse/shared';
+import { track } from './components/intelligence/sections/track';
 import Inputs from './components/Inputs';
 import Strategy from './components/Strategy';
 import ProfileSheet from './components/ProfileSheet';
@@ -16,7 +19,7 @@ import Paywall from './components/Paywall';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
 import { ViewState, Restaurant, User, Post, FeatureFlags, Platform, WebThemeName, EntitlementState } from '@restropulse/shared';
-import { authAPI, restaurantAPI, postsAPI, configAPI, subscriptionAPI } from './api';
+import { authAPI, restaurantAPI, postsAPI, configAPI, subscriptionAPI, intelligenceAPI } from './api';
 import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
 
 function getUserInitials(name: string): string {
@@ -50,6 +53,11 @@ const App: React.FC = () => {
     // by direct navigation (e.g. Meta's app-review crawler), not SPA routes.
     const [staticPage] = useState<StaticPage>(() => readStaticPageFromUrl());
     const [currentView, setCurrentView] = useState<ViewState>('LANDING');
+    // Intelligence notification feed for the bell (report ready, rival alerts,
+    // yesterday's reviews). Loaded once a restaurant is known; refreshed when
+    // the dashboard marks the feed seen or a new report lands.
+    const [notifications, setNotifications] = useState<IntelligenceNotification[]>([]);
+    const [unreadNotifications, setUnreadNotifications] = useState(0);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     // Plan slug chosen from the landing pricing cards, remembered across the
     // login -> onboarding flow so a trial can be auto-started afterwards.
@@ -238,6 +246,39 @@ const App: React.FC = () => {
         window.history.pushState({ level: 'view', view }, '', `?view=${view.toLowerCase()}`);
     };
 
+    const loadNotifications = async () => {
+        try {
+            const feed = await intelligenceAPI.getNotifications();
+            setNotifications(feed.items);
+            setUnreadNotifications(feed.unread);
+        } catch {
+            /* the feed is a nudge, never a blocker */
+        }
+    };
+
+    useEffect(() => {
+        if (!restaurantData?.id) return;
+        void loadNotifications();
+        const onSeen = () => void loadNotifications();
+        window.addEventListener(INTEL_NOTIFICATIONS_SEEN_EVENT, onSeen);
+        return () => window.removeEventListener(INTEL_NOTIFICATIONS_SEEN_EVENT, onSeen);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [restaurantData?.id]);
+
+    const handleNotificationsOpen = () => {
+        track.notificationsOpened({ unread: unreadNotifications, total: notifications.length });
+        if (unreadNotifications === 0) return;
+        setUnreadNotifications(0);
+        setNotifications((items) => items.map((n) => ({ ...n, unread: false })));
+        intelligenceAPI.markNotificationsSeen().then(announceNotificationsSeen).catch(() => undefined);
+    };
+
+    const handleNotificationClick = (n: IntelligenceNotification) => {
+        track.notificationClicked({ kind: n.kind, unread: n.unread, source: 'bell' });
+        requestIntelNav(n.link);
+        navigateTo('INTELLIGENCE');
+    };
+
     /**
      * RP-001 — deep-link handler for Restaurant Intelligence.
      *
@@ -249,6 +290,7 @@ const App: React.FC = () => {
      */
     const handleIntelligenceNavigate = (target: DeepLinkTarget) => {
         const view = shellBucketToView(target.bucket);
+        track.actionCtaClicked({ rank: Number(target.params?.rank ?? 0), bucket: target.bucket, resolvedView: view });
         if (view) navigateTo(view);
     };
 
@@ -485,6 +527,10 @@ const App: React.FC = () => {
                 featureFlags={featureFlags}
                 entitlement={entitlement}
                 onUpgrade={openSubscriptionPanel}
+                notifications={notifications}
+                unreadNotifications={unreadNotifications}
+                onNotificationsOpen={handleNotificationsOpen}
+                onNotificationClick={handleNotificationClick}
             >
                 {renderView()}
             </Layout>

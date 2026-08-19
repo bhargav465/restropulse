@@ -26,6 +26,7 @@ import {
 import type {
     ApiResponse,
     PlaceCandidate,
+    IntelligenceNotificationsResponse,
     IntelligenceReport,
     IntelligenceReportSummary,
     IntelligenceScan,
@@ -54,6 +55,8 @@ import { requireRole } from '../middleware/require-role.js';
 import { requireEntitlement } from '../middleware/require-entitlement.js';
 import { runScanPipeline } from '../services/intelligence/pipeline.js';
 import { searchPlaceCandidates } from '../services/intelligence/places.js';
+import { getNotificationFeed } from '../services/intelligence/notifications.js';
+import { draftReviewReply, type DraftReplyOutput } from '../services/intelligence/analysis.js';
 import { createLogger } from '@restropulse/telemetry/server';
 
 const log = createLogger('admin-intelligence');
@@ -90,6 +93,79 @@ function selfLocationOf(restaurant: { location?: { lat?: number; lng?: number } 
     const loc = restaurant?.location;
     return loc && typeof loc.lat === 'number' && typeof loc.lng === 'number' ? { lat: loc.lat, lng: loc.lng } : undefined;
 }
+
+// ============================================================
+// GET /notifications — the owner's feed; POST /notifications/seen — mark read
+// ============================================================
+
+router.get('/notifications', handle(async (req: Request, res: Response<ApiResponse<IntelligenceNotificationsResponse>>) => {
+    res.json({ success: true, data: await getNotificationFeed(restaurantId(req)) });
+}));
+
+router.post('/notifications/seen', handle(async (req: Request, res: Response<ApiResponse<{ seenAt: string }>>) => {
+    const rid = restaurantId(req);
+    const restaurant = await findRestaurantById(rid);
+    const seenAt = new Date();
+    await updateRestaurant(rid, {
+        intelligence: { ...(restaurant?.intelligence ?? {}), notificationsSeenAt: seenAt },
+    });
+    res.json({ success: true, data: { seenAt: seenAt.toISOString() } });
+}));
+
+// ============================================================
+// POST /reviews/draft-reply — one-tap follow-through for a review
+// ============================================================
+
+router.post('/reviews/draft-reply', handle(async (req: Request, res: Response<ApiResponse<DraftReplyOutput>>) => {
+    const { text, rating, author } = (req.body ?? {}) as { text?: unknown; rating?: unknown; author?: unknown };
+    if (typeof text !== 'string' || !text.trim()) return res.status(400).json({ success: false, error: 'text is required' });
+    if (typeof rating !== 'number' || rating < 1 || rating > 5) return res.status(400).json({ success: false, error: 'rating (1-5) is required' });
+    const restaurant = await findRestaurantById(restaurantId(req));
+    const out = await draftReviewReply({
+        restaurantName: restaurant?.name ?? 'our restaurant',
+        review: { text: text.trim(), rating, ...(typeof author === 'string' && author.trim() ? { author: author.trim() } : {}) },
+        voice: { ...(restaurant?.cuisine ? { cuisine: restaurant.cuisine } : {}) },
+    });
+    res.json({ success: true, data: out });
+}));
+
+// ============================================================
+// Action-plan progress — GET/PUT /action-plan/progress?reportId=
+// ============================================================
+
+const ACTION_PROGRESS_KEEP = 6;
+
+router.get('/action-plan/progress', handle(async (req: Request, res: Response<ApiResponse<{ reportId: string; done: number[] }>>) => {
+    const reportId = typeof req.query.reportId === 'string' ? req.query.reportId : '';
+    if (!reportId) return res.status(400).json({ success: false, error: 'reportId is required' });
+    const restaurant = await findRestaurantById(restaurantId(req));
+    const entry = (restaurant?.intelligence?.actionProgress ?? []).find((p) => p.reportId === reportId);
+    res.json({ success: true, data: { reportId, done: entry?.done ?? [] } });
+}));
+
+router.put('/action-plan/progress', handle(async (req: Request, res: Response<ApiResponse<{ reportId: string; done: number[] }>>) => {
+    const rid = restaurantId(req);
+    const { reportId, done } = (req.body ?? {}) as { reportId?: unknown; done?: unknown };
+    if (typeof reportId !== 'string' || !reportId.trim()) {
+        return res.status(400).json({ success: false, error: 'reportId is required' });
+    }
+    if (!Array.isArray(done) || done.some((n) => typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 20)) {
+        return res.status(422).json({ success: false, error: 'done must be a list of action priorities (1–20)' });
+    }
+    // The report must belong to this restaurant.
+    const owns = await getIntelligenceReportsCollection().findOne({ _id: reportId as any, restaurantId: rid }, { projection: { _id: 1 } });
+    if (!owns) return res.status(404).json({ success: false, error: 'report not found' });
+
+    const restaurant = await findRestaurantById(rid);
+    const current = restaurant?.intelligence?.actionProgress ?? [];
+    const cleaned = [...new Set(done as number[])].sort((a, b) => a - b);
+    const next = [
+        { reportId, done: cleaned, updatedAt: new Date() },
+        ...current.filter((p) => p.reportId !== reportId),
+    ].slice(0, ACTION_PROGRESS_KEEP);
+    await updateRestaurant(rid, { intelligence: { ...(restaurant?.intelligence ?? {}), actionProgress: next } });
+    res.json({ success: true, data: { reportId, done: cleaned } });
+}));
 
 // ============================================================
 // GET /places/search — "Is this you?" candidates before a scan

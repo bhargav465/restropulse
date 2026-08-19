@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { REVIEW_THEMES, type ReviewTheme } from '@restropulse/shared';
 import { intelligenceAPI, type FeedbackDay, type FeedbackReview } from '../../../../api';
 import type { PeriodQuery } from '../period';
-import { resolveDeepLink, type DeepLinkTarget } from '../deep-links';
+import type { DeepLinkTarget } from '../deep-links';
 import { ProvenanceChip } from '../provenance';
+import { track } from '../track';
 
 /**
  * FeedbackChanges (Brief 09 §2) — the self-only "what changed" feed. Day-grouped
@@ -29,6 +30,92 @@ const SourceChip: React.FC<{ source: FeedbackReview['source'] }> = ({ source }) 
         {source}
     </span>
 );
+
+/**
+ * One review + "Draft a reply". The reply is drafted by Claude (draft-only, the
+ * owner copies it to Google), which is the one-tap follow-through for the
+ * "negative review" nudge. Once Google Business Profile connect exists this
+ * becomes "post reply".
+ */
+export const ReviewCard: React.FC<{ review: FeedbackReview }> = ({ review: r }) => {
+    const [state, setState] = useState<{ status: 'idle' | 'loading' | 'ready' | 'error'; reply?: string; stance?: string; error?: string }>({ status: 'idle' });
+    const [copied, setCopied] = useState(false);
+
+    const draft = async () => {
+        setState({ status: 'loading' });
+        try {
+            const out = await intelligenceAPI.draftReply({ text: r.text, rating: r.rating, ...(r.author ? { author: r.author } : {}) });
+            setState({ status: 'ready', reply: out.reply, stance: out.stance });
+            track.replyDrafted({ rating: r.rating, stance: out.stance, ok: true });
+        } catch (e) {
+            setState({ status: 'error', error: e instanceof Error ? e.message : 'Could not draft a reply right now.' });
+            track.replyDrafted({ rating: r.rating, ok: false });
+        }
+    };
+    const copy = async () => {
+        if (!state.reply) return;
+        try {
+            await navigator.clipboard.writeText(state.reply);
+            setCopied(true);
+            track.replyCopied({ rating: r.rating });
+            setTimeout(() => setCopied(false), 1500);
+        } catch {
+            /* clipboard blocked — the textarea is selectable */
+        }
+    };
+
+    return (
+        <div className="rounded-xl border border-line p-4 bg-surface" data-testid="review-card">
+            <div className="flex items-center gap-2 flex-wrap">
+                <Stars n={r.rating} />
+                <SourceChip source={r.source} />
+                {(r.themes ?? []).map((t) => (
+                    <span key={t} className="text-[10px] text-muted">#{t}</span>
+                ))}
+                {state.status !== 'ready' && (
+                    <button
+                        type="button"
+                        onClick={draft}
+                        disabled={state.status === 'loading'}
+                        className="ml-auto text-xs font-semibold text-primary-strong hover:underline disabled:opacity-60"
+                    >
+                        {state.status === 'loading' ? 'Drafting…' : r.rating <= 2 ? 'Draft a reply →' : 'Draft a thank-you →'}
+                    </button>
+                )}
+            </div>
+            <p className="text-sm text-ink mt-2 leading-relaxed">{r.text}</p>
+
+            {state.status === 'error' && <p className="text-xs text-danger mt-2">{state.error}</p>}
+
+            {state.status === 'ready' && state.reply && (
+                <div className="mt-3 rounded-xl bg-canvas p-3" data-testid="reply-draft">
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                            Suggested reply{state.stance ? ` · ${state.stance}` : ''}
+                        </p>
+                        <ProvenanceChip provenance="ai-inferred" />
+                    </div>
+                    <textarea
+                        className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink leading-relaxed"
+                        rows={4}
+                        value={state.reply}
+                        onChange={(e) => setState((s) => ({ ...s, reply: e.target.value }))}
+                        aria-label="Suggested reply — edit before you post it"
+                    />
+                    <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        <button type="button" onClick={copy} className="rounded-lg bg-primary-strong text-white px-3 py-1.5 text-xs font-semibold hover:opacity-90">
+                            {copied ? 'Copied' : 'Copy reply'}
+                        </button>
+                        <button type="button" onClick={draft} className="text-xs font-semibold text-primary-strong hover:underline">
+                            Try another
+                        </button>
+                        <span className="text-[11px] text-muted">Edit it so it sounds like you, then paste it on Google.</span>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const NEGATIVE_WINDOW_DAYS = 7;
 
@@ -62,8 +149,6 @@ export const FeedbackChangesView: React.FC<{
 
     const negatives = useMemo(() => negativeTrendingThemes(days), [days]);
 
-    const reply = () => onNavigate(resolveDeepLink({ bucket: 'get-started', params: { task: 'review-replies' } }));
-
     const filtered = (reviews: FeedbackReview[]) =>
         activeTheme ? reviews.filter((r) => (r.themes ?? []).includes(activeTheme)) : reviews;
 
@@ -76,9 +161,7 @@ export const FeedbackChangesView: React.FC<{
                     <p className="text-sm text-muted mt-1">
                         {negatives.map((t) => `#${t}`).join(', ')} mentioned in multiple low-star reviews this week. Reply and address it before it drags your rating.
                     </p>
-                    <button type="button" onClick={reply} title="/admin/get-started" className="mt-2 text-xs font-semibold text-primary-strong hover:underline">
-                        Reply now →
-                    </button>
+                    <p className="mt-2 text-xs text-muted">Use “Draft a reply” on the low-star reviews below — replying quickly is what turns this around.</p>
                 </div>
             )}
 
@@ -132,19 +215,7 @@ export const FeedbackChangesView: React.FC<{
                             )}
                         </div>
                         {reviews.map((r, i) => (
-                            <div key={i} className="rounded-xl border border-line p-4 bg-surface">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <Stars n={r.rating} />
-                                    <SourceChip source={r.source} />
-                                    {(r.themes ?? []).map((t) => (
-                                        <span key={t} className="text-[10px] text-muted">#{t}</span>
-                                    ))}
-                                    <button type="button" onClick={reply} title="/admin/get-started" className="ml-auto text-xs font-semibold text-primary-strong hover:underline">
-                                        Reply now →
-                                    </button>
-                                </div>
-                                <p className="text-sm text-ink mt-2 leading-relaxed">{r.text}</p>
-                            </div>
+                            <ReviewCard key={`${day.date}-${i}`} review={r} />
                         ))}
                     </div>
                 );

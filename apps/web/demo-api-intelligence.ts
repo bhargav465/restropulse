@@ -11,6 +11,7 @@ import type {
     IntelligenceScan,
     ScanStatus,
     PlaceCandidate,
+    IntelligenceNotificationsResponse,
     IntelligenceReport,
     IntelligenceReportSummary,
     IntelligenceSelfMetrics,
@@ -41,9 +42,48 @@ const DEMO_RESTAURANT = { id: 'demo-r1', name: '[SAMPLE] Demo Kitchen' };
 
 // Fake a 3-poll scan completion so the pipeline stepper is exercised.
 const intelScanPolls = new Map<string, number>();
+let demoNotificationsSeenAt: Date | null = null;
+const demoActionProgress = new Map<string, number[]>([['demo-intel-report-0', [1, 2, 4]]]);
 const intelFixtures = () => import('./lib/demo-fixtures-intelligence');
 
 export const intelligenceAPI = {
+    draftReply: async (review: { text: string; rating: number; author?: string }): Promise<{ reply: string; stance: 'apology' | 'thanks' | 'clarify' }> => {
+        await delay(700);
+        notifyDemoBackendAction();
+        if (review.rating <= 2) {
+            return { stance: 'apology', reply: `[SAMPLE] Thank you for telling us — a late Friday delivery is not the experience we want anyone to have. We have added a rider for Friday evenings and are tightening our prep times. Please give us another chance; ask for me when you order. — The owner` };
+        }
+        return { stance: 'thanks', reply: `[SAMPLE] Thank you so much — we are glad the ${review.text.toLowerCase().includes('naan') ? 'naan' : 'food'} hit the spot. Our team will be delighted to hear this. See you again soon. — The owner` };
+    },
+    getActionProgress: async (reportId: string): Promise<{ reportId: string; done: number[] }> => {
+        await delay(60);
+        return { reportId, done: demoActionProgress.get(reportId) ?? [] };
+    },
+    putActionProgress: async (reportId: string, done: number[]): Promise<{ reportId: string; done: number[] }> => {
+        await delay(60);
+        notifyDemoBackendAction();
+        const cleaned = [...new Set(done)].sort((a, b) => a - b);
+        demoActionProgress.set(reportId, cleaned);
+        return { reportId, done: cleaned };
+    },
+    getNotifications: async (): Promise<IntelligenceNotificationsResponse> => {
+        await delay();
+        const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
+        const seen = demoNotificationsSeenAt;
+        const items = [
+            { id: 'reviews:t-1', kind: 'negative_review' as const, severity: 'warning' as const, title: '3 new Google reviews yesterday', body: '2 positive · 1 negative. “[SAMPLE] Delivery took longer than promised on a Friday.” — reply today.', at: day(1), link: { view: 'INTELLIGENCE' as const, bucket: 'MINE' as const, tab: 'FEEDBACK' } },
+            { id: 'week:demo', kind: 'new_reviews' as const, severity: 'info' as const, title: 'This week: 11 new reviews — 8 positive, 2 negative', body: '+3 vs last week · negatives 1 → 2.', at: day(1), link: { view: 'INTELLIGENCE' as const, bucket: 'MINE' as const, tab: 'FEEDBACK' } },
+            { id: 'report:demo', kind: 'report_ready' as const, severity: 'info' as const, title: 'Your new weekly report is ready', body: 'Score 68/100 (+3) · rank #4 of 38 nearby.', at: day(2), link: { view: 'INTELLIGENCE' as const, bucket: 'MINE' as const, tab: 'OVERVIEW' } },
+            { id: 'alert:surge', kind: 'competitor_surge' as const, severity: 'warning' as const, title: '[SAMPLE] Meghana Foods is gaining reviews fast', body: '[SAMPLE] Meghana Foods gained 380 reviews since your last scan.', at: day(2), link: { view: 'INTELLIGENCE' as const, bucket: 'COMPETITION' as const, tab: 'THREATS' } },
+            { id: 'alert:new', kind: 'new_competitor' as const, severity: 'info' as const, title: '[SAMPLE] Biryani Blues Express opened near you', body: '[SAMPLE] Biryani Blues Express opened 0.9 km away and is rising fast.', at: day(2), link: { view: 'INTELLIGENCE' as const, bucket: 'COMPETITION' as const, tab: 'OPENINGS' } },
+        ].map((n) => ({ ...n, unread: !seen || new Date(n.at) > seen }));
+        return { items, unread: items.filter((i) => i.unread).length, seenAt: seen ? seen.toISOString() : null };
+    },
+    markNotificationsSeen: async (): Promise<{ seenAt: string }> => {
+        await delay(60);
+        demoNotificationsSeenAt = new Date();
+        return { seenAt: demoNotificationsSeenAt.toISOString() };
+    },
     searchPlaces: async (query: { name?: string; city?: string } = {}): Promise<PlaceCandidate[]> => {
         await delay();
         const q = (query.name ?? '').trim().toLowerCase();

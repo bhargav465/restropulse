@@ -2,6 +2,7 @@ import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, A
 import type {
     SnapshotSource, SnapshotReview, ReviewTheme, WatchlistEntry,
     IntelligenceScan, IntelligenceReport, IntelligenceReportSummary, IntelligenceSelfMetrics, CompareRow, PlaceCandidate,
+    IntelligenceNotificationsResponse,
 } from '@restropulse/shared';
 import { intelligenceAPI as demoIntelligenceAPI } from './demo-api-intelligence';
 import { isDemoMode } from './lib/demo';
@@ -703,6 +704,33 @@ export interface ZomatoManualInput {
 
 // Real fetch-backed client -> /api/intelligence (OWNER-scoped).
 const realIntelligenceAPI = {
+    /** The owner's notification feed (report ready, alerts, yesterday's reviews). */
+    getNotifications: async (): Promise<IntelligenceNotificationsResponse> => {
+        const res = await fetchAPI<ApiResponse<IntelligenceNotificationsResponse>>('/intelligence/notifications');
+        return res.data ?? { items: [], unread: 0, seenAt: null };
+    },
+    markNotificationsSeen: async (): Promise<{ seenAt: string }> => {
+        const res = await fetchAPI<ApiResponse<{ seenAt: string }>>('/intelligence/notifications/seen', { method: 'POST' });
+        return res.data!;
+    },
+    /** Draft an owner reply to one review (Claude, draft-only). */
+    draftReply: async (review: { text: string; rating: number; author?: string }): Promise<{ reply: string; stance: 'apology' | 'thanks' | 'clarify' }> => {
+        const res = await fetchAPI<ApiResponse<{ reply: string; stance: 'apology' | 'thanks' | 'clarify' }>>('/intelligence/reviews/draft-reply', {
+            method: 'POST', body: JSON.stringify(review),
+        });
+        return res.data!;
+    },
+    /** Action-plan progress: which priorities are ticked off for a report. */
+    getActionProgress: async (reportId: string): Promise<{ reportId: string; done: number[] }> => {
+        const res = await fetchAPI<ApiResponse<{ reportId: string; done: number[] }>>(`/intelligence/action-plan/progress?reportId=${encodeURIComponent(reportId)}`);
+        return res.data ?? { reportId, done: [] };
+    },
+    putActionProgress: async (reportId: string, done: number[]): Promise<{ reportId: string; done: number[] }> => {
+        const res = await fetchAPI<ApiResponse<{ reportId: string; done: number[] }>>('/intelligence/action-plan/progress', {
+            method: 'PUT', body: JSON.stringify({ reportId, done }),
+        });
+        return res.data!;
+    },
     /** "Is this you?" — Google listings matching the restaurant, before a scan. */
     searchPlaces: async (query: { name?: string; city?: string } = {}): Promise<PlaceCandidate[]> => {
         const params = new URLSearchParams();

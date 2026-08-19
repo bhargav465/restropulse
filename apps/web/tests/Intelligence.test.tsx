@@ -19,6 +19,12 @@ vi.mock('../api', () => ({
         getFeedbackChanges: vi.fn(),
         getNewOpenings: vi.fn(),
         searchPlaces: vi.fn(),
+        getNotifications: vi.fn().mockResolvedValue({ items: [], unread: 0, seenAt: null }),
+        markNotificationsSeen: vi.fn().mockResolvedValue({ seenAt: new Date().toISOString() }),
+        getActionProgress: vi.fn().mockResolvedValue({ done: [] }),
+        putActionProgress: vi.fn().mockResolvedValue({ done: [] }),
+        getReports: vi.fn().mockResolvedValue([]),
+        draftReply: vi.fn(),
     },
 }));
 
@@ -33,7 +39,12 @@ import { DEMO_INTELLIGENCE_REPORT, DEMO_INTELLIGENCE_SELF_METRICS } from '../lib
 import ScanFlow, { PlacePicker } from '../components/intelligence/sections/ScanFlow';
 import { WhereTheyBeatYouView, rowsFromReport } from '../components/intelligence/sections/competition/WhereTheyBeatYou';
 import { humanCity, whatChangedLine } from '../components/intelligence/sections/copy';
-import type { PlaceCandidate } from '@restropulse/shared';
+import type { PlaceCandidate, IntelligenceNotification } from '@restropulse/shared';
+import WhileYouWereAway from '../components/intelligence/sections/WhileYouWereAway';
+import NotificationBell from '../components/NotificationBell';
+import { YesterdayView } from '../components/intelligence/sections/my-restaurant/Yesterday';
+import V1Overview from '../components/intelligence/sections/Overview';
+import { ReviewCard } from '../components/intelligence/sections/my-restaurant/FeedbackChanges';
 
 const restaurant = { id: 'r1', name: 'Test Kitchen', sourceCity: 'city-hyderabad' } as unknown as Restaurant;
 
@@ -273,5 +284,130 @@ describe('owner-facing copy helpers', () => {
         expect(line).toMatch(/score is up 3 points/);
         expect(line).toMatch(/opened nearby/);
         expect(whatChangedLine({ ...DEMO_INTELLIGENCE_REPORT, deltas: undefined })).toBeNull();
+    });
+});
+
+// ---------------------------------------------------------- nudges: feed ----
+
+describe('notification feed — the reason to open the app today', () => {
+    const feed: IntelligenceNotification[] = [
+        { id: 'reviews:t-1', kind: 'negative_review', severity: 'warning', title: '3 new Google reviews yesterday', body: '2 positive · 1 negative.', at: new Date(Date.now() - 3600000).toISOString(), unread: true, link: { view: 'INTELLIGENCE', bucket: 'MINE', tab: 'FEEDBACK' } },
+        { id: 'report:1', kind: 'report_ready', severity: 'info', title: 'Your new weekly report is ready', at: new Date(Date.now() - 2 * 86400000).toISOString(), unread: true, link: { view: 'INTELLIGENCE', bucket: 'MINE', tab: 'OVERVIEW' } },
+        { id: 'alert:old', kind: 'competitor_surge', severity: 'warning', title: 'Meghana is gaining reviews fast', at: new Date(Date.now() - 5 * 86400000).toISOString(), unread: false, link: { view: 'INTELLIGENCE', bucket: 'COMPETITION', tab: 'THREATS' } },
+    ];
+
+    it('"While you were away" shows only unread items and dismisses', () => {
+        const onDismiss = vi.fn();
+        const onOpen = vi.fn();
+        render(<WhileYouWereAway items={feed} onOpen={onOpen} onDismiss={onDismiss} />);
+        expect(screen.getByText(/2 things changed/)).toBeInTheDocument();
+        expect(screen.getByText('3 new Google reviews yesterday')).toBeInTheDocument();
+        expect(screen.queryByText('Meghana is gaining reviews fast')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByText('3 new Google reviews yesterday'));
+        expect(onOpen).toHaveBeenCalledWith(feed[0]);
+        fireEvent.click(screen.getByRole('button', { name: /Got it/i }));
+        expect(onDismiss).toHaveBeenCalled();
+    });
+
+    it('"While you were away" renders nothing when there is nothing unread', () => {
+        const { container } = render(<WhileYouWereAway items={feed.map((n) => ({ ...n, unread: false }))} onOpen={() => {}} onDismiss={() => {}} />);
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it('the bell shows a count, marks seen on open, and navigates on click', () => {
+        const onOpen = vi.fn();
+        const onItemClick = vi.fn();
+        render(<NotificationBell items={feed} unread={2} pendingPosts={1} onOpen={onOpen} onItemClick={onItemClick} />);
+        expect(screen.getByTestId('notification-badge')).toHaveTextContent('3');
+        fireEvent.click(screen.getByTestId('notification-bell'));
+        expect(onOpen).toHaveBeenCalledTimes(1);
+        expect(screen.getByText(/1 post waiting for your approval/)).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Your new weekly report is ready'));
+        expect(onItemClick).toHaveBeenCalledWith(feed[1]);
+    });
+});
+
+// -------------------------------------------------- nudges: yesterday ----
+
+describe('"Yesterday" strip — overnight numbers', () => {
+    it('shows the four tiles with deltas and the positive / negative split', () => {
+        render(
+            <YesterdayView
+                last={{ date: '2026-08-18', source: 'google', rating: 4.5, reviewCount: 905, newReviews: 3, photoCount: 41 }}
+                prev={{ date: '2026-08-17', source: 'google', rating: 4.6, reviewCount: 902, newReviews: 1, photoCount: 40 }}
+                reviews={{ date: '2026-08-18', ratingBefore: 4.6, ratingAfter: 4.5, themesTrending: [], newReviews: [
+                    { rating: 5, text: 'Great', time: 't', source: 'google' },
+                    { rating: 4, text: 'Good', time: 't', source: 'google' },
+                    { rating: 1, text: 'Cold', time: 't', source: 'google' },
+                ] }}
+            />,
+        );
+        expect(screen.getByTestId('yesterday')).toBeInTheDocument();
+        expect(screen.getByText('2 positive · 1 negative')).toBeInTheDocument();
+        expect(screen.getByText('-0.1 vs day before')).toBeInTheDocument();
+        expect(screen.getByText('+3 vs day before')).toBeInTheDocument();
+    });
+
+    it('says so when nothing changed, and when there is no check yet', () => {
+        const same = { date: '2026-08-18', source: 'google' as const, rating: 4.5, reviewCount: 905, newReviews: 0, photoCount: 41 };
+        const { rerender } = render(<YesterdayView last={same} prev={{ ...same, date: '2026-08-17' }} reviews={null} />);
+        expect(screen.getByText(/Nothing changed overnight/)).toBeInTheDocument();
+        rerender(<YesterdayView last={null} prev={null} reviews={null} />);
+        expect(screen.getByTestId('yesterday-empty')).toBeInTheDocument();
+    });
+});
+
+// ---------------------------------------------- nudges: action progress ----
+
+describe('action-plan progress — the commitment loop', () => {
+    it('ticks an action, updates "N of 5 done", and persists', async () => {
+        vi.mocked(intelligenceAPI.getActionProgress).mockResolvedValue({ reportId: DEMO_INTELLIGENCE_REPORT._id, done: [2] });
+        render(<V1Overview report={DEMO_INTELLIGENCE_REPORT} onNavigate={() => {}} />);
+        await waitFor(() => expect(screen.getByTestId('action-progress')).toHaveTextContent('1 of 5 done'));
+
+        fireEvent.click(screen.getByLabelText(/^Done: \[SAMPLE\] Publish a custom-domain ordering website/));
+        expect(screen.getByTestId('action-progress')).toHaveTextContent('2 of 5 done');
+        await waitFor(() => expect(intelligenceAPI.putActionProgress).toHaveBeenCalledWith(DEMO_INTELLIGENCE_REPORT._id, [1, 2]));
+    });
+});
+
+// ------------------------------------------------- reply drafting ----
+
+describe('"Draft a reply" — the follow-through for a review', () => {
+    it('drafts, shows an editable AI-labelled reply, and copies it', async () => {
+        vi.mocked(intelligenceAPI.draftReply).mockResolvedValue({ reply: 'So sorry about the wait — we have added a Friday rider. Please give us another chance. — The owner', stance: 'apology' });
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, { clipboard: { writeText } });
+
+        render(<ReviewCard review={{ rating: 1, text: 'Delivery took forever on Friday', time: 't', source: 'google' }} />);
+        fireEvent.click(screen.getByRole('button', { name: /Draft a reply/i }));
+        expect(await screen.findByTestId('reply-draft')).toBeInTheDocument();
+        expect(intelligenceAPI.draftReply).toHaveBeenCalledWith({ text: 'Delivery took forever on Friday', rating: 1 });
+        expect(screen.getByText(/Suggested reply · apology/)).toBeInTheDocument();
+        expect(screen.getByText('AI estimate')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: /Copy reply/i }));
+        await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Friday rider')));
+    });
+
+    it('offers a thank-you for a positive review and surfaces errors', async () => {
+        vi.mocked(intelligenceAPI.draftReply).mockRejectedValue(new Error('AI service is rate-limited right now'));
+        render(<ReviewCard review={{ rating: 5, text: 'Loved the biryani', time: 't', source: 'google' }} />);
+        fireEvent.click(screen.getByRole('button', { name: /Draft a thank-you/i }));
+        expect(await screen.findByText(/rate-limited/)).toBeInTheDocument();
+    });
+});
+
+// -------------------------------------------------- overview declutter ----
+
+describe('Overview — one headline, the plan, and a "Full report" disclosure', () => {
+    it('keeps findings, threats and the 90-day verdict behind Full report', async () => {
+        render(<V1Overview report={DEMO_INTELLIGENCE_REPORT} onNavigate={() => {}} />);
+        expect(screen.getByText('The headline')).toBeInTheDocument();
+        expect(screen.queryByTestId('full-report')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByTestId('full-report-toggle'));
+        expect(screen.getByTestId('full-report')).toBeInTheDocument();
+        expect(screen.getByText('Watch out for')).toBeInTheDocument();
+        expect(screen.getByText('The next 90 days')).toBeInTheDocument();
     });
 });
