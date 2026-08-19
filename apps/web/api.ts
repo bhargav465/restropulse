@@ -91,6 +91,15 @@ export const authAPI = {
         return response;
     },
 
+    // Backend OTP request (dev fallback). In non-production the API echoes the
+    // code back as `devOtp`, which is what makes local auto-login possible.
+    sendOtp: async (phone: string): Promise<{ success: boolean; message?: string; devOtp?: string }> => {
+        return fetchAPI<{ success: boolean; message?: string; devOtp?: string }>('/auth/send-otp', {
+            method: 'POST',
+            body: JSON.stringify({ phone }),
+        }, false);
+    },
+
     // Fallback OTP verification (when Firebase not configured)
     verifyOtp: async (phone: string, otp: string): Promise<AuthResponse & { refreshToken?: string }> => {
         const response = await fetchAPI<AuthResponse & { refreshToken?: string }>('/auth/verify-otp', {

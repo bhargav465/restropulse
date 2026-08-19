@@ -152,6 +152,25 @@ const App: React.FC = () => {
             const token = localStorage.getItem('rp_token');
             const session = localStorage.getItem('rp_session');
 
+            // Dev-only auto-login (VITE_DEV_AUTO_LOGIN_PHONE=+91… in apps/web/.env.local):
+            // no session yet → request the backend dev OTP, verify it, and land on
+            // the dashboard without the login page. Compiled out of production
+            // builds (import.meta.env.DEV) and inert unless the variable is set.
+            const autoPhone = import.meta.env.DEV ? (import.meta.env.VITE_DEV_AUTO_LOGIN_PHONE as string | undefined) : undefined;
+            if (!(token && session) && autoPhone) {
+                try {
+                    const sent = await authAPI.sendOtp(autoPhone);
+                    if (sent.success && sent.devOtp) {
+                        await onLoginSuccess(await authAPI.verifyOtp(autoPhone, sent.devOtp));
+                        setLoading(false);
+                        return;
+                    }
+                    console.warn('[dev auto-login] API did not return a devOtp — is the API running in non-production?');
+                } catch (e) {
+                    console.warn('[dev auto-login] failed, showing the login page instead:', e);
+                }
+            }
+
             if (token && session) {
                 try {
                     // Verify session and get user data

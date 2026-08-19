@@ -13,8 +13,12 @@ interface LoginProps {
 
 type Step = 'phone' | 'otp';
 
-// Check if Firebase is configured
+// Check if Firebase is configured. `VITE_AUTH_DEV_OTP=true` (dev builds only)
+// forces the backend OTP path even when a Firebase key is present — Firebase
+// phone auth does not work on localhost, and relying on an empty
+// VITE_FIREBASE_API_KEY in .env.local to shadow .env proved fragile.
 const isFirebaseConfigured = () => {
+    if (import.meta.env.DEV && import.meta.env.VITE_AUTH_DEV_OTP === 'true') return false;
     const apiKey = getFirebaseApiKey();
     return apiKey && apiKey !== 'your-api-key' && !apiKey.includes('your-');
 };
