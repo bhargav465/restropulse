@@ -161,6 +161,15 @@ export const authAPI = {
             body: JSON.stringify({ idToken }),
         });
     },
+    // Dev-only: the API accepts `devEmail` outside production and marks the
+    // email verified without Firebase (the email-link flow needs a real Firebase
+    // project and does not work on localhost).
+    verifyEmailDev: async (devEmail: string): Promise<void> => {
+        await fetchAPI('/auth/verify-email', {
+            method: 'POST',
+            body: JSON.stringify({ devEmail }),
+        });
+    },
 };
 
 // Restaurant API

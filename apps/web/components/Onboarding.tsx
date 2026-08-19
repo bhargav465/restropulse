@@ -219,6 +219,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         }
     }, [resendCountdown]);
 
+    // Local dev (VITE_AUTH_DEV_OTP=true): use the API's dev bypass instead of the
+    // Firebase email link, which cannot work on localhost.
+    const devEmailBypass = import.meta.env.DEV && import.meta.env.VITE_AUTH_DEV_OTP === 'true';
+
     const handleSendVerification = async () => {
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             setEmailError('Please enter a valid email address');
@@ -229,6 +233,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         try {
             if (userName.trim()) {
                 localStorage.setItem('rp_onboarding_name', userName.trim());
+            }
+            if (devEmailBypass) {
+                await authAPI.verifyEmailDev(email);
+                setEmailStatus('verified');
+                return;
             }
             await sendEmailVerificationLink(email);
             setEmailStatus('sent');
