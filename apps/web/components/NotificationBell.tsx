@@ -47,10 +47,10 @@ const NotificationBell: React.FC<{
                 aria-haspopup="dialog"
                 aria-expanded={open}
                 aria-label={total > 0 ? `Notifications, ${total} new` : 'Notifications'}
-                className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center relative hover:bg-slate-200 transition-colors"
+                className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center relative hover:bg-slate-200 transition-colors"
                 data-testid="notification-bell"
             >
-                <Bell size={18} className="text-slate-600" />
+                <Bell size={20} className="text-slate-600" />
                 {total > 0 && (
                     <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border border-white" data-testid="notification-badge">
                         {total > 9 ? '9+' : total}

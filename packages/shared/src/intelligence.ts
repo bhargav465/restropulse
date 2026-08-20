@@ -391,7 +391,7 @@ export interface NearbyPlaceSighting {
 
 /** One deterministic metric gap for "Where They Beat You" (computed). */
 export interface MetricGap {
-  metric: 'rating' | 'reviewVelocity' | 'responseRate' | 'photoCount';
+  metric: 'rating' | 'reviewVelocity' | 'responseRate' | 'photoCount' | 'reviewCount';
   source: SnapshotSource;
   yours: number;
   theirs: number;

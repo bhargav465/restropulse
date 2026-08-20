@@ -164,7 +164,10 @@ const App: React.FC = () => {
             // no session yet → request the backend dev OTP, verify it, and land on
             // the dashboard without the login page. Compiled out of production
             // builds (import.meta.env.DEV) and inert unless the variable is set.
-            const autoPhone = import.meta.env.DEV ? (import.meta.env.VITE_DEV_AUTO_LOGIN_PHONE as string | undefined) : undefined;
+            const autoPhone =
+                import.meta.env.DEV && import.meta.env.MODE !== 'test'
+                    ? (import.meta.env.VITE_DEV_AUTO_LOGIN_PHONE as string | undefined)
+                    : undefined;
             if (!(token && session) && autoPhone) {
                 try {
                     const sent = await authAPI.sendOtp(autoPhone);
@@ -291,7 +294,17 @@ const App: React.FC = () => {
     const handleIntelligenceNavigate = (target: DeepLinkTarget) => {
         const view = shellBucketToView(target.bucket);
         track.actionCtaClicked({ rank: Number(target.params?.rank ?? 0), bucket: target.bucket, resolvedView: view });
-        if (view) navigateTo(view);
+        if (!view) return;
+        // In-Intelligence destinations (e.g. review replies → What guests say):
+        // the dashboard listens for this and switches bucket/tab.
+        if (view === 'INTELLIGENCE' && target.params?.intelTab) {
+            requestIntelNav({
+                view: 'INTELLIGENCE',
+                bucket: (target.params.intelBucket as 'MINE' | 'COMPETITION') ?? 'MINE',
+                tab: target.params.intelTab,
+            });
+        }
+        navigateTo(view);
     };
 
     const onLoginSuccess = async (response: { success: boolean; message?: string }) => {

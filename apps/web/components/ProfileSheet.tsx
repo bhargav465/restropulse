@@ -1,3 +1,4 @@
+import { loadRazorpay } from '../utils/razorpay';
 import React, { useState, useEffect, useRef } from 'react';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
@@ -540,6 +541,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
                 const result = await subscriptionAPI.changePlan(planSlug, opts);
                 browserEvents.subscriptionStarted(planSlug, 'MONTHLY');
                 if (result.requiresCheckout && result.subscriptionId && result.keyId) {
+                    await loadRazorpay();
                     if (!(window as any).Razorpay) throw new Error('Payment service not available');
                     const rzp = new (window as any).Razorpay({
                         key: result.keyId,
@@ -585,6 +587,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
             } else {
                 const data = await subscriptionAPI.subscribe(planSlug, normalizedCouponCode || undefined);
                 browserEvents.subscriptionStarted(planSlug, 'MONTHLY');
+                await loadRazorpay();
                 if (!(window as any).Razorpay) {
                     throw new Error('Payment service not available');
                 }
@@ -636,6 +639,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         try {
             setActionError(null);
             const data = await subscriptionAPI.reactivate();
+            await loadRazorpay();
             if (!(window as any).Razorpay) throw new Error('Payment service not available');
             const rzp = new (window as any).Razorpay({
                 key: data.keyId,
@@ -674,6 +678,7 @@ const ProfileSheet: React.FC<ProfileSheetProps> = ({ isOpen, onClose, onLogout, 
         try {
             setActionError(null);
             const data = await subscriptionAPI.purchaseCredits(packId);
+            await loadRazorpay();
             if (!(window as any).Razorpay) {
                 throw new Error('Payment service not available');
             }

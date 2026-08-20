@@ -132,16 +132,17 @@ describe('Layout Component', () => {
 
     it('should show bell badge when pendingCount > 0', () => {
         render(<Layout {...defaultProps} pendingCount={3}>{mockChildren}</Layout>);
-        const bell = screen.getByLabelText('Notifications');
-        const badge = bell.querySelector('.bg-red-500');
-        expect(badge).toBeInTheDocument();
+        // The bell is now the Intelligence notification bell; pending posts feed
+        // its count badge alongside feed items.
+        const badge = screen.getByTestId('notification-badge');
+        expect(badge).toHaveTextContent('3');
+        expect(screen.getByLabelText('Notifications, 3 new')).toBeInTheDocument();
     });
 
     it('should not show bell badge when pendingCount is 0', () => {
         render(<Layout {...defaultProps} pendingCount={0}>{mockChildren}</Layout>);
-        const bell = screen.getByLabelText('Notifications');
-        const badge = bell.querySelector('.bg-red-500');
-        expect(badge).not.toBeInTheDocument();
+        expect(screen.queryByTestId('notification-badge')).not.toBeInTheDocument();
+        expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
     });
 
     it('should handle all ViewState values correctly', () => {

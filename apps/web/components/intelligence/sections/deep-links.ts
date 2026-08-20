@@ -48,7 +48,14 @@ export function resolveDeepLink(deepLink?: DeepLink): DeepLinkTarget {
         case 'ordering':
             return { bucket: 'ORDERING', orderingTab: 'OVERVIEW', href: '/admin/ordering', cta: 'Open Online Ordering', params };
         case 'get-started':
-            return { bucket: 'GET_STARTED', href: '/admin/get-started', cta: 'Open Get started', params };
+            // RP-002: this shell has no Get-started checklist. Profile/review
+            // actions land on What guests say, where "Draft a reply" lives.
+            return {
+                bucket: 'INTELLIGENCE',
+                href: '/admin/intelligence',
+                cta: 'Reply to reviews',
+                params: { ...(params ?? {}), intelBucket: 'MINE', intelTab: 'FEEDBACK' },
+            };
         default:
             return { bucket: 'GET_STARTED', href: '/admin/get-started', cta: 'Act on this', params };
     }

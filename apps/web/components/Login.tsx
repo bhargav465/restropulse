@@ -18,7 +18,9 @@ type Step = 'phone' | 'otp';
 // phone auth does not work on localhost, and relying on an empty
 // VITE_FIREBASE_API_KEY in .env.local to shadow .env proved fragile.
 const isFirebaseConfigured = () => {
-    if (import.meta.env.DEV && import.meta.env.VITE_AUTH_DEV_OTP === 'true') return false;
+    // MODE!=='test': vitest runs with DEV=true and loads .env.local, and the
+    // Login suite tests the Firebase path — the dev switch must not leak there.
+    if (import.meta.env.DEV && import.meta.env.MODE !== 'test' && import.meta.env.VITE_AUTH_DEV_OTP === 'true') return false;
     const apiKey = getFirebaseApiKey();
     return apiKey && apiKey !== 'your-api-key' && !apiKey.includes('your-');
 };

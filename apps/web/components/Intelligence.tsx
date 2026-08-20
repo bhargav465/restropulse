@@ -22,7 +22,7 @@ const Intelligence: React.FC<IntelligenceProps> = ({ restaurant, onNavigate }) =
   // Mobile horizontal gutter so cards don't touch the viewport edges. Layout
   // supplies desktop gutters (lg:px-6), so we drop ours at lg to avoid doubling.
   return (
-    <div className="px-4 pt-4 lg:px-0 lg:pt-0">
+    <div className="px-4 pt-4 lg:px-0 lg:pt-0 w-full max-w-[1400px] mx-auto">
       <IntelligenceDashboard restaurantData={restaurant} onNavigate={onNavigate} />
     </div>
   );

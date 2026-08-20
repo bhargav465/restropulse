@@ -34,7 +34,7 @@ import MyOverview from '../components/intelligence/sections/my-restaurant/Overvi
 import { DailyTrendsView } from '../components/intelligence/sections/my-restaurant/DailyTrends';
 import { TopThreatsView } from '../components/intelligence/sections/competition/TopThreats';
 import { TrendChart } from '../components/intelligence/sections/charts';
-import { SHELL_BUCKET_TO_VIEW, shellBucketToView } from '../components/intelligence/sections/deep-links';
+import { SHELL_BUCKET_TO_VIEW, shellBucketToView, resolveDeepLink } from '../components/intelligence/sections/deep-links';
 import { DEMO_INTELLIGENCE_REPORT, DEMO_INTELLIGENCE_SELF_METRICS } from '../lib/demo-fixtures-intelligence';
 import ScanFlow, { PlacePicker } from '../components/intelligence/sections/ScanFlow';
 import { WhereTheyBeatYouView, rowsFromReport } from '../components/intelligence/sections/competition/WhereTheyBeatYou';
@@ -62,8 +62,12 @@ describe('RP-001 — action-plan CTAs are wired to the shell', () => {
         expect(shellBucketToView('DASHBOARD')).toBe('DASHBOARD');
         // Buckets ported from restropulse-v2 that this app has no home for.
         expect(shellBucketToView('ORDERING')).toBeNull();
-        expect(shellBucketToView('GET_STARTED')).toBeNull();
         expect(shellBucketToView('DESIGN')).toBeNull();
+        // 'get-started' deep links no longer resolve to the dead GET_STARTED
+        // bucket: profile/review actions land on What guests say (RP-002).
+        const reviews = resolveDeepLink({ bucket: 'get-started', params: { task: 'review-replies' } });
+        expect(reviews.bucket).toBe('INTELLIGENCE');
+        expect(reviews.params).toMatchObject({ intelBucket: 'MINE', intelTab: 'FEEDBACK' });
         // No bucket may resolve to a view the shell cannot render.
         const renderable = ['DASHBOARD', 'STUDIO', 'INPUTS', 'STRATEGY', 'INTELLIGENCE'];
         for (const view of Object.values(SHELL_BUCKET_TO_VIEW)) {

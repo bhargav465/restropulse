@@ -80,6 +80,44 @@ const Chevron: React.FC<{ open: boolean }> = ({ open }) => (
     </span>
 );
 
+/**
+ * Deterministic stat tiles for the Full report — every number is already on the
+ * report; this just puts them side by side so the findings are inspectable.
+ */
+export function byTheNumbers(report: IntelligenceReport): Array<{ label: string; value: string; note?: string }> {
+    const rivals = report.competitors ?? [];
+    const within = rivals.length;
+    const areaAvg = within > 0 ? rivals.reduce((s, c) => s + c.rating, 0) / within : report.base.rating;
+    const topByReviews = [...rivals].sort((a, b) => b.totalRatings - a.totalRatings)[0];
+    const avgPhotos = within > 0 ? Math.round(rivals.reduce((s, c) => s + c.photoCount, 0) / within) : 0;
+    const inTop3 = (report.searchRankings ?? []).filter((s) => s.inMapPack).length;
+    const searches = (report.searchRankings ?? []).length;
+    const sameCuisine = (report.sameCuisineNearby ?? []).length;
+    const out: Array<{ label: string; value: string; note?: string }> = [
+        { label: 'Your rank nearby', value: `#${report.ranking.rank} of ${report.ranking.total}` },
+        {
+            label: 'Rating vs the area',
+            value: `${report.base.rating.toFixed(1)} vs ${areaAvg.toFixed(1)}`,
+            note: report.base.rating >= areaAvg ? 'You beat the area average' : 'Below the area average',
+        },
+        {
+            label: 'Reviews vs the busiest rival',
+            value: `${report.base.totalRatings.toLocaleString('en-IN')} vs ${(topByReviews?.totalRatings ?? 0).toLocaleString('en-IN')}`,
+            note: topByReviews?.name,
+        },
+        {
+            label: 'Photos vs rivals',
+            value: `${report.base.photoCount.toLocaleString('en-IN')} vs ~${avgPhotos.toLocaleString('en-IN')}`,
+            note: 'their average',
+        },
+        { label: 'Same-food rivals near you', value: String(sameCuisine), note: 'within 5 km' },
+    ];
+    if (searches > 0) {
+        out.push({ label: 'Searches you lead', value: `${inTop3} of ${searches}`, note: 'top 3 on the map (our estimate)' });
+    }
+    return out;
+}
+
 const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkTarget) => void }> = ({ report, onNavigate }) => {
     const { narrative } = report;
 
@@ -125,7 +163,9 @@ const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkT
             {/* The headline — one paragraph, always visible. Findings live in "Full report". */}
             <Card>
                 <h3 className="text-base font-semibold text-ink">The headline</h3>
-                <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.overview}</p>
+                {/* max-w keeps line length readable on wide screens; base size, ink not muted —
+                    this is the one paragraph we actually want read. */}
+                <p className="text-base text-ink/90 mt-2 leading-relaxed max-w-3xl">{narrative.overview}</p>
             </Card>
 
             {/* Action plan — collapsible on mobile (expanded by default; it's the core CTA). */}
@@ -190,31 +230,44 @@ const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkT
                     </span>
                 </button>
                 {fullOpen && (
-                    <div className="mt-4 space-y-5" data-testid="full-report">
+                    <div className="mt-5 space-y-6" data-testid="full-report">
+                        {/* By the numbers — computed from the report itself, no AI. */}
+                        <div data-testid="by-the-numbers">
+                            <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">By the numbers</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {byTheNumbers(report).map((n) => (
+                                    <div key={n.label} className="rounded-xl border border-line bg-canvas px-3 py-2.5">
+                                        <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">{n.label}</p>
+                                        <p className="text-base font-semibold text-ink tabular-nums mt-0.5">{n.value}</p>
+                                        {n.note && <p className="text-xs text-muted mt-0.5">{n.note}</p>}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                         <div>
                             <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Key findings</p>
-                            <ul className="space-y-2">
+                            <ul className="space-y-2.5 max-w-4xl">
                                 {narrative.keyFindings.map((f, i) => (
-                                    <li key={i} className="flex items-start gap-2.5 text-sm text-ink">
-                                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />
+                                    <li key={i} className="flex items-start gap-2.5 text-[15px] text-ink">
+                                        <span className="mt-2 w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />
                                         <span className="leading-relaxed">{f}</span>
                                     </li>
                                 ))}
                             </ul>
                         </div>
                         <div className="grid md:grid-cols-2 gap-4">
-                            <div className="rounded-xl bg-canvas p-4 border-l-[3px] border-l-danger">
+                            <div className="rounded-xl bg-canvas p-5 border-l-[3px] border-l-danger">
                                 <h4 className="text-sm font-semibold text-ink">Watch out for</h4>
-                                <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.immediateThreats}</p>
+                                <p className="text-[15px] text-ink/85 mt-2 leading-relaxed">{narrative.immediateThreats}</p>
                             </div>
-                            <div className="rounded-xl bg-canvas p-4 border-l-[3px] border-l-success">
+                            <div className="rounded-xl bg-canvas p-5 border-l-[3px] border-l-success">
                                 <h4 className="text-sm font-semibold text-ink">Where you can win</h4>
-                                <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.growthOpportunities}</p>
+                                <p className="text-[15px] text-ink/85 mt-2 leading-relaxed">{narrative.growthOpportunities}</p>
                             </div>
                         </div>
                         <div>
                             <h4 className="text-sm font-semibold text-ink">The next 90 days</h4>
-                            <p className="text-sm text-muted mt-2 leading-relaxed">{narrative.verdict}</p>
+                            <p className="text-[15px] text-ink/85 mt-2 leading-relaxed max-w-4xl">{narrative.verdict}</p>
                         </div>
                     </div>
                 )}

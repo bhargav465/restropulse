@@ -25,6 +25,10 @@ export function gapSeverity(gap: MetricGap): number {
             return gap.gap * 0.2;
         case 'photoCount':
             return gap.gap * 0.05;
+        case 'reviewCount':
+            // Log-ish damping: a 10k-review lead should outrank a 200-photo lead
+            // but not drown a 0.4 rating gap.
+            return Math.min(8, Math.log10(Math.max(1, gap.gap)) * 2);
         default:
             return gap.gap;
     }
@@ -40,20 +44,31 @@ function closeGapTarget(gaps: MetricGap[]): DeepLinkTarget {
     switch (top?.metric) {
         case 'photoCount':
             return resolveDeepLink({ bucket: 'content', params: { brief: 'fresh-photos' } });
-        case 'reviewVelocity':
-            return resolveDeepLink({ bucket: 'campaigns', params: { goal: 'reviews' } });
         case 'rating':
+        case 'reviewVelocity':
         case 'responseRate':
         default:
+            // Ratings, review pace and reply rate are all won in the reviews:
+            // land on What guests say, where "Draft a reply" is one tap away.
             return resolveDeepLink({ bucket: 'get-started', params: { task: 'review-replies' } });
     }
 }
 
 const GAP_LABEL: Record<MetricGap['metric'], (g: MetricGap) => string> = {
-    rating: (g) => `+${g.gap.toFixed(1)} rating (${g.source})`,
-    reviewVelocity: (g) => `${(g.theirs / (g.yours || 1)).toFixed(1)}× more new reviews (${g.source})`,
-    responseRate: (g) => `replies to ${g.theirs}% of reviews vs your ${g.yours}% (${g.source})`,
-    photoCount: (g) => `+${g.gap} photos (${g.source})`,
+    rating: (g) => `Rated ${g.theirs.toFixed(1)} vs your ${g.yours.toFixed(1)}`,
+    reviewVelocity: (g) => `Getting ${(g.theirs / (g.yours || 1)).toFixed(1)}× more new reviews than you`,
+    responseRate: (g) => `Replies to ${g.theirs}% of reviews vs your ${g.yours}%`,
+    photoCount: (g) => `${g.gap.toLocaleString('en-IN')} more photos than you`,
+    reviewCount: (g) => `${g.gap.toLocaleString('en-IN')} more reviews than you`,
+};
+
+/** What to DO about each gap — the insight is the instruction, not the number. */
+const GAP_ADVICE: Record<MetricGap['metric'], string> = {
+    rating: 'Reply to every low-star review this week — recovered guests update ratings more often than new ones.',
+    reviewVelocity: 'Ask happy dine-in guests for a Google review at billing time; pace compounds into rank.',
+    responseRate: 'Owners who reply look alive in search. Use “Draft a reply” on What guests say.',
+    photoCount: 'Post 5 fresh dish photos this week — photos are the cheapest ranking signal you control.',
+    reviewCount: 'You will not out-volume them quickly — win on rating and reply rate instead, and let photos carry discovery.',
 };
 
 const AiList: React.FC<{ title: string; items?: string[]; tone: 'good' | 'bad' }> = ({ title, items, tone }) => {
@@ -85,6 +100,7 @@ export function rowsFromReport(report: IntelligenceReport): CompareRow[] {
     const pool = report.buckets?.overallTop10 ?? report.topCompetitors ?? [];
     const yoursRating = report.base.rating;
     const yoursPhotos = report.base.photoCount;
+    const yoursReviews = report.base.totalRatings;
     return pool.map((c) => {
         const beatsYou: MetricGap[] = [];
         if (c.rating - yoursRating >= 0.1) {
@@ -92,6 +108,9 @@ export function rowsFromReport(report: IntelligenceReport): CompareRow[] {
         }
         if (c.photoCount > yoursPhotos) {
             beatsYou.push({ metric: 'photoCount', source: 'google', yours: yoursPhotos, theirs: c.photoCount, gap: c.photoCount - yoursPhotos });
+        }
+        if (c.totalRatings > yoursReviews) {
+            beatsYou.push({ metric: 'reviewCount', source: 'google', yours: yoursReviews, theirs: c.totalRatings, gap: c.totalRatings - yoursReviews });
         }
         return {
             placeId: c.placeId,
@@ -107,10 +126,12 @@ export const WhereTheyBeatYouView: React.FC<{
     rows: CompareRow[];
     profilesByName: Record<string, CompetitorProfile>;
     radar?: { base: { lat: number; lng: number; name: string }; competitors: CompetitorProfile[] };
+    /** Your own measured numbers, for the side-by-side row on each card. */
+    yours?: { rating: number; reviewCount: number; photoCount: number };
     onNavigate: (t: DeepLinkTarget) => void;
     /** 'daily' = from the nightly checks for this period; 'scan' = seeded from the latest report (day 0). */
     source?: 'daily' | 'scan';
-}> = ({ rows, profilesByName, radar, onNavigate, source = 'daily' }) => {
+}> = ({ rows, profilesByName, radar, yours, onNavigate, source = 'daily' }) => {
     const cards = rows
         .filter((r) => !r.isSelf && r.beatsYou.length > 0)
         .sort((a, b) => rowSeverity(b) - rowSeverity(a));
@@ -157,28 +178,76 @@ export const WhereTheyBeatYouView: React.FC<{
             {cards.map((row) => {
                 const profile = profilesByName[row.name];
                 const target = closeGapTarget(row.beatsYou);
+                const topGap = [...row.beatsYou].sort((a, b) => gapSeverity(b) - gapSeverity(a))[0];
+                const theirs = row.google;
                 return (
                     <div key={row.placeId} className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
-                        <div className="flex items-center justify-between gap-2 mb-3">
-                            <h3 className="text-base font-semibold text-ink">{row.name}</h3>
-                            <ProvenanceChip provenance="computed" />
+                        <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                            <h3 className="text-lg font-semibold text-ink">{row.name}</h3>
+                            <div className="flex items-center gap-2">
+                                {profile && (
+                                    <span className="text-xs text-muted">
+                                        {profile.cuisine} · {profile.distanceKm.toFixed(1)} km from you
+                                    </span>
+                                )}
+                                <ProvenanceChip provenance="computed" />
+                            </div>
                         </div>
-                        {/* Deterministic gaps */}
-                        <div className="flex flex-wrap gap-2 mb-4">
+                        {/* Where they're ahead — one line each, plain words. */}
+                        <ul className="mb-3 space-y-1">
                             {row.beatsYou.map((g, i) => (
-                                <span key={i} className="inline-flex items-center px-3 py-1.5 rounded-lg border border-line bg-canvas text-xs font-medium text-ink">
+                                <li key={i} className="text-sm text-ink flex items-start gap-2">
+                                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-danger shrink-0" aria-hidden="true" />
                                     {GAP_LABEL[g.metric](g)}
-                                </span>
+                                </li>
                             ))}
-                        </div>
-                        {/* v1 ai-inferred lists */}
-                        {profile && (profile.whatTheyDoBetter || profile.whereYouWin) && (
-                            <div className="grid sm:grid-cols-2 gap-4 rounded-xl bg-canvas p-4 mb-4">
-                                <AiList title="What they do better" items={profile.whatTheyDoBetter} tone="bad" />
-                                <AiList title="Where you win" items={profile.whereYouWin} tone="good" />
-                                <div className="sm:col-span-2">
-                                    <ProvenanceChip provenance="ai-inferred" />
+                        </ul>
+                        {/* The numbers, side by side — so "ahead" is inspectable. */}
+                        {theirs && yours && (
+                            <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl border border-line overflow-hidden text-center" data-testid="wtby-numbers">
+                                {(
+                                    [
+                                        { label: 'Rating', you: yours.rating.toFixed(1), them: theirs.rating.toFixed(1), worse: theirs.rating > yours.rating },
+                                        { label: 'Reviews', you: yours.reviewCount.toLocaleString('en-IN'), them: theirs.reviewCount.toLocaleString('en-IN'), worse: theirs.reviewCount > yours.reviewCount },
+                                        { label: 'Photos', you: yours.photoCount.toLocaleString('en-IN'), them: theirs.photoCount.toLocaleString('en-IN'), worse: theirs.photoCount > yours.photoCount },
+                                    ] as const
+                                ).map((m) => (
+                                    <div key={m.label} className="py-2.5 px-2 border-r border-line last:border-r-0 bg-canvas/50">
+                                        <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">{m.label}</p>
+                                        <p className="text-sm tabular-nums mt-1">
+                                            <span className="text-ink font-semibold">{m.you}</span>
+                                            <span className="text-muted mx-1.5">vs</span>
+                                            <span className={m.worse ? 'text-danger font-semibold' : 'text-success font-semibold'}>{m.them}</span>
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {/* What to do about the biggest gap. */}
+                        {topGap && (
+                            <p className="mb-4 rounded-xl bg-primary-soft px-3 py-2.5 text-sm text-ink leading-relaxed" data-testid="wtby-advice">
+                                <span className="font-semibold">Do this: </span>
+                                {GAP_ADVICE[topGap.metric]}
+                            </p>
+                        )}
+                        {/* v1 ai-inferred lists + pricing/marketing reads */}
+                        {profile && (profile.whatTheyDoBetter || profile.whereYouWin || profile.pricingInsight || profile.marketingEdge) && (
+                            <div className="rounded-xl bg-canvas p-4 mb-4 space-y-4">
+                                <div className="grid sm:grid-cols-2 gap-4">
+                                    <AiList title="What they do better" items={profile.whatTheyDoBetter} tone="bad" />
+                                    <AiList title="Where you win" items={profile.whereYouWin} tone="good" />
                                 </div>
+                                {(profile.pricingInsight || profile.marketingEdge) && (
+                                    <div className="grid sm:grid-cols-2 gap-4">
+                                        {profile.pricingInsight && (
+                                            <p className="text-sm text-ink leading-relaxed"><span className="font-semibold">Their pricing:</span> {profile.pricingInsight}</p>
+                                        )}
+                                        {profile.marketingEdge && (
+                                            <p className="text-sm text-ink leading-relaxed"><span className="font-semibold">How they market:</span> {profile.marketingEdge}</p>
+                                        )}
+                                    </div>
+                                )}
+                                <ProvenanceChip provenance="ai-inferred" />
                             </div>
                         )}
                         <button
@@ -228,15 +297,19 @@ const WhereTheyBeatYou: React.FC<{
         ? { base: { lat: report.base.location.lat, lng: report.base.location.lng, name: report.base.name }, competitors: report.topCompetitors }
         : undefined;
 
+    const yours = report
+        ? { rating: report.base.rating, reviewCount: report.base.totalRatings, photoCount: report.base.photoCount }
+        : undefined;
+
     // The daily layer has nothing usable for this period (no rows, or rows with no
     // Google data — the self row alone is common on day 0): seed from the report.
     const dailyHasData = rows.some((r) => !r.isSelf && (r.google || r.zomato));
     if (!dailyHasData && report) {
         return (
-            <WhereTheyBeatYouView rows={rowsFromReport(report)} profilesByName={profilesByName} radar={radar} onNavigate={onNavigate} source="scan" />
+            <WhereTheyBeatYouView rows={rowsFromReport(report)} profilesByName={profilesByName} radar={radar} yours={yours} onNavigate={onNavigate} source="scan" />
         );
     }
-    return <WhereTheyBeatYouView rows={rows} profilesByName={profilesByName} radar={radar} onNavigate={onNavigate} />;
+    return <WhereTheyBeatYouView rows={rows} profilesByName={profilesByName} radar={radar} yours={yours} onNavigate={onNavigate} />;
 };
 
 export default WhereTheyBeatYou;
