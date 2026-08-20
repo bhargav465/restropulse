@@ -689,6 +689,28 @@ export interface CompareQuery {
     month?: string; // YYYY-MM (month)
 }
 
+export interface RivalComment {
+    rating: number;
+    text: string;
+    date: string;
+}
+
+export interface RivalDigest {
+    placeId: string;
+    name: string;
+    latest?: { date: string; rating: number; reviewCount: number };
+    yesterday: { date: string | null; total: number; positive: number; negative: number };
+    week: { total: number; positive: number; negative: number };
+    positiveComments: RivalComment[];
+    negativeComments: RivalComment[];
+    aheadOnRating?: boolean;
+}
+
+export interface WatchlistDigestResponse {
+    rivals: RivalDigest[];
+    hasData: boolean;
+}
+
 export interface WatchlistInput {
     placeId: string;
     name?: string;
@@ -712,6 +734,11 @@ const realIntelligenceAPI = {
     markNotificationsSeen: async (): Promise<{ seenAt: string }> => {
         const res = await fetchAPI<ApiResponse<{ seenAt: string }>>('/intelligence/notifications/seen', { method: 'POST' });
         return res.data!;
+    },
+    /** Rivals-you-track digest: day/week review splits + actual comments. */
+    getWatchlistDigest: async (): Promise<WatchlistDigestResponse> => {
+        const res = await fetchAPI<ApiResponse<WatchlistDigestResponse>>('/intelligence/watchlist/digest');
+        return res.data ?? { rivals: [], hasData: false };
     },
     /** Draft an owner reply to one review (Claude, draft-only). */
     draftReply: async (review: { text: string; rating: number; author?: string }): Promise<{ reply: string; stance: 'apology' | 'thanks' | 'clarify' }> => {

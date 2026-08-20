@@ -5,6 +5,7 @@ import type { PeriodQuery } from '../period';
 import { compareParamsFor } from '../period';
 import { TOKENS, SERIES } from '../../theme';
 import { TrendChart, type TrendSeries } from '../charts';
+import { rowsFromReport } from './WhereTheyBeatYou';
 
 /**
  * Compare (Brief 09 §3) — the competition matrix (rows self + watchlist; columns
@@ -137,7 +138,7 @@ export const CompareView: React.FC<{
 };
 
 /** Container: fetches the compare rows + per-target rating trend for the period. */
-const Compare: React.FC<{ query: PeriodQuery }> = ({ query }) => {
+const Compare: React.FC<{ query: PeriodQuery; report?: IntelligenceReport | null }> = ({ query, report }) => {
     const [rows, setRows] = useState<CompareRow[] | null>(null);
     const [trend, setTrend] = useState<{ labels: string[]; series: TrendSeries[] } | undefined>(undefined);
 
@@ -187,6 +188,28 @@ const Compare: React.FC<{ query: PeriodQuery }> = ({ query }) => {
 
     if (rows === null) return <p className="text-sm text-muted">Loading the comparison…</p>;
 
+    // Thin daily layer (empty watchlist / day 0): fill the table from the latest
+    // scan so Side by side always has rivals to compare against, clearly labelled.
+    const rivalRows = rows.filter((r) => !r.isSelf && (r.google || r.zomato));
+    if (rivalRows.length < 3 && report) {
+        const have = new Set(rows.map((r) => r.placeId));
+        const selfRow: CompareRow = rows.find((r) => r.isSelf) ?? {
+            placeId: report.base.placeId,
+            name: report.base.name,
+            isSelf: true,
+            google: { rating: report.base.rating, reviewCount: report.base.totalRatings, newReviews: 0, photoCount: report.base.photoCount },
+            beatsYou: [],
+        };
+        const seeded = rowsFromReport(report).filter((r) => !have.has(r.placeId)).slice(0, 8);
+        return (
+            <div className="space-y-3">
+                <CompareView rows={[selfRow, ...rows.filter((r) => !r.isSelf), ...seeded]} trend={trend} />
+                <p className="text-xs text-muted" data-testid="compare-seeded-note">
+                    Rivals from your latest scan. Track a rival to follow it night by night — “New” fills in from tomorrow.
+                </p>
+            </div>
+        );
+    }
     return <CompareView rows={rows} trend={trend} />;
 };
 

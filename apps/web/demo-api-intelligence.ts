@@ -25,6 +25,7 @@ import type {
     SnapshotQuery,
     SnapshotSeriesResponse,
     WatchlistResponse,
+    WatchlistDigestResponse,
     WatchlistInput,
     CompareQuery,
     FeedbackDay,
@@ -65,6 +66,43 @@ export const intelligenceAPI = {
         const cleaned = [...new Set(done)].sort((a, b) => a - b);
         demoActionProgress.set(reportId, cleaned);
         return { reportId, done: cleaned };
+    },
+    getWatchlistDigest: async (): Promise<WatchlistDigestResponse> => {
+        await delay();
+        const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+        return {
+            hasData: true,
+            rivals: [
+                {
+                    placeId: 'sample-comp-meghana', name: '[SAMPLE] Meghana Foods',
+                    latest: { date: day(1), rating: 4.4, reviewCount: 5432 },
+                    yesterday: { date: day(1), total: 9, positive: 7, negative: 1 },
+                    week: { total: 54, positive: 41, negative: 6 },
+                    positiveComments: [
+                        { rating: 5, text: '[SAMPLE] Boneless biryani was outstanding, service quick even on a Sunday.', date: day(1) },
+                        { rating: 4, text: '[SAMPLE] Consistently good — the raita and salan never miss.', date: day(2) },
+                    ],
+                    negativeComments: [
+                        { rating: 1, text: '[SAMPLE] 45 minutes for a table and the AC was not working.', date: day(3) },
+                    ],
+                    aheadOnRating: false,
+                },
+                {
+                    placeId: 'sample-comp-empire', name: '[SAMPLE] Empire Restaurant',
+                    latest: { date: day(1), rating: 4.1, reviewCount: 8912 },
+                    yesterday: { date: day(1), total: 3, positive: 1, negative: 2 },
+                    week: { total: 21, positive: 11, negative: 7 },
+                    positiveComments: [
+                        { rating: 4, text: '[SAMPLE] Great value thali at lunch.', date: day(2) },
+                    ],
+                    negativeComments: [
+                        { rating: 2, text: '[SAMPLE] Delivery order arrived cold twice this month.', date: day(1) },
+                        { rating: 1, text: '[SAMPLE] Billing mistake and rude response when we pointed it out.', date: day(4) },
+                    ],
+                    aheadOnRating: false,
+                },
+            ],
+        };
     },
     getNotifications: async (): Promise<IntelligenceNotificationsResponse> => {
         await delay();

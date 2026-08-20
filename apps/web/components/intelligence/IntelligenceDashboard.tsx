@@ -388,9 +388,15 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
             ) : (
                 <>
                     <SubNav tabs={compTabs} active={compTab} onChange={(t) => { track.tabOpened({ bucket: 'COMPETITION', tab: t }); setCompTab(t); }} label="Competition sections" />
-                    {compTab === 'THREATS' && <TopThreats buckets={report.buckets} selfPlaceId={report.base.placeId} />}
+                    {compTab === 'THREATS' && (
+                        <TopThreats
+                            buckets={report.buckets}
+                            selfPlaceId={report.base.placeId}
+                            base={{ rating: report.base.rating, totalRatings: report.base.totalRatings, photoCount: report.base.photoCount }}
+                        />
+                    )}
                     {compTab === 'WATCHLIST' && <Watchlist />}
-                    {compTab === 'COMPARE' && <Compare query={compPeriod} />}
+                    {compTab === 'COMPARE' && <Compare query={compPeriod} report={report} />}
                     {compTab === 'BEAT' && <WhereTheyBeatYou query={compPeriod} report={report} onNavigate={onNavigate} />}
                     {compTab === 'OPENINGS' && <NewOpenings onNavigate={onNavigate} />}
                 </>

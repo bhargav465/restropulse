@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { CompareRow, MetricGap, CompetitorProfile, IntelligenceReport } from '@restropulse/shared';
 import { intelligenceAPI } from '../../../../api';
 import { compareParamsFor, type PeriodQuery } from '../period';
-import { ThreatRadar } from '../ThreatRadar';
 import { ProvenanceChip } from '../provenance';
 import { resolveDeepLink, type DeepLinkTarget } from '../deep-links';
 
@@ -11,7 +10,7 @@ import { resolveDeepLink, type DeepLinkTarget } from '../deep-links';
  * `beatsYou`. Deterministic `computed` gaps first (rating, review velocity,
  * response rate, photos), then the v1 `ai-inferred` whatTheyDoBetter/whereYouWin
  * lists. Cards are sorted by summed gap severity; each ends with a "Close this
- * gap →" deep link chosen by the top gap's type. ThreatRadar sits on top.
+ * gap →" deep link chosen by the top gap's type. A one-line verdict sits on top.
  */
 
 /** Normalized per-gap severity so heterogeneous metrics sort sensibly. */
@@ -97,7 +96,19 @@ const AiList: React.FC<{ title: string; items?: string[]; tone: 'good' | 'bad' }
  * checks exist.
  */
 export function rowsFromReport(report: IntelligenceReport): CompareRow[] {
-    const pool = report.buckets?.overallTop10 ?? report.topCompetitors ?? [];
+    // Union of both buckets + top threats, deduped — the widest set the report
+    // carries, so the tab shows every nearby rival that beats you on anything.
+    const seen = new Set<string>();
+    const pool: CompetitorProfile[] = [];
+    for (const c of [
+        ...(report.buckets?.directTop10 ?? []),
+        ...(report.buckets?.overallTop10 ?? []),
+        ...(report.topCompetitors ?? []),
+    ]) {
+        if (seen.has(c.placeId)) continue;
+        seen.add(c.placeId);
+        pool.push(c);
+    }
     const yoursRating = report.base.rating;
     const yoursPhotos = report.base.photoCount;
     const yoursReviews = report.base.totalRatings;
@@ -125,13 +136,12 @@ export function rowsFromReport(report: IntelligenceReport): CompareRow[] {
 export const WhereTheyBeatYouView: React.FC<{
     rows: CompareRow[];
     profilesByName: Record<string, CompetitorProfile>;
-    radar?: { base: { lat: number; lng: number; name: string }; competitors: CompetitorProfile[] };
     /** Your own measured numbers, for the side-by-side row on each card. */
     yours?: { rating: number; reviewCount: number; photoCount: number };
     onNavigate: (t: DeepLinkTarget) => void;
     /** 'daily' = from the nightly checks for this period; 'scan' = seeded from the latest report (day 0). */
     source?: 'daily' | 'scan';
-}> = ({ rows, profilesByName, radar, yours, onNavigate, source = 'daily' }) => {
+}> = ({ rows, profilesByName, yours, onNavigate, source = 'daily' }) => {
     const cards = rows
         .filter((r) => !r.isSelf && r.beatsYou.length > 0)
         .sort((a, b) => rowSeverity(b) - rowSeverity(a));
@@ -165,15 +175,21 @@ export const WhereTheyBeatYouView: React.FC<{
                     start after tonight’s first check.
                 </p>
             )}
-            {/* Threat radar: hidden on mobile (visual-only; the gap cards below carry
-                the same comparison as text). */}
-            {radar && (
-                <div className="hidden sm:flex bg-surface rounded-2xl p-4 sm:p-6 border border-line flex-col items-center">
-                    <h3 className="text-base font-semibold text-ink self-start">Who’s closest on your heels</h3>
-                    <p className="text-xs text-muted self-start mb-2">Closer to the centre = a stronger rival.</p>
-                    <ThreatRadar base={radar.base} competitors={radar.competitors} />
-                </div>
-            )}
+            {/* One-line verdict instead of the old bubble radar (which encoded the
+                same information as unreadable dots): who is ahead, on what, in words. */}
+            <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line" data-testid="wtby-summary">
+                <p className="text-[15px] text-ink leading-relaxed">
+                    <span className="font-semibold">{cards.length}</span> of the{' '}
+                    <span className="font-semibold">{rows.filter((r) => !r.isSelf).length}</span> rivals we compared are ahead of you
+                    on at least one measure.{' '}
+                    {cards[0] && (
+                        <>
+                            The strongest is <span className="font-semibold">{cards[0].name}</span> —{' '}
+                            {GAP_LABEL[[...cards[0].beatsYou].sort((a, b) => gapSeverity(b) - gapSeverity(a))[0].metric]([...cards[0].beatsYou].sort((a, b) => gapSeverity(b) - gapSeverity(a))[0]).toLowerCase()}.
+                        </>
+                    )}
+                </p>
+            </div>
 
             {cards.map((row) => {
                 const profile = profilesByName[row.name];
@@ -293,10 +309,6 @@ const WhereTheyBeatYou: React.FC<{
     if (rows === null) return <p className="text-sm text-muted">Loading where they beat you…</p>;
 
     const profilesByName = report ? Object.fromEntries(report.competitors.map((c) => [c.name, c])) : {};
-    const radar = report
-        ? { base: { lat: report.base.location.lat, lng: report.base.location.lng, name: report.base.name }, competitors: report.topCompetitors }
-        : undefined;
-
     const yours = report
         ? { rating: report.base.rating, reviewCount: report.base.totalRatings, photoCount: report.base.photoCount }
         : undefined;
@@ -306,10 +318,10 @@ const WhereTheyBeatYou: React.FC<{
     const dailyHasData = rows.some((r) => !r.isSelf && (r.google || r.zomato));
     if (!dailyHasData && report) {
         return (
-            <WhereTheyBeatYouView rows={rowsFromReport(report)} profilesByName={profilesByName} radar={radar} yours={yours} onNavigate={onNavigate} source="scan" />
+            <WhereTheyBeatYouView rows={rowsFromReport(report)} profilesByName={profilesByName} yours={yours} onNavigate={onNavigate} source="scan" />
         );
     }
-    return <WhereTheyBeatYouView rows={rows} profilesByName={profilesByName} radar={radar} yours={yours} onNavigate={onNavigate} />;
+    return <WhereTheyBeatYouView rows={rows} profilesByName={profilesByName} yours={yours} onNavigate={onNavigate} />;
 };
 
 export default WhereTheyBeatYou;

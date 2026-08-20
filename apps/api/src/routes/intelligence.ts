@@ -56,6 +56,7 @@ import { requireEntitlement } from '../middleware/require-entitlement.js';
 import { runScanPipeline } from '../services/intelligence/pipeline.js';
 import { searchPlaceCandidates } from '../services/intelligence/places.js';
 import { getNotificationFeed } from '../services/intelligence/notifications.js';
+import { getWatchlistDigest, type WatchlistDigestResponse } from '../services/intelligence/watchlist-digest.js';
 import { draftReviewReply, type DraftReplyOutput } from '../services/intelligence/analysis.js';
 import { createLogger } from '@restropulse/telemetry/server';
 
@@ -110,6 +111,14 @@ router.post('/notifications/seen', handle(async (req: Request, res: Response<Api
         intelligence: { ...(restaurant?.intelligence ?? {}), notificationsSeenAt: seenAt },
     });
     res.json({ success: true, data: { seenAt: seenAt.toISOString() } });
+}));
+
+// ============================================================
+// GET /watchlist/digest — tracked rivals: day/week reviews + comments
+// ============================================================
+
+router.get('/watchlist/digest', handle(async (req: Request, res: Response<ApiResponse<WatchlistDigestResponse>>) => {
+    res.json({ success: true, data: await getWatchlistDigest(restaurantId(req)) });
 }));
 
 // ============================================================

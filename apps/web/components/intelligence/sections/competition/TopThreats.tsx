@@ -82,6 +82,17 @@ const ExpandRow: React.FC<{ c: CompetitorProfile }> = ({ c }) => {
     );
 };
 
+/** One plain sentence per rival: where they beat you, or that you lead. */
+export function beatsYouLine(c: CompetitorProfile, base?: { rating: number; totalRatings: number; photoCount: number }): string | null {
+    if (!base) return null;
+    const wins: string[] = [];
+    if (c.rating - base.rating >= 0.1) wins.push(`rating (${c.rating.toFixed(1)} vs ${base.rating.toFixed(1)})`);
+    if (c.totalRatings > base.totalRatings) wins.push(`${(c.totalRatings - base.totalRatings).toLocaleString('en-IN')} more reviews`);
+    if (c.photoCount > base.photoCount) wins.push(`${(c.photoCount - base.photoCount).toLocaleString('en-IN')} more photos`);
+    if (wins.length === 0) return 'You lead on rating, reviews and photos';
+    return `Beats you on ${wins.join(' · ')}`;
+}
+
 export const TopThreatsView: React.FC<{
     buckets: CompetitionBuckets;
     watchlist: WatchlistEntry[];
@@ -90,7 +101,9 @@ export const TopThreatsView: React.FC<{
     onAdd: (c: CompetitorProfile) => void;
     /** The merchant's own Places id, filtered out of both buckets (RP-011). */
     selfPlaceId?: string;
-}> = ({ buckets, watchlist, max, error, onAdd, selfPlaceId }) => {
+    /** The merchant's measured numbers, for the per-row "beats you on" line. */
+    base?: { rating: number; totalRatings: number; photoCount: number };
+}> = ({ buckets, watchlist, max, error, onAdd, selfPlaceId, base }) => {
     const [tab, setTab] = useState<BucketKey>('DIRECT');
     const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -161,7 +174,19 @@ export const TopThreatsView: React.FC<{
                                         <React.Fragment key={c.placeId}>
                                             <tr className="border-t border-line">
                                                 <td className="py-2.5 pr-2 text-muted tabular-nums">{i + 1}</td>
-                                                <td className="py-2.5 pr-3 font-medium text-ink">{c.name}</td>
+                                                <td className="py-2.5 pr-3">
+                                                    <p className="font-medium text-ink">{c.name}</p>
+                                                    {(() => {
+                                                        const line = beatsYouLine(c, base);
+                                                        if (!line) return null;
+                                                        const leads = line.startsWith('You lead');
+                                                        return (
+                                                            <p className={`text-xs mt-0.5 ${leads ? 'text-success' : 'text-muted'}`} data-testid={`beats-${c.placeId}`}>
+                                                                {line}
+                                                            </p>
+                                                        );
+                                                    })()}
+                                                </td>
                                                 <td className="py-2.5 pr-3 text-muted hidden sm:table-cell">{c.cuisine}</td>
                                                 <td className="py-2.5 pr-3 text-muted hidden sm:table-cell">{aovBandLabel(c.priceLevel)}</td>
                                                 <td className="py-2.5 pr-3 text-right text-ink tabular-nums">★ {c.rating.toFixed(1)}</td>
@@ -214,7 +239,7 @@ export const TopThreatsView: React.FC<{
 };
 
 /** Container: pulls buckets from the report and manages watchlist adds (≤5 cap). */
-const TopThreats: React.FC<{ buckets?: CompetitionBuckets; selfPlaceId?: string }> = ({ buckets, selfPlaceId }) => {
+const TopThreats: React.FC<{ buckets?: CompetitionBuckets; selfPlaceId?: string; base?: { rating: number; totalRatings: number; photoCount: number } }> = ({ buckets, selfPlaceId, base }) => {
     const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
     const [max, setMax] = useState(5);
     const [error, setError] = useState<string | null>(null);
@@ -266,7 +291,7 @@ const TopThreats: React.FC<{ buckets?: CompetitionBuckets; selfPlaceId?: string 
         );
     }
 
-    return <TopThreatsView buckets={buckets} watchlist={watchlist} max={max} error={error} onAdd={onAdd} selfPlaceId={selfPlaceId} />;
+    return <TopThreatsView buckets={buckets} watchlist={watchlist} max={max} error={error} onAdd={onAdd} selfPlaceId={selfPlaceId} base={base} />;
 };
 
 export default TopThreats;

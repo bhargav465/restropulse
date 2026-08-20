@@ -25,6 +25,7 @@ vi.mock('../api', () => ({
         putActionProgress: vi.fn().mockResolvedValue({ done: [] }),
         getReports: vi.fn().mockResolvedValue([]),
         draftReply: vi.fn(),
+        getWatchlistDigest: vi.fn().mockResolvedValue({ rivals: [], hasData: false }),
     },
 }));
 
@@ -45,6 +46,9 @@ import NotificationBell from '../components/NotificationBell';
 import { YesterdayView } from '../components/intelligence/sections/my-restaurant/Yesterday';
 import V1Overview from '../components/intelligence/sections/Overview';
 import { ReviewCard } from '../components/intelligence/sections/my-restaurant/FeedbackChanges';
+import { RivalDigestBlock } from '../components/intelligence/sections/competition/Watchlist';
+import { beatsYouLine } from '../components/intelligence/sections/competition/TopThreats';
+import type { RivalDigest } from '../api';
 
 const restaurant = { id: 'r1', name: 'Test Kitchen', sourceCity: 'city-hyderabad' } as unknown as Restaurant;
 
@@ -413,5 +417,50 @@ describe('Overview — one headline, the plan, and a "Full report" disclosure', 
         expect(screen.getByTestId('full-report')).toBeInTheDocument();
         expect(screen.getByText('Watch out for')).toBeInTheDocument();
         expect(screen.getByText('The next 90 days')).toBeInTheDocument();
+    });
+});
+
+// ------------------------------------------- rivals-you-track digest ----
+
+describe('rivals you track — the week at their tables', () => {
+    const digest: RivalDigest = {
+        placeId: 'p-m', name: 'Meghana',
+        latest: { date: '2026-08-18', rating: 4.4, reviewCount: 5432 },
+        yesterday: { date: '2026-08-18', total: 3, positive: 2, negative: 1 },
+        week: { total: 12, positive: 9, negative: 2 },
+        positiveComments: [{ rating: 5, text: 'Outstanding biryani', date: '2026-08-18' }],
+        negativeComments: [{ rating: 1, text: 'AC broken, 45 min wait', date: '2026-08-17' }],
+        aheadOnRating: true,
+    };
+
+    it('shows day/week splits and the actual comments, negatives first', () => {
+        render(<RivalDigestBlock d={digest} />);
+        expect(screen.getByText(/Yesterday:/)).toBeInTheDocument();
+        expect(screen.getByText(/This week:/)).toBeInTheDocument();
+        // Negative tab opens by default when negatives exist.
+        expect(screen.getByText(/AC broken, 45 min wait/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /What their guests loved/ }));
+        expect(screen.getByText(/Outstanding biryani/)).toBeInTheDocument();
+    });
+
+    it('is honest before the first nightly check', () => {
+        render(<RivalDigestBlock d={{ ...digest, latest: undefined, yesterday: { date: null, total: 0, positive: 0, negative: 0 }, week: { total: 0, positive: 0, negative: 0 }, positiveComments: [], negativeComments: [] }} />);
+        expect(screen.getByTestId('digest-empty-p-m')).toHaveTextContent(/tonight/);
+    });
+});
+
+// ------------------------------------------- biggest rivals: beats-you line ----
+
+describe('biggest rivals — the one-sentence verdict per row', () => {
+    const base = { rating: 4.1, totalRatings: 85722, photoCount: 10 };
+    const rival = (over: object) => ({
+        placeId: 'x', name: 'X', address: '', rating: 4.0, totalRatings: 100, distanceKm: 1, lat: 0, lng: 0,
+        priceLevel: 2, photoCount: 0, cuisine: 'Indian', threatScore: 50, sameCuisineThreatScore: 50, ...over,
+    });
+
+    it('names exactly what the rival wins on', () => {
+        expect(beatsYouLine(rival({ rating: 4.3, photoCount: 200 }), base)).toBe('Beats you on rating (4.3 vs 4.1) · 190 more photos');
+        expect(beatsYouLine(rival({}), base)).toBe('You lead on rating, reviews and photos');
+        expect(beatsYouLine(rival({}), undefined)).toBeNull();
     });
 });
