@@ -16,6 +16,8 @@ import { randomUUID } from 'node:crypto';
 import {
     getIntelligenceReportsCollection,
     getIntelligenceScansCollection,
+    findRestaurantById,
+    updateRestaurant,
 } from '@restropulse/db';
 import type { IntelligenceReport, ScanStatus } from '@restropulse/shared';
 import { createLogger } from '@restropulse/telemetry/server';
@@ -65,6 +67,18 @@ export async function runScanPipeline(
                 502,
                 'FETCHING_PLACES',
             );
+        }
+        // First scan without a confirmed place: remember what Google resolved so
+        // the daily worker and later scans stay pinned to the same listing.
+        if (!query.placeId && base.placeId) {
+            const scanDoc = await getIntelligenceScansCollection().findOne({ _id: scanId as any });
+            const rid = scanDoc?.restaurantId ? String(scanDoc.restaurantId) : '';
+            if (rid) {
+                const current = await findRestaurantById(rid).catch(() => null);
+                if (current && !current.googlePlaceId) {
+                    await updateRestaurant(rid, { googlePlaceId: base.placeId }).catch(() => undefined);
+                }
+            }
         }
         const competitors = await getNearbyRestaurants(base.location);
         if (competitors.length === 0) {

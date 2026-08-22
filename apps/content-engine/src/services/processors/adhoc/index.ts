@@ -49,7 +49,7 @@ export async function processPendingPosts(): Promise<{ processed: number; failed
         {
           concept: postDoc.caption || postDoc.concept || '',
           type: (postDoc.type as PostType) || 'IMAGE',
-          platforms: (postDoc.platforms as Platform[]) || ['INSTAGRAM'],
+          platform: (postDoc.platform as Platform) || 'INSTAGRAM',
           themes,
           archetype,
         },

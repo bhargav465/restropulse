@@ -1,6 +1,6 @@
 import type { Platform, PostType } from '@restropulse/shared';
 import type { GeneratedPost } from '../content-generator/types.js';
-import { getMergedConstraints } from './media-constraints.js';
+import { getConstraints } from './media-constraints.js';
 
 export type ValidationSeverity = 'error' | 'warning';
 
@@ -24,10 +24,9 @@ function mimeTypeFromUrl(url: string): string | null {
 export function validateGeneratedPost(
   post: GeneratedPost,
   type: PostType,
-  platforms: Platform[],
+  platform: Platform,
 ): ValidationIssue[] {
-  if (platforms.length === 0) return [];
-  const c = getMergedConstraints(type, platforms);
+  const c = getConstraints(type, platform);
   const issues: ValidationIssue[] = [];
 
   // MIME type check via URL extension
@@ -38,7 +37,7 @@ export function validateGeneratedPost(
       issues.push({
         field: post.videoUrl ? 'videoUrl' : 'thumbnail',
         rule: 'allowedMimeTypes',
-        message: `${type} on ${platforms.join('+')} requires one of [${c.allowedMimeTypes.join(', ')}] but got ${mime}`,
+        message: `${type} on ${platform} requires one of [${c.allowedMimeTypes.join(', ')}] but got ${mime}`,
         severity: 'error',
       });
     }

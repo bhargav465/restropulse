@@ -14,13 +14,14 @@
 
 import { randomUUID } from 'node:crypto';
 import { createLogger } from '@restropulse/telemetry/server';
-import type { Platform, PostType, MediaJobRecord } from '@restropulse/shared';
+import type { PostType, MediaJobRecord } from '@restropulse/shared';
 import { withRetry, RETRY_PROFILES } from '../../with-retry.js';
 import { withCostTracking } from '../../with-cost-tracking.js';
 import { REPLICATE_MODELS } from './models.js';
 import { computeReplicateCostUsd } from './pricing.js';
 import type { ReplicateClient, ReplicatePrediction } from './replicate-client.js';
 import type { IMediaJobStore } from '../jobs/types.js';
+import { getPlatformTactics } from '../../specialization/restaurant/platform-tactics.js';
 import type {
   IMediaGenerator,
   ImageGenInput,
@@ -35,20 +36,45 @@ const CAROUSEL_FRAME_COUNT = 3;
 const IMAGE_POLL_INTERVAL_MS = 2000;
 const IMAGE_POLL_MAX_ATTEMPTS = 30;
 
+/**
+ * Prompt budget. The subject (art-director brief) always comes first and is
+ * never truncated; the style tail is trimmed only if the total would exceed
+ * the cap. Flux tokenises ~4 chars/token; 1500 chars ≈ 375 tokens, well inside
+ * the model context, so in practice nothing is cut.
+ */
+const PROMPT_MAX_CHARS = 1500;
+/** Flux dev: 3.5 is the vendor default sweet spot -- pinned so runs are comparable. */
+const FLUX_GUIDANCE = 3.5;
+/** img2img: how far the model may depart from the reference photo. */
+const DEFAULT_PROMPT_STRENGTH = 0.7;
+
+function pickSeed(): number {
+  return Math.floor(Math.random() * 2_147_483_647);
+}
+
 export interface ReplicateMediaGeneratorOptions {
   client: Pick<ReplicateClient, 'createPrediction' | 'getPrediction'>;
   store: IMediaJobStore;
 }
 
-function pickAspectRatio(postType: PostType, _platforms: Platform[]): string {
-  return postType === 'STORY' ? '9:16' : '1:1';
+function pickAspectRatio(postType: PostType, platform: ImageGenInput['platform']): string {
+  return getPlatformTactics(platform, postType).aspectRatio;
 }
 
-function buildPrompt(input: Pick<ImageGenInput | VideoGenInput, 'concept' | 'themes' | 'caption'> & { promptSuffix?: string }): string {
+/**
+ * Assemble the model prompt: SUBJECT first (never truncated), then optional
+ * themes, then the style tail. The old behaviour sliced the whole string at
+ * 1200 chars, which silently dropped the end of the style fragment on every
+ * call; we now trim only the tail, and only if needed.
+ */
+export function buildPrompt(input: Pick<ImageGenInput | VideoGenInput, 'concept' | 'themes' | 'caption'> & { promptSuffix?: string }): string {
   const themePart = input.themes?.length ? `, themes: ${input.themes.join(', ')}` : '';
-  const captionPart = input.caption ? `, alongside the caption "${input.caption.slice(0, 200)}"` : '';
-  const base = `${input.concept}${themePart}${captionPart}`;
-  return (input.promptSuffix ? `${base}\n\n${input.promptSuffix}` : base).slice(0, 1200);
+  const base = `${input.concept.trim()}${themePart}`;
+  if (!input.promptSuffix) return base.slice(0, PROMPT_MAX_CHARS);
+  const room = PROMPT_MAX_CHARS - base.length - 2;
+  if (room <= 0) return base.slice(0, PROMPT_MAX_CHARS);
+  const tail = input.promptSuffix.length > room ? input.promptSuffix.slice(0, room).trimEnd() : input.promptSuffix;
+  return `${base}\n\n${tail}`;
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -186,7 +212,20 @@ export class ReplicateMediaGenerator implements IMediaGenerator {
     const jobId = randomUUID();
     const modelSlug = REPLICATE_MODELS.fluxDev;
     const prompt = buildPrompt(input);
-    const aspectRatio = pickAspectRatio(input.postType, input.platforms);
+    const aspectRatio = pickAspectRatio(input.postType, input.platform);
+    const seed = input.seed ?? pickSeed();
+
+    // img2img: previously `baseImageUrl` was accepted by the interface but never
+    // forwarded to Replicate, so reference photos had no effect. Flux dev on
+    // Replicate accepts `image` + `prompt_strength` for this.
+    const img2img = input.baseImageUrl
+      ? { image: input.baseImageUrl, prompt_strength: input.promptStrength ?? DEFAULT_PROMPT_STRENGTH }
+      : {};
+
+    log.debug(
+      { jobId, modelSlug, seed, aspectRatio, img2img: Boolean(input.baseImageUrl), promptChars: prompt.length, promptHead: prompt.slice(0, 160) },
+      'Submitting Flux image prediction',
+    );
 
     let mediaUrl: string;
     try {
@@ -199,6 +238,9 @@ export class ReplicateMediaGenerator implements IMediaGenerator {
               num_outputs: 1,
               output_format: 'webp',
               output_quality: 80,
+              guidance: FLUX_GUIDANCE,
+              seed,
+              ...img2img,
             });
             const completed = await this.pollUntilDone(pred.id);
             const url = extractUrl(completed.output);
@@ -268,7 +310,7 @@ export class ReplicateMediaGenerator implements IMediaGenerator {
 
     const frameInputs: ImageGenInput[] = Array.from({ length: slideCount }, (_, i) => ({
       postType: 'IMAGE' as const,
-      platforms: input.platforms,
+      platform: input.platform,
       concept: input.concept,
       themes: input.themes,
       caption: input.caption,

@@ -59,13 +59,6 @@ function getDbCliDirCandidates(): string[] {
  * Uses override: false so shell env vars take precedence (CI-safe).
  */
 export async function loadEnv(env: string): Promise<void> {
-    if (process.env.SECRETS_BACKEND) {
-        await hydrateEnvFromProvider(
-            createSecretsProvider(process.env.SECRETS_BACKEND),
-            DB_CLI_SECRET_KEYS,
-        );
-    }
-
     const normalized = env.trim().toLowerCase() as ResolvedEnv;
 
     if (!VALID_ENVS.includes(normalized)) {
@@ -98,6 +91,13 @@ export async function loadEnv(env: string): Promise<void> {
             process.exit(1);
         }
         config({ path: found, override: false });
+    }
+
+    if (process.env.SECRETS_BACKEND) {
+        await hydrateEnvFromProvider(
+            createSecretsProvider(process.env.SECRETS_BACKEND),
+            DB_CLI_SECRET_KEYS,
+        );
     }
 
     process.env.NODE_ENV = normalized;

@@ -62,6 +62,9 @@ npm run dev --filter=@restropulse/web
 | npm run lint             | Lint all workspaces                                  |
 | npm run type-check       | TypeScript type checking                             |
 | npm run ngrok            | Start ngrok tunnel for webhook testing               |
+| npm run env:consolidate  | Build canonical env inventory + stale/orphan report  |
+| npm run env:consolidate:tag | Add inline env tags to .env and .env.example files |
+| npm run env:cloud:diff   | Compare canonical env keys with Azure settings       |
 | npm run clean            | Remove build artifacts                               |
 
 ## Tech Stack

@@ -70,6 +70,16 @@ describe('getSonarQueries', () => {
 });
 
 describe('getImagePromptFragment', () => {
+  it('uses an interior-photography tail for AMBIENCE shots and never mentions the dish', () => {
+    const fragment = spec.getImagePromptFragment(
+      { postType: 'IMAGE', platforms: ['INSTAGRAM'], concept: 'ambience only', shotType: 'AMBIENCE' } as any,
+      ctx,
+    );
+    expect(fragment.toLowerCase()).toContain('interior photography');
+    expect(fragment.toLowerCase()).not.toContain('of the dish');
+    expect(fragment.toLowerCase()).not.toContain('food photography');
+  });
+
   it('includes food-photography lighting + angle direction for IMAGE posts', () => {
     const fragment = spec.getImagePromptFragment(
       { postType: 'IMAGE', platforms: ['INSTAGRAM'], concept: 'paneer tikka' },

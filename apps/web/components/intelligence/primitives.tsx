@@ -279,7 +279,7 @@ export function SubNav<T extends string>({ tabs, active, onChange, label }: SubN
                         type="button"
                         aria-selected={isActive}
                         onClick={() => onChange(t.id)}
-                        className={`-mb-px border-b-2 pb-3 text-sm font-semibold whitespace-nowrap transition-colors ${
+                        className={`-mb-px border-b-2 px-1 pb-3 pt-1 text-[15px] font-semibold whitespace-nowrap transition-colors ${
                             isActive
                                 ? 'border-primary text-ink'
                                 : 'border-transparent text-muted hover:text-ink'

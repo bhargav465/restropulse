@@ -16,7 +16,7 @@ import {
   type RevisePostInput,
   type MediaMetadata,
 } from '../../../types.js';
-import type { Platform, PostType } from '@restropulse/shared';
+import type { PostType } from '@restropulse/shared';
 import { withRetry, RETRY_PROFILES } from '../with-retry.js';
 import { withCostTracking } from '../with-cost-tracking.js';
 import { PostCaptionSchema } from '../llm/schemas.js';
@@ -102,7 +102,7 @@ export async function runRevisePost(
     '',
     'Existing post:',
     `Type: ${input.existingPost.type}`,
-    `Platforms: ${input.existingPost.platforms.join(', ')}`,
+    `Platform: ${input.existingPost.platform}`,
     `Caption: ${input.existingPost.caption}`,
     input.existingPost.themes?.length ? `Themes: ${input.existingPost.themes.join(', ')}` : '',
     '',
@@ -164,21 +164,21 @@ export async function runRevisePost(
           const result = isVideo
             ? await deps.media.generateVideo({
                 postType: input.existingPost.type as 'REEL' | 'VIDEO' | 'STORY',
-                platforms: input.existingPost.platforms,
+                platform: input.existingPost.platform,
                 concept: captionObj.caption,
                 themes: input.existingPost.themes,
                 ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
               })
             : isCarousel
             ? await deps.media.generateCarousel({
-                platforms: input.existingPost.platforms,
+                platform: input.existingPost.platform,
                 concept: captionObj.caption,
                 themes: input.existingPost.themes,
                 ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),
               })
             : await deps.media.generateImage({
                 postType: input.existingPost.type,
-                platforms: input.existingPost.platforms,
+                platform: input.existingPost.platform,
                 concept: captionObj.caption,
                 themes: input.existingPost.themes,
                 ...(ctx?.restaurantId ? { restaurantId: ctx.restaurantId } : {}),

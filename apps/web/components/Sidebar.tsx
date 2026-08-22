@@ -40,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onProfileOpen, 
 
   return (
     <aside
-      className={`${className ?? ''} w-64 shrink-0 flex-col h-screen px-3 py-5 bg-[var(--rp-sidebar)] border-r border-[var(--rp-line)]`}
+      className={`${className ?? ''} w-64 shrink-0 flex-col h-screen sticky top-0 px-3 py-5 bg-[var(--rp-sidebar)] border-r border-[var(--rp-line)]`}
     >
       {/* Brand */}
       <div className="px-2 mb-6">

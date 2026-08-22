@@ -8,6 +8,7 @@ Standalone CLI tool for MongoDB database setup, schema validation, and test data
 - **Validate**: Check schemas and indexes against expected definitions
 - **Seed**: Populate test database with sample data
 - **Reset**: Drop all collections and recreate an empty database with indexes
+- **Atlas Admin**: Inventory users/databases, clone backups, provision env DB roles/users, validate access, and gated legacy cleanup
 
 ## Installation
 
@@ -83,13 +84,38 @@ Seeds the database with test data.
 
 Options:
 - `--clean` - Clear existing data before seeding
-- `--main` - Seed main database (use with caution)
+- `--allow-missing-razorpay` - Bypass Razorpay plan ID completeness check (not recommended)
 
 #### `reset`
 Drops all collections and recreates an empty database with schema validators and indexes. This gives you a fresh database as if the application has just started.
 
 Options:
-- `--main` - Reset main database instead of test (includes a 60-second safety delay)
+- `--allow-missing-razorpay` - Bypass Razorpay plan ID completeness check (not recommended)
+
+#### `atlas-inventory`
+Lists all cluster users/roles and databases into a sanitized JSON report under `reports/atlas/`.
+
+#### `atlas-backup-clone`
+Clones non-system/non-target databases into timestamped `backup_*` databases.
+
+Options:
+- `--execute` - perform cloning (default is dry-run)
+
+#### `atlas-provision`
+Creates target DBs (`restropulse_dev`, `restropulse_staging`, `restropulse_prod`), one role per DB, two scoped users per role, and one super-admin user. Passwords are generated and written only to Azure Key Vault.
+
+Options:
+- `--execute` - perform provisioning (default is dry-run)
+- `--vault-name <name>` - override key vault name
+
+#### `atlas-validate-access`
+Validates that scoped users can only access their assigned DB and that super-admin has full cluster access.
+
+#### `atlas-cleanup-legacy`
+Produces a dry-run cleanup report for legacy users/databases; execute mode requires explicit confirmation.
+
+Options:
+- `--execute` - perform deletions (default is dry-run)
 
 ## Building Executable
 

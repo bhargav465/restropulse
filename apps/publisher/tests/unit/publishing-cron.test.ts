@@ -130,7 +130,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 0
         };
 
@@ -144,7 +144,7 @@ describe('publishing cron service', () => {
         });
 
         mockPublishPost.mockResolvedValue({
-            instagram: { success: true, instagramMediaId: 'media-1', retryable: false }
+            success: true, externalPostId: 'media-1', retryable: false
         });
 
         const published = await processPostForPublishing(postDocument);
@@ -155,7 +155,7 @@ describe('publishing cron service', () => {
             expect.objectContaining({
                 $set: expect.objectContaining({
                     status: 'POSTED',
-                    instagramMediaId: 'media-1'
+                    externalPostId: 'media-1'
                 })
             })
         );
@@ -168,7 +168,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 0
         };
 
@@ -182,7 +182,7 @@ describe('publishing cron service', () => {
         });
 
         mockPublishPost.mockResolvedValue({
-            instagram: { success: false, error: 'Rate limit', retryable: true }
+            success: false, error: 'Rate limit', retryable: true
         });
 
         const published = await processPostForPublishing(postDocument);
@@ -205,7 +205,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 0
         };
 
@@ -219,7 +219,7 @@ describe('publishing cron service', () => {
         });
 
         mockPublishPost.mockResolvedValue({
-            instagram: { success: false, error: 'Bad request', retryable: false }
+            success: false, error: 'Bad request', retryable: false
         });
 
         const published = await processPostForPublishing(postDocument);
@@ -275,7 +275,7 @@ describe('publishing cron service', () => {
         const postDocument = {
             _id: 'post-no-creds',
             restaurantId: 'restaurant-2',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 1
         };
 
@@ -293,7 +293,7 @@ describe('publishing cron service', () => {
         const postDocument = {
             _id: 'post-no-creds-final',
             restaurantId: 'restaurant-2',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 2
         };
 
@@ -311,14 +311,14 @@ describe('publishing cron service', () => {
         );
     });
 
-    it('keeps post scheduled when Facebook side fails with retryable error', async () => {
+    it('keeps post scheduled when Facebook publish fails with retryable error', async () => {
         const postDocument = {
             _id: 'post-facebook-retryable',
             restaurantId: 'restaurant-1',
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platforms: ['INSTAGRAM', 'FACEBOOK'],
+            platform: 'FACEBOOK',
             publishAttempts: 0
         };
 
@@ -332,8 +332,7 @@ describe('publishing cron service', () => {
         });
 
         mockPublishPost.mockResolvedValue({
-            instagram: { success: true, instagramMediaId: 'ig-id', retryable: false },
-            facebook: { success: false, error: 'Rate limited', retryable: true }
+            success: false, error: 'Rate limited', retryable: true
         });
 
         const processed = await processPostForPublishing(postDocument);
@@ -344,20 +343,20 @@ describe('publishing cron service', () => {
             expect.objectContaining({
                 $set: expect.objectContaining({
                     status: 'SCHEDULED',
-                    publishError: expect.stringContaining('Facebook: Rate limited')
+                    publishError: 'Rate limited'
                 })
             })
         );
     });
 
-    it('combines instagram and facebook errors when both fail', async () => {
+    it('marks Facebook post permanently failed on non-retryable error', async () => {
         const postDocument = {
-            _id: 'post-both-fail',
+            _id: 'post-facebook-fail',
             restaurantId: 'restaurant-1',
             type: 'IMAGE',
             caption: 'Caption',
             thumbnail: 'https://example.com/photo.jpg',
-            platforms: ['INSTAGRAM', 'FACEBOOK'],
+            platform: 'FACEBOOK',
             publishAttempts: 2
         };
 
@@ -371,19 +370,18 @@ describe('publishing cron service', () => {
         });
 
         mockPublishPost.mockResolvedValue({
-            instagram: { success: false, error: 'IG failed', retryable: false },
-            facebook: { success: false, error: 'FB failed', retryable: false }
+            success: false, error: 'FB failed', retryable: false
         });
 
         const processed = await processPostForPublishing(postDocument);
 
         expect(processed).toBe(false);
         expect(mockUpdateOne).toHaveBeenCalledWith(
-            { _id: 'post-both-fail' },
+            { _id: 'post-facebook-fail' },
             expect.objectContaining({
                 $set: expect.objectContaining({
                     status: 'MISSED_DEADLINE',
-                    publishError: expect.stringContaining('Instagram: IG failed; Facebook: FB failed')
+                    publishError: 'FB failed'
                 })
             })
         );
@@ -400,7 +398,7 @@ describe('publishing cron service', () => {
         });
 
         mockPublishPost.mockResolvedValue({
-            instagram: { success: true, instagramMediaId: 'media-1', retryable: false }
+            success: true, externalPostId: 'media-1', retryable: false
         });
 
         await processPostForPublishing({
@@ -409,7 +407,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'One',
             thumbnail: 'https://example.com/one.jpg',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 0
         });
 
@@ -419,7 +417,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Two',
             thumbnail: 'https://example.com/two.jpg',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 0
         });
 
@@ -438,7 +436,7 @@ describe('publishing cron service', () => {
                 type: 'IMAGE',
                 caption: 'Caption A',
                 thumbnail: 'https://example.com/a.jpg',
-                platforms: ['INSTAGRAM'],
+                platform: 'INSTAGRAM',
                 publishAttempts: 0
             },
             {
@@ -447,7 +445,7 @@ describe('publishing cron service', () => {
                 type: 'IMAGE',
                 caption: 'Caption B',
                 thumbnail: 'https://example.com/b.jpg',
-                platforms: ['INSTAGRAM'],
+                platform: 'INSTAGRAM',
                 publishAttempts: 0
             }
         ];
@@ -463,8 +461,8 @@ describe('publishing cron service', () => {
         });
 
         mockPublishPost
-            .mockResolvedValueOnce({ instagram: { success: true, instagramMediaId: 'media-a', retryable: false } })
-            .mockResolvedValueOnce({ instagram: { success: false, error: 'Failed', retryable: false } });
+            .mockResolvedValueOnce({ success: true, externalPostId: 'media-a', retryable: false })
+            .mockResolvedValueOnce({ success: false, error: 'Failed', retryable: false });
 
         const statsPromise = runPublishingJob();
         await vi.advanceTimersByTimeAsync(4000);
@@ -511,7 +509,7 @@ describe('publishing cron service', () => {
             type: 'IMAGE',
             caption: 'Cron callback',
             thumbnail: 'https://example.com/callback.jpg',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 0
         };
 

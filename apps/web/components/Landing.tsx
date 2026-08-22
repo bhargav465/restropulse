@@ -404,7 +404,7 @@ const Landing: React.FC<LandingProps> = ({ onStartFree, onSelectPlan, onLogin })
                     <p className="pricing-note">
                         14-day free trial &middot; no credit card &middot;
                         Prices in INR, exclusive of GST &middot; Payments powered by Razorpay &middot;
-                        Need a custom plan for multiple outlets? <a href="mailto:hello@restropulse.in">Talk to us</a>
+                        Need a custom plan for multiple outlets? <a href="mailto:hello.restropulse@baxel.in">Talk to us</a>
                     </p>
                 </div>
 
@@ -416,6 +416,8 @@ const Landing: React.FC<LandingProps> = ({ onStartFree, onSelectPlan, onLogin })
                             <button className="linklike" onClick={() => scrollTo(productRef)}>Product</button>
                             <button className="linklike" onClick={() => scrollTo(pricingRef)}>Pricing</button>
                             <button className="linklike" onClick={onLogin}>Log in</button>
+                            <a className="linklike" href="/privacy-policy">Privacy Policy</a>
+                            <a className="linklike" href="/terms">Terms of Service</a>
                         </nav>
                         <span>&copy; {new Date().getFullYear()} RestroPulse</span>
                     </div>

@@ -80,7 +80,7 @@ describe('AIContentGenerator with current-affairs auto-enrichment (V1+V2)', () =
     });
 
     await gen.generatePost(
-      { concept: 'cricket match-day biryani special', type: 'IMAGE', platforms: ['INSTAGRAM'] },
+      { concept: 'cricket match-day biryani special', type: 'IMAGE', platform: 'INSTAGRAM' },
       { restaurantId: 'r1', restaurantName: 'Spice Route', locale: 'en-IN' },
     );
 

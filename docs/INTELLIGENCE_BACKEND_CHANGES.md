@@ -92,8 +92,8 @@ needs **no** Places/Anthropic keys unless someone wires in-process rescan.
 | `CRON_INTELLIGENCE` | `0 3 * * 1` (Mon 03:00 IST) | Weekly re-scan active restaurants, compute trend deltas + competitor alerts (into `events`), prune reports to last 12 |
 | `CRON_INTELLIGENCE_DAILY` | `0 2 * * *` (02:00 IST) | Daily snapshots for self + watchlist across sources; boot backfill of missing days. Kill-switch: `INTELLIGENCE_DAILY_ENABLED` |
 
-Auto-included via the `apps/*` workspace glob. **Not yet wired** into the CI
-test job (`ci.yml`) or the deploy workflows as a continuous WebJob — see §7.
+Auto-included via the `apps/*` workspace glob. Wired into CI (`ci.yml`) and
+deployed on App Service Linux via the shared `startup.sh` process launcher.
 
 ---
 
@@ -136,7 +136,7 @@ Worker crons: `CRON_INTELLIGENCE`, `CRON_INTELLIGENCE_DAILY`,
 1. **Runtime verification** — run `db-cli setup` to create the 6+1 collections, start the API, and exercise `/api/intelligence/*` with an OWNER session against a real Mongo (and with the two keys, a real scan). None of this has been done.
 2. **API tests** — no unit tests for the pure services (scoring/compare/snapshots) and no route tests (with mocked Places/Anthropic) were added. (The worker has 32 passing tests.)
 3. **Secrets manifest + docs** — DONE. `GOOGLE_MAPS_API_KEY` + `ANTHROPIC_API_KEY` are in `SECRETS_MANIFEST` and the provisioning scripts (`provision-azure.sh`, `set-keyvault-secrets.sh`); `ZOMATO_ADAPTER` stays a plain toggle. Remaining operator step: create the `{env}-google-maps-api-key` / `{env}-anthropic-api-key` KV secret **values** and re-run the scripts (needs Azure access).
-4. **CI + deploy** — DONE. `intelligence-worker` has a `ci.yml` test job (via `detect-changes`) and is deployed as a continuous WebJob alongside publisher/content-engine in `deploy-staging.yml` / `deploy-production.yml`.
+4. **CI + deploy** — DONE. `intelligence-worker` has a `ci.yml` test job (via `detect-changes`) and is started alongside `api`, `publisher`, and `content-engine` by `startup.sh` on App Service Linux in `deploy-staging.yml` / `deploy-production.yml`.
 5. **`self-metrics`** — currently stubbed; wire to a real data source if/when one exists here.
 6. **Runtime verification** — still pending (see item 1).
 

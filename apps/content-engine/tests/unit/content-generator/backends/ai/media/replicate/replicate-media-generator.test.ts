@@ -10,7 +10,7 @@ vi.mock('@restropulse/db', () => ({
 }));
 
 const { ReplicateMediaGenerator } = await import(
-  '../../../../../../../../src/services/content-generator/backends/ai/media/replicate/replicate-media-generator.js'
+  '../../../../../../../src/services/content-generator/backends/ai/media/replicate/replicate-media-generator.js'
 );
 
 const baseImageInput = {
@@ -77,7 +77,7 @@ function makeClient(overrides?: {
 }
 
 // Speed up in-process polling for tests
-vi.mock('../../../../../../../../src/services/content-generator/backends/ai/media/replicate/replicate-media-generator.js', async (importOriginal) => {
+vi.mock('../../../../../../../src/services/content-generator/backends/ai/media/replicate/replicate-media-generator.js', async (importOriginal) => {
   const mod = await importOriginal() as any;
   // Patch the sleep by making IMAGE_POLL_INTERVAL_MS effectively 0
   // We achieve this by reimporting with vi.importActual approach — instead just
@@ -109,6 +109,48 @@ describe('ReplicateMediaGenerator', () => {
       expect(input.aspect_ratio).toBe('1:1');
       expect(input.num_outputs).toBe(1);
       expect(job.status).toBe('COMPLETED');
+    });
+
+    it('pins guidance and a seed so runs are reproducible', async () => {
+      const client = makeClient();
+      const store = makeStore({ status: 'COMPLETED', mediaUrl: 'https://replicate.delivery/img.webp' });
+      const gen = new ReplicateMediaGenerator({ client, store });
+
+      await gen.generateImage({ ...baseImageInput, seed: 424242 });
+
+      const [, input] = client.createPrediction.mock.calls[0];
+      expect(input.guidance).toBe(3.5);
+      expect(input.seed).toBe(424242);
+      // No reference image => no img2img params
+      expect(input.image).toBeUndefined();
+      expect(input.prompt_strength).toBeUndefined();
+    });
+
+    it('forwards baseImageUrl as img2img (image + prompt_strength)', async () => {
+      const client = makeClient();
+      const store = makeStore({ status: 'COMPLETED', mediaUrl: 'https://replicate.delivery/img.webp' });
+      const gen = new ReplicateMediaGenerator({ client, store });
+
+      await gen.generateImage({ ...baseImageInput, baseImageUrl: 'https://cdn.example/ref.jpg' });
+
+      const [, input] = client.createPrediction.mock.calls[0];
+      expect(input.image).toBe('https://cdn.example/ref.jpg');
+      expect(input.prompt_strength).toBe(0.7);
+    });
+
+    it('puts the subject first and never truncates it; only the style tail is trimmed', async () => {
+      const client = makeClient();
+      const store = makeStore({ status: 'COMPLETED', mediaUrl: 'https://replicate.delivery/img.webp' });
+      const gen = new ReplicateMediaGenerator({ client, store });
+
+      const subject = 'A copper handi of saffron-streaked chicken biryani, steam rising, fried onions on top';
+      const longTail = 'Style: ' + 'x'.repeat(2000);
+      await gen.generateImage({ ...baseImageInput, concept: subject, promptSuffix: longTail });
+
+      const [, input] = client.createPrediction.mock.calls[0];
+      expect(input.prompt.startsWith(subject)).toBe(true);
+      expect(input.prompt.length).toBeLessThanOrEqual(1500);
+      expect(input.prompt).toContain('\n\nStyle: ');
     });
 
     it('uses portrait aspect ratio for STORY', async () => {

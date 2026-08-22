@@ -23,7 +23,7 @@ export const NewOpeningsView: React.FC<{
 }> = ({ openings, sinceDays, onSinceDaysChange, atCapacity, trackedPlaceIds, onAdd, onNavigate }) => (
     <div className="space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-base font-semibold text-ink">New openings within 5 km</h3>
+            <h3 className="text-base font-semibold text-ink">Opened recently within 5 km</h3>
             <div className="inline-flex items-center gap-1 rounded-xl bg-primary-soft p-1">
                 {SINCE_OPTIONS.map((d) => (
                     <button
@@ -61,7 +61,7 @@ export const NewOpeningsView: React.FC<{
                                         <span className="text-xs text-muted">{o.distanceKm.toFixed(1)} km</span>
                                     </div>
                                 </div>
-                                {o.fastStarter && <span className="text-xs font-semibold text-warning shrink-0">Fast starter</span>}
+                                {o.fastStarter && <span className="text-xs font-semibold text-warning shrink-0">Growing fast</span>}
                             </div>
                             <p className="text-xs text-muted mt-2">
                                 First seen {new Date(o.firstSeenAt).toISOString().slice(0, 10)} · +{o.reviewsSinceFirstSeen} reviews in {o.daysSinceFirstSeen}d
@@ -71,10 +71,10 @@ export const NewOpeningsView: React.FC<{
                                     type="button"
                                     onClick={() => onAdd(o)}
                                     disabled={atCapacity || tracked}
-                                    title={tracked ? 'Already on your watchlist' : atCapacity ? 'Watchlist is full (5/5) — remove one to add another' : 'Add to watchlist'}
+                                    title={tracked ? 'You already track this restaurant' : atCapacity ? 'You’re tracking the maximum (5) — remove one to add another' : 'Track this restaurant'}
                                     className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-strong text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
-                                    {tracked ? 'Tracked' : 'Add to watchlist'}
+                                    {tracked ? 'Tracked' : 'Track this restaurant'}
                                 </button>
                                 <button
                                     type="button"

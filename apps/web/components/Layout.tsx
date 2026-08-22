@@ -1,7 +1,8 @@
 import React from 'react';
-import { Gauge, PenTool, Lightbulb, Megaphone, Plus, Bell } from 'lucide-react';
-import { ViewState, FeatureFlags, EntitlementState } from '@restropulse/shared';
+import { Gauge, PenTool, Lightbulb, Megaphone, Plus } from 'lucide-react';
+import { ViewState, FeatureFlags, EntitlementState, IntelligenceNotification } from '@restropulse/shared';
 import Sidebar from './Sidebar';
+import NotificationBell from './NotificationBell';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -17,9 +18,14 @@ interface LayoutProps {
   featureFlags?: FeatureFlags | null;
   entitlement?: EntitlementState | null;
   onUpgrade?: () => void;
+  /** Intelligence notification feed for the bell (App owns the fetch). */
+  notifications?: IntelligenceNotification[];
+  unreadNotifications?: number;
+  onNotificationsOpen?: () => void;
+  onNotificationClick?: (n: IntelligenceNotification) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, restaurantName, userInitials, pendingCount, onCreatePost, onProfileOpen, profileOpen, featureFlags, entitlement, onUpgrade }) => {
+const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, restaurantName, userInitials, pendingCount, onCreatePost, onProfileOpen, profileOpen, featureFlags, entitlement, onUpgrade, notifications = [], unreadNotifications = 0, onNotificationsOpen, onNotificationClick }) => {
 
   const NavItem = ({ view, icon: Icon, label }: { view: ViewState, icon: any, label: string }) => {
     const isActive = currentView === view;
@@ -74,10 +80,14 @@ const Layout: React.FC<LayoutProps> = ({ children, currentView, setView, title, 
               <Plus size={20} strokeWidth={2.5} />
             </button>
           )}
-          <button className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center relative hover:bg-slate-200 transition-colors" aria-label="Notifications">
-            <Bell size={18} className="text-slate-600" />
-            {pendingCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
-          </button>
+          <NotificationBell
+            items={notifications}
+            unread={unreadNotifications}
+            pendingPosts={pendingCount}
+            onOpen={() => onNotificationsOpen?.()}
+            onItemClick={(n) => onNotificationClick?.(n)}
+            onPendingPostsClick={() => setView('STUDIO')}
+          />
           <button
             onClick={onProfileOpen}
             className="w-9 h-9 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center hover:opacity-90 transition-opacity active:scale-95 lg:hidden"

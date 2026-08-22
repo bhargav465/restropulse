@@ -5,6 +5,7 @@ import { intensity } from '../../theme';
 import { ProvenanceChip } from '../provenance';
 import type { DeepLinkTarget } from '../deep-links';
 import RevenueCard from './RevenueCard';
+import Yesterday from './Yesterday';
 
 /**
  * My-Restaurant · Overview (Brief 09 §2). Re-homes the v1 Overview (narrative,
@@ -73,9 +74,14 @@ const Overview: React.FC<{
             You are ranked #{report.ranking.rank}{' '}
             <span className="text-muted font-normal">of {report.ranking.total} nearby</span>
         </p>
+        <Yesterday />
         <RevenueCard report={report} />
         <V1Overview report={report} onNavigate={onNavigate} />
-        {metrics && <OpsStrip metrics={metrics} />}
+        {/* RP-006: this app has no ordering module, so /self-metrics returns an
+            all-zero payload for most accounts. Never pair a green "Measured"
+            provenance chip with a dataset that is entirely zero — hide the strip
+            until there is at least one completed order behind it. */}
+        {metrics && metrics.orderCount > 0 && <OpsStrip metrics={metrics} />}
     </div>
 );
 

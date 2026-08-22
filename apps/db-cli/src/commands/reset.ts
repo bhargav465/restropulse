@@ -13,7 +13,11 @@ import {
     DEFAULT_CREDIT_PACKS,
 } from '../data/default-data.js';
 
-export async function resetCommand(): Promise<void> {
+interface ResetOptions {
+    allowMissingRazorpay?: boolean;
+}
+
+export async function resetCommand(options: ResetOptions): Promise<void> {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const PLAN_IDS_PATH = resolve(__dirname, '../data/razorpay-plan-ids.json');
 
@@ -95,6 +99,31 @@ export async function resetCommand(): Promise<void> {
             razorpayPlanIds = allEnvIds[env] || allEnvIds['development'] || {};
         } catch {
             // File missing or unreadable — proceed with empty IDs from default-data
+        }
+
+        const missingRazorpay = DEFAULT_SUBSCRIPTION_PLANS
+            .map((p) => {
+                const ids = razorpayPlanIds[p._id];
+                const missing = [
+                    !ids?.monthly ? 'monthly' : null,
+                    !ids?.annual ? 'annual' : null,
+                ].filter(Boolean) as string[];
+                return { id: p._id, name: p.name, missing };
+            })
+            .filter((r) => r.missing.length > 0);
+        if (missingRazorpay.length > 0 && !options.allowMissingRazorpay) {
+            spinner.fail('Reset aborted');
+            console.error(chalk.red(`\nMissing Razorpay plan IDs for env "${env}".`));
+            for (const r of missingRazorpay) {
+                console.error(chalk.red(`  - ${r.id} (${r.name}): missing ${r.missing.join(', ')}`));
+            }
+            const scriptSuffix = env === 'development' ? '' : env === 'production' ? ':prod' : `:${env}`;
+            console.error(chalk.yellow(`\nFix: run "npm run razorpay:setup${scriptSuffix} --workspace=@restropulse/db-cli"`));
+            console.error(chalk.yellow('Or bypass once with "--allow-missing-razorpay" (not recommended).'));
+            process.exit(1);
+        }
+        if (missingRazorpay.length > 0 && options.allowMissingRazorpay) {
+            console.log(chalk.yellow(`\nProceeding with missing Razorpay plan IDs for env "${env}" because --allow-missing-razorpay was provided.`));
         }
 
         // Seed default subscription plans and credit packs

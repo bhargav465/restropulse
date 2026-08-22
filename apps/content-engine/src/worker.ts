@@ -25,6 +25,7 @@ import './instrument.js';
 import http from 'node:http';
 import path from 'node:path';
 import cron from 'node-cron';
+import { config as dotenvConfig } from 'dotenv';
 import { loadAndValidateEnv, z, ROLLING_WINDOW_HOURS, POST_APPROVAL_BUFFER_HOURS, CYCLE_APPROVAL_BUFFER_HOURS, validateTimingConstraints } from '@restropulse/shared';
 import { connectDB, disconnectDB } from '@restropulse/db';
 import { createLogger, shutdownServerTelemetry, tracedCronJob, registerProcessGuards } from '@restropulse/telemetry/server';
@@ -52,6 +53,8 @@ import {
 import { runPostResumeOnBoot } from './services/post-resume.js';
 
 const logger = createLogger('content-engine');
+
+dotenvConfig({ path: path.resolve(process.cwd(), '.env'), override: false });
 
 if (process.env.SECRETS_BACKEND) {
   await hydrateEnvFromProvider(
@@ -85,7 +88,7 @@ const env = loadAndValidateEnv({
     CRON_DEADLINES: z.string().default('*/2 * * * *'),
     CRON_CYCLE_SYNC: z.string().default('*/2 * * * *'),
     ENABLED_PLATFORMS: z.string().default('INSTAGRAM,FACEBOOK'),
-    CONTENT_GENERATOR_BACKEND: z.enum(['placeholder', 'ai']).default('placeholder'),
+    CONTENT_GENERATOR_BACKEND: z.enum(['placeholder', 'ai']).default('ai'),
     CURRENT_AFFAIRS_V1_ENABLED: z.string().default('true'),
     CURRENT_AFFAIRS_V2_ENABLED: z.string().default('false'),
     GOOGLE_CALENDAR_API_KEY: z.string().optional(),
@@ -132,8 +135,8 @@ const startWorker = async () => {
 
     await connectDB();
 
-    // Register the configured content generator backend. Default is 'placeholder';
-    // flip CONTENT_GENERATOR_BACKEND=ai to engage the AI generator (see ADR 0001).
+    // Register the configured content generator backend. Default is 'ai';
+    // set CONTENT_GENERATOR_BACKEND=placeholder to use the asset-catalog generator.
     // Tests swap this via setContentGenerator().
     const backend: ContentGeneratorBackend = env.CONTENT_GENERATOR_BACKEND;
     setContentGenerator(await createContentGenerator(backend));

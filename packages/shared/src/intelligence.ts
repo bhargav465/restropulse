@@ -29,6 +29,19 @@ export type ScanStatus =
  * `status` and finally links `reportId` when COMPLETED.
  * Collection: `intelligence_scans`.
  */
+/**
+ * One Google Places match offered in the "Is this you?" step before a scan. The
+ * merchant confirms which listing is theirs; the confirmed `placeId` is saved to
+ * the restaurant profile so every later scan and daily check targets it.
+ */
+export interface PlaceCandidate {
+  placeId: string;
+  name: string;
+  address: string;
+  rating: number;
+  totalRatings: number;
+}
+
 export interface IntelligenceScan {
   _id: string;
   restaurantId: string; // tenant
@@ -317,6 +330,42 @@ export interface DailySnapshot {
 
 export const WATCHLIST_MAX = 5;
 
+/**
+ * One item in the owner's Intelligence notification feed — the "reason to open
+ * the app today". Derived on read from data the worker already produces (report
+ * deltas + competitor alerts, nightly self snapshots); nothing is stored except
+ * the "seen up to" timestamp on the restaurant. `id` is stable across reads so
+ * the client can dedupe / animate.
+ */
+export type IntelligenceNotificationKind =
+  | 'report_ready'
+  | 'score_change'
+  | 'rating_drop'
+  | 'competitor_surge'
+  | 'new_competitor'
+  | 'new_reviews'
+  | 'negative_review';
+
+export interface IntelligenceNotification {
+  id: string;
+  kind: IntelligenceNotificationKind;
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  body?: string;
+  /** ISO timestamp the event is dated to (report generatedAt, snapshot day). */
+  at: string;
+  unread: boolean;
+  /** Where in the app to go. `bucket`/`tab` are Intelligence dashboard hints. */
+  link: { view: 'INTELLIGENCE'; bucket?: 'MINE' | 'COMPETITION'; tab?: string };
+}
+
+export interface IntelligenceNotificationsResponse {
+  items: IntelligenceNotification[];
+  unread: number;
+  /** ISO of the last "mark seen", or null if never. */
+  seenAt: string | null;
+}
+
 export interface WatchlistEntry {
   placeId: string;
   name: string;
@@ -342,7 +391,7 @@ export interface NearbyPlaceSighting {
 
 /** One deterministic metric gap for "Where They Beat You" (computed). */
 export interface MetricGap {
-  metric: 'rating' | 'reviewVelocity' | 'responseRate' | 'photoCount';
+  metric: 'rating' | 'reviewVelocity' | 'responseRate' | 'photoCount' | 'reviewCount';
   source: SnapshotSource;
   yours: number;
   theirs: number;

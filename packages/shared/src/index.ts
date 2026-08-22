@@ -196,6 +196,14 @@ export interface Restaurant {
     watchlist?: WatchlistEntry[];
     /** Merchant-provided Zomato URL for the restaurant's own listing. */
     selfZomatoUrl?: string;
+    /** Last time the owner opened the Intelligence notification feed. */
+    notificationsSeenAt?: Date;
+    /**
+     * Action-plan progress, per report: which `priority` numbers the owner has
+     * ticked off. Kept for the last few reports so the next report can say
+     * "you did 3 of 5 last time".
+     */
+    actionProgress?: Array<{ reportId: string; done: number[]; updatedAt: Date }>;
   };
   /** Source of the data: acquisition script writes this; manual entries leave it absent. */
   dataSource?: 'kaggle-zomato' | 'osm' | 'merged' | 'manual';
@@ -221,7 +229,11 @@ export interface Post {
   mediaUrls?: string[];
   videoUrl?: string;
   caption: string;
-  platforms: Platform[];
+  platform: Platform;
+  // Links posts created from the same request (e.g. one adhoc submission
+  // targeting both platforms fans out into N single-platform documents that
+  // share a groupId). Always assigned at creation; not used for UI grouping.
+  groupId?: string;
   restaurantId?: string;
   scheduledFor?: string;
   postedAt?: string;
@@ -235,8 +247,8 @@ export interface Post {
   generationStep?: GenerationStep;
   lastStepAt?: string;          // ISO; updated when generationStep advances
   isAdhoc?: boolean;
-  instagramMediaId?: string;
-  facebookPostId?: string;
+  // Set once published: Instagram media ID or Facebook post ID, depending on `platform`.
+  externalPostId?: string;
   stats?: PostStats;
   themes?: string[];
   archetype?: string;    // archetype ID this post was generated from (e.g. 'CRAVING_CUE')
@@ -289,9 +301,17 @@ export const POST_TYPE_CREDIT_COSTS: Record<PostType, number> = {
   REEL: 4,
 };
 
+// FACEBOOK excludes STORY: Facebook Page photo/video Stories publishing
+// requires Stories eligibility that isn't enabled for this Page, and every
+// attempt fails with Meta's generic error code 1 ("An unknown error has
+// occurred"). Disabled here (the single source of truth for platform/type
+// validity) until that's resolved -- remove once Facebook Stories work again.
+// REEL is included for FACEBOOK -- publishToFacebook() has a full two-phase
+// video_reels implementation (packages/publishing/src/publishing-service.ts);
+// this constant was just missing it previously.
 export const PLATFORM_POST_TYPES: Record<Platform, PostType[]> = {
   INSTAGRAM: ['IMAGE', 'CAROUSEL', 'VIDEO', 'REEL', 'STORY'],
-  FACEBOOK: ['IMAGE', 'VIDEO', 'CAROUSEL', 'STORY'],
+  FACEBOOK: ['IMAGE', 'VIDEO', 'CAROUSEL', 'REEL'],
 };
 
 export type PostTypeLimits = Partial<Record<PostType, number>>;
@@ -551,6 +571,12 @@ export interface ClientConfig {
   razorpayKeyId: string;
   appInsightsConnectionString: string;
   telemetrySampleRate: number;
+  deployment?: {
+    gitSha: string;
+    runId: string;
+    deployedAt: string;
+    artifactSha256?: string;
+  };
   firebase: {
     apiKey: string;
     authDomain: string;

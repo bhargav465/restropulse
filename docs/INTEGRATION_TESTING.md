@@ -14,9 +14,28 @@ npm run test:integration
 
 Missing secrets cause a hard failure with a clear error message listing which keys are absent and pointing to `.env.integration.example`.
 
+## Exhaustive AKV-backed validation
+
+Use these commands to validate required Key Vault secrets and run the full integration suite in KV mode:
+
+```bash
+npm run validate:kv:dev
+npm run validate:kv:staging
+npm run validate:kv:prod
+```
+
+These commands verify required manifest secrets exist in AKV for the selected prefix, then execute `test:integration:kv:*` for end-to-end integration coverage.
+
 ## Triggering in CI
 
-Integration tests are NOT part of the PR-blocking CI gate and are never triggered by a build or deploy. Run explicitly via:
+Integration tests are NOT part of the PR-blocking CI gate.
+
+Staging deploys now run an **exhaustive KV-backed validation** after API/Web smoke checks:
+- `npm run validate:kv:staging`
+  - verifies required AKV secrets exist for staging
+  - runs the full `test:integration:kv:staging` suite
+
+Manual workflow runs remain available for explicit env-specific checks:
 
 ```
 GitHub Actions -> Integration Tests -> Run workflow -> select environment (dev/staging/prod)

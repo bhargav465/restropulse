@@ -32,7 +32,7 @@ beforeAll(async () => {
   client = await MongoClient.connect(mongod.getUri());
   setDB(client.db(DB_NAME));
   // Mirror the compound index the migration will create so upsert races resolve deterministically.
-  await client.db(DB_NAME).collection('posts').createIndex({ cycleId: 1, scheduledFor: 1 });
+  await client.db(DB_NAME).collection('posts').createIndex({ cycleId: 1, scheduledFor: 1, platform: 1 });
 }, 60000);
 
 afterAll(async () => {
@@ -189,10 +189,12 @@ describe('processRollingWindow()', () => {
     ]);
 
     const totalCreated = results.reduce((sum, r) => sum + r.slotsCreated, 0);
-    expect(totalCreated).toBe(1);
+    // One slot fans out into one post per default platform (INSTAGRAM + FACEBOOK).
+    expect(totalCreated).toBe(2);
 
     const posts = await db.collection('posts').find({ cycleId: cycleId.toString() }).toArray();
-    expect(posts).toHaveLength(1);
+    expect(posts).toHaveLength(2);
+    expect(posts.map(p => p.platform).sort()).toEqual(['FACEBOOK', 'INSTAGRAM']);
   });
 
   it('activates an APPROVED cycle whose startDate has arrived and creates post stubs', async () => {
@@ -362,17 +364,32 @@ describe('processRollingWindow()', () => {
     });
     const scheduledForIso = slots[0].scheduledFor.toISOString();
 
-    await db.collection('posts').insertOne({
-      _id: new ObjectId(),
-      cycleId: cycleId.toString(),
-      scheduledFor: scheduledForIso,
-      type: 'IMAGE',
-      platforms: ['INSTAGRAM'],
-      status: 'PENDING_APPROVAL',
-      caption: 'Pre-existing approved post',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    // One slot fans out into one post per platform (INSTAGRAM + FACEBOOK by
+    // default); pre-seed both so neither platform's slot gets (re)created.
+    await db.collection('posts').insertMany([
+      {
+        _id: new ObjectId(),
+        cycleId: cycleId.toString(),
+        scheduledFor: scheduledForIso,
+        type: 'IMAGE',
+        platform: 'INSTAGRAM',
+        status: 'PENDING_APPROVAL',
+        caption: 'Pre-existing approved post (Instagram)',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        _id: new ObjectId(),
+        cycleId: cycleId.toString(),
+        scheduledFor: scheduledForIso,
+        type: 'IMAGE',
+        platform: 'FACEBOOK',
+        status: 'PENDING_APPROVAL',
+        caption: 'Pre-existing approved post (Facebook)',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
 
     const result = await processRollingWindow();
 
@@ -380,8 +397,10 @@ describe('processRollingWindow()', () => {
     expect(result.slotsCreated).toBe(0);
 
     const posts = await db.collection('posts').find({ cycleId: cycleId.toString() }).toArray();
-    expect(posts).toHaveLength(1);
-    expect(posts[0].status).toBe('PENDING_APPROVAL');
-    expect(posts[0].caption).toBe('Pre-existing approved post');
+    expect(posts).toHaveLength(2);
+    for (const post of posts) {
+      expect(post.status).toBe('PENDING_APPROVAL');
+      expect(post.caption).toContain('Pre-existing approved post');
+    }
   });
 });

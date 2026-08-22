@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { WatchlistEntry, CompetitorProfile } from '@restropulse/shared';
-import { intelligenceAPI, type SnapshotSeriesPoint } from '../../../../api';
+import { intelligenceAPI, type SnapshotSeriesPoint, type RivalDigest, type WatchlistDigestResponse } from '../../../../api';
 import { ThreatBar } from '../primitives';
 import { Sparkline } from '../charts';
 import { SERIES } from '../../theme';
@@ -36,14 +36,81 @@ export interface WatchlistCardData {
     spark?: number[];
 }
 
+/**
+ * Per-rival week digest — what their guests said, split positive / negative.
+ * This is the insight the tab existed for: not "you track 2 rivals" but "what
+ * happened at those rivals yesterday and this week".
+ */
+export const RivalDigestBlock: React.FC<{ d: RivalDigest }> = ({ d }) => {
+    const [tab, setTab] = useState<'negative' | 'positive'>(d.negativeComments.length > 0 ? 'negative' : 'positive');
+    const comments = tab === 'negative' ? d.negativeComments : d.positiveComments;
+    if (!d.latest) {
+        return (
+            <p className="text-xs text-muted mt-3" data-testid={`digest-empty-${d.placeId}`}>
+                Daily tracking starts after tonight’s first check — reviews and comments will appear here.
+            </p>
+        );
+    }
+    return (
+        <div className="mt-3 rounded-xl bg-canvas p-3 space-y-2.5" data-testid={`digest-${d.placeId}`}>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                <span className="text-ink">
+                    <span className="font-semibold">Yesterday:</span>{' '}
+                    {d.yesterday.total === 0 ? 'no new reviews' : (
+                        <>{d.yesterday.total} new · <span className="text-success font-semibold">{d.yesterday.positive} positive</span> · <span className="text-danger font-semibold">{d.yesterday.negative} negative</span></>
+                    )}
+                </span>
+                <span className="text-ink">
+                    <span className="font-semibold">This week:</span>{' '}
+                    {d.week.total === 0 ? 'no new reviews' : (
+                        <>{d.week.total} new · <span className="text-success font-semibold">{d.week.positive} positive</span> · <span className="text-danger font-semibold">{d.week.negative} negative</span></>
+                    )}
+                </span>
+            </div>
+            {(d.positiveComments.length > 0 || d.negativeComments.length > 0) && (
+                <>
+                    <div className="flex items-center gap-1">
+                        {(['negative', 'positive'] as const).map((t) => {
+                            const n = t === 'negative' ? d.negativeComments.length : d.positiveComments.length;
+                            if (n === 0) return null;
+                            return (
+                                <button
+                                    key={t}
+                                    type="button"
+                                    aria-pressed={tab === t}
+                                    onClick={() => setTab(t)}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
+                                        tab === t ? (t === 'negative' ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success') : 'text-muted hover:text-ink'
+                                    }`}
+                                >
+                                    {t === 'negative' ? `What upset their guests (${n})` : `What their guests loved (${n})`}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <ul className="space-y-1.5">
+                        {comments.map((c, i) => (
+                            <li key={i} className="text-xs text-ink leading-relaxed">
+                                <span className={`font-semibold ${c.rating <= 2 ? 'text-danger' : 'text-success'}`}>{'★'.repeat(Math.max(1, Math.round(c.rating)))}</span>{' '}
+                                “{c.text}” <span className="text-muted">· {c.date}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
+        </div>
+    );
+};
+
 export const WatchlistView: React.FC<{
     cards: WatchlistCardData[];
     candidates: WatchlistCandidate[];
     max: number;
     error: string | null;
+    digest?: WatchlistDigestResponse | null;
     onAdd: (c: WatchlistCandidate) => void;
     onRemove: (placeId: string) => void;
-}> = ({ cards, candidates, max, error, onAdd, onRemove }) => {
+}> = ({ cards, candidates, max, error, digest, onAdd, onRemove }) => {
     const [search, setSearch] = useState('');
     const count = cards.length;
     const atCapacity = count >= max;
@@ -60,7 +127,7 @@ export const WatchlistView: React.FC<{
     return (
         <div className="space-y-4 sm:space-y-6">
             <div className="flex items-center justify-between gap-3 flex-wrap">
-                <h3 className="text-base font-semibold text-ink">Your watchlist</h3>
+                <h3 className="text-base font-semibold text-ink">Rivals you track</h3>
                 <span className={`text-sm font-semibold tabular-nums ${atCapacity ? 'text-warning' : 'text-muted'}`} data-testid="watchlist-counter">
                     {count}/{max}
                 </span>
@@ -73,12 +140,14 @@ export const WatchlistView: React.FC<{
             )}
 
             {atCapacity && (
-                <p className="text-xs text-muted">Watchlist full — remove a competitor to swap in a new one.</p>
+                <p className="text-xs text-muted">You’re tracking the maximum — remove one to add another.</p>
             )}
 
             {/* Tracked cards */}
-            <div className="grid sm:grid-cols-2 gap-4">
-                {cards.map((c) => (
+            <div className="grid lg:grid-cols-2 gap-4">
+                {cards.map((c) => {
+                    const d = digest?.rivals.find((r) => r.placeId === c.entry.placeId);
+                    return (
                     <div key={c.entry.placeId} className="rounded-xl border border-line bg-surface p-4">
                         <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
@@ -101,14 +170,24 @@ export const WatchlistView: React.FC<{
                             </div>
                         )}
                         {c.threatScore !== undefined && <div className="mt-2"><ThreatBar value={c.threatScore} /></div>}
+                        {d?.aheadOnRating && (
+                            <p className="mt-2 text-xs font-semibold text-danger">Currently rated above you</p>
+                        )}
+                        {d && <RivalDigestBlock d={d} />}
                     </div>
-                ))}
-                {cards.length === 0 && <p className="text-sm text-muted">No competitors tracked yet — add up to {max} below.</p>}
+                    );
+                })}
+                {cards.length === 0 && (
+                    <p className="text-sm text-muted">
+                        No rivals tracked yet — add up to {max} below. Once tracked, we check them every night and show you
+                        their new reviews here, split into what guests loved and what upset them.
+                    </p>
+                )}
             </div>
 
             {/* Picker */}
             <Card>
-                <h3 className="text-base font-semibold text-ink mb-2">Add a competitor</h3>
+                <h3 className="text-base font-semibold text-ink mb-2">Track another restaurant</h3>
                 <input
                     type="text"
                     value={search}
@@ -130,7 +209,7 @@ export const WatchlistView: React.FC<{
                                 type="button"
                                 onClick={() => onAdd(c)}
                                 disabled={atCapacity}
-                                title={atCapacity ? `Watchlist is full (${max}/${max}) — remove one to add another` : 'Add to watchlist'}
+                                title={atCapacity ? `You’re tracking the maximum (${max}) — remove one to add another` : 'Track this restaurant'}
                                 className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-strong text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 Add
@@ -153,11 +232,13 @@ const Watchlist: React.FC = () => {
     const [profiles, setProfiles] = useState<Record<string, CompetitorProfile>>({});
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [digest, setDigest] = useState<WatchlistDigestResponse | null>(null);
 
     const load = async () => {
         const wl = await intelligenceAPI.getWatchlist();
         setEntries(wl.entries);
         setMax(wl.max);
+        intelligenceAPI.getWatchlistDigest().then(setDigest).catch(() => undefined);
         // 30-day rating sparkline per tracked competitor.
         const to = new Date().toISOString().slice(0, 10);
         const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
@@ -203,20 +284,20 @@ const Watchlist: React.FC = () => {
             setMax(res.max);
             await load();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Could not update your watchlist.');
+            setError(err instanceof Error ? err.message : 'Could not update the restaurants you track.');
         }
     };
 
     const onAdd = (c: WatchlistCandidate) => {
         if (entries.length >= max) {
-            setError(`Watchlist exceeds the maximum of ${max} competitors.`);
+            setError(`You can track at most ${max} restaurants.`);
             return;
         }
         persist([...entries, { placeId: c.placeId, name: c.name, addedAt: new Date() }]);
     };
     const onRemove = (placeId: string) => persist(entries.filter((e) => e.placeId !== placeId));
 
-    if (loading) return <p className="text-sm text-muted">Loading your watchlist…</p>;
+    if (loading) return <p className="text-sm text-muted">Loading the rivals you track…</p>;
 
     const cards: WatchlistCardData[] = entries.map((entry) => {
         const p = profiles[entry.name];
@@ -230,7 +311,7 @@ const Watchlist: React.FC = () => {
         };
     });
 
-    return <WatchlistView cards={cards} candidates={candidates} max={max} error={error} onAdd={onAdd} onRemove={onRemove} />;
+    return <WatchlistView cards={cards} candidates={candidates} max={max} error={error} digest={digest} onAdd={onAdd} onRemove={onRemove} />;
 };
 
 export default Watchlist;

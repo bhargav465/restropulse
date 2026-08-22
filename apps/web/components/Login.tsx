@@ -13,8 +13,14 @@ interface LoginProps {
 
 type Step = 'phone' | 'otp';
 
-// Check if Firebase is configured
+// Check if Firebase is configured. `VITE_AUTH_DEV_OTP=true` (dev builds only)
+// forces the backend OTP path even when a Firebase key is present — Firebase
+// phone auth does not work on localhost, and relying on an empty
+// VITE_FIREBASE_API_KEY in .env.local to shadow .env proved fragile.
 const isFirebaseConfigured = () => {
+    // MODE!=='test': vitest runs with DEV=true and loads .env.local, and the
+    // Login suite tests the Firebase path — the dev switch must not leak there.
+    if (import.meta.env.DEV && import.meta.env.MODE !== 'test' && import.meta.env.VITE_AUTH_DEV_OTP === 'true') return false;
     const apiKey = getFirebaseApiKey();
     return apiKey && apiKey !== 'your-api-key' && !apiKey.includes('your-');
 };
@@ -42,10 +48,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
         }
     }, [countdown]);
 
-    // Initialize reCAPTCHA when component mounts (Firebase mode)
     useEffect(() => {
-        if (useFirebase && step === 'phone') {
-            // Small delay to ensure button is rendered
+        if (useFirebase && step === 'phone' && !recaptchaVerifierRef.current) {
             const timer = setTimeout(() => {
                 try {
                     recaptchaVerifierRef.current = initRecaptcha('send-otp-button');
@@ -56,6 +60,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
             return () => clearTimeout(timer);
         }
     }, [useFirebase, step]);
+
+    useEffect(() => {
+        return () => {
+            if ((window as any).recaptchaVerifier) {
+                (window as any).recaptchaVerifier.clear();
+                (window as any).recaptchaVerifier = null;
+            }
+            recaptchaVerifierRef.current = null;
+        };
+    }, []);
 
     // Format phone for display
     const formatPhone = (value: string) => {
@@ -83,8 +97,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
         const fullPhone = `+91${phone}`;
 
         try {
-            if (useFirebase && recaptchaVerifierRef.current) {
+            if (useFirebase) {
                 // Firebase Authentication
+                if (!recaptchaVerifierRef.current) {
+                    recaptchaVerifierRef.current = initRecaptcha('send-otp-button');
+                }
                 await sendOTP(fullPhone, recaptchaVerifierRef.current);
                 setStep('otp');
                 setCountdown(30);
@@ -412,7 +429,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onFallbackLogin }) => {
                 )}
 
                 <p className="mt-8 text-xs text-slate-500 text-center">
-                    By continuing, you agree to our Terms of Service & Privacy Policy.
+                    By continuing, you agree to our{' '}
+                    <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline">Terms of Service</a>
+                    {' '}&amp;{' '}
+                    <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="underline">Privacy Policy</a>.
                 </p>
             </div>
         </div>

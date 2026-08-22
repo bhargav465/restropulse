@@ -53,7 +53,7 @@ describe('ContentStudio Component', () => {
             type: 'IMAGE' as const,
             status: 'PENDING_APPROVAL' as const,
             thumbnail: '/mock.jpg',
-            platforms: ['INSTAGRAM'] as Platform[],
+            platform: 'INSTAGRAM' as Platform,
             createdAt: new Date().toISOString(),
         },
         {
@@ -62,7 +62,7 @@ describe('ContentStudio Component', () => {
             type: 'VIDEO' as const,
             status: 'PENDING_APPROVAL' as const,
             thumbnail: '/mock.jpg',
-            platforms: ['INSTAGRAM'] as Platform[],
+            platform: 'INSTAGRAM' as Platform,
             createdAt: new Date().toISOString(),
         },
         {
@@ -71,7 +71,7 @@ describe('ContentStudio Component', () => {
             type: 'IMAGE' as const,
             status: 'SCHEDULED' as const,
             thumbnail: '/special.jpg',
-            platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[],
+            platform: 'INSTAGRAM' as Platform,
             scheduledFor: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
         },
         {
@@ -80,7 +80,7 @@ describe('ContentStudio Component', () => {
             type: 'IMAGE' as const,
             status: 'POSTED' as const,
             thumbnail: '/posted.jpg',
-            platforms: ['FACEBOOK'] as Platform[],
+            platform: 'FACEBOOK' as Platform,
             postedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
         },
     ];
@@ -200,7 +200,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_CONTENT' as const,
                     thumbnail: '/mock.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                 },
             ]);
 
@@ -222,7 +222,7 @@ describe('ContentStudio Component', () => {
                     type: 'REEL' as const,
                     status: 'PENDING_MEDIA' as const,
                     thumbnail: '',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                     mediaJobId: 'job_v1',
                     generationStep: 'MEDIA_REQUESTED' as const,
                 },
@@ -247,7 +247,7 @@ describe('ContentStudio Component', () => {
                     type: 'REEL' as const,
                     status: 'PENDING_MEDIA' as const,
                     thumbnail: '',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                     mediaJobId: 'job_v2',
                 },
             ]);
@@ -273,7 +273,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'SCHEDULED' as const,
                     thumbnail: '/mock.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                     scheduledFor: new Date().toISOString(),
                 },
             ]);
@@ -294,7 +294,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/mock.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                 },
             ]);
 
@@ -357,22 +357,22 @@ describe('ContentStudio Component', () => {
     });
 
     describe('Request Changes Button', () => {
-        it('should render request edit button for pending posts', async () => {
+        it('should render Edit button for pending posts', async () => {
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
-                const requestEditButton = buttons.find(btn => btn.textContent?.includes('Request Edit'));
+                const requestEditButton = buttons.find(btn => btn.textContent?.includes('Edit'));
                 expect(requestEditButton).toBeDefined();
             });
         });
 
-        it('should find post to edit when clicking request edit', async () => {
+        it('should find post to edit when clicking Edit', async () => {
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
                 const buttons = screen.getAllByRole('button');
-                const requestEditButton = buttons.find(btn => btn.textContent?.includes('Request Edit'));
+                const requestEditButton = buttons.find(btn => btn.textContent?.includes('Edit'));
 
                 if (requestEditButton) {
                     fireEvent.click(requestEditButton);
@@ -417,7 +417,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/carousel1.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/carousel1.jpg', '/carousel2.jpg', '/carousel3.jpg'],
             };
@@ -437,7 +437,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/carousel1.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/carousel1.jpg', '/carousel2.jpg'],
             };
@@ -461,7 +461,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/video-thumb.jpg',
                 videoUrl: '/video.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 duration: '0:30',
             };
@@ -482,7 +482,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/story-thumb.jpg',
                 videoUrl: '/story.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
 
@@ -525,7 +525,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/feedback.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption', 'Media'],
@@ -543,23 +543,23 @@ describe('ContentStudio Component', () => {
         });
     });
 
-    describe('Multiple Platforms', () => {
-        it('should display platform badges', async () => {
-            const multiPlatformPost = {
+    describe('Platform badge', () => {
+        it('should display the platform badge', async () => {
+            const platformPost = {
                 id: 'p9',
-                caption: 'Multi-platform post',
+                caption: 'Platform badge post',
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/multi.jpg',
-                platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
 
-            vi.mocked(postsAPI.getAll).mockResolvedValue([multiPlatformPost]);
+            vi.mocked(postsAPI.getAll).mockResolvedValue([platformPost]);
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
-                expect(screen.getByText('Multi-platform post')).toBeInTheDocument();
+                expect(screen.getByText('Platform badge post')).toBeInTheDocument();
             });
         });
     });
@@ -647,7 +647,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/adhoc.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 // No scheduledFor set
             };
@@ -712,7 +712,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/missed.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
 
@@ -734,7 +734,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/video-thumb.jpg',
                 videoUrl: '/video.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 duration: '0:45',
             };
@@ -758,7 +758,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/video-thumb.jpg',
                 videoUrl: '/video.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 duration: '1:30',
             };
@@ -780,7 +780,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg', '/car3.jpg'],
             };
@@ -800,7 +800,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg'],
             };
@@ -827,7 +827,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/future.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             };
 
@@ -849,7 +849,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'POSTED' as const,
                 thumbnail: '/past.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 postedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
             };
 
@@ -873,7 +873,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/fb.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption', 'Timing'],
@@ -897,7 +897,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/fb2.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 feedback: 'Simple text feedback',
             };
@@ -920,7 +920,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p1.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                 },
                 {
                     id: 'p2',
@@ -928,7 +928,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p2.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                 },
             ];
 
@@ -948,7 +948,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/p1.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                 },
                 {
                     id: 's1',
@@ -956,7 +956,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'SCHEDULED' as const,
                     thumbnail: '/s1.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                     scheduledFor: new Date().toISOString(),
                 },
             ];
@@ -990,7 +990,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/fb.jpg',
-                platforms: ['FACEBOOK'] as Platform[],
+                platform: 'FACEBOOK' as Platform,
                 createdAt: new Date().toISOString(),
             };
 
@@ -1002,22 +1002,22 @@ describe('ContentStudio Component', () => {
             });
         });
 
-        it('should render cross-platform posts', async () => {
-            const bothPost = {
-                id: 'both1',
-                caption: 'Both platforms',
+        it('should render Instagram platform posts', async () => {
+            const instagramPost = {
+                id: 'ig1',
+                caption: 'Instagram exclusive',
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
-                thumbnail: '/both.jpg',
-                platforms: ['INSTAGRAM', 'FACEBOOK'] as Platform[],
+                thumbnail: '/ig.jpg',
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
 
-            vi.mocked(postsAPI.getAll).mockResolvedValue([bothPost]);
+            vi.mocked(postsAPI.getAll).mockResolvedValue([instagramPost]);
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => {
-                expect(screen.getByText('Both platforms')).toBeInTheDocument();
+                expect(screen.getByText('Instagram exclusive')).toBeInTheDocument();
             });
         });
     });
@@ -1041,7 +1041,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'POSTED' as const,
                     thumbnail: '/p1.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                     postedAt: new Date().toISOString(),
                 },
             ]);
@@ -1067,7 +1067,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'CHANGES_REQUESTED' as const,
                     thumbnail: '/img.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                     feedback: '{"broken": json',
                 },
                 {
@@ -1076,7 +1076,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'CHANGES_REQUESTED' as const,
                     thumbnail: '/img.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                     feedback: '{}',
                 }
             ];
@@ -1104,7 +1104,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
@@ -1132,7 +1132,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 // Scheduled 1 hour from now
                 scheduledFor: new Date(Date.now() + 1 * 60 * 60 * 1000).toISOString(),
             };
@@ -1146,7 +1146,7 @@ describe('ContentStudio Component', () => {
                 expect(screen.getByText('Locked Post')).toBeInTheDocument();
                 expect(screen.getByText('Locked for Publishing')).toBeInTheDocument();
                 // Revert button should NOT be present
-                expect(screen.queryByText('Revert to Review')).not.toBeInTheDocument();
+                expect(screen.queryByText('Revert')).not.toBeInTheDocument();
             });
         });
 
@@ -1157,7 +1157,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 // Scheduled 5 hours from now
                 scheduledFor: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
             };
@@ -1172,7 +1172,7 @@ describe('ContentStudio Component', () => {
                 // "Ready to Post" appears multiple times (header + card badge)
                 const readyBadges = screen.getAllByText('Ready to Post');
                 expect(readyBadges.length).toBeGreaterThan(0);
-                expect(screen.getByText('Revert to Review')).toBeInTheDocument();
+                expect(screen.getByText('Revert')).toBeInTheDocument();
             });
         });
 
@@ -1190,7 +1190,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
@@ -1198,7 +1198,7 @@ describe('ContentStudio Component', () => {
 
             // 1. Open Modal
             await waitFor(() => expect(screen.getByText('Pending Post')).toBeInTheDocument());
-            const requestEditBtn = screen.getByText('Request Edit');
+            const requestEditBtn = screen.getByText('Edit');
             fireEvent.click(requestEditBtn);
 
             // 2. Verify Modal Header
@@ -1239,14 +1239,14 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Pending Post')).toBeInTheDocument());
-            fireEvent.click(screen.getByText('Request Edit'));
+            fireEvent.click(screen.getByText('Edit'));
 
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
 
@@ -1271,7 +1271,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([scheduledPost]);
@@ -1279,9 +1279,9 @@ describe('ContentStudio Component', () => {
 
             await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
-            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+            await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
 
-            fireEvent.click(screen.getByText('Revert to Review'));
+            fireEvent.click(screen.getByText('Revert'));
 
             // Modal opens
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
@@ -1317,7 +1317,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1348,13 +1348,13 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Pending Post')).toBeInTheDocument());
-            fireEvent.click(screen.getByText('Request Edit'));
+            fireEvent.click(screen.getByText('Edit'));
 
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
 
@@ -1379,7 +1379,7 @@ describe('ContentStudio Component', () => {
                 type: 'REEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
 
@@ -1400,7 +1400,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'MISSED_DEADLINE' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 postedAt: new Date().toISOString(),
                 publishError: 'Media upload failed'
             };
@@ -1425,7 +1425,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 scheduledFor: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1440,9 +1440,9 @@ describe('ContentStudio Component', () => {
 
             await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
-            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+            await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
 
-            fireEvent.click(screen.getByText('Revert to Review'));
+            fireEvent.click(screen.getByText('Revert'));
 
             await waitFor(() => {
                 expect(screen.getByText('Max Revisions Reached')).toBeInTheDocument();
@@ -1466,7 +1466,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
 
@@ -1495,7 +1495,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg', '/car3.jpg'],
             };
@@ -1531,7 +1531,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg'],
             };
@@ -1572,7 +1572,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg'],
             };
@@ -1609,7 +1609,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
@@ -1645,7 +1645,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1679,7 +1679,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1718,7 +1718,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/img.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                 },
             ];
             const refreshedPosts = [
@@ -1729,7 +1729,7 @@ describe('ContentStudio Component', () => {
                     type: 'IMAGE' as const,
                     status: 'PENDING_APPROVAL' as const,
                     thumbnail: '/img2.jpg',
-                    platforms: ['INSTAGRAM'] as Platform[],
+                    platform: 'INSTAGRAM' as Platform,
                 },
             ];
 
@@ -1759,14 +1759,14 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Chip toggle test')).toBeInTheDocument());
-            fireEvent.click(screen.getByText('Request Edit'));
+            fireEvent.click(screen.getByText('Edit'));
 
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
 
@@ -1797,7 +1797,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption'],
@@ -1810,9 +1810,9 @@ describe('ContentStudio Component', () => {
 
             await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
-            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+            await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
 
-            fireEvent.click(screen.getByText('Revert to Review'));
+            fireEvent.click(screen.getByText('Revert'));
 
             await waitFor(() => expect(screen.getByText('Review Notes')).toBeInTheDocument());
 
@@ -1834,7 +1834,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Caption', 'Media'],
@@ -1847,9 +1847,9 @@ describe('ContentStudio Component', () => {
 
             await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
-            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+            await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
 
-            fireEvent.click(screen.getByText('Revert to Review'));
+            fireEvent.click(screen.getByText('Revert'));
 
             // The modal is read-only since feedback exists, and shows history view (covers 1075-1083)
             await waitFor(() => {
@@ -1874,7 +1874,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'SCHEDULED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 scheduledFor: new Date(Date.now() + 5 * 3600 * 1000).toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Other'],
@@ -1887,9 +1887,9 @@ describe('ContentStudio Component', () => {
 
             await waitFor(() => expect(screen.getByText('Scheduled')).toBeInTheDocument());
             fireEvent.click(screen.getByText('Scheduled'));
-            await waitFor(() => expect(screen.getByText('Revert to Review')).toBeInTheDocument());
+            await waitFor(() => expect(screen.getByText('Revert')).toBeInTheDocument());
 
-            fireEvent.click(screen.getByText('Revert to Review'));
+            fireEvent.click(screen.getByText('Revert'));
 
             await waitFor(() => expect(screen.getByText('Review Notes')).toBeInTheDocument());
 
@@ -1923,14 +1923,14 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Drag snap test')).toBeInTheDocument());
-            fireEvent.click(screen.getByText('Request Edit'));
+            fireEvent.click(screen.getByText('Edit'));
 
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
 
@@ -1955,14 +1955,14 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([pendingPost]);
             render(<ContentStudio instagramConnected={true} />);
 
             await waitFor(() => expect(screen.getByText('Branch 750 test')).toBeInTheDocument());
-            fireEvent.click(screen.getByText('Request Edit'));
+            fireEvent.click(screen.getByText('Edit'));
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
 
             // Click Caption tab first
@@ -1989,7 +1989,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 feedback: JSON.stringify({
                     tags: ['Other'],
@@ -2041,13 +2041,13 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([freshPost]);
             render(<ContentStudio instagramConnected={true} />);
             await waitFor(() => expect(screen.getByText('Chip without note test')).toBeInTheDocument());
-            fireEvent.click(screen.getByText('Request Edit'));
+            fireEvent.click(screen.getByText('Edit'));
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
 
             // Select the Caption tab
@@ -2145,7 +2145,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 scheduledFor: pastDate,
                 createdAt: new Date().toISOString(),
             };
@@ -2170,7 +2170,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 scheduledFor: futureDate,
                 createdAt: new Date().toISOString(),
             };
@@ -2194,7 +2194,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
@@ -2217,7 +2217,7 @@ describe('ContentStudio Component', () => {
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/thumb.jpg',
                 videoUrl: '/vid.mp4',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([videoPost]);
@@ -2241,7 +2241,7 @@ describe('ContentStudio Component', () => {
                 type: 'CAROUSEL' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/car1.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 mediaUrls: ['/car1.jpg', '/car2.jpg'],
             };
@@ -2261,7 +2261,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([imagePost]);
@@ -2282,7 +2282,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([initialPost]);
@@ -2312,7 +2312,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([freshPost]);
@@ -2320,7 +2320,7 @@ describe('ContentStudio Component', () => {
             await waitFor(() => expect(screen.getByText('Post for chip warning test')).toBeInTheDocument());
 
             // Open feedback modal
-            fireEvent.click(screen.getByText('Request Edit'));
+            fireEvent.click(screen.getByText('Edit'));
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
 
             // Select Caption tab (this adds 'Caption' to selectedTags via toggleDetailOption when a chip is clicked)
@@ -2367,7 +2367,7 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'CHANGES_REQUESTED' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
                 // feedback with a tag that has empty detail - unusual state but tests the guard
                 feedback: JSON.stringify({
@@ -2410,14 +2410,14 @@ describe('ContentStudio Component', () => {
                 type: 'IMAGE' as const,
                 status: 'PENDING_APPROVAL' as const,
                 thumbnail: '/img.jpg',
-                platforms: ['INSTAGRAM'] as Platform[],
+                platform: 'INSTAGRAM' as Platform,
                 createdAt: new Date().toISOString(),
             };
             vi.mocked(postsAPI.getAll).mockResolvedValue([freshPost]);
             render(<ContentStudio instagramConnected={true} />);
             await waitFor(() => expect(screen.getByText('Warn chip post')).toBeInTheDocument());
 
-            fireEvent.click(screen.getByText('Request Edit'));
+            fireEvent.click(screen.getByText('Edit'));
             await waitFor(() => expect(screen.getByText('Refine Content')).toBeInTheDocument());
 
             // Add a chip, then remove it — leaves Caption in selectedTags with empty detail

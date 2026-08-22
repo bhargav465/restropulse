@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import ContentStudio from './components/ContentStudio';
 import Intelligence from './components/Intelligence';
+import { shellBucketToView, type DeepLinkTarget } from './components/intelligence/sections/deep-links';
+import { announceNotificationsSeen, requestIntelNav, INTEL_NOTIFICATIONS_SEEN_EVENT } from './components/intelligence/sections/notifications';
+import type { IntelligenceNotification } from '@restropulse/shared';
+import { track } from './components/intelligence/sections/track';
 import Inputs from './components/Inputs';
 import Strategy from './components/Strategy';
 import ProfileSheet from './components/ProfileSheet';
@@ -11,9 +15,12 @@ import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
 import Landing from './components/Landing';
+import Grader from './components/Grader';
 import Paywall from './components/Paywall';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
 import { ViewState, Restaurant, User, Post, FeatureFlags, Platform, WebThemeName, EntitlementState } from '@restropulse/shared';
-import { authAPI, restaurantAPI, postsAPI, configAPI, subscriptionAPI } from './api';
+import { authAPI, restaurantAPI, postsAPI, configAPI, subscriptionAPI, intelligenceAPI } from './api';
 import { trackPageView, browserEvents } from '@restropulse/telemetry/browser';
 
 function getUserInitials(name: string): string {
@@ -31,8 +38,27 @@ function readViewFromUrl(): ViewState | null {
     return RESTORABLE_VIEWS.includes(view) ? view : null;
 }
 
+// Public, unauthenticated static pages (Meta app review requires these to be
+// reachable without login). Checked once per page load, not part of the
+// SPA's view-state routing.
+type StaticPage = 'privacy-policy' | 'terms' | null;
+function readStaticPageFromUrl(): StaticPage {
+    const path = window.location.pathname.replace(/\/$/, '') || '/';
+    if (path === '/privacy-policy') return 'privacy-policy';
+    if (path === '/terms') return 'terms';
+    return null;
+}
+
 const App: React.FC = () => {
+    // Computed once per page load -- these are plain server-style pages reached
+    // by direct navigation (e.g. Meta's app-review crawler), not SPA routes.
+    const [staticPage] = useState<StaticPage>(() => readStaticPageFromUrl());
     const [currentView, setCurrentView] = useState<ViewState>('LANDING');
+    // Intelligence notification feed for the bell (report ready, rival alerts,
+    // yesterday's reviews). Loaded once a restaurant is known; refreshed when
+    // the dashboard marks the feed seen or a new report lands.
+    const [notifications, setNotifications] = useState<IntelligenceNotification[]>([]);
+    const [unreadNotifications, setUnreadNotifications] = useState(0);
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     // Plan slug chosen from the landing pricing cards, remembered across the
     // login -> onboarding flow so a trial can be auto-started afterwards.
@@ -135,6 +161,28 @@ const App: React.FC = () => {
             const token = localStorage.getItem('rp_token');
             const session = localStorage.getItem('rp_session');
 
+            // Dev-only auto-login (VITE_DEV_AUTO_LOGIN_PHONE=+91… in apps/web/.env.local):
+            // no session yet → request the backend dev OTP, verify it, and land on
+            // the dashboard without the login page. Compiled out of production
+            // builds (import.meta.env.DEV) and inert unless the variable is set.
+            const autoPhone =
+                import.meta.env.DEV && import.meta.env.MODE !== 'test'
+                    ? (import.meta.env.VITE_DEV_AUTO_LOGIN_PHONE as string | undefined)
+                    : undefined;
+            if (!(token && session) && autoPhone) {
+                try {
+                    const sent = await authAPI.sendOtp(autoPhone);
+                    if (sent.success && sent.devOtp) {
+                        await onLoginSuccess(await authAPI.verifyOtp(autoPhone, sent.devOtp));
+                        setLoading(false);
+                        return;
+                    }
+                    console.warn('[dev auto-login] API did not return a devOtp — is the API running in non-production?');
+                } catch (e) {
+                    console.warn('[dev auto-login] failed, showing the login page instead:', e);
+                }
+            }
+
             if (token && session) {
                 try {
                     // Verify session and get user data
@@ -200,6 +248,64 @@ const App: React.FC = () => {
         setCurrentView(view);
         trackPageView(view);
         window.history.pushState({ level: 'view', view }, '', `?view=${view.toLowerCase()}`);
+    };
+
+    const loadNotifications = async () => {
+        try {
+            const feed = await intelligenceAPI.getNotifications();
+            setNotifications(feed.items);
+            setUnreadNotifications(feed.unread);
+        } catch {
+            /* the feed is a nudge, never a blocker */
+        }
+    };
+
+    useEffect(() => {
+        if (!restaurantData?.id) return;
+        void loadNotifications();
+        const onSeen = () => void loadNotifications();
+        window.addEventListener(INTEL_NOTIFICATIONS_SEEN_EVENT, onSeen);
+        return () => window.removeEventListener(INTEL_NOTIFICATIONS_SEEN_EVENT, onSeen);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [restaurantData?.id]);
+
+    const handleNotificationsOpen = () => {
+        track.notificationsOpened({ unread: unreadNotifications, total: notifications.length });
+        if (unreadNotifications === 0) return;
+        setUnreadNotifications(0);
+        setNotifications((items) => items.map((n) => ({ ...n, unread: false })));
+        intelligenceAPI.markNotificationsSeen().then(announceNotificationsSeen).catch(() => undefined);
+    };
+
+    const handleNotificationClick = (n: IntelligenceNotification) => {
+        track.notificationClicked({ kind: n.kind, unread: n.unread, source: 'bell' });
+        requestIntelNav(n.link);
+        navigateTo('INTELLIGENCE');
+    };
+
+    /**
+     * RP-001 — deep-link handler for Restaurant Intelligence.
+     *
+     * Every action-plan CTA, Search & SEO "Fix →", pillar drilldown and
+     * "Close this gap →" resolves to a `DeepLinkTarget`; this maps its shell
+     * bucket onto the `ViewState` this shell owns and navigates. Buckets this
+     * app has no home for (Ordering / Campaigns / Design / Get-started) map to
+     * null and are left alone — retargeting them is RP-002, gated on RP-014.
+     */
+    const handleIntelligenceNavigate = (target: DeepLinkTarget) => {
+        const view = shellBucketToView(target.bucket);
+        track.actionCtaClicked({ rank: Number(target.params?.rank ?? 0), bucket: target.bucket, resolvedView: view });
+        if (!view) return;
+        // In-Intelligence destinations (e.g. review replies → What guests say):
+        // the dashboard listens for this and switches bucket/tab.
+        if (view === 'INTELLIGENCE' && target.params?.intelTab) {
+            requestIntelNav({
+                view: 'INTELLIGENCE',
+                bucket: (target.params.intelBucket as 'MINE' | 'COMPETITION') ?? 'MINE',
+                tab: target.params.intelTab,
+            });
+        }
+        navigateTo(view);
     };
 
     const onLoginSuccess = async (response: { success: boolean; message?: string }) => {
@@ -308,18 +414,18 @@ const App: React.FC = () => {
             // Restaurant Intelligence replaces the old Dashboard as the home view.
             case 'INTELLIGENCE':
             case 'DASHBOARD':
-                return <Intelligence restaurant={restaurantData} />;
+                return <Intelligence restaurant={restaurantData} onNavigate={handleIntelligenceNavigate} />;
             case 'STUDIO':
                 return <ContentStudio onCreatePost={metaConnected ? () => setIsAdhocModalOpen(true) : undefined} refreshKey={refreshKey} instagramConnected={metaConnected} onConnectInstagram={handleConnectInstagram} postApprovalBufferMins={featureFlags?.postApprovalBufferMins} instagramEnabled={instagramEnabled} facebookEnabled={facebookEnabled} />;
             case 'INPUTS':
                 if (featureFlags?.updatesSection === false) {
-                    return <Intelligence restaurant={restaurantData} />;
+                    return <Intelligence restaurant={restaurantData} onNavigate={handleIntelligenceNavigate} />;
                 }
                 return <Inputs restaurantData={restaurantData} onRefresh={refreshRestaurantData} />;
             case 'STRATEGY':
                 return <Strategy restaurantData={restaurantData} instagramConnected={instagramConnected} onConnectInstagram={handleConnectInstagram} cycleApprovalBufferMins={featureFlags?.cycleApprovalBufferMins} instagramEnabled={instagramEnabled} />;
             default:
-                return <Intelligence restaurant={restaurantData} />;
+                return <Intelligence restaurant={restaurantData} onNavigate={handleIntelligenceNavigate} />;
         }
     };
 
@@ -333,6 +439,19 @@ const App: React.FC = () => {
             default: return 'RestroPulse';
         }
     };
+
+    // Public static pages render immediately, independent of auth/session state.
+    if (staticPage === 'privacy-policy') {
+        return <PrivacyPolicy onBack={() => { window.location.href = '/'; }} />;
+    }
+    if (staticPage === 'terms') {
+        return <TermsOfService onBack={() => { window.location.href = '/'; }} />;
+    }
+
+    // Public lead-gen grader (?view=grader) — no auth, its own page entirely.
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'grader') {
+        return <Grader />;
+    }
 
     if (loading) {
         return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -427,6 +546,10 @@ const App: React.FC = () => {
                 featureFlags={featureFlags}
                 entitlement={entitlement}
                 onUpgrade={openSubscriptionPanel}
+                notifications={notifications}
+                unreadNotifications={unreadNotifications}
+                onNotificationsOpen={handleNotificationsOpen}
+                onNotificationClick={handleNotificationClick}
             >
                 {renderView()}
             </Layout>

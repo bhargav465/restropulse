@@ -11,6 +11,7 @@
  * Usage:
  *   node scripts/secrets-pull.mjs                    # pull for all apps
  *   node scripts/secrets-pull.mjs --app web           # pull for a single app
+ *   node scripts/secrets-pull.mjs --app root          # pull root tooling env (ngrok)
  *   node scripts/secrets-pull.mjs --dry-run           # print mapping, no network/writes
  *   node scripts/secrets-pull.mjs --dry-run --app api
  *
@@ -26,7 +27,25 @@ const REPO_ROOT = new URL('..', import.meta.url).pathname.replace(/^\/([A-Z]:)/i
 const KEY_VAULT_URL = process.env.AZURE_KEY_VAULT_URL || 'https://restropulse-prod-kv.vault.azure.net';
 const PREFIX = 'dev';
 
-const ALL_APPS = ['api', 'web', 'publisher', 'content-engine', 'db-cli'];
+const ALL_APPS = ['api', 'web', 'publisher', 'content-engine', 'intelligence-worker', 'db-cli', 'root'];
+const RUNTIME_AKV_APPS = ['api', 'publisher', 'content-engine', 'intelligence-worker', 'db-cli'];
+const WEB_LOCAL_DEFAULTS = {
+  VITE_API_URL: 'http://localhost:3001/api',
+  VITE_APP_URL: 'http://localhost:3000',
+};
+const API_LOCAL_DEFAULTS = {
+  FRONTEND_URL: 'http://localhost:3000',
+  BACKEND_URL: 'http://localhost:3001',
+};
+const AKV_RUNTIME_DEFAULTS = {
+  SECRETS_BACKEND: 'azure-kv',
+  AZURE_KEY_VAULT_URL: KEY_VAULT_URL,
+  AZURE_KEY_VAULT_KEY_PREFIX: PREFIX,
+};
+const ROOT_SECRET_MAPPINGS = [
+  { key: 'NGROK_AUTH_TOKEN', kvName: 'ngrok-auth-token' },
+  { key: 'NGROK_DOMAIN', kvName: 'ngrok-domain' },
+];
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -41,17 +60,33 @@ if (requestedApp && !ALL_APPS.includes(requestedApp)) {
 const apps = requestedApp ? [requestedApp] : ALL_APPS;
 
 function envPathForApp(app) {
+  if (app === 'root') {
+    return join(REPO_ROOT, '.env');
+  }
   return join(REPO_ROOT, 'apps', app, '.env');
 }
 
 function selectSecretsForApp(app) {
+  if (app === 'root') {
+    return ROOT_SECRET_MAPPINGS;
+  }
   return SECRETS_MANIFEST.filter((def) => def.apps.includes(app));
 }
 
-function mergeEnvFile(envPath, resolved) {
+function mergeEnvFile(envPath, resolved, removeKeys = []) {
   let lines = [];
   if (existsSync(envPath)) {
     lines = readFileSync(envPath, 'utf8').split(/\r?\n/);
+  }
+
+  if (removeKeys.length > 0) {
+    const keySet = new Set(removeKeys);
+    lines = lines.filter((line) => {
+      const eq = line.indexOf('=');
+      if (eq === -1) return true;
+      const key = line.slice(0, eq).trim();
+      return !keySet.has(key);
+    });
   }
 
   for (const [key, value] of Object.entries(resolved)) {
@@ -74,46 +109,74 @@ function mergeEnvFile(envPath, resolved) {
 async function pullForApp(app, client) {
   const defs = selectSecretsForApp(app);
   const envPath = envPathForApp(app);
+  const runtimeAkv = RUNTIME_AKV_APPS.includes(app);
 
   let resolvedCount = 0;
   let skippedCount = 0;
   const resolved = {};
 
-  for (const def of defs) {
-    if (!def.kvName) {
-      skippedCount++;
-      continue;
-    }
-    const kvSecretName = `${PREFIX}-${def.kvName}`;
+  if (!runtimeAkv) {
+    for (const def of defs) {
+      if (!def.kvName) {
+        skippedCount++;
+        continue;
+      }
+      const kvSecretName = `${PREFIX}-${def.kvName}`;
 
-    if (dryRun) {
-      console.log(`${app}: ${def.key} -> ${kvSecretName}`);
-      continue;
-    }
+      if (dryRun) {
+        console.log(`${app}: ${def.key} -> ${kvSecretName}`);
+        continue;
+      }
 
-    try {
-      const secret = await client.getSecret(kvSecretName);
-      if (secret?.value !== undefined) {
-        resolved[def.key] = secret.value;
-        resolvedCount++;
-      } else {
+      try {
+        const secret = await client.getSecret(kvSecretName);
+        if (secret?.value !== undefined) {
+          resolved[def.key] = secret.value;
+          resolvedCount++;
+        } else {
+          skippedCount++;
+        }
+      } catch (err) {
+        if (err?.code === 'SecretNotFound' || err?.statusCode === 404) {
+          skippedCount++;
+        } else {
+          throw err;
+        }
+      }
+    }
+  } else {
+    for (const def of defs) {
+      if (def.kvName) {
         skippedCount++;
       }
-    } catch (err) {
-      if (err?.code === 'SecretNotFound' || err?.statusCode === 404) {
-        skippedCount++;
-      } else {
-        throw err;
-      }
     }
+    Object.assign(resolved, AKV_RUNTIME_DEFAULTS);
   }
 
   if (dryRun) {
     return;
   }
 
+  if (app === 'web') {
+    for (const [key, value] of Object.entries(WEB_LOCAL_DEFAULTS)) {
+      if (!resolved[key]) {
+        resolved[key] = value;
+      }
+    }
+  }
+  if (app === 'api') {
+    for (const [key, value] of Object.entries(API_LOCAL_DEFAULTS)) {
+      if (!resolved[key]) {
+        resolved[key] = value;
+      }
+    }
+  }
+
   if (Object.keys(resolved).length > 0) {
-    mergeEnvFile(envPath, resolved);
+    const removeKeys = runtimeAkv
+      ? defs.filter((d) => d.kvName).map((d) => d.key)
+      : [];
+    mergeEnvFile(envPath, resolved, removeKeys);
   }
 
   console.log(`${app}: resolved=${resolvedCount} skipped-missing=${skippedCount} -> ${envPath}`);

@@ -22,7 +22,15 @@ export const CUISINE_TYPES = [
     'BBQ/Grill', 'Kebab', 'Andhra',
 ];
 
-export const DEEP_LINK_BUCKETS = ['content', 'ordering', 'get-started', 'campaigns'] as const;
+/**
+ * RP-002 / RP-014 option (b): this app has no Ordering or Campaigns module, so
+ * the model may only route actions to tools that exist —
+ *   'content'     → draft posts/photos in Content Studio
+ *   'get-started' → fix the Google profile / reply to reviews (Intelligence)
+ * Old reports still carry 'ordering'/'campaigns'; the web resolves those to a
+ * no-op rather than a dead page.
+ */
+export const DEEP_LINK_BUCKETS = ['content', 'get-started'] as const;
 
 // A compacted competitor row — the ONLY competitor data sent to the model.
 // Never send raw Places payloads (cost rule, CLAUDE §9).
@@ -92,7 +100,11 @@ export const ANALYSIS_SYSTEM =
     'must name real restaurants from the input — no generic statements. ' +
     // Addition (a):
     'Every action-plan item MUST include a deepLinkBucket routing the owner to the right RestroPulse tool ' +
-    `(one of: ${DEEP_LINK_BUCKETS.join(', ')}). ` +
+    `(one of: ${DEEP_LINK_BUCKETS.join(', ')}): use "content" for actions done by posting content or photos, ` +
+    '"get-started" for actions done on the Google profile or by replying to reviews. ' +
+    'Every action must be something the owner can do with those two tools or on their Google Business Profile — ' +
+    'do NOT recommend launching ad campaigns, loyalty programs, SMS/WhatsApp blasts, discounts, or online-ordering ' +
+    'features: this product does not have them. ' +
     // Addition (b):
     'You must NEVER state numeric platform metrics (ratings, review counts, follower counts, delivery-app ' +
     'numbers) that are not present in the input data. Do not estimate Swiggy/Zomato numbers. ' +
@@ -107,10 +119,10 @@ export const ANALYSIS_TOOL: Anthropic.Tool = {
             overview: { type: 'string', description: '3–4 sentence high-level overview of the competitive landscape and the base restaurant\'s standing.' },
             keyFindings: {
                 type: 'array',
-                description: 'Exactly 6 specific, data-backed findings — each references actual restaurants/metrics from the input.',
+                description: '8–10 specific, data-backed findings — each references actual restaurants/metrics from the input and ends with why it matters to the owner.',
                 items: { type: 'string' },
-                minItems: 6,
-                maxItems: 6,
+                minItems: 8,
+                maxItems: 10,
             },
             immediateThreats: { type: 'string', description: '2–3 sentences naming the most urgent competitive threats and why.' },
             growthOpportunities: { type: 'string', description: '2–3 sentences on the biggest untapped opportunities.' },
@@ -187,7 +199,9 @@ export function buildAnalysisPrompt(input: AnalysisPromptInput): string {
         'Same-cuisine rivals nearby:',
         ...(sameCuisineRows.length ? sameCuisineRows.map(fmt) : ['- (none within range)']),
         '',
-        'Produce the analysis via the competitive_analysis tool. keyFindings must be exactly 6 items and ',
-        'actionPlan exactly 5 items. Only reference numbers that appear above — never invent platform metrics.',
+        'Produce the analysis via the competitive_analysis tool. keyFindings must be 8 to 10 items, each anchored ',
+        'to a specific number from the data above (a rating, review count, distance, or photo count) and each ending ',
+        'with why it matters to the owner in plain words. actionPlan exactly 5 items. ',
+        'Only reference numbers that appear above — never invent platform metrics.',
     ].join('\n');
 }

@@ -123,11 +123,11 @@ Rules:
 
 #### Content Engine AI backend (env additions)
 
-Default behavior unchanged unless `CONTENT_GENERATOR_BACKEND=ai` is set. The flag is an "uber" master switch: when set, every AI sub-feature defaults on. All four required keys (`ANTHROPIC_API_KEY`, `REPLICATE_API_TOKEN`, `GOOGLE_CALENDAR_API_KEY`, `PERPLEXITY_API_KEY`) must be present or the factory throws a single combined error listing every missing key. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the supported rollout path and `docs/SECRETS.md` for how to obtain each key.
+`CONTENT_GENERATOR_BACKEND` defaults to `ai`. The flag is an "uber" master switch: when set to `ai`, every AI sub-feature defaults on. All four required keys (`ANTHROPIC_API_KEY`, `REPLICATE_API_TOKEN`, `GOOGLE_CALENDAR_API_KEY`, `PERPLEXITY_API_KEY`) must be present or the factory throws a single combined error listing every missing key. Set `CONTENT_GENERATOR_BACKEND=placeholder` to use the asset-catalog generator. See `docs/CONTENT_ENGINE_AI_ROLLOUT.md` for the rollout path and `docs/SECRETS.md` for how to obtain each key.
 
 | Variable                          | Required when                                          | Default (no AI)  | Default (AI mode) | Purpose                                                                       |
 |-----------------------------------|--------------------------------------------------------|------------------|-------------------|-------------------------------------------------------------------------------|
-| `CONTENT_GENERATOR_BACKEND`       | always                                                 | `placeholder`    | n/a               | Master switch: `placeholder` (asset catalog) or `ai` (full AI chain).         |
+| `CONTENT_GENERATOR_BACKEND`       | always                                                 | `ai`             | n/a               | Master switch: `placeholder` (asset catalog) or `ai` (full AI chain).         |
 | `ANTHROPIC_API_KEY`               | `CONTENT_GENERATOR_BACKEND=ai`                         | --               | required          | Anthropic API key for Sonnet 4.6 / Haiku 4.5 via `@ai-sdk/anthropic`.         |
 | `REPLICATE_API_TOKEN`             | AI mode + `MEDIA_BACKEND` not overridden               | --               | required          | Replicate API token for image (sync) and video (queue) generation.            |
 | `GOOGLE_CALENDAR_API_KEY`         | AI mode + V1 not overridden                            | --               | required          | Google Calendar API key for India public holidays calendar (V1).              |
@@ -245,6 +245,24 @@ These settings are required because the monorepo uses `@restropulse/*` workspace
 packages that Oryx cannot resolve (it runs `npm ci` without workspace context,
 producing a broken `node_modules`).
 
+### Deployment identity markers (staging/production)
+
+Deploy workflows stamp deployment metadata so the live resources can be verified
+against the workflow run/ref:
+
+| Setting / Surface | Description |
+|---|---|
+| `APP_GIT_SHA` | Deployed git commit SHA (staging `github.sha`; production resolves `inputs.ref` to commit SHA first) |
+| `APP_DEPLOY_RUN_ID` | GitHub Actions run ID |
+| `APP_DEPLOYED_AT` | UTC deployment timestamp |
+| `APP_ARTIFACT_SHA256` | SHA-256 of `api-deploy.zip` (staging API bundle) |
+| `GET /health` | API returns deployment metadata in `deployment` object |
+| `web /config.json` | Runtime web config includes deployment metadata under `deployment` |
+
+Deployment metadata above is operational and non-secret. Secret-backed values for
+runtime web config are fetched from Azure Key Vault during deploy and are not read
+from GitHub secrets/vars.
+
 ### Slot-Sticky Settings
 
 All app settings are **slot-sticky** (marked as "Deployment slot setting" in Azure Portal).
@@ -341,8 +359,8 @@ Individual app builds produce output in their respective `dist/` directories.
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `ci.yml` | PRs to `main`/`staging`, push to `staging` | Parallel type-check, lint, per-service tests with path filtering |
-| `deploy-staging.yml` | Push to `staging` | Build, deploy API to staging slot + SWA to staging environment, smoke tests, tag |
-| `deploy-production.yml` | Manual (`workflow_dispatch`) | Promote a staging tag to production via slot swap (API) and SWA upload (web) |
+| `deploy-staging.yml` | Push to `staging` | Build, deploy API to staging slot + SWA to staging environment, enforce/validate App Service Key Vault references, smoke tests, tag |
+| `deploy-production.yml` | Manual (`workflow_dispatch`) | Promote a staging tag to production via slot swap (API) and SWA upload (web), enforce/validate App Service Key Vault references |
 
 ### CI Gate (`ci.yml`)
 
@@ -362,10 +380,11 @@ Coverage is enforced on PRs via `config/coverage-baseline.json` (85% minimum for
 |---------|---------------|----------------|-------------------|------|
 | `apps/web` | Static Web Apps (`restropulse-prod-web`) | Upload to `staging` SWA environment | Upload artifact to production SWA environment | Free tier |
 | `apps/api` | App Service (`restropulse-prod-api`) | Deploy bundle to `staging` slot | Slot swap: staging -> production | ~$13/month |
-| `apps/publisher` | Continuous WebJob on same App Service | Bundled with API deploy | Promoted via slot swap | $0 extra |
-| `apps/content-engine` | Continuous WebJob on same App Service | Bundled with API deploy | Promoted via slot swap | $0 extra |
+| `apps/publisher` | Same App Service process group (Linux startup script) | Bundled with API deploy | Promoted via slot swap | $0 extra |
+| `apps/content-engine` | Same App Service process group (Linux startup script) | Bundled with API deploy | Promoted via slot swap | $0 extra |
+| `apps/intelligence-worker` | Same App Service process group (Linux startup script) | Bundled with API deploy | Promoted via slot swap | $0 extra |
 
-Publisher and content-engine run as continuous WebJobs under `App_Data/jobs/continuous/<name>/` on the same App Service as the API.
+Linux App Service does not run Windows-style WebJobs (`App_Data/jobs/**`). The deployed package includes `startup.sh`, and App Service starts all four processes (`api`, `publisher`, `content-engine`, `intelligence-worker`) via `bash startup.sh`.
 
 There is no separate staging Azure resource group. All resources share `restropulse-prod-rg`. Staging isolation is achieved via:
 - App Service: the `staging` deployment slot (`restropulse-prod-api-staging.azurewebsites.net`) with slot-sticky settings (separate DB, secrets, NODE_ENV)

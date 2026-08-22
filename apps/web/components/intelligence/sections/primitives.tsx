@@ -13,12 +13,12 @@ export type Grade = 'A' | 'B' | 'C' | 'D' | 'F';
 
 /** Human-friendly pillar labels keyed by PillarScore.key. */
 export const PILLAR_LABELS: Record<PillarScore['key'], string> = {
-    profile: 'Profile',
+    profile: 'Google profile',
     reviews: 'Reviews',
     photos: 'Photos',
     website: 'Website',
-    competition: 'Competition',
-    momentum: 'Momentum',
+    competition: 'Vs. nearby',
+    momentum: 'Trend',
 };
 
 /** Grade → semantic text color. A/B strong, C neutral-primary, D warn, F danger. */
@@ -120,7 +120,7 @@ export const PillarBar: React.FC<{
 // ---------------------------------------------------------------------------
 
 export const ThreatBar: React.FC<{ value: number; className?: string }> = ({ value, className = '' }) => (
-    <div className={`flex items-center gap-2 ${className}`} title={`Threat ${Math.round(value)}/100`}>
+    <div className={`flex items-center gap-2 ${className}`} title={`Rivalry ${Math.round(value)}/100`}>
         <div className="h-1.5 w-16 rounded-full bg-primary-soft overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: intensity(value / 100) }} />
         </div>

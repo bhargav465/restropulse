@@ -131,7 +131,7 @@ describe('Publishing Cron Service', () => {
             type: 'IMAGE',
             caption: 'Test post',
             thumbnail: 'https://example.com/img.jpg',
-            platforms: ['INSTAGRAM'],
+            platform: 'INSTAGRAM',
             publishAttempts: 0
         };
 
@@ -147,7 +147,7 @@ describe('Publishing Cron Service', () => {
         it('should publish a post successfully', async () => {
             mockRestFindOne.mockResolvedValue(mockRestaurant);
             mockPublishPost.mockResolvedValue({
-                instagram: { success: true, instagramMediaId: 'media-999', retryable: false }
+                success: true, externalPostId: 'media-999', retryable: false
             });
 
             const result = await processPostForPublishing(mockPostDoc);
@@ -185,7 +185,7 @@ describe('Publishing Cron Service', () => {
                 expect.objectContaining({
                     $set: expect.objectContaining({
                         status: 'POSTED',
-                        instagramMediaId: 'media-999'
+                        externalPostId: 'media-999'
                     })
                 })
             );
@@ -241,7 +241,7 @@ describe('Publishing Cron Service', () => {
         it('should handle retryable publishing failure', async () => {
             mockRestFindOne.mockResolvedValue(mockRestaurant);
             mockPublishPost.mockResolvedValue({
-                instagram: { success: false, error: 'Rate limited', retryable: true }
+                success: false, error: 'Rate limited', retryable: true
             });
 
             const result = await processPostForPublishing(mockPostDoc);
@@ -258,7 +258,7 @@ describe('Publishing Cron Service', () => {
         it('should mark as MISSED_DEADLINE on non-retryable failure', async () => {
             mockRestFindOne.mockResolvedValue(mockRestaurant);
             mockPublishPost.mockResolvedValue({
-                instagram: { success: false, error: 'Invalid media', retryable: false }
+                success: false, error: 'Invalid media', retryable: false
             });
 
             const result = await processPostForPublishing(mockPostDoc);
@@ -277,7 +277,7 @@ describe('Publishing Cron Service', () => {
         it('should mark as MISSED_DEADLINE when max retries reached even if retryable', async () => {
             mockRestFindOne.mockResolvedValue(mockRestaurant);
             mockPublishPost.mockResolvedValue({
-                instagram: { success: false, error: 'Rate limited', retryable: true }
+                success: false, error: 'Rate limited', retryable: true
             });
 
             const postAtMaxRetry = { ...mockPostDoc, publishAttempts: 2 };
@@ -314,7 +314,7 @@ describe('Publishing Cron Service', () => {
                     type: 'IMAGE',
                     caption: 'Post 1',
                     thumbnail: 'https://example.com/1.jpg',
-                    platforms: ['INSTAGRAM'],
+                    platform: 'INSTAGRAM',
                     publishAttempts: 0
                 },
                 {
@@ -323,7 +323,7 @@ describe('Publishing Cron Service', () => {
                     type: 'IMAGE',
                     caption: 'Post 2',
                     thumbnail: 'https://example.com/2.jpg',
-                    platforms: ['INSTAGRAM'],
+                    platform: 'INSTAGRAM',
                     publishAttempts: 0
                 }
             ];
@@ -340,8 +340,8 @@ describe('Publishing Cron Service', () => {
 
             // First post succeeds, second fails (non-retryable)
             mockPublishPost
-                .mockResolvedValueOnce({ instagram: { success: true, instagramMediaId: 'media-1', retryable: false } })
-                .mockResolvedValueOnce({ instagram: { success: false, error: 'Failed', retryable: false } });
+                .mockResolvedValueOnce({ success: true, externalPostId: 'media-1', retryable: false })
+                .mockResolvedValueOnce({ success: false, error: 'Failed', retryable: false });
 
             const resultPromise = runPublishingJob();
 

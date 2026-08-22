@@ -17,7 +17,7 @@ import type {
  */
 
 const pillClass = (active: boolean): string =>
-    `px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+    `px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
         active ? 'bg-primary text-white' : 'text-primary-strong hover:bg-surface/60'
     }`;
 
@@ -32,7 +32,7 @@ const COMP_PRESETS: Array<{ id: CompetitionPreset; label: string }> = [
     { id: 'MONTH', label: 'Month' },
 ];
 
-const inputClass = 'text-xs border border-line rounded-lg px-2 py-1.5 bg-surface text-ink';
+const inputClass = 'text-sm border border-line rounded-lg px-3 py-2 bg-surface text-ink';
 
 // Mobile-only compact dropdown that replaces the pill group (< sm).
 const selectClass = 'sm:hidden w-full text-xs font-semibold border border-line rounded-lg px-3 py-2 bg-primary-soft text-primary-strong';

@@ -167,7 +167,7 @@ Full setup details: `docs/MCP-SETUP.md`
 ## CI/CD
 
 - **CI workflow** (`ci.yml`): Runs on PRs to `main`/`staging`. Uses path-based change detection to skip irrelevant jobs. `ci-complete` is the single required status check.
-- **Staging deploy** (`deploy-staging.yml`): Auto-deploys on push to `staging`. Builds once, deploys artifacts to Azure (SWA for web, App Service for API + WebJobs).
+- **Staging deploy** (`deploy-staging.yml`): Auto-deploys on push to `staging`. Builds once, deploys artifacts to Azure (SWA for web, App Service for API + Linux startup script that launches API + workers).
 - **Production deploy** (`deploy-production.yml`): Manual `workflow_dispatch` with a staging tag. Requires environment approval.
 - **Coverage gate**: PRs enforce coverage thresholds from `config/coverage-baseline.json` (85% lines/branches/functions for web, api, content-engine). Publisher is excluded.
 - **Branching model**: Feature branches -> PR to `staging` -> PR to `main` (production promotion).

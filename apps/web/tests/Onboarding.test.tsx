@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from './utils/test-utils';
 import Onboarding, { resetEmailVerificationState } from '../components/Onboarding';
 import { restaurantAPI, accountManagerAPI, citiesAPI, authAPI } from '../api';
 import { sendEmailVerificationLink, completeEmailVerification, isEmailSignInLink, getStoredVerificationEmail } from '../firebase';
+import * as envUtils from '../utils/env';
 
 // Mock API modules
 vi.mock('../api', () => ({
@@ -124,6 +125,7 @@ describe('Onboarding Component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         resetEmailVerificationState();
+        vi.spyOn(envUtils, 'getGoogleMapsApiKey').mockReturnValue('');
         (localStorage.getItem as any).mockReturnValue(null);
         (citiesAPI.getAll as any).mockResolvedValue(mockCitiesResponse);
         (accountManagerAPI.getByCityAndZone as any).mockResolvedValue([]);
@@ -506,7 +508,7 @@ describe('Onboarding Component', () => {
     // --- handlePlaceSelect with city (Google Maps path) ---
 
     it('should render Google Maps address input when API key is set', async () => {
-        vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', 'test-api-key');
+        vi.spyOn(envUtils, 'getGoogleMapsApiKey').mockReturnValue('test-api-key');
 
         mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
@@ -516,8 +518,6 @@ describe('Onboarding Component', () => {
         await waitFor(() => {
             expect(screen.getByTestId('api-provider')).toBeInTheDocument();
         });
-
-        vi.unstubAllEnvs();
     });
 
     // --- handlePlaceSelect with city extraction ---
@@ -535,7 +535,7 @@ describe('Onboarding Component', () => {
             ),
         }));
 
-        vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', 'test-api-key');
+        vi.spyOn(envUtils, 'getGoogleMapsApiKey').mockReturnValue('test-api-key');
 
         mockEmailVerified();
         render(<Onboarding onComplete={mockOnComplete} />);
@@ -555,8 +555,6 @@ describe('Onboarding Component', () => {
                 expect(accountManagerAPI.getByCityAndZone).toHaveBeenCalledWith('Bangalore', undefined);
             });
         }
-
-        vi.unstubAllEnvs();
     });
 
     // --- Manager deselection (toggle) ---

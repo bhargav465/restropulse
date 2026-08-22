@@ -4,7 +4,12 @@ import { intelligenceAPI } from '../../api';
 import { SubNav, SubNavTab } from './primitives';
 import { ScoreDial, PillarBar, CheckRow, type Grade, PILLAR_LABELS, gradeTextClass } from './sections/primitives';
 import { ProvenanceChip, ProvenanceLegend } from './sections/provenance';
-import { resolveActionHref, type DeepLinkTarget } from './sections/deep-links';
+import { resolveActionHref, SHOW_ACTION_CTAS, type DeepLinkTarget } from './sections/deep-links';
+import { humanCity, whatChangedLine } from './sections/copy';
+import WhileYouWereAway from './sections/WhileYouWereAway';
+import { announceNotificationsSeen, INTEL_NAV_EVENT, INTEL_NOTIFICATIONS_SEEN_EVENT, type IntelNavDetail } from './sections/notifications';
+import type { IntelligenceNotification } from '@restropulse/shared';
+import { track } from './sections/track';
 import ScanFlow from './sections/ScanFlow';
 import { BucketSwitch } from './sections/BucketSwitch';
 import { PeriodFilter } from './sections/PeriodFilter';
@@ -53,8 +58,12 @@ function initialBucket(): BucketId {
 
 interface IntelligenceDashboardProps {
     restaurantData: Restaurant;
-    /** Deep-link navigation into other buckets (wired by the shell). */
-    onNavigate?: (target: DeepLinkTarget) => void;
+    /**
+     * Deep-link navigation into other buckets (wired by the shell). Required:
+     * see RP-001 — the previous `onNavigate?` + `?? (() => {})` default meant a
+     * shell that forgot to pass it got silently dead CTAs, with no type error.
+     */
+    onNavigate: (target: DeepLinkTarget) => void;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -73,14 +82,35 @@ const HeaderBand: React.FC<{
     selectedPillar: PillarScore['key'] | null;
     onSelectPillar: (key: PillarScore['key']) => void;
     onRescan: () => void;
+    /** "Not your restaurant?" — reopen the Google-listing picker and rescan. */
+    onChangeRestaurant: () => void;
     onNavigate: (t: DeepLinkTarget) => void;
-}> = ({ report, selectedPillar, onSelectPillar, onRescan, onNavigate }) => {
+}> = ({ report, selectedPillar, onSelectPillar, onRescan, onChangeRestaurant, onNavigate }) => {
     const grade: Grade = restroGrade(report.restroScore);
     const scannedAt = new Date(report.generatedAt);
     const withinWindow = Date.now() - scannedAt.getTime() < DAY_MS;
+    const changed = whatChangedLine(report);
+    const where = report.base.zone || report.base.city;
 
     return (
         <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
+            {/* Which listing this report is about — the owner must be able to see, at a
+                glance, that we scored the right restaurant, and fix it if we didn't. */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-4">
+                <p className="text-sm text-ink" data-testid="report-identity">
+                    Report for <span className="font-semibold">{report.base.name}</span>
+                    {where ? <span className="text-muted"> · {where}</span> : null}
+                    {' '}
+                    <button type="button" onClick={onChangeRestaurant} className="text-xs font-semibold text-primary-strong hover:underline">
+                        Not your restaurant?
+                    </button>
+                </p>
+                {changed ? (
+                    <p className="text-sm text-muted" data-testid="what-changed">{changed}</p>
+                ) : (
+                    <p className="text-sm text-muted">This is your first report — changes will show here from the next scan.</p>
+                )}
+            </div>
             <div className="grid gap-6 md:grid-cols-[auto_1fr_auto] md:items-center">
                 {/* Dial */}
                 <div className="flex justify-center lg:justify-start">
@@ -99,16 +129,29 @@ const HeaderBand: React.FC<{
                     <p className="text-sm text-ink font-semibold">
                         Rank #{report.ranking.rank} <span className="text-muted font-normal">of {report.ranking.total} nearby</span>
                     </p>
-                    <p className="text-xs text-muted">Scanned {relativeDays(scannedAt)}</p>
-                    <button
-                        type="button"
-                        onClick={onRescan}
-                        disabled={withinWindow}
-                        title={withinWindow ? 'You can re-scan once every 24 hours' : 'Run a fresh scan'}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line text-primary-strong hover:bg-primary-soft transition-colors disabled:opacity-50 disabled:hover:bg-surface"
-                    >
-                        Re-scan
-                    </button>
+                    <p className="text-xs text-muted">Report from {relativeDays(scannedAt)}</p>
+                    <div className="flex items-center gap-2 no-print">
+                        <button
+                            type="button"
+                            onClick={onRescan}
+                            disabled={withinWindow}
+                            title={withinWindow ? 'You can refresh once every 24 hours' : 'Run a fresh scan'}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line text-primary-strong hover:bg-primary-soft transition-colors disabled:opacity-50 disabled:hover:bg-surface"
+                        >
+                            Refresh report
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                track.tabOpened({ bucket: 'MINE', tab: 'PDF' });
+                                window.print();
+                            }}
+                            title="Save this report as a PDF (choose 'Save as PDF' in the print dialog)"
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line text-primary-strong hover:bg-primary-soft transition-colors"
+                        >
+                            Download PDF
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -126,7 +169,7 @@ const HeaderBand: React.FC<{
 const PillarChecks: React.FC<{
     report: IntelligenceReport;
     pillarKey: PillarScore['key'];
-    onNavigate?: (t: DeepLinkTarget) => void;
+    onNavigate: (t: DeepLinkTarget) => void;
 }> = ({ report, pillarKey, onNavigate }) => {
     const pillar = report.pillars.find((p) => p.key === pillarKey);
     if (!pillar) return null;
@@ -147,7 +190,7 @@ const PillarChecks: React.FC<{
                             label={chk.label}
                             pass={chk.pass}
                             note={chk.note}
-                            action={!chk.pass && target && onNavigate ? { label: target.cta, href: target.href, onClick: () => onNavigate(target) } : undefined}
+                            action={SHOW_ACTION_CTAS && !chk.pass && target ? { label: target.cta, href: target.href, onClick: () => onNavigate(target) } : undefined}
                         />
                     );
                 })}
@@ -168,7 +211,8 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
     const [report, setReport] = useState<IntelligenceReport | null | undefined>(undefined);
     const [selfMetrics, setSelfMetrics] = useState<IntelligenceSelfMetrics | null>(null);
     const [selectedPillar, setSelectedPillar] = useState<PillarScore['key'] | null>(null);
-    const [rescanning, setRescanning] = useState(false);
+    // Rescan state: `pick` reopens the "Is this you?" step ("Not your restaurant?").
+    const [rescan, setRescan] = useState<{ active: boolean; pick: boolean }>({ active: false, pick: false });
 
     // Two-bucket state (persisted per session + ?bucket= param).
     const [bucket, setBucket] = useState<BucketId>(initialBucket);
@@ -180,6 +224,47 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
     useEffect(() => {
         if (typeof window !== 'undefined') window.sessionStorage?.setItem('intel_bucket', bucket);
     }, [bucket]);
+
+    // Bell / landing-card navigation: jump to a bucket + tab.
+    const goTo = (link: IntelNavDetail) => {
+        if (link.bucket) setBucket(link.bucket);
+        if (link.bucket === 'MINE' && link.tab) setMineTab(link.tab as MineTab);
+        if (link.bucket === 'COMPETITION' && link.tab) setCompTab(link.tab as CompTab);
+    };
+    useEffect(() => {
+        const onNav = (e: Event) => goTo((e as CustomEvent<IntelNavDetail>).detail);
+        window.addEventListener(INTEL_NAV_EVENT, onNav);
+        return () => window.removeEventListener(INTEL_NAV_EVENT, onNav);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Notification feed for the "While you were away" card. Loaded here (not
+    // passed down) so the card also works in demo mode and after a rescan.
+    const [feed, setFeed] = useState<IntelligenceNotification[]>([]);
+    const loadFeed = async () => {
+        try {
+            const res = await intelligenceAPI.getNotifications();
+            setFeed(res.items);
+        } catch {
+            /* nudge only */
+        }
+    };
+    useEffect(() => {
+        void loadFeed();
+        const onSeen = () => void loadFeed();
+        window.addEventListener(INTEL_NOTIFICATIONS_SEEN_EVENT, onSeen);
+        return () => window.removeEventListener(INTEL_NOTIFICATIONS_SEEN_EVENT, onSeen);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [restaurantData.id, report?._id]);
+    // report_viewed — once per report id per mount.
+    useEffect(() => {
+        if (report) track.reportViewed({ reportId: report._id, score: report.restroScore, first: !report.deltas });
+    }, [report?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const dismissFeed = () => {
+        setFeed((items) => items.map((n) => ({ ...n, unread: false })));
+        intelligenceAPI.markNotificationsSeen().then(announceNotificationsSeen).catch(() => undefined);
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -202,24 +287,28 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
         };
     }, [restaurantData.id]);
 
-    const nav = onNavigate ?? (() => {});
     const scanDefaults = useMemo(
-        () => ({ name: restaurantData.name, city: restaurantData.sourceCity ?? '' }),
-        [restaurantData.name, restaurantData.sourceCity],
+        () => ({
+            name: restaurantData.name,
+            city: humanCity(restaurantData.sourceCity),
+            ...(restaurantData.googlePlaceId ? { placeId: restaurantData.googlePlaceId } : {}),
+        }),
+        [restaurantData.name, restaurantData.sourceCity, restaurantData.googlePlaceId],
     );
 
+    // Owner-facing labels (sections/copy.ts): plain words, no jargon.
     const mineTabs: Array<SubNavTab<MineTab>> = [
         { id: 'OVERVIEW', label: 'Overview' },
-        { id: 'TRENDS', label: 'Daily Trends', shortLabel: 'Trends' },
-        { id: 'FEEDBACK', label: 'Feedback Changes', shortLabel: 'Feedback' },
-        { id: 'SEARCH', label: 'Search & SEO', shortLabel: 'SEO' },
+        { id: 'TRENDS', label: 'Day by day', shortLabel: 'Trends' },
+        { id: 'FEEDBACK', label: 'What guests say', shortLabel: 'Guests' },
+        { id: 'SEARCH', label: 'Google search', shortLabel: 'Search' },
     ];
     const compTabs: Array<SubNavTab<CompTab>> = [
-        { id: 'THREATS', label: 'Top Threats', shortLabel: 'Threats' },
-        { id: 'WATCHLIST', label: 'Watchlist' },
-        { id: 'COMPARE', label: 'Compare' },
-        { id: 'BEAT', label: 'Where They Beat You', shortLabel: 'Gaps' },
-        { id: 'OPENINGS', label: 'New Openings', shortLabel: 'New' },
+        { id: 'THREATS', label: 'Biggest rivals', shortLabel: 'Rivals' },
+        { id: 'WATCHLIST', label: 'Rivals you track', shortLabel: 'Tracked' },
+        { id: 'COMPARE', label: 'Side by side', shortLabel: 'Compare' },
+        { id: 'BEAT', label: 'Where they beat you', shortLabel: 'Gaps' },
+        { id: 'OPENINGS', label: 'New nearby', shortLabel: 'New' },
     ];
 
     const minePeriod = mineQuery(mineSel);
@@ -231,18 +320,19 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
     }
 
     // Re-scan in progress (report exists, running a fresh scan)
-    if (rescanning) {
+    if (rescan.active) {
         return (
             <ScanFlow
                 variant="rescan"
                 force
+                startWithPicker={rescan.pick}
                 defaults={scanDefaults}
                 api={intelligenceAPI}
                 onReport={(r) => {
                     setReport(r);
-                    setRescanning(false);
+                    setRescan({ active: false, pick: false });
                 }}
-                onCancel={() => setRescanning(false)}
+                onCancel={() => setRescan({ active: false, pick: false })}
             />
         );
     }
@@ -261,12 +351,32 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
 
     return (
         <div className="space-y-4 sm:space-y-6">
+            <WhileYouWereAway
+                items={feed}
+                onOpen={(n) => {
+                    track.notificationClicked({ kind: n.kind, unread: n.unread, source: 'landing' });
+                    goTo(n.link);
+                    dismissFeed();
+                }}
+                onDismiss={dismissFeed}
+            />
             <HeaderBand
                 report={report}
                 selectedPillar={selectedPillar}
-                onSelectPillar={(k) => setSelectedPillar((cur) => (cur === k ? null : k))}
-                onRescan={() => setRescanning(true)}
-                onNavigate={nav}
+                onSelectPillar={(k) => {
+                    const p = report.pillars.find((x) => x.key === k);
+                    if (selectedPillar !== k && p) track.pillarOpened({ pillar: k, grade: p.grade });
+                    setSelectedPillar((cur) => (cur === k ? null : k));
+                }}
+                onRescan={() => {
+                    track.rescanClicked({ reason: 'refresh' });
+                    setRescan({ active: true, pick: false });
+                }}
+                onChangeRestaurant={() => {
+                    track.rescanClicked({ reason: 'change_restaurant' });
+                    setRescan({ active: true, pick: true });
+                }}
+                onNavigate={onNavigate}
             />
 
             {/* Bucket switch + bucket-scoped period filter. Stacks full-width on
@@ -282,20 +392,26 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
 
             {bucket === 'MINE' ? (
                 <>
-                    <SubNav tabs={mineTabs} active={mineTab} onChange={setMineTab} label="My Restaurant sections" />
-                    {mineTab === 'OVERVIEW' && <MyOverview report={report} metrics={selfMetrics} onNavigate={nav} />}
+                    <SubNav tabs={mineTabs} active={mineTab} onChange={(t) => { track.tabOpened({ bucket: 'MINE', tab: t }); setMineTab(t); }} label="My Restaurant sections" />
+                    {mineTab === 'OVERVIEW' && <MyOverview report={report} metrics={selfMetrics} onNavigate={onNavigate} />}
                     {mineTab === 'TRENDS' && <DailyTrends query={minePeriod} />}
-                    {mineTab === 'FEEDBACK' && <FeedbackChanges query={minePeriod} onNavigate={nav} />}
-                    {mineTab === 'SEARCH' && <SearchSEO report={report} onNavigate={nav} />}
+                    {mineTab === 'FEEDBACK' && <FeedbackChanges query={minePeriod} report={report} onNavigate={onNavigate} />}
+                    {mineTab === 'SEARCH' && <SearchSEO report={report} onNavigate={onNavigate} />}
                 </>
             ) : (
                 <>
-                    <SubNav tabs={compTabs} active={compTab} onChange={setCompTab} label="Competition sections" />
-                    {compTab === 'THREATS' && <TopThreats buckets={report.buckets} />}
+                    <SubNav tabs={compTabs} active={compTab} onChange={(t) => { track.tabOpened({ bucket: 'COMPETITION', tab: t }); setCompTab(t); }} label="Competition sections" />
+                    {compTab === 'THREATS' && (
+                        <TopThreats
+                            buckets={report.buckets}
+                            selfPlaceId={report.base.placeId}
+                            base={{ rating: report.base.rating, totalRatings: report.base.totalRatings, photoCount: report.base.photoCount }}
+                        />
+                    )}
                     {compTab === 'WATCHLIST' && <Watchlist />}
-                    {compTab === 'COMPARE' && <Compare query={compPeriod} />}
-                    {compTab === 'BEAT' && <WhereTheyBeatYou query={compPeriod} report={report} onNavigate={nav} />}
-                    {compTab === 'OPENINGS' && <NewOpenings onNavigate={nav} />}
+                    {compTab === 'COMPARE' && <Compare query={compPeriod} report={report} />}
+                    {compTab === 'BEAT' && <WhereTheyBeatYou query={compPeriod} report={report} onNavigate={onNavigate} />}
+                    {compTab === 'OPENINGS' && <NewOpenings onNavigate={onNavigate} />}
                 </>
             )}
         </div>

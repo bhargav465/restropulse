@@ -139,14 +139,16 @@ interface PostCardProps {
     post: Post;
     tab: 'REVIEW' | 'SCHEDULED' | 'HISTORY';
     onApprove: (id: string) => void;
+    onPublishNow: (id: string) => void;
     onFeedback: (id: string, type: 'EDIT' | 'REVERT') => void;
     approving?: string | null;
+    publishing?: string | null;
     instagramConnected?: boolean;
     now: Date;
     postApprovalBufferMins?: number;
 }
 
-const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, approving, instagramConnected = true, now, postApprovalBufferMins }) => {
+const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onPublishNow, onFeedback, approving, publishing, instagramConnected = true, now, postApprovalBufferMins }) => {
     // Local state for Carousel
     const [currentSlide, setCurrentSlide] = useState(0);
     const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -372,7 +374,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                     {getTypeIcon()}
                     <span>{post.type}</span>
                     <span className="w-px h-3 bg-slate-300 mx-0.5"></span>
-                    <span>{post.platforms.join('+')}</span>
+                    <span>{post.platform}</span>
                 </div>
 
                 {/* Status Overlay for Scheduled */}
@@ -513,7 +515,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                                     onClick={() => onFeedback(post.id, 'EDIT')}
                                     className="flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 active:scale-[0.98] transition-all"
                                 >
-                                    <Edit size={16} /> Request Edit
+                                    <Edit size={16} /> Edit
                                 </button>
                                 <button
                                     type="button"
@@ -537,21 +539,69 @@ const PostCard: React.FC<PostCardProps> = ({ post, tab, onApprove, onFeedback, a
                 {tab === 'SCHEDULED' && (
                     <div className="pt-3 border-t border-slate-50">
                         {isLocked ? (
-                            <div className="flex items-center justify-center gap-2 text-xs text-slate-400 italic bg-slate-50 py-3 rounded-xl">
-                                <Lock size={14} />
-                                Publishing soon. Changes locked.
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 italic bg-slate-50 py-3 rounded-xl">
+                                    <Lock size={14} />
+                                    Publishing soon. Changes locked.
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onPublishNow(post.id);
+                                    }}
+                                    disabled={publishing === post.id || !instagramConnected}
+                                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs transition-all ${
+                                        !instagramConnected
+                                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                            : publishing === post.id
+                                                ? 'bg-orange-400 text-white/80 cursor-wait'
+                                                : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'
+                                    }`}
+                                    title={!instagramConnected ? 'Connect Instagram first' : undefined}
+                                >
+                                    {publishing === post.id ? (
+                                        <><RefreshCw size={14} className="animate-spin" /> Publishing...</>
+                                    ) : (
+                                        <><Send size={14} /> Publish Now</>
+                                    )}
+                                </button>
                             </div>
                         ) : (
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onFeedback(post.id, 'REVERT');
-                                }}
-                                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 active:scale-[0.98] transition-all"
-                            >
-                                <Undo2 size={14} /> Revert to Review
-                            </button>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onFeedback(post.id, 'REVERT');
+                                    }}
+                                    className="flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 active:scale-[0.98] transition-all"
+                                >
+                                    <Undo2 size={14} /> Revert
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onPublishNow(post.id);
+                                    }}
+                                    disabled={publishing === post.id || !instagramConnected}
+                                    className={`flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-xs transition-all ${
+                                        !instagramConnected
+                                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                            : publishing === post.id
+                                                ? 'bg-orange-400 text-white/80 cursor-wait'
+                                                : 'bg-orange-600 text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 active:scale-[0.98]'
+                                    }`}
+                                    title={!instagramConnected ? 'Connect Instagram first' : undefined}
+                                >
+                                    {publishing === post.id ? (
+                                        <><RefreshCw size={14} className="animate-spin" /> Publishing...</>
+                                    ) : (
+                                        <><Send size={14} /> Publish</>
+                                    )}
+                                </button>
+                            </div>
                         )}
                     </div>
                 )}
@@ -804,6 +854,7 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
     const displayPosts = activeTab === 'REVIEW' ? reviewPosts : activeTab === 'SCHEDULED' ? scheduledPosts : historyPosts;
 
     const [approving, setApproving] = useState<string | null>(null);
+    const [publishing, setPublishing] = useState<string | null>(null);
 
     const handleApprove = async (id: string) => {
         if (approving) return; // Prevent double-clicks
@@ -825,6 +876,21 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
             console.error('Failed to approve post:', err);
         } finally {
             setApproving(null);
+        }
+    };
+
+    const handlePublishNow = async (id: string) => {
+        if (publishing) return;
+        setPublishing(id);
+        try {
+            const updatedPost = await postsAPI.publish(id);
+            setPosts(prev => prev.map(p => p.id === id ? updatedPost : p));
+            setNotice({ message: 'Post published.', type: 'success' });
+        } catch (err: any) {
+            console.error('Failed to publish post:', err);
+            setNotice({ message: err?.message || 'Failed to publish post.', type: 'error' });
+        } finally {
+            setPublishing(null);
         }
     };
 
@@ -1036,8 +1102,10 @@ const ContentStudio: React.FC<ContentStudioProps> = ({ onCreatePost, refreshKey,
                             post={post}
                             tab={activeTab}
                             onApprove={handleApprove}
+                            onPublishNow={handlePublishNow}
                             onFeedback={openFeedbackModal}
                             approving={approving}
+                            publishing={publishing}
                             instagramConnected={instagramConnected}
                             now={now}
                             postApprovalBufferMins={postApprovalBufferMins}

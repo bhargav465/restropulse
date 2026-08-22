@@ -1,7 +1,8 @@
 import { User, Restaurant, Post, ContentStrategy, StrategyCycle, LoginRequest, AuthResponse, ApiResponse, InstagramConnectionStatus, InstagramAccount, InstagramConnectionError, AccountManager, City, SubscriptionPlan, Subscription, PlanUsage, CreditPack, BillingCycle, Invoice, FeatureFlags, Platform, EntitlementState } from '@restropulse/shared';
 import type {
     SnapshotSource, SnapshotReview, ReviewTheme, WatchlistEntry,
-    IntelligenceScan, IntelligenceReport, IntelligenceReportSummary, IntelligenceSelfMetrics, CompareRow,
+    IntelligenceScan, IntelligenceReport, IntelligenceReportSummary, IntelligenceSelfMetrics, CompareRow, PlaceCandidate,
+    IntelligenceNotificationsResponse,
 } from '@restropulse/shared';
 import { intelligenceAPI as demoIntelligenceAPI } from './demo-api-intelligence';
 import { isDemoMode } from './lib/demo';
@@ -91,6 +92,15 @@ export const authAPI = {
         return response;
     },
 
+    // Backend OTP request (dev fallback). In non-production the API echoes the
+    // code back as `devOtp`, which is what makes local auto-login possible.
+    sendOtp: async (phone: string): Promise<{ success: boolean; message?: string; devOtp?: string }> => {
+        return fetchAPI<{ success: boolean; message?: string; devOtp?: string }>('/auth/send-otp', {
+            method: 'POST',
+            body: JSON.stringify({ phone }),
+        }, false);
+    },
+
     // Fallback OTP verification (when Firebase not configured)
     verifyOtp: async (phone: string, otp: string): Promise<AuthResponse & { refreshToken?: string }> => {
         const response = await fetchAPI<AuthResponse & { refreshToken?: string }>('/auth/verify-otp', {
@@ -150,6 +160,15 @@ export const authAPI = {
         await fetchAPI('/auth/verify-email', {
             method: 'POST',
             body: JSON.stringify({ idToken }),
+        });
+    },
+    // Dev-only: the API accepts `devEmail` outside production and marks the
+    // email verified without Firebase (the email-link flow needs a real Firebase
+    // project and does not work on localhost).
+    verifyEmailDev: async (devEmail: string): Promise<void> => {
+        await fetchAPI('/auth/verify-email', {
+            method: 'POST',
+            body: JSON.stringify({ devEmail }),
         });
     },
 };
@@ -234,23 +253,25 @@ export const postsAPI = {
         return response.data!;
     },
 
-    create: async (post: Omit<Post, 'id'>): Promise<Post> => {
-        const response = await fetchAPI<ApiResponse<Post>>('/posts', {
+    // A request may target multiple platforms; the API fans it out into one
+    // single-platform Post per platform, sharing a groupId.
+    create: async (post: Omit<Post, 'id' | 'platform'> & { platforms: Platform[] }): Promise<Post[]> => {
+        const response = await fetchAPI<ApiResponse<Post[]>>('/posts', {
             method: 'POST',
             body: JSON.stringify(post),
         });
         return response.data!;
     },
 
-    // Generate post with AI-created content
+    // Generate post(s) with AI-created content -- one per requested platform.
     generate: async (params: {
         concept: string;
         type: Post['type'];
-        platforms: Post['platforms'];
+        platforms: Platform[];
         scheduledFor?: string;
         asap?: boolean;
-    }): Promise<Post> => {
-        const response = await fetchAPI<ApiResponse<Post>>('/posts/generate', {
+    }): Promise<Post[]> => {
+        const response = await fetchAPI<ApiResponse<Post[]>>('/posts/generate', {
             method: 'POST',
             body: JSON.stringify(params),
         });
@@ -261,6 +282,13 @@ export const postsAPI = {
         const response = await fetchAPI<ApiResponse<Post>>(`/posts/${id}`, {
             method: 'PUT',
             body: JSON.stringify(post),
+        });
+        return response.data!;
+    },
+
+    publish: async (id: string): Promise<Post> => {
+        const response = await fetchAPI<ApiResponse<Post>>(`/posts/${id}/publish`, {
+            method: 'POST',
         });
         return response.data!;
     },
@@ -661,6 +689,28 @@ export interface CompareQuery {
     month?: string; // YYYY-MM (month)
 }
 
+export interface RivalComment {
+    rating: number;
+    text: string;
+    date: string;
+}
+
+export interface RivalDigest {
+    placeId: string;
+    name: string;
+    latest?: { date: string; rating: number; reviewCount: number };
+    yesterday: { date: string | null; total: number; positive: number; negative: number };
+    week: { total: number; positive: number; negative: number };
+    positiveComments: RivalComment[];
+    negativeComments: RivalComment[];
+    aheadOnRating?: boolean;
+}
+
+export interface WatchlistDigestResponse {
+    rivals: RivalDigest[];
+    hasData: boolean;
+}
+
 export interface WatchlistInput {
     placeId: string;
     name?: string;
@@ -676,6 +726,47 @@ export interface ZomatoManualInput {
 
 // Real fetch-backed client -> /api/intelligence (OWNER-scoped).
 const realIntelligenceAPI = {
+    /** The owner's notification feed (report ready, alerts, yesterday's reviews). */
+    getNotifications: async (): Promise<IntelligenceNotificationsResponse> => {
+        const res = await fetchAPI<ApiResponse<IntelligenceNotificationsResponse>>('/intelligence/notifications');
+        return res.data ?? { items: [], unread: 0, seenAt: null };
+    },
+    markNotificationsSeen: async (): Promise<{ seenAt: string }> => {
+        const res = await fetchAPI<ApiResponse<{ seenAt: string }>>('/intelligence/notifications/seen', { method: 'POST' });
+        return res.data!;
+    },
+    /** Rivals-you-track digest: day/week review splits + actual comments. */
+    getWatchlistDigest: async (): Promise<WatchlistDigestResponse> => {
+        const res = await fetchAPI<ApiResponse<WatchlistDigestResponse>>('/intelligence/watchlist/digest');
+        return res.data ?? { rivals: [], hasData: false };
+    },
+    /** Draft an owner reply to one review (Claude, draft-only). */
+    draftReply: async (review: { text: string; rating: number; author?: string }): Promise<{ reply: string; stance: 'apology' | 'thanks' | 'clarify' }> => {
+        const res = await fetchAPI<ApiResponse<{ reply: string; stance: 'apology' | 'thanks' | 'clarify' }>>('/intelligence/reviews/draft-reply', {
+            method: 'POST', body: JSON.stringify(review),
+        });
+        return res.data!;
+    },
+    /** Action-plan progress: which priorities are ticked off for a report. */
+    getActionProgress: async (reportId: string): Promise<{ reportId: string; done: number[] }> => {
+        const res = await fetchAPI<ApiResponse<{ reportId: string; done: number[] }>>(`/intelligence/action-plan/progress?reportId=${encodeURIComponent(reportId)}`);
+        return res.data ?? { reportId, done: [] };
+    },
+    putActionProgress: async (reportId: string, done: number[]): Promise<{ reportId: string; done: number[] }> => {
+        const res = await fetchAPI<ApiResponse<{ reportId: string; done: number[] }>>('/intelligence/action-plan/progress', {
+            method: 'PUT', body: JSON.stringify({ reportId, done }),
+        });
+        return res.data!;
+    },
+    /** "Is this you?" — Google listings matching the restaurant, before a scan. */
+    searchPlaces: async (query: { name?: string; city?: string } = {}): Promise<PlaceCandidate[]> => {
+        const params = new URLSearchParams();
+        if (query.name) params.set('name', query.name);
+        if (query.city) params.set('city', query.city);
+        const qs = params.toString();
+        const res = await fetchAPI<ApiResponse<PlaceCandidate[]>>(`/intelligence/places/search${qs ? `?${qs}` : ''}`);
+        return res.data ?? [];
+    },
     startScan: async (body: { name?: string; city?: string; force?: boolean; placeId?: string }): Promise<{ scanId: string }> => {
         const res = await fetchAPI<ApiResponse<{ scanId: string }>>('/intelligence/scan', {
             method: 'POST', body: JSON.stringify(body),

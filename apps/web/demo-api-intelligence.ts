@@ -10,6 +10,8 @@
 import type {
     IntelligenceScan,
     ScanStatus,
+    PlaceCandidate,
+    IntelligenceNotificationsResponse,
     IntelligenceReport,
     IntelligenceReportSummary,
     IntelligenceSelfMetrics,
@@ -23,6 +25,7 @@ import type {
     SnapshotQuery,
     SnapshotSeriesResponse,
     WatchlistResponse,
+    WatchlistDigestResponse,
     WatchlistInput,
     CompareQuery,
     FeedbackDay,
@@ -40,9 +43,99 @@ const DEMO_RESTAURANT = { id: 'demo-r1', name: '[SAMPLE] Demo Kitchen' };
 
 // Fake a 3-poll scan completion so the pipeline stepper is exercised.
 const intelScanPolls = new Map<string, number>();
+let demoNotificationsSeenAt: Date | null = null;
+const demoActionProgress = new Map<string, number[]>([['demo-intel-report-0', [1, 2, 4]]]);
 const intelFixtures = () => import('./lib/demo-fixtures-intelligence');
 
 export const intelligenceAPI = {
+    draftReply: async (review: { text: string; rating: number; author?: string }): Promise<{ reply: string; stance: 'apology' | 'thanks' | 'clarify' }> => {
+        await delay(700);
+        notifyDemoBackendAction();
+        if (review.rating <= 2) {
+            return { stance: 'apology', reply: `[SAMPLE] Thank you for telling us — a late Friday delivery is not the experience we want anyone to have. We have added a rider for Friday evenings and are tightening our prep times. Please give us another chance; ask for me when you order. — The owner` };
+        }
+        return { stance: 'thanks', reply: `[SAMPLE] Thank you so much — we are glad the ${review.text.toLowerCase().includes('naan') ? 'naan' : 'food'} hit the spot. Our team will be delighted to hear this. See you again soon. — The owner` };
+    },
+    getActionProgress: async (reportId: string): Promise<{ reportId: string; done: number[] }> => {
+        await delay(60);
+        return { reportId, done: demoActionProgress.get(reportId) ?? [] };
+    },
+    putActionProgress: async (reportId: string, done: number[]): Promise<{ reportId: string; done: number[] }> => {
+        await delay(60);
+        notifyDemoBackendAction();
+        const cleaned = [...new Set(done)].sort((a, b) => a - b);
+        demoActionProgress.set(reportId, cleaned);
+        return { reportId, done: cleaned };
+    },
+    getWatchlistDigest: async (): Promise<WatchlistDigestResponse> => {
+        await delay();
+        const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+        return {
+            hasData: true,
+            rivals: [
+                {
+                    placeId: 'sample-comp-meghana', name: '[SAMPLE] Meghana Foods',
+                    latest: { date: day(1), rating: 4.4, reviewCount: 5432 },
+                    yesterday: { date: day(1), total: 9, positive: 7, negative: 1 },
+                    week: { total: 54, positive: 41, negative: 6 },
+                    positiveComments: [
+                        { rating: 5, text: '[SAMPLE] Boneless biryani was outstanding, service quick even on a Sunday.', date: day(1) },
+                        { rating: 4, text: '[SAMPLE] Consistently good — the raita and salan never miss.', date: day(2) },
+                    ],
+                    negativeComments: [
+                        { rating: 1, text: '[SAMPLE] 45 minutes for a table and the AC was not working.', date: day(3) },
+                    ],
+                    aheadOnRating: false,
+                },
+                {
+                    placeId: 'sample-comp-empire', name: '[SAMPLE] Empire Restaurant',
+                    latest: { date: day(1), rating: 4.1, reviewCount: 8912 },
+                    yesterday: { date: day(1), total: 3, positive: 1, negative: 2 },
+                    week: { total: 21, positive: 11, negative: 7 },
+                    positiveComments: [
+                        { rating: 4, text: '[SAMPLE] Great value thali at lunch.', date: day(2) },
+                    ],
+                    negativeComments: [
+                        { rating: 2, text: '[SAMPLE] Delivery order arrived cold twice this month.', date: day(1) },
+                        { rating: 1, text: '[SAMPLE] Billing mistake and rude response when we pointed it out.', date: day(4) },
+                    ],
+                    aheadOnRating: false,
+                },
+            ],
+        };
+    },
+    getNotifications: async (): Promise<IntelligenceNotificationsResponse> => {
+        await delay();
+        const day = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
+        const seen = demoNotificationsSeenAt;
+        const items = [
+            { id: 'reviews:t-1', kind: 'negative_review' as const, severity: 'warning' as const, title: '3 new Google reviews yesterday', body: '2 positive · 1 negative. “[SAMPLE] Delivery took longer than promised on a Friday.” — reply today.', at: day(1), link: { view: 'INTELLIGENCE' as const, bucket: 'MINE' as const, tab: 'FEEDBACK' } },
+            { id: 'week:demo', kind: 'new_reviews' as const, severity: 'info' as const, title: 'This week: 11 new reviews — 8 positive, 2 negative', body: '+3 vs last week · negatives 1 → 2.', at: day(1), link: { view: 'INTELLIGENCE' as const, bucket: 'MINE' as const, tab: 'FEEDBACK' } },
+            { id: 'report:demo', kind: 'report_ready' as const, severity: 'info' as const, title: 'Your new weekly report is ready', body: 'Score 68/100 (+3) · rank #4 of 38 nearby.', at: day(2), link: { view: 'INTELLIGENCE' as const, bucket: 'MINE' as const, tab: 'OVERVIEW' } },
+            { id: 'alert:surge', kind: 'competitor_surge' as const, severity: 'warning' as const, title: '[SAMPLE] Meghana Foods is gaining reviews fast', body: '[SAMPLE] Meghana Foods gained 380 reviews since your last scan.', at: day(2), link: { view: 'INTELLIGENCE' as const, bucket: 'COMPETITION' as const, tab: 'THREATS' } },
+            { id: 'alert:new', kind: 'new_competitor' as const, severity: 'info' as const, title: '[SAMPLE] Biryani Blues Express opened near you', body: '[SAMPLE] Biryani Blues Express opened 0.9 km away and is rising fast.', at: day(2), link: { view: 'INTELLIGENCE' as const, bucket: 'COMPETITION' as const, tab: 'OPENINGS' } },
+        ].map((n) => ({ ...n, unread: !seen || new Date(n.at) > seen }));
+        return { items, unread: items.filter((i) => i.unread).length, seenAt: seen ? seen.toISOString() : null };
+    },
+    markNotificationsSeen: async (): Promise<{ seenAt: string }> => {
+        await delay(60);
+        demoNotificationsSeenAt = new Date();
+        return { seenAt: demoNotificationsSeenAt.toISOString() };
+    },
+    searchPlaces: async (query: { name?: string; city?: string } = {}): Promise<PlaceCandidate[]> => {
+        await delay();
+        const q = (query.name ?? '').trim().toLowerCase();
+        // Three plausible matches so the "Is this you?" step has something to choose
+        // between; a free-text search that mentions "kitchen" keeps them, anything
+        // else returns a single generic match so "search again" visibly does something.
+        const all: PlaceCandidate[] = [
+            { placeId: 'sample-place-demo-kitchen', name: '[SAMPLE] RestroPulse Demo Kitchen', address: '100 Feet Rd, Indiranagar, Bengaluru', rating: 4.6, totalRatings: 820 },
+            { placeId: 'sample-place-demo-kitchen-koramangala', name: '[SAMPLE] RestroPulse Demo Kitchen — Koramangala', address: '5th Block, Koramangala, Bengaluru', rating: 4.3, totalRatings: 212 },
+            { placeId: 'sample-place-demo-kitchen-cloud', name: '[SAMPLE] Demo Kitchen Cloud (delivery only)', address: 'CMH Rd, Indiranagar, Bengaluru', rating: 3.9, totalRatings: 64 },
+        ];
+        if (!q || q.includes('kitchen') || q.includes('demo')) return all;
+        return [{ placeId: `sample-place-${q.replace(/\W+/g, '-')}`, name: `[SAMPLE] ${query.name}`, address: `${query.city ?? 'Bengaluru'}`, rating: 4.1, totalRatings: 138 }];
+    },
     startScan: async (_body: { name?: string; city?: string; force?: boolean; placeId?: string }): Promise<{ scanId: string }> => {
         await delay();
         notifyDemoBackendAction();

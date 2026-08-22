@@ -102,7 +102,7 @@ export interface GeneratedCycle {
 export interface GeneratePostInput {
   concept: string;
   type: PostType;
-  platforms: Platform[];
+  platform: Platform;
   themes?: string[];
   archetype?: string;
   scheduledFor?: string;
@@ -122,7 +122,7 @@ export interface PostFeedback {
 export interface RevisePostInput {
   existingPost: {
     type: PostType;
-    platforms: Platform[];
+    platform: Platform;
     caption: string;
     thumbnail?: string;
     mediaUrls?: string[];

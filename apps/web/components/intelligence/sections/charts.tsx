@@ -30,8 +30,34 @@ interface TrendChartProps {
 
 const PAD = { top: 8, right: 8, bottom: 8, left: 8 };
 
+/**
+ * Measure the host element's width so the viewBox is 1:1 with rendered pixels.
+ *
+ * RP-003(b): the chart used a fixed `viewBox="0 0 320 {height}"` with
+ * `width="100%"` and no `height`, so `height` was a *viewBox unit*, not a
+ * rendered cap — uniform `preserveAspectRatio` scaled the box up with the
+ * container (1566px wide → 1566 x 120/320 = 587px tall). Tracking the real
+ * width keeps the aspect ratio at 1:1 so `height` renders literally, with no
+ * axis distortion (which `preserveAspectRatio="none"` would introduce).
+ */
+function useMeasuredWidth(fallback: number): [React.RefObject<HTMLDivElement | null>, number] {
+    const ref = React.useRef<HTMLDivElement>(null);
+    const [width, setWidth] = React.useState(fallback);
+    React.useEffect(() => {
+        const el = ref.current;
+        if (!el || typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver((entries) => {
+            const w = Math.round(entries[0]?.contentRect.width ?? 0);
+            if (w > 0) setWidth(w);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+    return [ref, width];
+}
+
 export const TrendChart: React.FC<TrendChartProps> = ({ labels, series, height = 120, format, ariaLabel }) => {
-    const W = 320;
+    const [hostRef, W] = useMeasuredWidth(320);
     const H = height;
     const innerW = W - PAD.left - PAD.right;
     const innerH = H - PAD.top - PAD.bottom;
@@ -45,56 +71,62 @@ export const TrendChart: React.FC<TrendChartProps> = ({ labels, series, height =
     const xFor = (i: number) => PAD.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW);
     const yFor = (v: number) => PAD.top + innerH - ((v - yMin) / span) * innerH;
 
+    // Nothing to plot: render nothing rather than an empty, full-height frame.
+    // Callers own the empty-state copy (RP-003a / RP-004).
+    if (n === 0 || all.length === 0) return null;
+
     return (
-        <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel} className="max-w-full">
-            {series.map((s) => {
-                // Split into contiguous segments (break at null → gap).
-                const segments: Array<Array<{ x: number; y: number }>> = [];
-                let cur: Array<{ x: number; y: number }> = [];
-                s.points.forEach((p, i) => {
-                    if (p === null) {
-                        if (cur.length) segments.push(cur);
-                        cur = [];
-                    } else {
-                        cur.push({ x: xFor(i), y: yFor(p) });
-                    }
-                });
-                if (cur.length) segments.push(cur);
-                return (
-                    <g key={s.key}>
-                        {segments.map((seg, si) => (
-                            <polyline
-                                key={si}
-                                fill="none"
-                                stroke={s.color}
-                                strokeWidth={2}
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                points={seg.map((pt) => `${pt.x},${pt.y}`).join(' ')}
-                            />
-                        ))}
-                        {s.points.map((p, i) =>
-                            p === null ? null : (
-                                <circle
-                                    key={i}
-                                    cx={xFor(i)}
-                                    cy={yFor(p)}
-                                    r={s.hollow?.[i] ? 3.5 : 2.5}
-                                    fill={s.hollow?.[i] ? TOKENS.surface : s.color}
+        <div ref={hostRef} className="w-full">
+            <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={ariaLabel} className="block max-w-full">
+                {series.map((s) => {
+                    // Split into contiguous segments (break at null → gap).
+                    const segments: Array<Array<{ x: number; y: number }>> = [];
+                    let cur: Array<{ x: number; y: number }> = [];
+                    s.points.forEach((p, i) => {
+                        if (p === null) {
+                            if (cur.length) segments.push(cur);
+                            cur = [];
+                        } else {
+                            cur.push({ x: xFor(i), y: yFor(p) });
+                        }
+                    });
+                    if (cur.length) segments.push(cur);
+                    return (
+                        <g key={s.key}>
+                            {segments.map((seg, si) => (
+                                <polyline
+                                    key={si}
+                                    fill="none"
                                     stroke={s.color}
-                                    strokeWidth={s.hollow?.[i] ? 1.5 : 0}
-                                    strokeDasharray={s.hollow?.[i] ? '2 1' : undefined}
-                                >
-                                    <title>
-                                        {`${s.label} · ${labels[i]} · ${format ? format(p) : p}${s.hollow?.[i] ? ' (backfilled)' : ''}`}
-                                    </title>
-                                </circle>
-                            ),
-                        )}
-                    </g>
-                );
-            })}
-        </svg>
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    points={seg.map((pt) => `${pt.x},${pt.y}`).join(' ')}
+                                />
+                            ))}
+                            {s.points.map((p, i) =>
+                                p === null ? null : (
+                                    <circle
+                                        key={i}
+                                        cx={xFor(i)}
+                                        cy={yFor(p)}
+                                        r={s.hollow?.[i] ? 3.5 : 2.5}
+                                        fill={s.hollow?.[i] ? TOKENS.surface : s.color}
+                                        stroke={s.color}
+                                        strokeWidth={s.hollow?.[i] ? 1.5 : 0}
+                                        strokeDasharray={s.hollow?.[i] ? '2 1' : undefined}
+                                    >
+                                        <title>
+                                            {`${s.label} · ${labels[i]} · ${format ? format(p) : p}${s.hollow?.[i] ? ' (backfilled)' : ''}`}
+                                        </title>
+                                    </circle>
+                                ),
+                            )}
+                        </g>
+                    );
+                })}
+            </svg>
+        </div>
     );
 };
 

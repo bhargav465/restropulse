@@ -15,7 +15,7 @@ import {
   getRandomImage,
   getRandomVideo,
 } from '../../../asset-manager.js';
-import { getMergedConstraints } from '../../../content-validator/media-constraints.js';
+import { getConstraints } from '../../../content-validator/media-constraints.js';
 import { BaseContentGenerator } from '../../base-generator.js';
 import {
   ContentGenerationError,
@@ -53,10 +53,10 @@ function pickConcept(input: Pick<GeneratePostInput, 'concept' | 'themes'>): stri
 
 function assembleMedia(
   type: PostType,
-  platforms: Platform[],
+  platform: Platform,
   theme: string,
 ): Omit<GeneratedPost, 'caption'> {
-  const constraints = getMergedConstraints(type, platforms);
+  const constraints = getConstraints(type, platform);
 
   switch (type) {
     case 'CAROUSEL': {
@@ -83,7 +83,7 @@ function assembleMedia(
       }
       // No compatible video found; fall back to image asset and log warning
       log.warn(
-        { type, platforms, theme },
+        { type, platform, theme },
         'No constraint-compatible video asset found; falling back to image thumbnail',
       );
       const imgFallback = getConstraintCompatibleImage(constraints, theme) ?? getRandomImage(theme);
@@ -109,7 +109,7 @@ function assembleMedia(
         };
       }
       log.warn(
-        { type, platforms, theme },
+        { type, platform, theme },
         'No constraint-compatible video for STORY; falling back to photo story',
       );
       const imgSelected = getConstraintCompatibleImage(constraints, theme) ?? getRandomImage(theme);
@@ -184,7 +184,7 @@ export class PlaceholderContentGenerator extends BaseContentGenerator {
     const theme = pickTheme(input.themes);
     const concept = pickConcept(input);
     const caption = buildCaption(concept, theme, ctx?.restaurantName);
-    const media = assembleMedia(input.type, input.platforms ?? [], theme);
+    const media = assembleMedia(input.type, input.platform, theme);
 
     return { caption, ...media };
   }
@@ -207,7 +207,7 @@ export class PlaceholderContentGenerator extends BaseContentGenerator {
       [feedback.note, details].filter((s) => s && s.trim().length > 0).join(' - ') ||
       pickTheme(existingPost.themes);
     const caption = buildCaption(concept, theme, ctx?.restaurantName);
-    const media = assembleMedia(existingPost.type, existingPost.platforms ?? [], theme);
+    const media = assembleMedia(existingPost.type, existingPost.platform, theme);
 
     return { caption, ...media };
   }

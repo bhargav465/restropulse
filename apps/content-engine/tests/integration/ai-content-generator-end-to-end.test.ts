@@ -50,6 +50,15 @@ function makeGen() {
         modelId: 'claude-sonnet-4-6',
       };
     }
+    // Art-director (shot brief) call: schema carries a `subject` field
+    const isShotBrief = req.schema?._def?.shape && 'subject' in req.schema._def.shape();
+    if (isShotBrief) {
+      return {
+        object: { shotType: 'DISH', subject: 'Flaky ghee parotta on a steel plate', setting: 'a kitchen counter', props: 'a bowl of salna', lighting: 'warm side light', mood: 'homely' },
+        usage: { inputTokens: 60, outputTokens: 40 },
+        modelId: 'claude-haiku-4-5-20251001',
+      };
+    }
     return {
       object: { caption: 'A warm, sensory caption from the kitchen.', suggestedHashtags: ['#warm', '#kitchen'] },
       usage: { inputTokens: 100, outputTokens: 50 },
@@ -72,21 +81,23 @@ function makeGen() {
 }
 
 describe('AIContentGenerator end-to-end (mocked external, real Mongo cost events)', () => {
-  it('draftCycle then generatePost yields three cost events tagged for the same restaurant', async () => {
+  it('draftCycle then generatePost yields four cost events tagged for the same restaurant', async () => {
     const gen = makeGen();
     await gen.draftCycle({ period: 'w1' }, { restaurantId: 'r-end-to-end' });
     await gen.generatePost(
-      { concept: 'parotta', type: 'IMAGE', platforms: ['INSTAGRAM'] },
+      { concept: 'parotta', type: 'IMAGE', platform: 'INSTAGRAM' },
       { restaurantId: 'r-end-to-end' },
     );
 
     const events = await findCostEventsByRestaurant('r-end-to-end');
-    expect(events.length).toBe(3); // 1 LLM (cycle) + 1 LLM (caption) + 1 image
+    expect(events.length).toBe(4); // 1 LLM (cycle) + 1 LLM (caption) + 1 LLM (shot brief) + 1 image
     const ops = events.map((e) => e.operation);
     expect(ops.filter((o) => o === 'draftCycle')).toHaveLength(1);
-    expect(ops.filter((o) => o === 'generatePost')).toHaveLength(2);
+    expect(ops.filter((o) => o === 'generatePost')).toHaveLength(3);
     const surfaces = events.map((e) => e.surface);
     expect(surfaces).toContain('llm');
     expect(surfaces).toContain('image');
+    // every event succeeded (the shot brief must not fall back in this flow)
+    expect(events.every((e) => e.status === 'success')).toBe(true);
   });
 });

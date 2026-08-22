@@ -60,7 +60,6 @@ export async function findSubscriptionByPendingRazorpayId(
 /**
  * Get weekly post counts for a restaurant, grouped by platform and post type.
  * Counts posts created in the current ISO week (Mon-Sun).
- * Unwinds the platforms array so each platform gets its own count.
  */
 export async function getWeeklyPostCounts(
   restaurantId: string,
@@ -84,8 +83,7 @@ export async function getWeeklyPostCounts(
           status: { $nin: ['MISSED_DEADLINE'] },
         },
       },
-      { $unwind: '$platforms' },
-      { $group: { _id: { type: '$type', platform: '$platforms' }, count: { $sum: 1 } } },
+      { $group: { _id: { type: '$type', platform: '$platform' }, count: { $sum: 1 } } },
     ])
     .toArray();
 
@@ -131,8 +129,7 @@ export async function getDailyAdhocPostCounts(
           status: { $nin: ['MISSED_DEADLINE'] },
         },
       },
-      { $unwind: '$platforms' },
-      { $group: { _id: { type: '$type', platform: '$platforms' }, count: { $sum: 1 } } },
+      { $group: { _id: { type: '$type', platform: '$platform' }, count: { $sum: 1 } } },
     ])
     .toArray();
 

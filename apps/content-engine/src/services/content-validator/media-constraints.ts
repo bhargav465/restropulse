@@ -34,32 +34,7 @@ export const CONSTRAINTS: Record<Platform, Partial<Record<PostType, MediaConstra
   },
 };
 
-/**
- * Merge constraints from all target platforms, taking the most restrictive
- * value for each field (smallest maxes, largest mins).
- */
-export function getMergedConstraints(type: PostType, platforms: Platform[]): MediaConstraints {
-  const merged: MediaConstraints = {};
-  for (const platform of platforms) {
-    const c = CONSTRAINTS[platform]?.[type];
-    if (!c) continue;
-    if (c.allowedMimeTypes) {
-      // intersection of allowed types (must be accepted by ALL platforms)
-      merged.allowedMimeTypes = merged.allowedMimeTypes
-        ? merged.allowedMimeTypes.filter(m => c.allowedMimeTypes!.includes(m))
-        : [...c.allowedMimeTypes];
-    }
-    if (c.maxFileSizeBytes !== undefined)    merged.maxFileSizeBytes    = merged.maxFileSizeBytes    !== undefined ? Math.min(merged.maxFileSizeBytes,    c.maxFileSizeBytes)    : c.maxFileSizeBytes;
-    if (c.minWidthPx       !== undefined)    merged.minWidthPx          = merged.minWidthPx          !== undefined ? Math.max(merged.minWidthPx,          c.minWidthPx)          : c.minWidthPx;
-    if (c.maxWidthPx       !== undefined)    merged.maxWidthPx          = merged.maxWidthPx          !== undefined ? Math.min(merged.maxWidthPx,          c.maxWidthPx)          : c.maxWidthPx;
-    if (c.minHeightPx      !== undefined)    merged.minHeightPx         = merged.minHeightPx         !== undefined ? Math.max(merged.minHeightPx,         c.minHeightPx)         : c.minHeightPx;
-    if (c.maxHeightPx      !== undefined)    merged.maxHeightPx         = merged.maxHeightPx         !== undefined ? Math.min(merged.maxHeightPx,         c.maxHeightPx)         : c.maxHeightPx;
-    if (c.minAspectRatio   !== undefined)    merged.minAspectRatio      = merged.minAspectRatio      !== undefined ? Math.max(merged.minAspectRatio,      c.minAspectRatio)      : c.minAspectRatio;
-    if (c.maxAspectRatio   !== undefined)    merged.maxAspectRatio      = merged.maxAspectRatio      !== undefined ? Math.min(merged.maxAspectRatio,      c.maxAspectRatio)      : c.maxAspectRatio;
-    if (c.minDurationSeconds !== undefined)  merged.minDurationSeconds  = merged.minDurationSeconds  !== undefined ? Math.max(merged.minDurationSeconds,  c.minDurationSeconds)  : c.minDurationSeconds;
-    if (c.maxDurationSeconds !== undefined)  merged.maxDurationSeconds  = merged.maxDurationSeconds  !== undefined ? Math.min(merged.maxDurationSeconds,  c.maxDurationSeconds)  : c.maxDurationSeconds;
-    if (c.minCarouselItems !== undefined)    merged.minCarouselItems    = merged.minCarouselItems    !== undefined ? Math.max(merged.minCarouselItems,    c.minCarouselItems)    : c.minCarouselItems;
-    if (c.maxCarouselItems !== undefined)    merged.maxCarouselItems    = merged.maxCarouselItems    !== undefined ? Math.min(merged.maxCarouselItems,    c.maxCarouselItems)    : c.maxCarouselItems;
-  }
-  return merged;
+/** Media constraints for a single platform + post type. */
+export function getConstraints(type: PostType, platform: Platform): MediaConstraints {
+  return CONSTRAINTS[platform]?.[type] ?? {};
 }

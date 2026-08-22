@@ -18,8 +18,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve-ref:
+    name: Resolve Deploy Ref
+    runs-on: ubuntu-latest
+    outputs:
+      deploy-git-sha: ${{ steps.resolve_sha.outputs.deploy_git_sha }}
+    steps:
+      - name: Checkout deploy ref
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+
+      - name: Resolve deploy git SHA
+        id: resolve_sha
+        run: echo "deploy_git_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
   build-web:
     name: Build Web
+    needs: resolve-ref
     if: contains(inputs.services, 'web') || inputs.services == 'all'
     runs-on: ubuntu-latest
     environment: production
@@ -52,14 +69,16 @@ jobs:
       # VITE_RAZORPAY_KEY_ID into the compiled JS. Instead a same-origin
       # config.json sidecar is written into the build output and fetched at
       # runtime by apps/web/utils/client-config.ts. This file only ever
-      # contains public web-facing config -- never fetch/emit
-      # FIREBASE-SERVICE-ACCOUNT-KEY (server-only admin secret).
+      # contains public web-facing config. AKV-first policy: any secret-backed
+      # values in this file must come from Azure Key Vault fetches in this step
+      # (never GitHub secrets/vars). Never fetch/emit FIREBASE-SERVICE-ACCOUNT-KEY
+      # (server-only admin secret).
       - name: Generate config.json sidecar from Key Vault
         run: |
           get_secret() {
             az keyvault secret show \
               --vault-name restropulse-prod-kv \
-              --name "PROD-$1" \
+              --name "prod-$(echo "$1" | tr '[:upper:]' '[:lower:]')" \
               --query "value" -o tsv
           }
 
@@ -81,6 +100,9 @@ jobs:
           echo "::add-mask::$APPINSIGHTS"
           RAZORPAY_KEY_ID=$(get_secret RAZORPAY-KEY-ID)
           echo "::add-mask::$RAZORPAY_KEY_ID"
+          DEPLOY_GIT_SHA="${{ needs.resolve-ref.outputs.deploy-git-sha }}"
+          DEPLOY_RUN_ID="${{ github.run_id }}"
+          DEPLOYED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
           jq -n \
             --arg apiUrl "${{ vars.PRODUCTION_API_URL }}/api" \
@@ -89,6 +111,9 @@ jobs:
             --arg razorpayKeyId "$RAZORPAY_KEY_ID" \
             --arg appInsightsConnectionString "$APPINSIGHTS" \
             --argjson telemetrySampleRate 100 \
+            --arg deployGitSha "$DEPLOY_GIT_SHA" \
+            --arg deployRunId "$DEPLOY_RUN_ID" \
+            --arg deployedAt "$DEPLOYED_AT" \
             --arg firebaseApiKey "$FIREBASE_API_KEY" \
             --arg firebaseAuthDomain "$FIREBASE_AUTH_DOMAIN" \
             --arg firebaseProjectId "$FIREBASE_PROJECT_ID" \
@@ -102,6 +127,11 @@ jobs:
               razorpayKeyId: $razorpayKeyId,
               appInsightsConnectionString: $appInsightsConnectionString,
               telemetrySampleRate: $telemetrySampleRate,
+              deployment: {
+                gitSha: $deployGitSha,
+                runId: $deployRunId,
+                deployedAt: $deployedAt
+              },
               firebase: {
                 apiKey: $firebaseApiKey,
                 authDomain: $firebaseAuthDomain,
@@ -166,7 +196,7 @@ jobs:
     # Wait for web to deploy first so both services update together. If web
     # was not in this deployment (deploy-web-production skipped), always() lets
     # this job proceed anyway; !failure() blocks the swap if web deploy failed.
-    needs: [deploy-web-production]
+    needs: [resolve-ref, deploy-web-production]
     if: >-
       always() &&
       !failure() &&
@@ -194,15 +224,68 @@ jobs:
       # mounts the zip as a read-only filesystem, bypassing Oryx entirely.
       - name: Configure production for zip-mount deploy
         run: |
+          DEPLOYED_AT=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           az webapp config appsettings set \
             --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
             --slot-settings \
               NODE_ENV=production \
               CORS_ORIGIN="${{ vars.PRODUCTION_WEB_URL }}" \
+              CONTENT_GENERATOR_BACKEND=ai \
+              ANTHROPIC_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-anthropic-api-key)" \
+              FIREBASE_PROJECT_ID="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-firebase-project-id)" \
+              GOOGLE_MAPS_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-google-maps-api-key)" \
+              REPLICATE_API_TOKEN="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-replicate-api-token)" \
+              GOOGLE_CALENDAR_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-google-calendar-api-key)" \
+              PERPLEXITY_API_KEY="@Microsoft.KeyVault(VaultName=restropulse-prod-kv;SecretName=prod-perplexity-api-key)" \
               WEBSITE_RUN_FROM_PACKAGE=1 \
               WEBSITE_NODE_DEFAULT_VERSION="~22" \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              APP_GIT_SHA="${{ needs.resolve-ref.outputs.deploy-git-sha }}" \
+              APP_DEPLOY_RUN_ID="${{ github.run_id }}" \
+              APP_DEPLOYED_AT="$DEPLOYED_AT"
+          az webapp config set \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            --startup-file "bash startup.sh" \
+            --always-on true
+
+      - name: Validate production Key Vault references resolve
+        run: |
+          settings_json=$(az webapp config appsettings list \
+            --name ${{ vars.AZURE_WEBAPP_NAME_PROD }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            -o json)
+
+          failures=0
+          while IFS= read -r ref; do
+            [ -z "$ref" ] && continue
+            vault_name=""
+            secret_name=""
+            secret_uri=$(echo "$ref" | sed -n 's/.*SecretUri=\([^;)]*\).*/\1/p')
+            if [ -n "$secret_uri" ]; then
+              vault_name=$(echo "$secret_uri" | awk -F/ '{print $3}' | cut -d. -f1)
+              secret_name=$(echo "$secret_uri" | awk -F/ '{print $5}')
+            else
+              vault_name=$(echo "$ref" | sed -n 's/.*VaultName=\([^;)]*\).*/\1/p')
+              secret_name=$(echo "$ref" | sed -n 's/.*SecretName=\([^;)]*\).*/\1/p')
+            fi
+            if [ -z "$vault_name" ] || [ -z "$secret_name" ]; then
+              echo "Invalid Key Vault reference: $ref"
+              failures=1
+              continue
+            fi
+            if ! az keyvault secret show --vault-name "$vault_name" --name "$secret_name" --query id -o tsv >/dev/null; then
+              echo "Missing Key Vault secret: $vault_name/$secret_name"
+              failures=1
+            fi
+          done < <(echo "$settings_json" | jq -r '.[] | .value // "" | select(startswith("@Microsoft.KeyVault("))')
+
+          if [ "$failures" -ne 0 ]; then
+            echo "Key Vault reference validation failed for production slot."
+            exit 1
+          fi
+          echo "All production slot Key Vault references resolve."
 
       - name: Swap staging slot to production
         run: |
@@ -214,7 +297,7 @@ jobs:
 
   smoke-test-api:
     name: Smoke Test API
-    needs: swap-api-production
+    needs: [resolve-ref, swap-api-production]
     if: needs.swap-api-production.result == 'success'
     runs-on: ubuntu-latest
     environment: production
@@ -227,10 +310,12 @@ jobs:
 
       - name: Smoke test API
         run: bash scripts/smoke-test.sh api "${{ vars.PRODUCTION_API_URL }}"
+        env:
+          EXPECTED_GIT_SHA: ${{ needs.resolve-ref.outputs.deploy-git-sha }}
 
   smoke-test-web:
     name: Smoke Test Web
-    needs: deploy-web-production
+    needs: [resolve-ref, deploy-web-production]
     if: needs.deploy-web-production.result == 'success'
     runs-on: ubuntu-latest
     environment: production
@@ -243,6 +328,8 @@ jobs:
 
       - name: Smoke test Web
         run: bash scripts/smoke-test.sh web "${{ vars.PRODUCTION_WEB_URL }}"
+        env:
+          EXPECTED_GIT_SHA: ${{ needs.resolve-ref.outputs.deploy-git-sha }}
 
   tag-production:
     name: Tag Production
