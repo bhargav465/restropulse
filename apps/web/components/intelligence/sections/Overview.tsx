@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import type { IntelligenceReport, ActionPlanItem } from '@restropulse/shared';
 import { intelligenceAPI } from '../../../api';
-import { resolveDeepLink, type DeepLinkTarget } from './deep-links';
+import { resolveDeepLink, resolveActionHref, SHOW_ACTION_CTAS, type DeepLinkTarget } from './deep-links';
+import { PILLAR_LABELS, gradeTextClass } from './primitives';
 import { track } from './track';
 
 /**
@@ -58,14 +59,16 @@ const ActionPlanCard: React.FC<{
                     <span className={`font-semibold ${IMPACT_CLASS[item.impact]}`}>{item.impact} impact</span>
                     <span className="text-muted">{item.timeframe}</span>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => onNavigate(target)}
-                    title={target.href}
-                    className="text-xs font-semibold text-primary-strong hover:underline whitespace-nowrap"
-                >
-                    {target.cta} →
-                </button>
+                {SHOW_ACTION_CTAS && (
+                    <button
+                        type="button"
+                        onClick={() => onNavigate(target)}
+                        title={target.href}
+                        className="text-xs font-semibold text-primary-strong hover:underline whitespace-nowrap"
+                    >
+                        {target.cta} →
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -118,6 +121,14 @@ export function byTheNumbers(report: IntelligenceReport): Array<{ label: string;
     return out;
 }
 
+/** Every failed check across the pillars, worst grades first. */
+export function quickWins(report: IntelligenceReport): Array<{ pillar: IntelligenceReport['pillars'][number]; check: IntelligenceReport['pillars'][number]['checks'][number] }> {
+    const order = { F: 0, D: 1, C: 2, B: 3, A: 4 } as const;
+    return [...report.pillars]
+        .sort((a, b) => order[a.grade] - order[b.grade])
+        .flatMap((pillar) => pillar.checks.filter((c) => !c.pass).map((check) => ({ pillar, check })));
+}
+
 const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkTarget) => void }> = ({ report, onNavigate }) => {
     const { narrative } = report;
 
@@ -167,6 +178,59 @@ const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkT
                     this is the one paragraph we actually want read. */}
                 <p className="text-base text-ink/90 mt-2 leading-relaxed max-w-3xl">{narrative.overview}</p>
             </Card>
+
+            {/* By the numbers — every claim inspectable at a glance. */}
+            <Card>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                    <h3 className="text-base font-semibold text-ink">By the numbers</h3>
+                    <span className="text-xs text-muted">From your latest scan</span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2" data-testid="by-the-numbers">
+                    {byTheNumbers(report).map((n) => (
+                        <div key={n.label} className="rounded-xl border border-line bg-canvas px-3 py-2.5">
+                            <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">{n.label}</p>
+                            <p className="text-base font-semibold text-ink tabular-nums mt-0.5">{n.value}</p>
+                            {n.note && <p className="text-xs text-muted mt-0.5">{n.note}</p>}
+                        </div>
+                    ))}
+                </div>
+            </Card>
+
+            {/* Quick wins — every failed check across the six pillars, each with a Fix.
+                This is the "what can I address right now" list the Overview lacked. */}
+            {quickWins(report).length > 0 && (
+                <Card>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                        <h3 className="text-base font-semibold text-ink">Fix these to raise your score</h3>
+                        <span className="text-xs text-muted">{quickWins(report).length} found</span>
+                    </div>
+                    <div data-testid="quick-wins">
+                        {quickWins(report).map(({ pillar, check }) => {
+                            const target = resolveActionHref(check.actionHref);
+                            return (
+                                <div key={`${pillar.key}-${check.id}`} className="flex items-start justify-between gap-3 py-2.5 border-b border-line last:border-b-0">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium text-ink">{check.label}</p>
+                                        <p className="text-xs text-muted mt-0.5 leading-relaxed">
+                                            <span className={`font-semibold ${gradeTextClass(pillar.grade)}`}>{PILLAR_LABELS[pillar.key]} · {pillar.grade}</span>
+                                            {' — '}{check.note}
+                                        </p>
+                                    </div>
+                                    {SHOW_ACTION_CTAS && target && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onNavigate(target)}
+                                            className="shrink-0 text-xs font-semibold text-primary-strong hover:underline whitespace-nowrap"
+                                        >
+                                            {target.cta} →
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </Card>
+            )}
 
             {/* Action plan — collapsible on mobile (expanded by default; it's the core CTA). */}
             <Card>
@@ -231,19 +295,6 @@ const Overview: React.FC<{ report: IntelligenceReport; onNavigate: (t: DeepLinkT
                 </button>
                 {fullOpen && (
                     <div className="mt-5 space-y-6" data-testid="full-report">
-                        {/* By the numbers — computed from the report itself, no AI. */}
-                        <div data-testid="by-the-numbers">
-                            <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">By the numbers</p>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                {byTheNumbers(report).map((n) => (
-                                    <div key={n.label} className="rounded-xl border border-line bg-canvas px-3 py-2.5">
-                                        <p className="text-[11px] uppercase tracking-wider text-muted font-semibold">{n.label}</p>
-                                        <p className="text-base font-semibold text-ink tabular-nums mt-0.5">{n.value}</p>
-                                        {n.note && <p className="text-xs text-muted mt-0.5">{n.note}</p>}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
                         <div>
                             <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Key findings</p>
                             <ul className="space-y-2.5 max-w-4xl">

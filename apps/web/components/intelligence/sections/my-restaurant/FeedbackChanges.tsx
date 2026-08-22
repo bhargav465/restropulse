@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { REVIEW_THEMES, type ReviewTheme } from '@restropulse/shared';
+import { REVIEW_THEMES, type ReviewTheme, type IntelligenceReport } from '@restropulse/shared';
 import { intelligenceAPI, type FeedbackDay, type FeedbackReview } from '../../../../api';
 import type { PeriodQuery } from '../period';
 import type { DeepLinkTarget } from '../deep-links';
@@ -132,13 +132,44 @@ export function negativeTrendingThemes(days: FeedbackDay[]): ReviewTheme[] {
     return [...counts.entries()].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).map(([t]) => t);
 }
 
+type SentimentFilter = 'all' | 'positive' | 'negative';
+
+/** "What changed" summary for the trailing few days of the feed. */
+export function lastDaysSummary(days: FeedbackDay[], window = 3): {
+    total: number; positive: number; negative: number;
+    ratingFrom: number | null; ratingTo: number | null;
+    themesUp: ReviewTheme[];
+} {
+    const recent = [...days].sort((a, b) => b.date.localeCompare(a.date)).slice(0, window);
+    let total = 0, positive = 0, negative = 0;
+    const themeCounts = new Map<ReviewTheme, number>();
+    for (const d of recent) {
+        for (const r of d.newReviews) {
+            total++;
+            if (r.rating >= 4) positive++;
+            if (r.rating <= 2) negative++;
+            for (const t of r.themes ?? []) themeCounts.set(t, (themeCounts.get(t) ?? 0) + 1);
+        }
+    }
+    const oldest = recent[recent.length - 1];
+    const newest = recent[0];
+    return {
+        total, positive, negative,
+        ratingFrom: oldest?.ratingBefore ?? null,
+        ratingTo: newest?.ratingAfter ?? null,
+        themesUp: [...themeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t),
+    };
+}
+
 export const FeedbackChangesView: React.FC<{
     days: FeedbackDay[];
     onNavigate: (t: DeepLinkTarget) => void;
 }> = ({ days, onNavigate }) => {
     const [activeTheme, setActiveTheme] = useState<ReviewTheme | null>(null);
+    const [sentiment, setSentiment] = useState<SentimentFilter>('all');
 
     const sortedDays = useMemo(() => [...days].sort((a, b) => b.date.localeCompare(a.date)), [days]);
+    const summary = useMemo(() => lastDaysSummary(days), [days]);
 
     // Which themes appear anywhere in the feed (drives the chip row).
     const presentThemes = useMemo(() => {
@@ -149,11 +180,34 @@ export const FeedbackChangesView: React.FC<{
 
     const negatives = useMemo(() => negativeTrendingThemes(days), [days]);
 
-    const filtered = (reviews: FeedbackReview[]) =>
-        activeTheme ? reviews.filter((r) => (r.themes ?? []).includes(activeTheme)) : reviews;
+    const filtered = (reviews: FeedbackReview[]) => {
+        let out = activeTheme ? reviews.filter((r) => (r.themes ?? []).includes(activeTheme)) : reviews;
+        if (sentiment === 'positive') out = out.filter((r) => r.rating >= 4);
+        if (sentiment === 'negative') out = out.filter((r) => r.rating <= 2);
+        return out;
+    };
 
     return (
         <div className="space-y-4 sm:space-y-6">
+            {/* What changed in the last few days — the strip that answers the daily
+                question before the owner reads a single review. */}
+            {summary.total > 0 && (
+                <div className="bg-surface rounded-2xl p-4 sm:p-5 border border-line" data-testid="what-changed-strip">
+                    <p className="text-[15px] text-ink leading-relaxed">
+                        <span className="font-semibold">Last few days:</span>{' '}
+                        {summary.total} new review{summary.total === 1 ? '' : 's'} —{' '}
+                        <span className="text-success font-semibold">{summary.positive} positive</span>,{' '}
+                        <span className="text-danger font-semibold">{summary.negative} negative</span>
+                        {summary.ratingFrom !== null && summary.ratingTo !== null && summary.ratingFrom !== summary.ratingTo && (
+                            <> · rating {summary.ratingFrom.toFixed(1)} → <span className={summary.ratingTo < summary.ratingFrom ? 'text-danger font-semibold' : 'text-success font-semibold'}>{summary.ratingTo.toFixed(1)}</span></>
+                        )}
+                        {summary.themesUp.length > 0 && (
+                            <> · guests talking about {summary.themesUp.map((t) => `#${t}`).join(', ')}</>
+                        )}
+                        .
+                    </p>
+                </div>
+            )}
             {/* Negative-trend alert */}
             {negatives.length > 0 && (
                 <div className="bg-surface rounded-2xl p-5 border border-line border-l-[3px] border-l-danger" data-testid="negative-trend-alert">
@@ -170,6 +224,28 @@ export const FeedbackChangesView: React.FC<{
                 <div className="flex items-center justify-between gap-2 mb-3">
                     <h3 className="text-base font-semibold text-ink">What guests are talking about</h3>
                     <ProvenanceChip provenance="ai-inferred" />
+                </div>
+                {/* Positive / negative first — the split the owner filters by most. */}
+                <div className="flex flex-wrap gap-2 mb-2" role="group" aria-label="Filter by sentiment">
+                    {([
+                        { id: 'all', label: 'All' },
+                        { id: 'positive', label: 'Where you shine' },
+                        { id: 'negative', label: 'Where it hurts' },
+                    ] as const).map((f) => (
+                        <button
+                            key={f.id}
+                            type="button"
+                            aria-pressed={sentiment === f.id}
+                            onClick={() => setSentiment(f.id)}
+                            className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
+                                sentiment === f.id
+                                    ? f.id === 'negative' ? 'bg-danger text-white border-danger' : f.id === 'positive' ? 'bg-success text-white border-success' : 'bg-primary text-white border-primary'
+                                    : 'border-line text-ink hover:bg-primary-soft'
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {presentThemes.map((t) => {
@@ -225,7 +301,7 @@ export const FeedbackChangesView: React.FC<{
 };
 
 /** Container: fetches the self feedback feed for the current window. */
-const FeedbackChanges: React.FC<{ query: PeriodQuery; onNavigate: (t: DeepLinkTarget) => void }> = ({ query, onNavigate }) => {
+const FeedbackChanges: React.FC<{ query: PeriodQuery; report?: IntelligenceReport | null; onNavigate: (t: DeepLinkTarget) => void }> = ({ query, report, onNavigate }) => {
     const [days, setDays] = useState<FeedbackDay[] | null>(null);
 
     useEffect(() => {
@@ -245,7 +321,27 @@ const FeedbackChanges: React.FC<{ query: PeriodQuery; onNavigate: (t: DeepLinkTa
     }, [query.from, query.to]);
 
     if (days === null) return <p className="text-sm text-muted">Loading recent reviews…</p>;
-    if (days.length === 0) return <p className="text-sm text-muted">No new reviews in this period.</p>;
+
+    // Day 0: the nightly checks haven't run yet, but the scan itself carries the
+    // latest Google reviews — show those (Draft-a-reply works on them too)
+    // rather than a blank tab.
+    if (days.length === 0) {
+        const recent = report?.base.recentReviews ?? [];
+        if (recent.length === 0) {
+            return <p className="text-sm text-muted">No new reviews in this period.</p>;
+        }
+        return (
+            <div className="space-y-3" data-testid="feedback-from-scan">
+                <p className="text-xs text-muted">
+                    From your latest scan — your most recent Google reviews. Day-by-day tracking of what changed starts after
+                    tonight’s first check.
+                </p>
+                {recent.map((r, i) => (
+                    <ReviewCard key={i} review={{ rating: r.rating, text: r.text, time: r.time, source: 'google' }} />
+                ))}
+            </div>
+        );
+    }
     return <FeedbackChangesView days={days} onNavigate={onNavigate} />;
 };
 

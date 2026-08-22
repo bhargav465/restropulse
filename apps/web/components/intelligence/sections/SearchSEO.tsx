@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { IntelligenceReport, PillarScore } from '@restropulse/shared';
 import { CheckRow, KeywordChips } from './primitives';
 import { ProvenanceChip } from './provenance';
-import { resolveActionHref, resolveDeepLink, type DeepLinkTarget } from './deep-links';
+import { resolveActionHref, resolveDeepLink, SHOW_ACTION_CTAS, type DeepLinkTarget } from './deep-links';
 
 /**
  * Search & SEO sub-tab (DESIGN §4.4) — Google profile + website pass/fail
@@ -32,7 +32,7 @@ const ChecklistCard: React.FC<{ title: string; pillar?: PillarScore; onNavigate:
                             label={chk.label}
                             pass={chk.pass}
                             note={chk.note}
-                            action={!chk.pass && target ? { label: target.cta, href: target.href, onClick: () => onNavigate(target) } : undefined}
+                            action={SHOW_ACTION_CTAS && !chk.pass && target ? { label: target.cta, href: target.href, onClick: () => onNavigate(target) } : undefined}
                         />
                     );
                 })}

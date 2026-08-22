@@ -3,7 +3,7 @@ import type { CompareRow, MetricGap, CompetitorProfile, IntelligenceReport } fro
 import { intelligenceAPI } from '../../../../api';
 import { compareParamsFor, type PeriodQuery } from '../period';
 import { ProvenanceChip } from '../provenance';
-import { resolveDeepLink, type DeepLinkTarget } from '../deep-links';
+import { resolveDeepLink, SHOW_ACTION_CTAS, type DeepLinkTarget } from '../deep-links';
 
 /**
  * WhereTheyBeatYou (Brief 09 §3) — one card per competitor with a non-empty
@@ -266,14 +266,16 @@ export const WhereTheyBeatYouView: React.FC<{
                                 <ProvenanceChip provenance="ai-inferred" />
                             </div>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => onNavigate(target)}
-                            title={target.href}
-                            className="text-xs font-semibold text-primary-strong hover:underline"
-                        >
-                            Close this gap →
-                        </button>
+                        {SHOW_ACTION_CTAS && (
+                            <button
+                                type="button"
+                                onClick={() => onNavigate(target)}
+                                title={target.href}
+                                className="text-xs font-semibold text-primary-strong hover:underline"
+                            >
+                                Close this gap →
+                            </button>
+                        )}
                     </div>
                 );
             })}

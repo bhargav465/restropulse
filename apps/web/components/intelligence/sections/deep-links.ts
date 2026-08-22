@@ -13,6 +13,15 @@
 
 import type { ActionPlanItem, ViewState } from '@restropulse/shared';
 
+/**
+ * Master switch for action CTAs ("Act on this →", Quick-wins "Fix →").
+ * OFF for launch (Bhargav, 20 Aug): the destinations aren't configured as
+ * guided actionables yet, and a button that lands somewhere unhelpful costs
+ * more trust than no button. The deep-link plumbing, tick-boxes and telemetry
+ * all stay; flip to true to bring every CTA back.
+ */
+export const SHOW_ACTION_CTAS = false;
+
 /** Shell-level buckets — mirror of the shell's Bucket union. */
 export type ShellBucketId = 'DASHBOARD' | 'GET_STARTED' | 'CONTENT' | 'ORDERING' | 'INTELLIGENCE' | 'DESIGN';
 

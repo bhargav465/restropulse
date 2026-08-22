@@ -4,7 +4,7 @@ import { intelligenceAPI } from '../../api';
 import { SubNav, SubNavTab } from './primitives';
 import { ScoreDial, PillarBar, CheckRow, type Grade, PILLAR_LABELS, gradeTextClass } from './sections/primitives';
 import { ProvenanceChip, ProvenanceLegend } from './sections/provenance';
-import { resolveActionHref, type DeepLinkTarget } from './sections/deep-links';
+import { resolveActionHref, SHOW_ACTION_CTAS, type DeepLinkTarget } from './sections/deep-links';
 import { humanCity, whatChangedLine } from './sections/copy';
 import WhileYouWereAway from './sections/WhileYouWereAway';
 import { announceNotificationsSeen, INTEL_NAV_EVENT, INTEL_NOTIFICATIONS_SEEN_EVENT, type IntelNavDetail } from './sections/notifications';
@@ -130,15 +130,28 @@ const HeaderBand: React.FC<{
                         Rank #{report.ranking.rank} <span className="text-muted font-normal">of {report.ranking.total} nearby</span>
                     </p>
                     <p className="text-xs text-muted">Report from {relativeDays(scannedAt)}</p>
-                    <button
-                        type="button"
-                        onClick={onRescan}
-                        disabled={withinWindow}
-                        title={withinWindow ? 'You can refresh once every 24 hours' : 'Run a fresh scan'}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line text-primary-strong hover:bg-primary-soft transition-colors disabled:opacity-50 disabled:hover:bg-surface"
-                    >
-                        Refresh report
-                    </button>
+                    <div className="flex items-center gap-2 no-print">
+                        <button
+                            type="button"
+                            onClick={onRescan}
+                            disabled={withinWindow}
+                            title={withinWindow ? 'You can refresh once every 24 hours' : 'Run a fresh scan'}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line text-primary-strong hover:bg-primary-soft transition-colors disabled:opacity-50 disabled:hover:bg-surface"
+                        >
+                            Refresh report
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                track.tabOpened({ bucket: 'MINE', tab: 'PDF' });
+                                window.print();
+                            }}
+                            title="Save this report as a PDF (choose 'Save as PDF' in the print dialog)"
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line text-primary-strong hover:bg-primary-soft transition-colors"
+                        >
+                            Download PDF
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -177,7 +190,7 @@ const PillarChecks: React.FC<{
                             label={chk.label}
                             pass={chk.pass}
                             note={chk.note}
-                            action={!chk.pass && target ? { label: target.cta, href: target.href, onClick: () => onNavigate(target) } : undefined}
+                            action={SHOW_ACTION_CTAS && !chk.pass && target ? { label: target.cta, href: target.href, onClick: () => onNavigate(target) } : undefined}
                         />
                     );
                 })}
@@ -382,7 +395,7 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
                     <SubNav tabs={mineTabs} active={mineTab} onChange={(t) => { track.tabOpened({ bucket: 'MINE', tab: t }); setMineTab(t); }} label="My Restaurant sections" />
                     {mineTab === 'OVERVIEW' && <MyOverview report={report} metrics={selfMetrics} onNavigate={onNavigate} />}
                     {mineTab === 'TRENDS' && <DailyTrends query={minePeriod} />}
-                    {mineTab === 'FEEDBACK' && <FeedbackChanges query={minePeriod} onNavigate={onNavigate} />}
+                    {mineTab === 'FEEDBACK' && <FeedbackChanges query={minePeriod} report={report} onNavigate={onNavigate} />}
                     {mineTab === 'SEARCH' && <SearchSEO report={report} onNavigate={onNavigate} />}
                 </>
             ) : (

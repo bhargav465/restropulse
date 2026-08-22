@@ -35,7 +35,7 @@ import MyOverview from '../components/intelligence/sections/my-restaurant/Overvi
 import { DailyTrendsView } from '../components/intelligence/sections/my-restaurant/DailyTrends';
 import { TopThreatsView } from '../components/intelligence/sections/competition/TopThreats';
 import { TrendChart } from '../components/intelligence/sections/charts';
-import { SHELL_BUCKET_TO_VIEW, shellBucketToView, resolveDeepLink } from '../components/intelligence/sections/deep-links';
+import { SHELL_BUCKET_TO_VIEW, shellBucketToView, resolveDeepLink, SHOW_ACTION_CTAS } from '../components/intelligence/sections/deep-links';
 import { DEMO_INTELLIGENCE_REPORT, DEMO_INTELLIGENCE_SELF_METRICS } from '../lib/demo-fixtures-intelligence';
 import ScanFlow, { PlacePicker } from '../components/intelligence/sections/ScanFlow';
 import { WhereTheyBeatYouView, rowsFromReport } from '../components/intelligence/sections/competition/WhereTheyBeatYou';
@@ -79,19 +79,21 @@ describe('RP-001 — action-plan CTAs are wired to the shell', () => {
         }
     });
 
-    it('calls onNavigate when an action-plan CTA is clicked', async () => {
+    it('action CTAs follow the SHOW_ACTION_CTAS switch (off for launch)', async () => {
         vi.mocked(intelligenceAPI.getLatestReport).mockResolvedValue(DEMO_INTELLIGENCE_REPORT as never);
         vi.mocked(intelligenceAPI.getSelfMetrics).mockResolvedValue(DEMO_INTELLIGENCE_SELF_METRICS as never);
-        const onNavigate = vi.fn();
 
-        render(<Intelligence restaurant={restaurant} onNavigate={onNavigate} />);
+        render(<Intelligence restaurant={restaurant} onNavigate={() => {}} />);
+        await screen.findByText('Your action plan');
 
-        // The fixture's priority-3 action carries deepLink { bucket: 'content' }.
-        const cta = await screen.findByRole('button', { name: /Draft in Content Engine/i });
-        fireEvent.click(cta);
-
-        expect(onNavigate).toHaveBeenCalledTimes(1);
-        expect(onNavigate.mock.calls[0][0]).toMatchObject({ bucket: 'CONTENT' });
+        if (SHOW_ACTION_CTAS) {
+            expect(screen.getByRole('button', { name: /Draft in Content Engine/i })).toBeInTheDocument();
+        } else {
+            // Bhargav, 20 Aug: actionables aren't configured — no CTA renders,
+            // but the plumbing (deep links, tick-boxes) stays.
+            expect(screen.queryByRole('button', { name: /Draft in Content Engine/i })).not.toBeInTheDocument();
+            expect(screen.queryByText(/Act on this/)).not.toBeInTheDocument();
+        }
     });
 });
 

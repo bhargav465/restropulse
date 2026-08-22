@@ -24,6 +24,7 @@ import invoiceRoutes from './routes/invoices.js';
 import configRoutes from './routes/config.js';
 import accountRoutes from './routes/account.js';
 import intelligenceRoutes from './routes/intelligence.js';
+import graderRoutes from './routes/grader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -130,9 +131,11 @@ initializeFirebaseAdmin();
 // Serve static content from public directory
 app.use('/content', express.static(path.join(__dirname, '../public')));
 
-// Middleware - Allow both ports 3000 and 3001 for development
+// Middleware — CORS_ORIGIN accepts a comma-separated list so local dev can
+// allow localhost and the machine's LAN IP at the same time (phone testing).
+// Deployed slots keep setting a single origin; nothing changes for them.
 app.use(cors({
-    origin: [CORS_ORIGIN, 'http://localhost:3001'],
+    origin: [...CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean), 'http://localhost:3001'],
     credentials: true
 }));
 // Razorpay webhook needs raw body for signature verification
@@ -170,6 +173,8 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
+// Public lead-gen grader — deliberately unauthenticated; rate-limited inside.
+app.use('/api/grader', graderRoutes);
 
 // Dev-only: proxy /dev-assets/* to the content-engine asset server (port 3002).
 // Allows the single ngrok tunnel to serve both API routes and placeholder media

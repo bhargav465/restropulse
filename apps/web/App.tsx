@@ -15,6 +15,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import InstagramCallback from './components/InstagramCallback';
 import Onboarding from './components/Onboarding';
 import Landing from './components/Landing';
+import Grader from './components/Grader';
 import Paywall from './components/Paywall';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
@@ -445,6 +446,11 @@ const App: React.FC = () => {
     }
     if (staticPage === 'terms') {
         return <TermsOfService onBack={() => { window.location.href = '/'; }} />;
+    }
+
+    // Public lead-gen grader (?view=grader) — no auth, its own page entirely.
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'grader') {
+        return <Grader />;
     }
 
     if (loading) {

@@ -339,3 +339,17 @@ html, body {
   & .hover\:border-orange-400:hover { border-color: color-mix(in srgb, var(--rp-primary) 55%, white) !important; }
   & .hover\:border-pink-300:hover { border-color: color-mix(in srgb, var(--rp-accent) 40%, white) !important; }
 }
+
+
+/* ---- Download as PDF (browser print) ------------------------------------ */
+@media print {
+    /* Hide the shell: sidebar, header, trial banner, bottom nav, buttons that
+       only make sense on screen. */
+    aside, header, nav, .no-print { display: none !important; }
+    main { overflow: visible !important; padding: 0 !important; }
+    body { background: white !important; }
+    /* Cards flow across pages without splitting mid-card where possible. */
+    .rounded-2xl { break-inside: avoid; }
+    /* Expand anything the screen keeps behind a disclosure. */
+    .print-expand { display: block !important; }
+}
