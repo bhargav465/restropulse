@@ -166,7 +166,7 @@ export async function runGraderScan(name: string, city: string): Promise<GraderR
 export async function unlockGraderScan(
     scanId: string,
     promoCode: string,
-    contact: { phone?: string; name?: string },
+    contact: { phone?: string; email?: string; name?: string },
 ): Promise<{ ok: true; result: GraderResult } | { ok: false; error: string }> {
     const codes = (process.env.GRADER_PROMO_CODES ?? 'RESTRO2026')
         .split(',')
@@ -185,6 +185,7 @@ export async function unlockGraderScan(
         city: (doc as { city?: string }).city,
         promoCode: promoCode.trim().toUpperCase(),
         ...(contact.phone ? { phone: contact.phone } : {}),
+        ...(contact.email ? { email: contact.email.toLowerCase() } : {}),
         ...(contact.name ? { contactName: contact.name } : {}),
         createdAt: new Date(),
     });

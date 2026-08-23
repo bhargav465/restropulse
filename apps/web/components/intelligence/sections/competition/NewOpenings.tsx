@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { intelligenceAPI, type NewOpening } from '../../../../api';
 import { resolveDeepLink, type DeepLinkTarget } from '../deep-links';
+import type { IntelligenceReport } from '@restropulse/shared';
 
 /**
  * NewOpenings (Brief 09 §3) — the 5 km new-openings radar. `sinceDays` chip
@@ -13,6 +14,8 @@ import { resolveDeepLink, type DeepLinkTarget } from '../deep-links';
 const SINCE_OPTIONS: Array<30 | 60 | 90> = [30, 60, 90];
 
 export const NewOpeningsView: React.FC<{
+    /** True when there is no previous report/sightings to diff against. */
+    firstScan?: boolean;
     openings: NewOpening[];
     sinceDays: 30 | 60 | 90;
     onSinceDaysChange: (d: 30 | 60 | 90) => void;
@@ -20,7 +23,7 @@ export const NewOpeningsView: React.FC<{
     trackedPlaceIds: Set<string>;
     onAdd: (o: NewOpening) => void;
     onNavigate: (t: DeepLinkTarget) => void;
-}> = ({ openings, sinceDays, onSinceDaysChange, atCapacity, trackedPlaceIds, onAdd, onNavigate }) => (
+}> = ({ firstScan, openings, sinceDays, onSinceDaysChange, atCapacity, trackedPlaceIds, onAdd, onNavigate }) => (
     <div className="space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-base font-semibold text-ink">Opened recently within 5 km</h3>
@@ -42,10 +45,21 @@ export const NewOpeningsView: React.FC<{
         </div>
 
         {openings.length === 0 ? (
-            <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line">
-                <p className="text-sm text-muted">
-                    No new openings within 5 km in the last {sinceDays} days — quiet streets are good news.
-                </p>
+            <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line" data-testid="openings-empty">
+                {firstScan ? (
+                    <>
+                        <p className="text-sm font-semibold text-ink">We can't spot newcomers from one scan</p>
+                        <p className="text-sm text-muted mt-1 leading-relaxed">
+                            A restaurant only counts as “new” when it appears in a scan that wasn't in the one before. Your next
+                            scan (or the weekly Monday one) starts the comparison — anyone who opens near you after today shows
+                            up here automatically.
+                        </p>
+                    </>
+                ) : (
+                    <p className="text-sm text-muted">
+                        No new openings within 5 km in the last {sinceDays} days — quiet streets are good news.
+                    </p>
+                )}
             </div>
         ) : (
             <div className="grid sm:grid-cols-2 gap-4">
@@ -93,8 +107,38 @@ export const NewOpeningsView: React.FC<{
     </div>
 );
 
+/**
+ * Day-0/day-N fallback: the sightings sweep only has data once the worker has
+ * run twice. Until then, the report's `deltas.newCompetitors` (names of rivals
+ * that appeared since the previous scan) is the honest source of "new near you".
+ */
+function seedFromReport(report?: IntelligenceReport | null): NewOpening[] {
+    const names = report?.deltas?.newCompetitors ?? [];
+    if (names.length === 0) return [];
+    const byName = new Map((report?.competitors ?? []).map((c) => [c.name, c]));
+    const generated = report ? new Date(report.generatedAt).toISOString() : new Date().toISOString();
+    return names.flatMap((n) => {
+        const c = byName.get(n);
+        if (!c) return [];
+        const opening: NewOpening = {
+            placeId: c.placeId,
+            name: c.name,
+            cuisine: c.cuisine,
+            distanceKm: c.distanceKm,
+            firstSeenAt: generated,
+            ratingAtFirstSeen: c.rating,
+            reviewsAtFirstSeen: c.totalRatings,
+            currentReviewCount: c.totalRatings,
+            reviewsSinceFirstSeen: 0,
+            daysSinceFirstSeen: 0,
+            fastStarter: false,
+        };
+        return [opening];
+    });
+}
+
 /** Container: fetches openings for the current sinceDays + wires add-to-watchlist. */
-const NewOpenings: React.FC<{ onNavigate: (t: DeepLinkTarget) => void }> = ({ onNavigate }) => {
+const NewOpenings: React.FC<{ report?: IntelligenceReport | null; onNavigate: (t: DeepLinkTarget) => void }> = ({ report, onNavigate }) => {
     const [sinceDays, setSinceDays] = useState<30 | 60 | 90>(30);
     const [openings, setOpenings] = useState<NewOpening[] | null>(null);
     const [tracked, setTracked] = useState<Set<string>>(new Set());
@@ -118,9 +162,16 @@ const NewOpenings: React.FC<{ onNavigate: (t: DeepLinkTarget) => void }> = ({ on
             setOpenings(null);
             try {
                 const res = await intelligenceAPI.getNewOpenings({ sinceDays });
-                if (!cancelled) setOpenings(res);
+                if (cancelled) return;
+                if (res.length > 0) {
+                    setOpenings(res);
+                    return;
+                }
+                // Sightings sweep has nothing yet: seed from the report's own diff —
+                // competitors that appeared since the PREVIOUS report.
+                setOpenings(seedFromReport(report));
             } catch {
-                if (!cancelled) setOpenings([]);
+                if (!cancelled) setOpenings(seedFromReport(report));
             }
         })();
         return () => {
@@ -146,6 +197,7 @@ const NewOpenings: React.FC<{ onNavigate: (t: DeepLinkTarget) => void }> = ({ on
 
     return (
         <NewOpeningsView
+            firstScan={!report?.deltas}
             openings={openings}
             sinceDays={sinceDays}
             onSinceDaysChange={setSinceDays}

@@ -315,10 +315,11 @@ const WhereTheyBeatYou: React.FC<{
         ? { rating: report.base.rating, reviewCount: report.base.totalRatings, photoCount: report.base.photoCount }
         : undefined;
 
-    // The daily layer has nothing usable for this period (no rows, or rows with no
-    // Google data — the self row alone is common on day 0): seed from the report.
-    const dailyHasData = rows.some((r) => !r.isSelf && (r.google || r.zomato));
-    if (!dailyHasData && report) {
+    // Seed from the report whenever the daily layer would render ZERO gap cards
+    // for this period — empty rows, self-only rows, or rival rows with no gaps.
+    // The daily view only earns the tab once it can actually show something.
+    const dailyGapCards = rows.filter((r) => !r.isSelf && (r.google || r.zomato) && r.beatsYou.length > 0);
+    if (dailyGapCards.length === 0 && report) {
         return (
             <WhereTheyBeatYouView rows={rowsFromReport(report)} profilesByName={profilesByName} yours={yours} onNavigate={onNavigate} source="scan" />
         );

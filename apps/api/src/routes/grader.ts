@@ -66,12 +66,19 @@ router.post('/scan', handle(async (req: Request, res: Response<ApiResponse<Grade
 }));
 
 router.post('/unlock', handle(async (req: Request, res: Response<ApiResponse<GraderResult>>) => {
-    const { scanId, promoCode, phone, name } = (req.body ?? {}) as Record<string, unknown>;
+    const { scanId, promoCode, phone, email, name } = (req.body ?? {}) as Record<string, unknown>;
     if (typeof scanId !== 'string' || typeof promoCode !== 'string' || !promoCode.trim()) {
         return res.status(400).json({ success: false, error: 'scanId and promoCode are required.' });
     }
+    // The lead IS the product of this page: at least one way to reach them.
+    const cleanPhone = typeof phone === 'string' && phone.trim() ? phone.trim().slice(0, 20) : undefined;
+    const cleanEmail = typeof email === 'string' && /.+@.+\..+/.test(email.trim()) ? email.trim().slice(0, 120) : undefined;
+    if (!cleanPhone && !cleanEmail) {
+        return res.status(422).json({ success: false, error: 'Enter a phone number or email so we can send your report.' });
+    }
     const out = await unlockGraderScan(scanId, promoCode, {
-        ...(typeof phone === 'string' && phone.trim() ? { phone: phone.trim().slice(0, 20) } : {}),
+        ...(cleanPhone ? { phone: cleanPhone } : {}),
+        ...(cleanEmail ? { email: cleanEmail } : {}),
         ...(typeof name === 'string' && name.trim() ? { name: name.trim().slice(0, 80) } : {}),
     });
     if (!out.ok) return res.status(422).json({ success: false, error: out.error });

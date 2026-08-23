@@ -65,6 +65,7 @@ const Grader: React.FC = () => {
     const [unlockOpen, setUnlockOpen] = useState(false);
     const [promo, setPromo] = useState('');
     const [phone, setPhone] = useState('');
+    const [email, setEmail] = useState('');
     const [contactName, setContactName] = useState('');
     const [unlockBusy, setUnlockBusy] = useState(false);
     const [unlockError, setUnlockError] = useState<string | null>(null);
@@ -101,6 +102,7 @@ const Grader: React.FC = () => {
             scanId: result.scanId,
             promoCode: promo,
             phone: phone || undefined,
+            email: email || undefined,
             name: contactName || undefined,
         });
         setUnlockBusy(false);
@@ -262,13 +264,19 @@ const Grader: React.FC = () => {
                                     className="mt-1 w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base text-ink" />
                             </label>
                             <label className="text-xs font-semibold text-muted">
-                                Phone <span className="font-normal">(optional — we'll send the PDF)</span>
-                                <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel"
-                                    className="mt-1 w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base text-ink" />
+                                Phone
+                                <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="+91…"
+                                    className="mt-1 w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base text-ink" data-testid="lead-phone" />
                             </label>
+                            <label className="text-xs font-semibold text-muted">
+                                Email
+                                <input value={email} onChange={(e) => setEmail(e.target.value)} inputMode="email" placeholder="you@restaurant.com"
+                                    className="mt-1 w-full rounded-xl border border-line bg-canvas px-4 py-3 text-base text-ink" data-testid="lead-email" />
+                            </label>
+                            <p className="text-[11px] text-muted -mt-1">Phone or email required — we'll send your full report there.</p>
                             {unlockError && <p className="text-sm text-danger" role="alert">{unlockError}</p>}
                             <div className="flex items-center gap-3">
-                                <button type="button" disabled={unlockBusy || !promo.trim()} onClick={() => void unlock()}
+                                <button type="button" disabled={unlockBusy || !promo.trim() || (!phone.trim() && !email.trim())} onClick={() => void unlock()}
                                     className="flex-1 rounded-xl bg-primary-strong text-white px-4 py-3 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
                                     {unlockBusy ? 'Unlocking…' : 'Unlock'}
                                 </button>
