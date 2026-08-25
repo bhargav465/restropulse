@@ -26,7 +26,7 @@ export const NewOpeningsView: React.FC<{
 }> = ({ firstScan, openings, sinceDays, onSinceDaysChange, atCapacity, trackedPlaceIds, onAdd, onNavigate }) => (
     <div className="space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-base font-semibold text-ink">Opened recently within 5 km</h3>
+            <h3 className="text-base font-semibold text-ink">Opened recently within 7 km</h3>
             <div className="inline-flex items-center gap-1 rounded-xl bg-primary-soft p-1">
                 {SINCE_OPTIONS.map((d) => (
                     <button
@@ -48,16 +48,15 @@ export const NewOpeningsView: React.FC<{
             <div className="bg-surface rounded-2xl p-4 sm:p-6 border border-line" data-testid="openings-empty">
                 {firstScan ? (
                     <>
-                        <p className="text-sm font-semibold text-ink">We can't spot newcomers from one scan</p>
+                        <p className="text-sm font-semibold text-ink">No likely newcomers within 7 km</p>
                         <p className="text-sm text-muted mt-1 leading-relaxed">
-                            A restaurant only counts as “new” when it appears in a scan that wasn't in the one before. Your next
-                            scan (or the weekly Monday one) starts the comparison — anyone who opens near you after today shows
-                            up here automatically.
+                            Nothing near you looks freshly opened (every rival already has a substantial review history). From
+                            your next scan onward, anyone who newly appears near you shows up here automatically.
                         </p>
                     </>
                 ) : (
                     <p className="text-sm text-muted">
-                        No new openings within 5 km in the last {sinceDays} days — quiet streets are good news.
+                        No new openings within 7 km in the last {sinceDays} days — quiet streets are good news.
                     </p>
                 )}
             </div>
@@ -77,9 +76,15 @@ export const NewOpeningsView: React.FC<{
                                 </div>
                                 {o.fastStarter && <span className="text-xs font-semibold text-warning shrink-0">Growing fast</span>}
                             </div>
-                            <p className="text-xs text-muted mt-2">
-                                First seen {new Date(o.firstSeenAt).toISOString().slice(0, 10)} · +{o.reviewsSinceFirstSeen} reviews in {o.daysSinceFirstSeen}d
-                            </p>
+                            {o.daysSinceFirstSeen === 0 && o.reviewsSinceFirstSeen === 0 ? (
+                                <p className="text-xs text-muted mt-2">
+                                    Only {o.currentReviewCount.toLocaleString('en-IN')} review{o.currentReviewCount === 1 ? '' : 's'} on Google — usually a recent opening <span className="italic">(our estimate)</span>
+                                </p>
+                            ) : (
+                                <p className="text-xs text-muted mt-2">
+                                    First seen {new Date(o.firstSeenAt).toISOString().slice(0, 10)} · +{o.reviewsSinceFirstSeen} reviews in {o.daysSinceFirstSeen}d
+                                </p>
+                            )}
                             <div className="flex items-center gap-3 mt-3">
                                 <button
                                     type="button"
@@ -112,34 +117,48 @@ export const NewOpeningsView: React.FC<{
  * run twice. Until then, the report's `deltas.newCompetitors` (names of rivals
  * that appeared since the previous scan) is the honest source of "new near you".
  */
-function seedFromReport(report?: IntelligenceReport | null): NewOpening[] {
-    const names = report?.deltas?.newCompetitors ?? [];
-    if (names.length === 0) return [];
-    const byName = new Map((report?.competitors ?? []).map((c) => [c.name, c]));
-    const generated = report ? new Date(report.generatedAt).toISOString() : new Date().toISOString();
-    return names.flatMap((n) => {
-        const c = byName.get(n);
-        if (!c) return [];
-        const opening: NewOpening = {
-            placeId: c.placeId,
-            name: c.name,
-            cuisine: c.cuisine,
-            distanceKm: c.distanceKm,
-            firstSeenAt: generated,
-            ratingAtFirstSeen: c.rating,
-            reviewsAtFirstSeen: c.totalRatings,
-            currentReviewCount: c.totalRatings,
-            reviewsSinceFirstSeen: 0,
-            daysSinceFirstSeen: 0,
-            fastStarter: false,
-        };
-        return [opening];
+/** Review count at or below which we treat a place as "likely opened recently". */
+export const LIKELY_NEW_MAX_REVIEWS = 100;
+const LIKELY_NEW_RADIUS_KM = 7;
+const LIKELY_NEW_MAX = 10;
+
+export function seedFromReport(report?: IntelligenceReport | null): NewOpening[] {
+    if (!report) return [];
+    const generated = new Date(report.generatedAt).toISOString();
+    const toOpening = (c: (typeof report.competitors)[number]): NewOpening => ({
+        placeId: c.placeId,
+        name: c.name,
+        cuisine: c.cuisine,
+        distanceKm: c.distanceKm,
+        firstSeenAt: generated,
+        ratingAtFirstSeen: c.rating,
+        reviewsAtFirstSeen: c.totalRatings,
+        currentReviewCount: c.totalRatings,
+        reviewsSinceFirstSeen: 0,
+        daysSinceFirstSeen: 0,
+        fastStarter: false,
     });
+
+    // 1. Real newcomers: appeared since the previous scan (needs two scans).
+    const names = new Set(report.deltas?.newCompetitors ?? []);
+    const confirmed = (report.competitors ?? []).filter((c) => names.has(c.name)).map(toOpening);
+    const seen = new Set(confirmed.map((o) => o.placeId));
+
+    // 2. Likely-new heuristic: Google has no "opened on" date, but a restaurant
+    //    with only a handful of reviews is almost always a recent opening. Within
+    //    7 km, fewest reviews first, honestly labelled as an estimate in the UI.
+    const likely = (report.competitors ?? [])
+        .filter((c) => c.distanceKm <= LIKELY_NEW_RADIUS_KM && c.totalRatings > 0 && c.totalRatings <= LIKELY_NEW_MAX_REVIEWS && !seen.has(c.placeId))
+        .sort((a, b) => a.totalRatings - b.totalRatings)
+        .slice(0, LIKELY_NEW_MAX)
+        .map(toOpening);
+
+    return [...confirmed, ...likely];
 }
 
 /** Container: fetches openings for the current sinceDays + wires add-to-watchlist. */
 const NewOpenings: React.FC<{ report?: IntelligenceReport | null; onNavigate: (t: DeepLinkTarget) => void }> = ({ report, onNavigate }) => {
-    const [sinceDays, setSinceDays] = useState<30 | 60 | 90>(30);
+    const [sinceDays, setSinceDays] = useState<30 | 60 | 90>(90);
     const [openings, setOpenings] = useState<NewOpening[] | null>(null);
     const [tracked, setTracked] = useState<Set<string>>(new Set());
     const [max, setMax] = useState(5);
@@ -161,7 +180,7 @@ const NewOpenings: React.FC<{ report?: IntelligenceReport | null; onNavigate: (t
         (async () => {
             setOpenings(null);
             try {
-                const res = await intelligenceAPI.getNewOpenings({ sinceDays });
+                const res = await intelligenceAPI.getNewOpenings({ sinceDays, radiusKm: 7 });
                 if (cancelled) return;
                 if (res.length > 0) {
                     setOpenings(res);

@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { CompareRow, MetricGap, CompetitorProfile, IntelligenceReport } from '@restropulse/shared';
 import { intelligenceAPI } from '../../../../api';
-import { compareParamsFor, type PeriodQuery } from '../period';
 import { ProvenanceChip } from '../provenance';
 import { resolveDeepLink, SHOW_ACTION_CTAS, type DeepLinkTarget } from '../deep-links';
 
@@ -284,20 +283,24 @@ export const WhereTheyBeatYouView: React.FC<{
 };
 
 /** Container: fetches compare rows for the period and joins the v1 report layer. */
+/**
+ * No period filter here (Bhargav, 20 Aug): "where they beat you" is a question
+ * about NOW. Always fetch the current month's tracked data; the report seed
+ * covers everything else.
+ */
 const WhereTheyBeatYou: React.FC<{
-    query: PeriodQuery;
     report: IntelligenceReport | null;
     onNavigate: (t: DeepLinkTarget) => void;
-}> = ({ query, report, onNavigate }) => {
+}> = ({ report, onNavigate }) => {
     const [rows, setRows] = useState<CompareRow[] | null>(null);
-    const params = useMemo(() => compareParamsFor(query), [query.from, query.to, query.granularity]);
 
     useEffect(() => {
         let cancelled = false;
         (async () => {
             setRows(null);
             try {
-                const data = await intelligenceAPI.getCompare(params);
+                const month = new Date().toISOString().slice(0, 7);
+                const data = await intelligenceAPI.getCompare({ granularity: 'month', month });
                 if (!cancelled) setRows(data);
             } catch {
                 if (!cancelled) setRows([]);
@@ -306,7 +309,7 @@ const WhereTheyBeatYou: React.FC<{
         return () => {
             cancelled = true;
         };
-    }, [params.granularity, (params as { date?: string }).date, (params as { month?: string }).month]);
+    }, [report?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     if (rows === null) return <p className="text-sm text-muted">Loading where they beat you…</p>;
 

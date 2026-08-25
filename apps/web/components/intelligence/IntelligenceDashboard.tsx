@@ -385,9 +385,9 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
                 <BucketSwitch value={bucket} onChange={setBucket} />
                 {bucket === 'MINE' ? (
                     <PeriodFilter bucket="MINE" selection={mineSel} onChange={setMineSel} />
-                ) : (
+                ) : compTab === 'COMPARE' ? (
                     <PeriodFilter bucket="COMPETITION" selection={compSel} onChange={setCompSel} />
-                )}
+                ) : null}
             </div>
 
             {bucket === 'MINE' ? (
@@ -410,7 +410,7 @@ const IntelligenceDashboard: React.FC<IntelligenceDashboardProps> = ({ restauran
                     )}
                     {compTab === 'WATCHLIST' && <Watchlist />}
                     {compTab === 'COMPARE' && <Compare query={compPeriod} report={report} />}
-                    {compTab === 'BEAT' && <WhereTheyBeatYou query={compPeriod} report={report} onNavigate={onNavigate} />}
+                    {compTab === 'BEAT' && <WhereTheyBeatYou report={report} onNavigate={onNavigate} />}
                     {compTab === 'OPENINGS' && <NewOpenings report={report} onNavigate={onNavigate} />}
                 </>
             )}
