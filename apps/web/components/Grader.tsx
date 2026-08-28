@@ -15,14 +15,21 @@ import { track } from './intelligence/sections/track';
 
 interface GraderCandidate { placeId: string; name: string; address: string; rating: number; totalRatings: number; photoName?: string; lat?: number; lng?: number }
 interface GraderProblem { label: string; note: string; pillar: string; grade: string }
-interface GraderRankRow { name: string; rating: number; reviews: number; position: number; isYou: boolean }
+interface GraderRankRow { name: string; rating: number; reviews: number; position: number; isYou: boolean; beatsYou: string[] }
+interface GraderPillarCheck { id: string; label: string; pass: boolean; note: string }
+interface GraderPillar { key: string; score: number; grade: string; checks: GraderPillarCheck[] }
 interface GraderSearchRow { query: string; topResult: string; yourPosition: number | null }
 interface GraderResult {
     scanId: string; name: string; address: string; city: string;
     score: number; gradeLabel: string; rating: number; reviews: number; photos: number;
     photoName?: string | null;
     location?: { lat: number; lng: number } | null;
-    problems: GraderProblem[]; rankedBelow: number; leaderboard: GraderRankRow[];
+    problems: GraderProblem[];
+    pillars: GraderPillar[];
+    rank: number; totalNearby: number; areaAvgRating: number; reviewPercentile: number;
+    closestRival: { name: string; distanceKm: number; rating: number } | null;
+    likelyNew: Array<{ name: string; reviews: number; rating: number; distanceKm: number }>;
+    rankedBelow: number; leaderboard: GraderRankRow[];
     searches: GraderSearchRow[]; estMonthlyLossInr: number; unlocked: boolean;
 }
 
@@ -36,8 +43,51 @@ const STAGES = [
 ];
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+const PILLAR_LABELS: Record<string, string> = {
+    profile: 'Google Business Profile',
+    reviews: 'Reviews & replies',
+    photos: 'Photos',
+    website: 'Website & SEO',
+    competition: 'Competition',
+    momentum: 'Momentum',
+};
+const GRADE_COLOR: Record<string, string> = { A: '#16a34a', B: '#65a30d', C: '#d97706', D: '#ea580c', F: '#dc2626' };
 const photoUrl = (ref: string) => `${getApiUrl()}/grader/photo?ref=${encodeURIComponent(ref)}`;
 const mapUrl = (lat: number, lng: number) => `${getApiUrl()}/grader/staticmap?lat=${lat}&lng=${lng}`;
+/**
+ * Keyless map: OpenStreetMap tiles composed directly (no iframe, no API key),
+ * with a pin at the restaurant — the location renders even while the Google
+ * key has no Static Maps access.
+ */
+const TileMap: React.FC<{ lat: number; lng: number; zoom?: number }> = ({ lat, lng, zoom = 16 }) => {
+    const worldPx = 256 * Math.pow(2, zoom);
+    const px = ((lng + 180) / 360) * worldPx;
+    const latRad = (lat * Math.PI) / 180;
+    const py = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * worldPx;
+    const TX = 6;
+    const TY = 4;
+    const originX = Math.floor(px / 256) - Math.floor(TX / 2);
+    const originY = Math.floor(py / 256) - Math.floor(TY / 2);
+    const offsetX = px - originX * 256;
+    const offsetY = py - originY * 256;
+    return (
+        <div className="relative w-full h-full overflow-hidden bg-canvas">
+            <div className="absolute" style={{ width: TX * 256, height: TY * 256, left: `calc(50% - ${offsetX}px)`, top: `calc(50% - ${offsetY}px)` }}>
+                {Array.from({ length: TX * TY }, (_, i) => {
+                    const tx = i % TX;
+                    const ty = Math.floor(i / TX);
+                    return (
+                        <img key={i} alt="" loading="eager"
+                            src={`https://tile.openstreetmap.org/${zoom}/${originX + tx}/${originY + ty}.png`}
+                            className="absolute" style={{ left: tx * 256, top: ty * 256, width: 256, height: 256 }} />
+                    );
+                })}
+            </div>
+            <span className="absolute text-4xl drop-shadow" style={{ left: '50%', top: '50%', transform: 'translate(-50%, -92%)' }} aria-hidden="true">📍</span>
+            <span className="absolute bottom-1 right-2 text-[9px] text-muted px-1 rounded" style={{ background: 'rgba(255,255,255,0.75)' }}>© OpenStreetMap</span>
+        </div>
+    );
+};
 
 /**
  * The scanning theatre — an owner.com-style mock browser window showing the
@@ -52,7 +102,6 @@ const ScanTheatre: React.FC<{
 }> = ({ name, address, rating, reviews, photoName, lat, lng, stageIdx, total }) => {
     const [starPct, setStarPct] = useState(0);
     const [count, setCount] = useState(0);
-    const [heroFailed, setHeroFailed] = useState(false);
     useEffect(() => {
         const t = setTimeout(() => setStarPct(Math.max(0, Math.min(100, (rating / 5) * 100))), 300);
         return () => clearTimeout(t);
@@ -73,17 +122,13 @@ const ScanTheatre: React.FC<{
         backgroundSize: '400px 100%',
         animation: 'grader-shimmer 1.4s linear infinite',
     };
-    const heroSrc = photoName && !heroFailed
-        ? photoUrl(photoName)
-        : lat != null && lng != null && !heroFailed
-            ? mapUrl(lat, lng)
-            : null;
     return (
-        <div className="mt-5 bg-surface rounded-2xl border border-line overflow-hidden shadow-sm" data-testid="scan-card">
+        <div className="mt-5 bg-surface rounded-2xl border border-line overflow-hidden shadow-xl" data-testid="scan-card">
             <style>{[
                 '@keyframes grader-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }',
                 '@keyframes grader-sweep2 { 0% { top: -15%; } 100% { top: 105%; } }',
                 '@keyframes grader-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }',
+                '@keyframes grader-ping2 { 0% { transform: scale(0.5); opacity: 0.8; } 100% { transform: scale(2.2); opacity: 0; } }',
             ].join('\n')}</style>
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-line bg-canvas">
                 <span className="flex gap-1.5" aria-hidden="true">
@@ -117,20 +162,100 @@ const ScanTheatre: React.FC<{
                         {reviews > 0 ? `${count.toLocaleString('en-IN')} reviews` : 'reading reviews…'}
                     </span>
                 </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                    {heroSrc ? (
-                        <img src={heroSrc} alt="" className="col-span-3 h-28 w-full object-cover rounded-lg"
-                            onError={() => setHeroFailed(true)} />
-                    ) : (
-                        [0, 1, 2].map((i) => (
-                            <span key={i} className="h-16 rounded-lg block" style={{ ...shimmer, animationDelay: `${i * 0.2}s` }} aria-hidden="true" />
-                        ))
-                    )}
+                <div className="mt-3 rounded-lg overflow-hidden border border-line shadow-inner relative bg-canvas" style={{ height: 'min(56vh, 620px)', minHeight: '20rem' }}>
+                    {/* Scene 1-2: locate on the map, then rivals pulse around you */}
+                    <div className="absolute inset-0" style={{ opacity: stageIdx <= 1 ? 1 : 0, transition: 'opacity 0.7s ease', pointerEvents: 'none' }}>
+                        {lat != null && lng != null
+                            ? <TileMap lat={lat} lng={lng} zoom={16} />
+                            : <ScanHero name={name} photoName={photoName} heightClass="h-full" />}
+                        {stageIdx >= 1 && [[16, 26], [72, 20], [38, 68], [82, 58], [22, 52], [58, 38], [68, 76]].map(([x, y], i) => (
+                            <span key={i} className="absolute w-3 h-3 rounded-full"
+                                style={{ left: `${x}%`, top: `${y}%`, background: 'rgba(220,38,38,0.9)', boxShadow: '0 0 0 3px rgba(220,38,38,0.2)', animation: `grader-ping2 1.6s ease-out ${i * 0.22}s infinite` }}
+                                aria-hidden="true" />
+                        ))}
+                        <span className="absolute top-2 left-2 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-surface border border-line text-ink shadow-sm">
+                            {stageIdx >= 1 ? '🏪 Scanning restaurants within 7 km' : '📍 Locating your restaurant'}
+                        </span>
+                    </div>
+                    {/* Scene 3: Google Business Profile fields being checked */}
+                    <div className="absolute inset-0 p-6 bg-surface" style={{ opacity: stageIdx === 2 ? 1 : 0, transition: 'opacity 0.7s ease', pointerEvents: 'none' }}>
+                        <p className="text-sm font-bold text-ink mb-2">Google Business Profile</p>
+                        {['Business hours', 'Phone number', 'Website link', 'Description', 'Owner replies to reviews', 'Business status'].map((f, i) => (
+                            <div key={f} className="flex items-center justify-between py-2.5 border-b border-line last:border-b-0 text-sm">
+                                <span className="text-ink">{f}</span>
+                                <span className="w-4 h-4 rounded-full border-2 border-primary animate-pulse" style={{ animationDelay: `${i * 0.2}s` }} aria-hidden="true" />
+                            </div>
+                        ))}
+                    </div>
+                    {/* Scene 4: photos + reviews under the scanner */}
+                    <div className="absolute inset-0 p-6 bg-surface" style={{ opacity: stageIdx === 3 ? 1 : 0, transition: 'opacity 0.7s ease', pointerEvents: 'none' }}>
+                        <p className="text-sm font-bold text-ink mb-3">Photos & reviews</p>
+                        <div className="grid grid-cols-3 gap-2">
+                            {[0, 1, 2, 3, 4, 5].map((i) => (
+                                <span key={i} className="h-16 rounded-lg block" style={{ ...shimmer, animationDelay: `${i * 0.15}s` }} aria-hidden="true" />
+                            ))}
+                        </div>
+                        <div className="mt-4 space-y-3">
+                            {[0, 1].map((i) => (
+                                <div key={i} className="flex items-start gap-3">
+                                    <span className="w-8 h-8 rounded-full shrink-0" style={{ ...shimmer, animationDelay: `${i * 0.3}s` }} aria-hidden="true" />
+                                    <div className="flex-1 space-y-1.5">
+                                        <span className="text-xs" style={{ color: '#f59e0b' }} aria-hidden="true">★★★★★</span>
+                                        <span className="block h-2.5 rounded w-full" style={{ ...shimmer, animationDelay: `${0.2 + i * 0.3}s` }} />
+                                        <span className="block h-2.5 rounded w-2/3" style={{ ...shimmer, animationDelay: `${0.4 + i * 0.3}s` }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    {/* Scene 5: website being tested */}
+                    <div className="absolute inset-0 p-6 bg-surface" style={{ opacity: stageIdx === 4 ? 1 : 0, transition: 'opacity 0.7s ease', pointerEvents: 'none' }}>
+                        <p className="text-sm font-bold text-ink mb-3">Your website</p>
+                        <div className="rounded-lg border border-line overflow-hidden">
+                            <div className="flex items-center gap-2 px-3 py-2 border-b border-line bg-canvas">
+                                <span className="flex gap-1" aria-hidden="true">
+                                    <span className="w-2 h-2 rounded-full" style={{ background: '#f87171' }} />
+                                    <span className="w-2 h-2 rounded-full" style={{ background: '#fbbf24' }} />
+                                    <span className="w-2 h-2 rounded-full" style={{ background: '#34d399' }} />
+                                </span>
+                                <span className="flex-1 h-4 rounded-full" style={shimmer} />
+                            </div>
+                            <div className="p-4 space-y-3">
+                                <span className="block h-6 rounded w-2/3" style={shimmer} />
+                                <span className="block h-24 rounded" style={{ ...shimmer, animationDelay: '0.2s' }} />
+                                <div className="grid grid-cols-3 gap-2">
+                                    <span className="h-8 rounded" style={{ ...shimmer, animationDelay: '0.3s' }} />
+                                    <span className="h-8 rounded" style={{ ...shimmer, animationDelay: '0.45s' }} />
+                                    <span className="h-8 rounded" style={{ ...shimmer, animationDelay: '0.6s' }} />
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted mt-3">Checking SEO title, description, headline and ordering links…</p>
+                    </div>
+                    {/* Scene 6: compiling the score */}
+                    <div className="absolute inset-0 bg-surface flex flex-col items-center justify-center gap-4" style={{ opacity: stageIdx >= 5 ? 1 : 0, transition: 'opacity 0.7s ease', pointerEvents: 'none' }}>
+                        <div className="w-36 h-36 rounded-full flex items-center justify-center" style={{ background: `conic-gradient(#7C3AED ${pct}%, rgba(124,58,237,0.12) 0)` }}>
+                            <div className="w-28 h-28 rounded-full bg-surface flex items-center justify-center text-3xl font-bold text-ink tabular-nums">{pct}%</div>
+                        </div>
+                        <p className="text-sm text-muted">Scoring {name} against the restaurants around you…</p>
+                    </div>
                 </div>
-                <div className="mt-3 space-y-2" aria-hidden="true">
-                    <span className="block h-2.5 rounded w-full" style={shimmer} />
-                    <span className="block h-2.5 rounded w-4/5" style={{ ...shimmer, animationDelay: '0.3s' }} />
-                    <span className="block h-2.5 rounded w-3/5" style={{ ...shimmer, animationDelay: '0.6s' }} />
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {[
+                        address ? `📍 ${address.split(',')[0]}` : null,
+                        rating > 0 ? `⭐ ${rating.toFixed(1)} on Google` : null,
+                        reviews > 0 ? `💬 ${reviews.toLocaleString('en-IN')} reviews` : null,
+                        '🏪 Checking nearby rivals',
+                        '🌐 Testing the website',
+                    ]
+                        .filter((f): f is string => !!f)
+                        .map((f, i) => (
+                            <span key={f}
+                                className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-line bg-canvas text-ink"
+                                style={{ opacity: stageIdx > i ? 1 : 0.15, transform: stageIdx > i ? 'translateY(0)' : 'translateY(4px)', transition: 'all 0.5s ease' }}>
+                                {f}
+                            </span>
+                        ))}
                 </div>
                 <div className="absolute left-0 right-0 h-14 pointer-events-none"
                     style={{ animation: 'grader-sweep2 2s linear infinite', background: 'linear-gradient(180deg, transparent, rgba(124,58,237,0.22), transparent)' }}
@@ -154,7 +279,7 @@ const ScanTheatre: React.FC<{
  * live map with a pin on the restaurant, otherwise designed placeholder art —
  * never a plain text card. The animated sweep sells "we are examining you".
  */
-const ScanHero: React.FC<{ name: string; photoName?: string | null; lat?: number | null; lng?: number | null; sweep?: boolean }> = ({ name, photoName, lat, lng, sweep }) => {
+const ScanHero: React.FC<{ name: string; photoName?: string | null; lat?: number | null; lng?: number | null; sweep?: boolean; heightClass?: string }> = ({ name, photoName, lat, lng, sweep, heightClass = 'h-44' }) => {
     const [photoFailed, setPhotoFailed] = useState(false);
     const [mapFailed, setMapFailed] = useState(false);
     const src = photoName && !photoFailed
@@ -162,11 +287,14 @@ const ScanHero: React.FC<{ name: string; photoName?: string | null; lat?: number
         : lat != null && lng != null && !mapFailed
             ? mapUrl(lat, lng)
             : null;
+    const hasCoords = lat != null && lng != null;
     return (
-        <div className="relative h-44 bg-canvas overflow-hidden">
+        <div className={`relative ${heightClass} bg-canvas overflow-hidden`}>
             {src ? (
                 <img src={src} alt={name} className="w-full h-full object-cover"
                     onError={() => { if (photoName && !photoFailed) setPhotoFailed(true); else setMapFailed(true); }} />
+            ) : hasCoords ? (
+                <TileMap lat={lat as number} lng={lng as number} />
             ) : (
                 <div className="w-full h-full relative flex items-center justify-center overflow-hidden"
                     style={{
@@ -295,7 +423,7 @@ const Grader: React.FC = () => {
         // scans return in under a second, so hold the scanning screen a few
         // seconds anyway: the owner should see their restaurant being examined.
         const started = Date.now();
-        stageTimer.current = setInterval(() => setStageIdx((i) => Math.min(i + 1, STAGES.length - 2)), 1000);
+        stageTimer.current = setInterval(() => setStageIdx((i) => Math.min(i + 1, STAGES.length - 1)), 1800);
         const res = await post<GraderResult>('/grader/scan', {
             name: name.trim(),
             city: city.trim(),
@@ -307,7 +435,7 @@ const Grader: React.FC = () => {
             setError(res.error ?? 'The scan failed — try again.');
             return;
         }
-        const hold = Math.max(600, 6500 - (Date.now() - started));
+        const hold = Math.max(600, 12000 - (Date.now() - started));
         setTimeout(() => {
             if (stageTimer.current) clearInterval(stageTimer.current);
             setStageIdx(STAGES.length);
@@ -396,30 +524,32 @@ const Grader: React.FC = () => {
                 )}
 
                 {step === 'scanning' && (
-                    <div className="max-w-md mx-auto" data-testid="grader-scanning">
-                        <h2 className="text-xl font-bold text-ink">Scanning {picked?.name ?? name}…</h2>
-                        <ScanTheatre
-                            name={picked?.name ?? name}
-                            address={picked?.address || city}
-                            rating={picked?.rating ?? 0}
-                            reviews={picked?.totalRatings ?? 0}
-                            photoName={picked?.photoName}
-                            lat={picked?.lat}
-                            lng={picked?.lng}
-                            stageIdx={stageIdx}
-                            total={STAGES.length}
-                        />
-                        <ol className="mt-6 space-y-3">
+                    <div className="max-w-6xl mx-auto rounded-3xl px-4 py-8 lg:px-12"
+                        style={{ background: 'radial-gradient(90% 70% at 50% 0%, rgba(124,58,237,0.10), transparent)' }}
+                        data-testid="grader-scanning">
+                        <h2 className="text-4xl font-bold text-ink text-center">Scanning {picked?.name ?? name}…</h2>
+                        <p className="text-base text-muted text-center mt-2">Reading your public Google listing and the restaurants around you.</p>
+                        {/* Compact horizontal stepper — the card below carries the detail */}
+                        <div className="mt-5 flex items-center justify-center gap-2" aria-hidden="true">
                             {STAGES.map((s, i) => (
-                                <li key={s} className="flex items-center gap-3 text-sm">
-                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                                        i < stageIdx ? 'bg-success text-white' : i === stageIdx ? 'border-2 border-primary animate-pulse' : 'border border-line'
-                                    }`}>{i < stageIdx ? '✓' : ''}</span>
-                                    <span className={i <= stageIdx ? 'text-ink font-medium' : 'text-muted'}>{s}</span>
-                                </li>
+                                <span key={s} title={s} className="h-1.5 rounded-full transition-all duration-500"
+                                    style={{ width: i === stageIdx ? '2.5rem' : '1.25rem', background: i <= stageIdx ? '#7C3AED' : 'rgba(124,58,237,0.18)' }} />
                             ))}
-                        </ol>
-                        <p className="text-xs text-muted mt-6">Usually under a minute.</p>
+                        </div>
+                        <div className="max-w-4xl mx-auto">
+                            <ScanTheatre
+                                name={picked?.name ?? name}
+                                address={picked?.address || city}
+                                rating={picked?.rating ?? 0}
+                                reviews={picked?.totalRatings ?? 0}
+                                photoName={picked?.photoName}
+                                lat={picked?.lat}
+                                lng={picked?.lng}
+                                stageIdx={stageIdx}
+                                total={STAGES.length}
+                            />
+                            <p className="text-xs text-muted text-center mt-3">Usually under a minute.</p>
+                        </div>
                     </div>
                 )}
 
@@ -467,15 +597,91 @@ const Grader: React.FC = () => {
                                 {!result.unlocked && <p className="text-xs text-muted mt-3">Unlock to see every problem and how to fix each one.</p>}
                             </div>
 
+                            {/* By the numbers — same tiles idea as the RestroPulse dashboard */}
+                            <div className="bg-surface rounded-2xl border border-line p-6">
+                                <h3 className="text-base font-semibold text-ink mb-4">By the numbers</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="grader-numbers">
+                                    <div className="rounded-xl bg-canvas p-4">
+                                        <p className="text-2xl font-bold text-ink tabular-nums">★ {result.rating.toFixed(1)}</p>
+                                        <p className="text-xs text-muted mt-1">
+                                            Area average is ★ {result.areaAvgRating.toFixed(1)} — you're {result.rating >= result.areaAvgRating ? 'at or above it' : 'below it'}
+                                        </p>
+                                    </div>
+                                    <div className="rounded-xl bg-canvas p-4">
+                                        <p className="text-2xl font-bold text-ink tabular-nums">{result.reviews.toLocaleString('en-IN')}</p>
+                                        <p className="text-xs text-muted mt-1">Reviews — more than {result.reviewPercentile}% of nearby rivals</p>
+                                    </div>
+                                    <div className="rounded-xl bg-canvas p-4">
+                                        <p className="text-2xl font-bold text-ink tabular-nums">#{result.rank} of {result.totalNearby}</p>
+                                        <p className="text-xs text-muted mt-1">Your standing among restaurants nearby</p>
+                                    </div>
+                                    <div className="rounded-xl bg-canvas p-4">
+                                        {result.closestRival ? (
+                                            <>
+                                                <p className="text-2xl font-bold text-ink tabular-nums">{result.closestRival.distanceKm.toFixed(1)} km</p>
+                                                <p className="text-xs text-muted mt-1">To {result.closestRival.name} (★ {result.closestRival.rating.toFixed(1)}) — your closest rival</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-2xl font-bold text-ink tabular-nums">{result.photos.toLocaleString('en-IN')}</p>
+                                                <p className="text-xs text-muted mt-1">Photos on your Google profile</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Score breakdown — the product's pillar scorecard */}
+                            <div className="bg-surface rounded-2xl border border-line p-6">
+                                <h3 className="text-base font-semibold text-ink mb-1">Where your score comes from</h3>
+                                <p className="text-xs text-muted mb-4">Each area is graded the same way the full RestroPulse dashboard grades it.</p>
+                                <div className="space-y-4" data-testid="grader-pillars">
+                                    {(result.pillars ?? []).map((pl) => {
+                                        const failed = pl.checks.filter((c) => !c.pass);
+                                        return (
+                                            <div key={pl.key}>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="w-44 shrink-0 text-sm text-ink truncate">{PILLAR_LABELS[pl.key] ?? pl.key}</span>
+                                                    <div className="flex-1 h-2 rounded-full bg-canvas overflow-hidden">
+                                                        <div className="h-full rounded-full" style={{ width: `${Math.max(4, pl.score)}%`, background: GRADE_COLOR[pl.grade] ?? '#7C3AED' }} />
+                                                    </div>
+                                                    <span className="w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ background: GRADE_COLOR[pl.grade] ?? '#7C3AED' }}>{pl.grade}</span>
+                                                </div>
+                                                {result.unlocked && failed.length > 0 && (
+                                                    <ul className="mt-2 ml-2 space-y-1">
+                                                        {failed.map((c) => (
+                                                            <li key={c.id} className="text-xs text-muted flex items-start gap-1.5">
+                                                                <span className="text-danger mt-0.5" aria-hidden="true">▲</span>
+                                                                <span><span className="font-medium text-ink">{c.label}</span> — {c.note}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {!result.unlocked && <p className="text-xs text-muted mt-4">Unlock to see every check behind each grade — and exactly what to fix first.</p>}
+                            </div>
+
                             {/* Competition — blurred until unlock */}
                             <div className="bg-surface rounded-2xl border border-line p-6">
                                 <h3 className="text-base font-semibold text-ink mb-3">You're ranking below {result.rankedBelow} competitor{result.rankedBelow === 1 ? '' : 's'}</h3>
                                 <Blurrable locked={!result.unlocked}>
                                     <div data-testid="grader-leaderboard">
                                         {result.leaderboard.map((r) => (
-                                            <div key={r.position} className={`flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-b-0 ${r.isYou ? 'font-semibold text-primary-strong' : 'text-ink'}`}>
-                                                <span className="text-sm truncate">{r.position}. {r.name}{r.isYou ? ' (you)' : ''}</span>
-                                                <span className="text-sm tabular-nums text-muted">★ {r.rating.toFixed(1)} · {r.reviews.toLocaleString('en-IN')}</span>
+                                            <div key={r.position} className={`py-2.5 border-b border-line last:border-b-0 ${r.isYou ? 'font-semibold text-primary-strong' : 'text-ink'}`}>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="text-sm truncate">{r.position}. {r.name}{r.isYou ? ' (you)' : ''}</span>
+                                                    <span className="text-sm tabular-nums text-muted">★ {r.rating.toFixed(1)} · {r.reviews.toLocaleString('en-IN')}</span>
+                                                </div>
+                                                {(r.beatsYou ?? []).length > 0 && (
+                                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                                        {(r.beatsYou ?? []).map((b) => (
+                                                            <span key={b} className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-canvas border border-line text-muted">{b}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -502,8 +708,43 @@ const Grader: React.FC = () => {
                                 </div>
                             </div>
 
+                            {/* New openings near you — the freshest competitive intel */}
+                            <div className="bg-surface rounded-2xl border border-line p-6">
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                    <h3 className="text-base font-semibold text-ink">New restaurants near you</h3>
+                                    <span className="text-[11px] text-muted">Low review counts usually mean a recent opening — our estimate</span>
+                                </div>
+                                {result.unlocked ? (
+                                    (result.likelyNew ?? []).length > 0 ? (
+                                        <div data-testid="grader-new-openings">
+                                            {(result.likelyNew ?? []).map((n) => (
+                                                <div key={n.name} className="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-b-0">
+                                                    <span className="text-sm text-ink truncate">{n.name}</span>
+                                                    <span className="text-sm tabular-nums text-muted whitespace-nowrap">
+                                                        {n.distanceKm.toFixed(1)} km · ★ {n.rating.toFixed(1)} · only {n.reviews.toLocaleString('en-IN')} review{n.reviews === 1 ? '' : 's'}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted">No obviously new listings within 5 km right now — we'll keep watching in the full product.</p>
+                                    )
+                                ) : (
+                                    <Blurrable locked>
+                                        <div>
+                                            {['A new listing 1.2 km away', 'A new listing 2.8 km away', 'A new listing 3.4 km away'].map((t) => (
+                                                <div key={t} className="flex items-center justify-between gap-3 py-2.5 border-b border-line last:border-b-0">
+                                                    <span className="text-sm text-ink">{t}</span>
+                                                    <span className="text-sm text-muted">★ •.• · •• reviews</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </Blurrable>
+                                )}
+                            </div>
+
                             <p className="text-xs text-muted">
-                                Want this every week, with a plan to fix it? <a href="/" className="font-semibold text-primary-strong hover:underline">That's RestroPulse.</a>
+                                Want this every week — plus guest sentiment, rival tracking and a plan to fix each problem? <a href="/" className="font-semibold text-primary-strong hover:underline">That's RestroPulse.</a>
                             </p>
                         </div>
                     </div>

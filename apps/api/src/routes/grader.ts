@@ -36,7 +36,8 @@ function makeLimiter(maxPerHour: number) {
         return false;
     };
 }
-const rateLimited = makeLimiter(5);
+// 5/hr in production keeps Places costs bounded; local dev gets room to test.
+const rateLimited = makeLimiter(process.env.NODE_ENV === 'production' ? 5 : 100);
 const suggestLimited = makeLimiter(120);
 const photoLimited = makeLimiter(300);
 
@@ -74,6 +75,10 @@ router.post('/scan', handle(async (req: Request, res: Response<ApiResponse<Grade
             problems: result.problems.slice(0, 4),
             leaderboard: result.leaderboard.slice(0, 4),
             searches: result.searches.map((s, i) => (i === 0 ? s : { ...s, topResult: '••••••', yourPosition: s.yourPosition })),
+            // Teaser keeps pillar grades but not the checks inside them, and
+            // holds back the new-openings intel entirely — that's the unlock.
+            pillars: result.pillars.map((p) => ({ ...p, checks: [] })),
+            likelyNew: [],
         },
     });
 }));

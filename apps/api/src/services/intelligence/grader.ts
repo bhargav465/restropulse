@@ -29,6 +29,8 @@ export interface GraderRankRow {
     reviews: number;
     position: number;
     isYou: boolean;
+    /** Concrete ways this rival beats the scanned restaurant ("Higher rating (4.5 vs 4.1)"). */
+    beatsYou: string[];
 }
 
 export interface GraderSearchRow {
@@ -52,6 +54,16 @@ export interface GraderResult {
     /** Listing coordinates for the map fallback when the key returns no photos. */
     location: { lat: number; lng: number } | null;
     problems: GraderProblem[];
+    /** Full pillar scorecard — same math as the product dashboard. */
+    pillars: PillarScore[];
+    rank: number;
+    totalNearby: number;
+    areaAvgRating: number;
+    /** % of nearby rivals with review counts at or below yours. */
+    reviewPercentile: number;
+    closestRival: { name: string; distanceKm: number; rating: number } | null;
+    /** Low-review nearby listings — usually recent openings (our estimate). */
+    likelyNew: Array<{ name: string; reviews: number; rating: number; distanceKm: number }>;
     rankedBelow: number;
     leaderboard: GraderRankRow[];
     searches: GraderSearchRow[];
@@ -92,6 +104,7 @@ export async function runGraderScan(name: string, city: string, placeId?: string
     const closest = [...within].sort((a, b) => a.distanceKm - b.distanceKm)[0];
     const reviewPercentile =
         within.length === 0 ? 100 : Math.round((within.filter((c) => c.totalRatings <= base.totalRatings).length / within.length) * 100);
+    const areaAvgRating = within.length > 0 ? within.reduce((sum, c) => sum + c.rating, 0) / within.length : base.rating;
 
     const pillars = computePillars({
         base: {
@@ -119,7 +132,7 @@ export async function runGraderScan(name: string, city: string, placeId?: string
             leadsClosestSameCuisineRival: !closest || base.rating >= closest.rating,
             reviewPercentile,
         },
-        areaAvgRating: within.length > 0 ? within.reduce((s, c) => s + c.rating, 0) / within.length : base.rating,
+        areaAvgRating,
     });
     const score = restroScore(pillars);
 
@@ -159,8 +172,28 @@ export async function runGraderScan(name: string, city: string, placeId?: string
         photoName: base.photoName,
         location: base.location.lat === 0 && base.location.lng === 0 ? null : base.location,
         problems,
+        pillars,
+        rank,
+        totalNearby: rows.length,
+        areaAvgRating: Math.round(areaAvgRating * 10) / 10,
+        reviewPercentile,
+        closestRival: closest
+            ? { name: closest.name, distanceKm: closest.distanceKm, rating: closest.rating }
+            : null,
+        likelyNew: within
+            .filter((c) => c.totalRatings > 0 && c.totalRatings <= 100)
+            .sort((a, b) => a.totalRatings - b.totalRatings)
+            .slice(0, 5)
+            .map((c) => ({ name: c.name, reviews: c.totalRatings, rating: c.rating, distanceKm: c.distanceKm })),
         rankedBelow: Math.max(0, rank - 1),
-        leaderboard: rows.slice(0, 8).map((r, i) => ({ name: r.name, rating: r.rating, reviews: r.reviews, position: i + 1, isYou: r.isYou })),
+        leaderboard: rows.slice(0, 8).map((r, i) => {
+            const beatsYou: string[] = [];
+            if (!r.isYou) {
+                if (r.rating >= base.rating + 0.1) beatsYou.push(`Higher rating (${r.rating.toFixed(1)} vs ${base.rating.toFixed(1)})`);
+                if (r.reviews > base.totalRatings) beatsYou.push(`More reviews (${r.reviews.toLocaleString('en-IN')} vs ${base.totalRatings.toLocaleString('en-IN')})`);
+            }
+            return { name: r.name, rating: r.rating, reviews: r.reviews, position: i + 1, isYou: r.isYou, beatsYou };
+        }),
         searches,
         estMonthlyLossInr,
         unlocked: false,
