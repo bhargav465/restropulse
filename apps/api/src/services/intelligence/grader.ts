@@ -47,6 +47,10 @@ export interface GraderResult {
     rating: number;
     reviews: number;
     photos: number;
+    /** Places photo resource name for the hero image (served via /api/grader/photo). */
+    photoName: string | null;
+    /** Listing coordinates for the map fallback when the key returns no photos. */
+    location: { lat: number; lng: number } | null;
     problems: GraderProblem[];
     rankedBelow: number;
     leaderboard: GraderRankRow[];
@@ -70,8 +74,9 @@ function gradeLabel(score: number): GraderResult['gradeLabel'] {
 const getGraderScans = () => getDB().collection('grader_scans');
 const getGraderLeads = () => getDB().collection('grader_leads');
 
-export async function runGraderScan(name: string, city: string): Promise<GraderResult | null> {
-    const base = await getBaseRestaurantDetails(name, city);
+export async function runGraderScan(name: string, city: string, placeId?: string): Promise<GraderResult | null> {
+    // placeId comes from the autocomplete pick — exact listing, no text-search guessing.
+    const base = await getBaseRestaurantDetails(name, city, placeId);
     if (!base) return null;
     const competitors = (await getNearbyRestaurants(base.location)).filter((c) => c.placeId !== base.placeId);
     const seo = await fetchWebsiteSEO(base.website, base.name, city);
@@ -151,6 +156,8 @@ export async function runGraderScan(name: string, city: string): Promise<GraderR
         rating: base.rating,
         reviews: base.totalRatings,
         photos: base.photoCount,
+        photoName: base.photoName,
+        location: base.location.lat === 0 && base.location.lng === 0 ? null : base.location,
         problems,
         rankedBelow: Math.max(0, rank - 1),
         leaderboard: rows.slice(0, 8).map((r, i) => ({ name: r.name, rating: r.rating, reviews: r.reviews, position: i + 1, isYou: r.isYou })),

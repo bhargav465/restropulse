@@ -93,6 +93,8 @@ export interface BaseRestaurant {
     phone: string | null;
     hasHours: boolean;
     photoCount: number;
+    /** First Places photo resource name — the listing's hero shot, when present. */
+    photoName: string | null;
     hasDescription: boolean;
     recentReviews: Array<{ rating: number; text: string; time: string }>;
     ownerRespondsToReviews: boolean;
@@ -122,7 +124,7 @@ interface PlaceApi {
     location?: { latitude?: number; longitude?: number };
     types?: string[];
     priceLevel?: string;
-    photos?: unknown[];
+    photos?: Array<{ name?: string }>;
     websiteUri?: string;
     googleMapsUri?: string;
     nationalPhoneNumber?: string;
@@ -226,9 +228,10 @@ export async function searchPlaceCandidates(
     city: string,
     selfLocation?: { lat: number; lng: number },
     limit = 5,
+    regionCode?: string,
 ): Promise<PlaceCandidate[]> {
     const MASK =
-        'places.id,places.displayName,places.shortFormattedAddress,places.formattedAddress,places.rating,places.userRatingCount,places.location';
+        'places.id,places.displayName,places.shortFormattedAddress,places.formattedAddress,places.rating,places.userRatingCount,places.location,places.photos';
     const hasValidLoc =
         !!selfLocation &&
         Number.isFinite(selfLocation.lat) && Number.isFinite(selfLocation.lng) &&
@@ -239,12 +242,17 @@ export async function searchPlaceCandidates(
     const absorb = (res: PlacesTextSearchResponse | undefined) => {
         for (const p of res?.places ?? []) {
             if (!p.id || seen.has(p.id)) continue;
+            const photoName = p.photos?.[0]?.name;
+            const lat = p.location?.latitude;
+            const lng = p.location?.longitude;
             seen.set(p.id, {
                 placeId: p.id,
                 name: p.displayName?.text ?? '',
                 address: p.shortFormattedAddress ?? p.formattedAddress ?? '',
                 rating: p.rating ?? 0,
                 totalRatings: p.userRatingCount ?? 0,
+                ...(photoName ? { photoName } : {}),
+                ...(lat != null && lng != null && !(lat === 0 && lng === 0) ? { lat, lng } : {}),
             });
         }
     };
@@ -264,7 +272,32 @@ export async function searchPlaceCandidates(
         );
     }
     if (seen.size < limit) {
-        absorb(await placesTextSearch({ textQuery: `${name}, ${city}`, pageSize: limit }, MASK));
+        // City is optional for public callers (the grader's autocomplete) — a bare
+        // name query still returns useful candidates. Without a regionCode Google
+        // defaults to US-biased results, where Indian brand names return nothing.
+        absorb(
+            await placesTextSearch(
+                {
+                    textQuery: city.trim() ? `${name}, ${city}` : name,
+                    pageSize: limit,
+                    ...(regionCode ? { regionCode } : {}),
+                    // regionCode alone barely moves the needle — a country-bounds
+                    // rectangle is the strong bias that makes bare Indian brand
+                    // names ("Bawarchi") return Indian listings instead of nothing.
+                    ...(regionCode === 'IN'
+                        ? {
+                              locationBias: {
+                                  rectangle: {
+                                      low: { latitude: 6.4, longitude: 68.0 },
+                                      high: { latitude: 35.8, longitude: 97.5 },
+                                  },
+                              },
+                          }
+                        : {}),
+                },
+                MASK,
+            ),
+        );
     }
     return [...seen.values()].filter((c) => c.name).slice(0, limit);
 }
@@ -333,8 +366,11 @@ export async function getBaseRestaurantDetails(
         resolvedPlaceId = found.id;
     }
 
-    // Cache hit skips the detail call.
+    // Cache hit skips the detail call. Payloads cached before `photos` joined
+    // the field mask lack the key entirely — treat those as stale so the hero
+    // photo (grader scan card / report) can be resolved.
     let d = (await getPlaceCache(resolvedPlaceId)) as PlaceApi | null;
+    if (d && !('photos' in d)) d = null;
     if (!d) {
         const detailRes = await fetch(`${PLACES_BASE}/places/${resolvedPlaceId}`, {
             headers: {
@@ -363,6 +399,7 @@ export async function getBaseRestaurantDetails(
             phone: null,
             hasHours: false,
             photoCount: 0,
+            photoName: null,
             hasDescription: false,
             recentReviews: [],
             ownerRespondsToReviews: false,
@@ -398,6 +435,7 @@ export async function getBaseRestaurantDetails(
         phone: d.nationalPhoneNumber ?? null,
         hasHours: !!(d.regularOpeningHours?.weekdayDescriptions?.length),
         photoCount: Array.isArray(d.photos) ? d.photos.length : 0,
+        photoName: d.photos?.[0]?.name ?? null,
         hasDescription: !!d.editorialSummary?.text,
         recentReviews,
         // Places API (New) exposes reviews but not owner replies; presence of

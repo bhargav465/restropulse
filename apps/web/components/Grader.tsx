@@ -13,12 +13,15 @@ import { track } from './intelligence/sections/track';
  * paise, not rupees; the full Intelligence product is the upsell.
  */
 
+interface GraderCandidate { placeId: string; name: string; address: string; rating: number; totalRatings: number; photoName?: string; lat?: number; lng?: number }
 interface GraderProblem { label: string; note: string; pillar: string; grade: string }
 interface GraderRankRow { name: string; rating: number; reviews: number; position: number; isYou: boolean }
 interface GraderSearchRow { query: string; topResult: string; yourPosition: number | null }
 interface GraderResult {
     scanId: string; name: string; address: string; city: string;
     score: number; gradeLabel: string; rating: number; reviews: number; photos: number;
+    photoName?: string | null;
+    location?: { lat: number; lng: number } | null;
     problems: GraderProblem[]; rankedBelow: number; leaderboard: GraderRankRow[];
     searches: GraderSearchRow[]; estMonthlyLossInr: number; unlocked: boolean;
 }
@@ -33,6 +36,174 @@ const STAGES = [
 ];
 
 const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+const photoUrl = (ref: string) => `${getApiUrl()}/grader/photo?ref=${encodeURIComponent(ref)}`;
+const mapUrl = (lat: number, lng: number) => `${getApiUrl()}/grader/staticmap?lat=${lat}&lng=${lng}`;
+
+/**
+ * The scanning theatre — an owner.com-style mock browser window showing the
+ * restaurant's Google listing being examined: stars fill to the real rating,
+ * the review count counts up, photo tiles shimmer (or show the real photo/map
+ * when the key allows), a scan beam sweeps, and a progress bar tracks stages.
+ */
+const ScanTheatre: React.FC<{
+    name: string; address: string; rating: number; reviews: number;
+    photoName?: string | null; lat?: number | null; lng?: number | null;
+    stageIdx: number; total: number;
+}> = ({ name, address, rating, reviews, photoName, lat, lng, stageIdx, total }) => {
+    const [starPct, setStarPct] = useState(0);
+    const [count, setCount] = useState(0);
+    const [heroFailed, setHeroFailed] = useState(false);
+    useEffect(() => {
+        const t = setTimeout(() => setStarPct(Math.max(0, Math.min(100, (rating / 5) * 100))), 300);
+        return () => clearTimeout(t);
+    }, [rating]);
+    useEffect(() => {
+        if (reviews <= 0) return;
+        const started = Date.now();
+        const iv = setInterval(() => {
+            const f = Math.min(1, (Date.now() - started) / 2000);
+            setCount(Math.round(reviews * f));
+            if (f >= 1) clearInterval(iv);
+        }, 60);
+        return () => clearInterval(iv);
+    }, [reviews]);
+    const pct = Math.min(96, Math.round(((stageIdx + 0.5) / total) * 100));
+    const shimmer: React.CSSProperties = {
+        background: 'linear-gradient(90deg, rgba(124,58,237,0.08) 25%, rgba(124,58,237,0.2) 50%, rgba(124,58,237,0.08) 75%)',
+        backgroundSize: '400px 100%',
+        animation: 'grader-shimmer 1.4s linear infinite',
+    };
+    const heroSrc = photoName && !heroFailed
+        ? photoUrl(photoName)
+        : lat != null && lng != null && !heroFailed
+            ? mapUrl(lat, lng)
+            : null;
+    return (
+        <div className="mt-5 bg-surface rounded-2xl border border-line overflow-hidden shadow-sm" data-testid="scan-card">
+            <style>{[
+                '@keyframes grader-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }',
+                '@keyframes grader-sweep2 { 0% { top: -15%; } 100% { top: 105%; } }',
+                '@keyframes grader-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }',
+            ].join('\n')}</style>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-line bg-canvas">
+                <span className="flex gap-1.5" aria-hidden="true">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#f87171' }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#fbbf24' }} />
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#34d399' }} />
+                </span>
+                <span className="flex-1 truncate rounded-full bg-surface border border-line px-3 py-1 text-[11px] text-muted">
+                    google.com/search?q={encodeURIComponent(name)}
+                </span>
+            </div>
+            <div className="relative p-4 overflow-hidden">
+                <div className="flex items-center gap-3">
+                    <span className="w-11 h-11 rounded-full flex items-center justify-center text-lg font-bold text-white shrink-0"
+                        style={{ background: 'rgba(124,58,237,0.85)' }} aria-hidden="true">
+                        {(name.trim().charAt(0) || '?').toUpperCase()}
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block font-semibold text-ink truncate">{name}</span>
+                        <span className="block text-[11px] text-muted truncate">📍 {address}</span>
+                    </span>
+                </div>
+                <div className="mt-3 flex items-center gap-2 text-base">
+                    <span className="relative inline-block leading-none" aria-hidden="true">
+                        <span style={{ color: 'rgba(124,58,237,0.2)' }}>★★★★★</span>
+                        <span className="absolute inset-y-0 left-0 overflow-hidden whitespace-nowrap"
+                            style={{ width: `${starPct}%`, color: '#f59e0b', transition: 'width 1.8s ease-out' }}>★★★★★</span>
+                    </span>
+                    {rating > 0 && <span className="text-sm text-ink font-semibold tabular-nums">{rating.toFixed(1)}</span>}
+                    <span className="text-sm text-muted tabular-nums">
+                        {reviews > 0 ? `${count.toLocaleString('en-IN')} reviews` : 'reading reviews…'}
+                    </span>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                    {heroSrc ? (
+                        <img src={heroSrc} alt="" className="col-span-3 h-28 w-full object-cover rounded-lg"
+                            onError={() => setHeroFailed(true)} />
+                    ) : (
+                        [0, 1, 2].map((i) => (
+                            <span key={i} className="h-16 rounded-lg block" style={{ ...shimmer, animationDelay: `${i * 0.2}s` }} aria-hidden="true" />
+                        ))
+                    )}
+                </div>
+                <div className="mt-3 space-y-2" aria-hidden="true">
+                    <span className="block h-2.5 rounded w-full" style={shimmer} />
+                    <span className="block h-2.5 rounded w-4/5" style={{ ...shimmer, animationDelay: '0.3s' }} />
+                    <span className="block h-2.5 rounded w-3/5" style={{ ...shimmer, animationDelay: '0.6s' }} />
+                </div>
+                <div className="absolute left-0 right-0 h-14 pointer-events-none"
+                    style={{ animation: 'grader-sweep2 2s linear infinite', background: 'linear-gradient(180deg, transparent, rgba(124,58,237,0.22), transparent)' }}
+                    aria-hidden="true" />
+            </div>
+            <div className="px-4 pb-4">
+                <div className="flex items-center justify-between text-[11px] text-muted mb-1">
+                    <span style={{ animation: 'grader-blink 1.2s ease-in-out infinite' }}>{STAGES[Math.min(stageIdx, STAGES.length - 1)]}…</span>
+                    <span className="tabular-nums font-semibold text-ink">{pct}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-canvas overflow-hidden">
+                    <div className="h-full rounded-full bg-primary-strong" style={{ width: `${pct}%`, transition: 'width 0.8s ease' }} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * The scan screen's hero: listing photo when Google gives us one, otherwise a
+ * live map with a pin on the restaurant, otherwise designed placeholder art —
+ * never a plain text card. The animated sweep sells "we are examining you".
+ */
+const ScanHero: React.FC<{ name: string; photoName?: string | null; lat?: number | null; lng?: number | null; sweep?: boolean }> = ({ name, photoName, lat, lng, sweep }) => {
+    const [photoFailed, setPhotoFailed] = useState(false);
+    const [mapFailed, setMapFailed] = useState(false);
+    const src = photoName && !photoFailed
+        ? photoUrl(photoName)
+        : lat != null && lng != null && !mapFailed
+            ? mapUrl(lat, lng)
+            : null;
+    return (
+        <div className="relative h-44 bg-canvas overflow-hidden">
+            {src ? (
+                <img src={src} alt={name} className="w-full h-full object-cover"
+                    onError={() => { if (photoName && !photoFailed) setPhotoFailed(true); else setMapFailed(true); }} />
+            ) : (
+                <div className="w-full h-full relative flex items-center justify-center overflow-hidden"
+                    style={{
+                        background:
+                            'linear-gradient(rgba(124,58,237,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.06) 1px, transparent 1px), linear-gradient(135deg, rgba(124,58,237,0.14), rgba(124,58,237,0.02))',
+                        backgroundSize: '24px 24px, 24px 24px, 100% 100%',
+                    }}>
+                    <style>{'@keyframes grader-ping { 0% { transform: scale(0.4); opacity: 0.6; } 100% { transform: scale(1.8); opacity: 0; } }'}</style>
+                    <span className="absolute rounded-full" style={{ width: '90px', height: '90px', border: '2px solid rgba(124,58,237,0.45)', animation: 'grader-ping 1.6s ease-out infinite' }} aria-hidden="true" />
+                    <span className="absolute rounded-full" style={{ width: '90px', height: '90px', border: '2px solid rgba(124,58,237,0.3)', animation: 'grader-ping 1.6s ease-out 0.8s infinite' }} aria-hidden="true" />
+                    <span className="relative text-4xl" aria-hidden="true">📍</span>
+                    <span className="absolute bottom-2 left-0 right-0 text-center text-[11px] font-semibold" style={{ color: 'rgba(124,58,237,0.7)' }}>
+                        Locating {name.trim() || 'your restaurant'} on Google…
+                    </span>
+                </div>
+            )}
+            {sweep && (
+                <>
+                    <style>{'@keyframes grader-sweep { 0% { top: -20%; } 100% { top: 110%; } }'}</style>
+                    <div className="absolute left-0 right-0 h-12 pointer-events-none"
+                        style={{ animation: 'grader-sweep 1.8s linear infinite', background: 'linear-gradient(180deg, transparent, rgba(124,58,237,0.28), transparent)' }}
+                        aria-hidden="true" />
+                </>
+            )}
+        </div>
+    );
+};
+
+async function get<T>(path: string): Promise<{ ok: boolean; data?: T }> {
+    try {
+        const res = await fetch(`${getApiUrl()}${path}`);
+        const json = (await res.json()) as { success: boolean; data?: T };
+        return { ok: json.success, data: json.data };
+    } catch {
+        return { ok: false };
+    }
+}
 
 async function post<T>(path: string, body: unknown): Promise<{ ok: boolean; data?: T; error?: string }> {
     try {
@@ -60,6 +231,11 @@ const Grader: React.FC = () => {
     const [name, setName] = useState('');
     const [city, setCity] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [suggestions, setSuggestions] = useState<GraderCandidate[]>([]);
+    const [suggestOpen, setSuggestOpen] = useState(false);
+    const [picked, setPicked] = useState<GraderCandidate | null>(null);
+    const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const suggestSeq = useRef(0);
     const [stageIdx, setStageIdx] = useState(0);
     const [result, setResult] = useState<GraderResult | null>(null);
     const [unlockOpen, setUnlockOpen] = useState(false);
@@ -71,7 +247,42 @@ const Grader: React.FC = () => {
     const [unlockError, setUnlockError] = useState<string | null>(null);
     const stageTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    useEffect(() => () => { if (stageTimer.current) clearInterval(stageTimer.current); }, []);
+    useEffect(() => () => {
+        if (stageTimer.current) clearInterval(stageTimer.current);
+        if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    }, []);
+
+    // Autocomplete: debounce the name, ask the public suggest endpoint, and let
+    // the owner pick their exact listing (name + address) instead of guessing.
+    const onNameChange = (v: string) => {
+        setName(v);
+        if (picked && v !== picked.name) setPicked(null);
+        if (suggestTimer.current) clearTimeout(suggestTimer.current);
+        const q = v.trim();
+        if (q.length < 3) { setSuggestions([]); setSuggestOpen(false); return; }
+        suggestTimer.current = setTimeout(() => {
+            const seq = ++suggestSeq.current;
+            void get<GraderCandidate[]>(
+                `/grader/suggest?name=${encodeURIComponent(q)}${city.trim() ? `&city=${encodeURIComponent(city.trim())}` : ''}`,
+            ).then((res) => {
+                if (seq !== suggestSeq.current) return; // a newer keystroke owns the dropdown
+                const list = res.ok && res.data ? res.data : [];
+                setSuggestions(list);
+                setSuggestOpen(list.length > 0);
+            });
+        }, 350);
+    };
+
+    const pick = (c: GraderCandidate) => {
+        setPicked(c);
+        setName(c.name);
+        setSuggestions([]);
+        setSuggestOpen(false);
+        if (!city.trim() && c.address) {
+            const parts = c.address.split(',').map((x) => x.trim()).filter(Boolean);
+            if (parts.length > 0) setCity(parts[parts.length - 1]);
+        }
+    };
 
     const scan = async () => {
         if (!name.trim() || !city.trim()) { setError('Enter your restaurant name and city.'); return; }
@@ -80,18 +291,29 @@ const Grader: React.FC = () => {
         setStageIdx(0);
         track.tabOpened({ bucket: 'GRADER', tab: 'SCAN' });
         // The staged checklist is theatre timed to the real request — it advances
-        // while the scan runs and snaps to done when the response lands.
-        stageTimer.current = setInterval(() => setStageIdx((i) => Math.min(i + 1, STAGES.length - 2)), 1800);
-        const res = await post<GraderResult>('/grader/scan', { name: name.trim(), city: city.trim() });
-        if (stageTimer.current) clearInterval(stageTimer.current);
+        // while the scan runs and snaps to done when the response lands. Cached
+        // scans return in under a second, so hold the scanning screen a few
+        // seconds anyway: the owner should see their restaurant being examined.
+        const started = Date.now();
+        stageTimer.current = setInterval(() => setStageIdx((i) => Math.min(i + 1, STAGES.length - 2)), 1000);
+        const res = await post<GraderResult>('/grader/scan', {
+            name: name.trim(),
+            city: city.trim(),
+            placeId: picked?.placeId,
+        });
         if (!res.ok || !res.data) {
+            if (stageTimer.current) clearInterval(stageTimer.current);
             setStep('form');
             setError(res.error ?? 'The scan failed — try again.');
             return;
         }
-        setStageIdx(STAGES.length);
-        setResult(res.data);
-        setTimeout(() => setStep('report'), 500);
+        const hold = Math.max(600, 6500 - (Date.now() - started));
+        setTimeout(() => {
+            if (stageTimer.current) clearInterval(stageTimer.current);
+            setStageIdx(STAGES.length);
+            setResult(res.data ?? null);
+            setTimeout(() => setStep('report'), 600);
+        }, hold);
     };
 
     const unlock = async () => {
@@ -130,10 +352,34 @@ const Grader: React.FC = () => {
                             className="mt-8 grid gap-3 text-left"
                             onSubmit={(e) => { e.preventDefault(); void scan(); }}
                         >
-                            <label className="text-xs font-semibold text-muted">
+                            <label className="text-xs font-semibold text-muted relative block">
                                 Restaurant name
-                                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Exactly as it appears on Google"
+                                <input value={name} onChange={(e) => onNameChange(e.target.value)}
+                                    onFocus={() => { if (suggestions.length > 0) setSuggestOpen(true); }}
+                                    onBlur={() => setSuggestOpen(false)}
+                                    placeholder="Start typing and pick yours from the list"
+                                    autoComplete="off" role="combobox" aria-expanded={suggestOpen} aria-autocomplete="list"
                                     className="mt-1 w-full rounded-xl border border-line bg-surface px-4 py-3 text-base text-ink" />
+                                {suggestOpen && suggestions.length > 0 && (
+                                    <div className="absolute left-0 right-0 top-full mt-1 bg-surface border border-line rounded-xl shadow-lg overflow-hidden overflow-y-auto max-h-80 z-20"
+                                        role="listbox" data-testid="grader-suggestions">
+                                        {suggestions.map((c) => (
+                                            <button key={c.placeId} type="button" role="option" aria-selected={picked?.placeId === c.placeId}
+                                                onMouseDown={(e) => { e.preventDefault(); pick(c); }}
+                                                className="w-full text-left px-4 py-2.5 hover:bg-canvas border-b border-line last:border-b-0">
+                                                <span className="block text-sm font-medium text-ink truncate">{c.name}</span>
+                                                <span className="block text-xs text-muted mt-0.5 truncate">
+                                                    {c.address}{c.rating > 0 ? ` · ★ ${c.rating.toFixed(1)} (${c.totalRatings.toLocaleString('en-IN')})` : ''}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {picked && (
+                                    <span className="block mt-1 text-[11px] font-normal text-success" data-testid="picked-confirmation">
+                                        ✓ {picked.name} · {picked.address}
+                                    </span>
+                                )}
                             </label>
                             <label className="text-xs font-semibold text-muted">
                                 City or area
@@ -151,7 +397,18 @@ const Grader: React.FC = () => {
 
                 {step === 'scanning' && (
                     <div className="max-w-md mx-auto" data-testid="grader-scanning">
-                        <h2 className="text-xl font-bold text-ink">Scanning {name}…</h2>
+                        <h2 className="text-xl font-bold text-ink">Scanning {picked?.name ?? name}…</h2>
+                        <ScanTheatre
+                            name={picked?.name ?? name}
+                            address={picked?.address || city}
+                            rating={picked?.rating ?? 0}
+                            reviews={picked?.totalRatings ?? 0}
+                            photoName={picked?.photoName}
+                            lat={picked?.lat}
+                            lng={picked?.lng}
+                            stageIdx={stageIdx}
+                            total={STAGES.length}
+                        />
                         <ol className="mt-6 space-y-3">
                             {STAGES.map((s, i) => (
                                 <li key={s} className="flex items-center gap-3 text-sm">
@@ -170,10 +427,17 @@ const Grader: React.FC = () => {
                     <div className="grid lg:grid-cols-[280px_1fr] gap-6 items-start">
                         {/* Score rail */}
                         <div className="bg-surface rounded-2xl border border-line p-6 flex flex-col items-center gap-3 lg:sticky lg:top-6">
+                            {(result.photoName || result.location) && (
+                                <div className="w-full rounded-xl overflow-hidden -mt-1" style={{ height: '8rem' }}>
+                                    <ScanHero name={result.name} photoName={result.photoName}
+                                        lat={result.location?.lat} lng={result.location?.lng} />
+                                </div>
+                            )}
                             <ScoreDial score={result.score} grade={result.score >= 85 ? 'A' : result.score >= 70 ? 'B' : result.score >= 55 ? 'C' : result.score >= 40 ? 'D' : 'F'} label="Online score" />
                             <p className="text-sm text-muted">Online health: <span className="font-semibold text-ink">{result.gradeLabel}</span></p>
                             <div className="w-full border-t border-line pt-3 text-sm text-ink">
                                 <p className="font-semibold truncate">{result.name}</p>
+                                {result.address && <p className="text-xs text-muted mt-0.5 truncate">{result.address}</p>}
                                 <p className="text-xs text-muted mt-0.5">★ {result.rating.toFixed(1)} · {result.reviews.toLocaleString('en-IN')} reviews · {result.photos.toLocaleString('en-IN')} photos</p>
                             </div>
                             {!result.unlocked && (

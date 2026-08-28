@@ -40,6 +40,11 @@ export interface PlaceCandidate {
   address: string;
   rating: number;
   totalRatings: number;
+  /** Places (New) photo resource name (places/…/photos/…) for a thumbnail, when the listing has one. */
+  photoName?: string;
+  /** Listing coordinates — lets the grader draw a map while scanning. */
+  lat?: number;
+  lng?: number;
 }
 
 export interface IntelligenceScan {
