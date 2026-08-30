@@ -61,7 +61,15 @@ router.post('/scan', handle(async (req: Request, res: Response<ApiResponse<Grade
         return res.status(400).json({ success: false, error: 'Restaurant name and city are required.' });
     }
     const cleanPlaceId = typeof placeId === 'string' && placeId.trim() ? placeId.trim().slice(0, 100) : undefined;
-    const result = await runGraderScan(name.trim().slice(0, 120), city.trim().slice(0, 80), cleanPlaceId);
+    let result;
+    try {
+        result = await runGraderScan(name.trim().slice(0, 120), city.trim().slice(0, 80), cleanPlaceId);
+    } catch (e) {
+        // TEMP DEBUG: surface the real failure to a file readable from the repo.
+        const { appendFileSync } = await import('node:fs');
+        try { appendFileSync('grader-error.log', new Date().toISOString() + ' ' + String((e as Error)?.stack ?? e) + '\n'); } catch { /* ignore */ }
+        throw e;
+    }
     if (!result) {
         return res.status(404).json({ success: false, error: `We couldn't find "${name.trim()}" on Google in ${city.trim()}. Try the exact name from your Google listing.` });
     }
@@ -79,6 +87,7 @@ router.post('/scan', handle(async (req: Request, res: Response<ApiResponse<Grade
             // holds back the new-openings intel entirely — that's the unlock.
             pillars: result.pillars.map((p) => ({ ...p, checks: [] })),
             likelyNew: [],
+            nearbyTop: [],
         },
     });
 }));

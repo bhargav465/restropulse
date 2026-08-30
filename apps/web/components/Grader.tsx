@@ -15,7 +15,19 @@ import { track } from './intelligence/sections/track';
 
 interface GraderCandidate { placeId: string; name: string; address: string; rating: number; totalRatings: number; photoName?: string; lat?: number; lng?: number }
 interface GraderProblem { label: string; note: string; pillar: string; grade: string }
-interface GraderRankRow { name: string; rating: number; reviews: number; position: number; isYou: boolean; beatsYou: string[] }
+interface GraderRankRow { name: string; rating: number; reviews: number; position: number; isYou: boolean; beatsYou: string[]; threatScore?: number }
+interface GraderActionItem { priority: number; action: string; detail: string; impact: string; timeframe: string }
+interface GraderInsights {
+    baseCuisine: string;
+    executiveSummary: {
+        overview: string; keyFindings: string[]; immediateThreats: string;
+        growthOpportunities: string; recommendation: string; actionPlan: GraderActionItem[];
+    };
+    verdict: string;
+    keywords: { primary: string[]; positive: string[]; negative: string[]; longTail: string[]; trending: string[] };
+    rivals: Array<{ name: string; theyDoBetter: string[]; whereYouWin: string[] }>;
+    cuisineOf: Record<string, string>;
+}
 interface GraderPillarCheck { id: string; label: string; pass: boolean; note: string }
 interface GraderPillar { key: string; score: number; grade: string; checks: GraderPillarCheck[] }
 interface GraderSearchRow { query: string; topResult: string; yourPosition: number | null }
@@ -28,6 +40,12 @@ interface GraderResult {
     pillars: GraderPillar[];
     rank: number; totalNearby: number; areaAvgRating: number; reviewPercentile: number;
     closestRival: { name: string; distanceKm: number; rating: number } | null;
+    threat?: { overall: 'High' | 'Moderate' | 'Low'; avgScore: number };
+    ratingPercentile?: number;
+    totalReviewsInArea?: number;
+    estimatedNegativeReviews?: number;
+    cuisineBreakdown?: Array<{ cuisine: string; count: number; totalReviews: number; avgRating: number; top: string }> | null;
+    aiInsights?: GraderInsights | null;
     likelyNew: Array<{ name: string; reviews: number; rating: number; distanceKm: number }>;
     rankedBelow: number; leaderboard: GraderRankRow[];
     searches: GraderSearchRow[]; estMonthlyLossInr: number; unlocked: boolean;
@@ -52,6 +70,7 @@ const PILLAR_LABELS: Record<string, string> = {
     momentum: 'Momentum',
 };
 const GRADE_COLOR: Record<string, string> = { A: '#16a34a', B: '#65a30d', C: '#d97706', D: '#ea580c', F: '#dc2626' };
+const THREAT_COLOR: Record<string, string> = { High: '#dc2626', Moderate: '#d97706', Low: '#16a34a' };
 const photoUrl = (ref: string) => `${getApiUrl()}/grader/photo?ref=${encodeURIComponent(ref)}`;
 const mapUrl = (lat: number, lng: number) => `${getApiUrl()}/grader/staticmap?lat=${lat}&lng=${lng}`;
 /**
@@ -597,6 +616,80 @@ const Grader: React.FC = () => {
                                 {!result.unlocked && <p className="text-xs text-muted mt-3">Unlock to see every problem and how to fix each one.</p>}
                             </div>
 
+                            {/* Executive summary — the AI's full read, appears once unlocked */}
+                            {result.unlocked && result.aiInsights && result.aiInsights.executiveSummary?.overview && (
+                                <div className="rounded-2xl border border-line p-6 bg-surface" data-testid="grader-exec-summary">
+                                    <h3 className="text-base font-semibold text-ink mb-2">Executive summary</h3>
+                                    <p className="text-sm text-ink leading-relaxed">{result.aiInsights.executiveSummary.overview}</p>
+                                    {result.aiInsights.executiveSummary.keyFindings.length > 0 && (
+                                        <ul className="mt-3 space-y-1.5">
+                                            {result.aiInsights.executiveSummary.keyFindings.map((f) => (
+                                                <li key={f} className="text-sm text-ink flex items-start gap-2">
+                                                    <span className="text-primary-strong mt-0.5" aria-hidden="true">›</span>
+                                                    <span>{f}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    <div className="mt-4 grid md:grid-cols-2 gap-3">
+                                        <div className="rounded-xl bg-canvas p-4">
+                                            <p className="text-xs font-bold mb-1" style={{ color: '#dc2626' }}>⚠ Immediate threats</p>
+                                            <p className="text-sm text-ink leading-relaxed">{result.aiInsights.executiveSummary.immediateThreats}</p>
+                                        </div>
+                                        <div className="rounded-xl bg-canvas p-4">
+                                            <p className="text-xs font-bold mb-1" style={{ color: '#16a34a' }}>↗ Growth opportunities</p>
+                                            <p className="text-sm text-ink leading-relaxed">{result.aiInsights.executiveSummary.growthOpportunities}</p>
+                                        </div>
+                                    </div>
+                                    {result.aiInsights.executiveSummary.recommendation && (
+                                        <p className="text-sm text-ink leading-relaxed mt-3"><span className="font-semibold">Our recommendation:</span> {result.aiInsights.executiveSummary.recommendation}</p>
+                                    )}
+                                    {result.aiInsights.executiveSummary.actionPlan.length > 0 && (
+                                        <div className="mt-4">
+                                            <p className="text-sm font-semibold text-ink mb-2">Your action plan</p>
+                                            <div className="space-y-2">
+                                                {result.aiInsights.executiveSummary.actionPlan.map((a) => (
+                                                    <div key={a.priority} className="rounded-xl border border-line p-3.5">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="w-5 h-5 rounded-full bg-primary-strong text-white text-[11px] font-bold flex items-center justify-center shrink-0">{a.priority}</span>
+                                                            <span className="text-sm font-semibold text-ink">{a.action}</span>
+                                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: a.impact === 'High' ? '#dc2626' : a.impact === 'Medium' ? '#d97706' : '#65a30d' }}>{a.impact} impact</span>
+                                                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-canvas border border-line text-muted">{a.timeframe}</span>
+                                                        </div>
+                                                        <p className="text-xs text-muted mt-1.5 leading-relaxed">{a.detail}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Strategic verdict — multi-paragraph, appears once unlocked */}
+                            {result.unlocked && result.aiInsights?.verdict && (
+                                <div className="rounded-2xl border border-line p-6"
+                                    style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(124,58,237,0.02))' }}
+                                    data-testid="grader-verdict">
+                                    <h3 className="text-base font-semibold text-ink mb-2">Your strategic verdict</h3>
+                                    {result.aiInsights.verdict.split(/\n\n+/).map((para, i) => (
+                                        <p key={i} className="text-sm text-ink leading-relaxed mt-2 first:mt-0">{para}</p>
+                                    ))}
+                                    <p className="text-[11px] text-muted mt-3">Written by AI from your scan's numbers.</p>
+                                </div>
+                            )}
+
+                            {/* Locked teaser: what the unlock contains */}
+                            {!result.unlocked && (
+                                <div className="rounded-2xl border border-line p-6 bg-surface" data-testid="grader-unlock-teaser">
+                                    <h3 className="text-base font-semibold text-ink mb-2">In your full report</h3>
+                                    <ul className="grid md:grid-cols-2 gap-x-6 gap-y-1.5">
+                                        {['Executive summary with 6 key findings', 'Prioritized action plan with timelines', 'Strategic verdict + 90-day roadmap', 'SEO keywords for your cuisine & city', 'Cuisine mix of your area', 'Every check behind each grade', 'Full rival ranking with insights', 'New restaurants opening near you'].map((t) => (
+                                            <li key={t} className="text-sm text-muted flex items-start gap-2"><span className="text-primary-strong" aria-hidden="true">✓</span><span>{t}</span></li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+
                             {/* By the numbers — same tiles idea as the RestroPulse dashboard */}
                             <div className="bg-surface rounded-2xl border border-line p-6">
                                 <h3 className="text-base font-semibold text-ink mb-4">By the numbers</h3>
@@ -611,6 +704,18 @@ const Grader: React.FC = () => {
                                         <p className="text-2xl font-bold text-ink tabular-nums">{result.reviews.toLocaleString('en-IN')}</p>
                                         <p className="text-xs text-muted mt-1">Reviews — more than {result.reviewPercentile}% of nearby rivals</p>
                                     </div>
+                                    {result.ratingPercentile != null && (
+                                        <div className="rounded-xl bg-canvas p-4">
+                                            <p className="text-2xl font-bold text-ink tabular-nums">{result.ratingPercentile}%</p>
+                                            <p className="text-xs text-muted mt-1">Of nearby rivals are rated at or below you</p>
+                                        </div>
+                                    )}
+                                    {result.totalReviewsInArea != null && result.totalReviewsInArea > 0 && (
+                                        <div className="rounded-xl bg-canvas p-4">
+                                            <p className="text-2xl font-bold text-ink tabular-nums">{result.totalReviewsInArea.toLocaleString('en-IN')}</p>
+                                            <p className="text-xs text-muted mt-1">Total rival reviews nearby — your share is {result.totalReviewsInArea + result.reviews > 0 ? Math.round((result.reviews / (result.totalReviewsInArea + result.reviews)) * 100) : 0}%</p>
+                                        </div>
+                                    )}
                                     <div className="rounded-xl bg-canvas p-4">
                                         <p className="text-2xl font-bold text-ink tabular-nums">#{result.rank} of {result.totalNearby}</p>
                                         <p className="text-xs text-muted mt-1">Your standing among restaurants nearby</p>
@@ -666,14 +771,25 @@ const Grader: React.FC = () => {
 
                             {/* Competition — blurred until unlock */}
                             <div className="bg-surface rounded-2xl border border-line p-6">
-                                <h3 className="text-base font-semibold text-ink mb-3">You're ranking below {result.rankedBelow} competitor{result.rankedBelow === 1 ? '' : 's'}</h3>
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                    <h3 className="text-base font-semibold text-ink">You're ranking below {result.rankedBelow} competitor{result.rankedBelow === 1 ? '' : 's'}</h3>
+                                    {result.threat && (
+                                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full text-white whitespace-nowrap"
+                                            style={{ background: THREAT_COLOR[result.threat.overall] ?? '#d97706' }}>
+                                            Competition heat: {result.threat.overall}
+                                        </span>
+                                    )}
+                                </div>
                                 <Blurrable locked={!result.unlocked}>
                                     <div data-testid="grader-leaderboard">
                                         {result.leaderboard.map((r) => (
                                             <div key={r.position} className={`py-2.5 border-b border-line last:border-b-0 ${r.isYou ? 'font-semibold text-primary-strong' : 'text-ink'}`}>
                                                 <div className="flex items-center justify-between gap-3">
                                                     <span className="text-sm truncate">{r.position}. {r.name}{r.isYou ? ' (you)' : ''}</span>
-                                                    <span className="text-sm tabular-nums text-muted">★ {r.rating.toFixed(1)} · {r.reviews.toLocaleString('en-IN')}</span>
+                                                    <span className="text-sm tabular-nums text-muted whitespace-nowrap">
+                                                        ★ {r.rating.toFixed(1)} · {r.reviews.toLocaleString('en-IN')}
+                                                        {r.threatScore != null && <> · <span style={{ color: r.threatScore >= 70 ? '#dc2626' : r.threatScore >= 45 ? '#d97706' : '#16a34a' }}>threat {r.threatScore}</span></>}
+                                                    </span>
                                                 </div>
                                                 {(r.beatsYou ?? []).length > 0 && (
                                                     <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -682,6 +798,26 @@ const Grader: React.FC = () => {
                                                         ))}
                                                     </div>
                                                 )}
+                                                {result.unlocked && (() => {
+                                                    const ai = result.aiInsights?.rivals.find((x) => x.name === r.name);
+                                                    if (!ai || (ai.theyDoBetter.length === 0 && ai.whereYouWin.length === 0)) return null;
+                                                    return (
+                                                        <div className="mt-1.5 space-y-1">
+                                                            {ai.theyDoBetter.map((t) => (
+                                                                <p key={t} className="text-[11px] font-normal text-muted flex items-start gap-1.5">
+                                                                    <span style={{ color: '#dc2626' }} aria-hidden="true">▲</span>
+                                                                    <span><span className="font-medium text-ink">They do better:</span> {t}</span>
+                                                                </p>
+                                                            ))}
+                                                            {ai.whereYouWin.map((t) => (
+                                                                <p key={t} className="text-[11px] font-normal text-muted flex items-start gap-1.5">
+                                                                    <span style={{ color: '#16a34a' }} aria-hidden="true">✓</span>
+                                                                    <span><span className="font-medium text-ink">Where you win:</span> {t}</span>
+                                                                </p>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         ))}
                                     </div>
@@ -707,6 +843,59 @@ const Grader: React.FC = () => {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* SEO keywords — appears once unlocked */}
+                            {result.unlocked && result.aiInsights && result.aiInsights.keywords?.primary?.length > 0 && (
+                                <div className="bg-surface rounded-2xl border border-line p-6" data-testid="grader-keywords">
+                                    <h3 className="text-base font-semibold text-ink mb-1">Keywords that bring guests to you</h3>
+                                    <p className="text-xs text-muted mb-4">Use these in your Google profile, website and posts{result.aiInsights.baseCuisine ? ` — tuned for ${result.aiInsights.baseCuisine} in ${result.city}` : ''}.</p>
+                                    {([
+                                        ['Primary', result.aiInsights.keywords.primary, 'rgba(124,58,237,0.10)'],
+                                        ['What happy guests search', result.aiInsights.keywords.positive, 'rgba(22,163,74,0.10)'],
+                                        ['Long-tail phrases', result.aiInsights.keywords.longTail, 'rgba(2,132,199,0.10)'],
+                                        ['Trending now', result.aiInsights.keywords.trending, 'rgba(217,119,6,0.10)'],
+                                        ['Complaints to watch for', result.aiInsights.keywords.negative, 'rgba(220,38,38,0.10)'],
+                                    ] as Array<[string, string[], string]>).filter(([, list]) => list.length > 0).map(([label, list, bg]) => (
+                                        <div key={label} className="mb-3 last:mb-0">
+                                            <p className="text-xs font-semibold text-muted mb-1.5">{label}</p>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {list.map((k) => (
+                                                    <span key={k} className="text-xs px-2.5 py-1 rounded-full text-ink" style={{ background: bg }}>{k}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Cuisine mix of the area — appears once unlocked */}
+                            {result.unlocked && (result.cuisineBreakdown ?? []).length > 0 && (
+                                <div className="bg-surface rounded-2xl border border-line p-6" data-testid="grader-cuisines">
+                                    <div className="flex items-center justify-between gap-2 mb-3">
+                                        <h3 className="text-base font-semibold text-ink">What your area eats</h3>
+                                        {result.aiInsights?.baseCuisine && (
+                                            <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-canvas border border-line text-ink">You: {result.aiInsights.baseCuisine}</span>
+                                        )}
+                                    </div>
+                                    {(() => {
+                                        const rows = result.cuisineBreakdown ?? [];
+                                        const maxReviews = Math.max(...rows.map((c) => c.totalReviews), 1);
+                                        return rows.map((c) => (
+                                            <div key={c.cuisine} className="py-2 border-b border-line last:border-b-0">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="w-32 shrink-0 text-sm text-ink truncate">{c.cuisine}</span>
+                                                    <div className="flex-1 h-2 rounded-full bg-canvas overflow-hidden">
+                                                        <div className="h-full rounded-full bg-primary-strong" style={{ width: `${Math.max(4, Math.round((c.totalReviews / maxReviews) * 100))}%` }} />
+                                                    </div>
+                                                    <span className="text-xs tabular-nums text-muted whitespace-nowrap">{c.count} spot{c.count === 1 ? '' : 's'} · ★ {c.avgRating.toFixed(1)}</span>
+                                                </div>
+                                                <p className="text-[11px] text-muted mt-0.5 ml-32 pl-3">Leader: {c.top} · {c.totalReviews.toLocaleString('en-IN')} reviews</p>
+                                            </div>
+                                        ));
+                                    })()}
+                                    <p className="text-[11px] text-muted mt-3">Share of review volume among your top nearby rivals. Cuisine labels estimated by AI.</p>
+                                </div>
+                            )}
 
                             {/* New openings near you — the freshest competitive intel */}
                             <div className="bg-surface rounded-2xl border border-line p-6">
@@ -783,7 +972,7 @@ const Grader: React.FC = () => {
                             <div className="flex items-center gap-3">
                                 <button type="button" disabled={unlockBusy || !promo.trim() || (!phone.trim() && !email.trim())} onClick={() => void unlock()}
                                     className="flex-1 rounded-xl bg-primary-strong text-white px-4 py-3 text-sm font-semibold hover:opacity-90 disabled:opacity-50">
-                                    {unlockBusy ? 'Unlocking…' : 'Unlock'}
+                                    {unlockBusy ? 'Preparing your full report…' : 'Unlock'}
                                 </button>
                                 <button type="button" onClick={() => setUnlockOpen(false)} className="text-sm font-semibold text-muted hover:text-ink">Not now</button>
                             </div>
