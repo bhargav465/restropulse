@@ -136,6 +136,195 @@ async function runForcedTool<T>(
 }
 
 // ---------------------------------------------------------------------------
+// Grader unlock insights — the AI layer of the public lead-gen report. Runs
+// ONCE per scan, at unlock time (a captured lead), never for anonymous scans,
+// so the free teaser stays Places-only paise-cheap. One Haiku forced-tool call
+// produces the full owner-facing analysis: executive summary + action plan,
+// keyword clusters, per-rival insights, cuisine classification, and a
+// multi-paragraph verdict.
+// ---------------------------------------------------------------------------
+
+export interface GraderInsightsInput {
+    name: string;
+    city: string;
+    rating: number;
+    reviews: number;
+    rank: number;
+    totalNearby: number;
+    areaAvgRating: number;
+    estMonthlyLossInr: number;
+    problems: Array<{ label: string; note: string }>;
+    rivals: Array<{ name: string; rating: number; reviews: number; threatScore?: number }>;
+    /** Wider nearby field (top ~20 by threat) for cuisine classification. */
+    nearby: Array<{ name: string; rating: number; reviews: number; distanceKm?: number }>;
+}
+
+export interface GraderActionItem {
+    priority: number;
+    action: string;
+    detail: string;
+    impact: string;
+    timeframe: string;
+}
+
+export interface GraderInsights {
+    baseCuisine: string;
+    executiveSummary: {
+        overview: string;
+        keyFindings: string[];
+        immediateThreats: string;
+        growthOpportunities: string;
+        recommendation: string;
+        actionPlan: GraderActionItem[];
+    };
+    verdict: string;
+    keywords: {
+        primary: string[];
+        positive: string[];
+        negative: string[];
+        longTail: string[];
+        trending: string[];
+    };
+    rivals: Array<{ name: string; theyDoBetter: string[]; whereYouWin: string[] }>;
+    /** AI cuisine label per nearby restaurant name (for the cuisine-mix card). */
+    cuisineOf: Record<string, string>;
+}
+
+const strArr = (v: unknown, cap: number): string[] =>
+    Array.isArray(v) ? v.map(String).filter(Boolean).slice(0, cap) : [];
+
+export async function generateGraderInsights(
+    input: GraderInsightsInput,
+    client: Anthropic = getClient(),
+): Promise<GraderInsights> {
+    const out = await runForcedTool<GraderInsights>(client, {
+        model: HAIKU_MODEL,
+        maxTokens: 4000,
+        system: [
+            'You write sharp, concrete competitive analysis for Indian restaurant owners.',
+            'Plain language a busy owner skims in seconds. Anchor every claim to the numbers provided.',
+            'Never invent facts absent from the data — no delivery-platform claims, no imagined menus.',
+            'Amounts are in INR (₹). Keyword suggestions should fit Indian search behaviour.',
+        ].join(' '),
+        prompt: JSON.stringify(input),
+        tool: {
+            name: 'grader_insights',
+            description: 'Full structured analysis for the unlocked grader report.',
+            input_schema: {
+                type: 'object',
+                required: ['baseCuisine', 'executiveSummary', 'verdict', 'keywords', 'rivals', 'cuisineOf'],
+                properties: {
+                    baseCuisine: { type: 'string', description: "The scanned restaurant's primary cuisine (e.g. Biryani, North Indian, Cafe)." },
+                    executiveSummary: {
+                        type: 'object',
+                        required: ['overview', 'keyFindings', 'immediateThreats', 'growthOpportunities', 'recommendation', 'actionPlan'],
+                        properties: {
+                            overview: { type: 'string', description: '3-4 sentences on the competitive landscape and this restaurant\'s standing.' },
+                            keyFindings: { type: 'array', maxItems: 6, items: { type: 'string' }, description: '6 specific, number-anchored findings.' },
+                            immediateThreats: { type: 'string', description: '2-3 sentences naming the most urgent rivals and exactly why.' },
+                            growthOpportunities: { type: 'string', description: '2-3 sentences on the biggest untapped opportunities in this data.' },
+                            recommendation: { type: 'string', description: '2-3 sentences: what to do first, second, and why.' },
+                            actionPlan: {
+                                type: 'array',
+                                maxItems: 5,
+                                items: {
+                                    type: 'object',
+                                    required: ['priority', 'action', 'detail', 'impact', 'timeframe'],
+                                    properties: {
+                                        priority: { type: 'number' },
+                                        action: { type: 'string' },
+                                        detail: { type: 'string', description: '2-3 sentences: exactly what to do and how.' },
+                                        impact: { type: 'string', enum: ['High', 'Medium', 'Low'] },
+                                        timeframe: { type: 'string', enum: ['Immediate', '1-2 weeks', '1 month', '3 months'] },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    verdict: {
+                        type: 'string',
+                        description:
+                            '3 short paragraphs separated by blank lines: (1) market position and biggest risk, (2) the single biggest opportunity and how to capture it, (3) a 90-day roadmap with 3 milestones.',
+                    },
+                    keywords: {
+                        type: 'object',
+                        required: ['primary', 'positive', 'negative', 'longTail', 'trending'],
+                        properties: {
+                            primary: { type: 'array', maxItems: 8, items: { type: 'string' } },
+                            positive: { type: 'array', maxItems: 8, items: { type: 'string' } },
+                            negative: { type: 'array', maxItems: 6, items: { type: 'string' }, description: 'Complaint keywords to monitor for this cuisine.' },
+                            longTail: { type: 'array', maxItems: 8, items: { type: 'string' }, description: '4-6 word phrases customers type into Google/Zomato/Swiggy.' },
+                            trending: { type: 'array', maxItems: 6, items: { type: 'string' } },
+                        },
+                    },
+                    rivals: {
+                        type: 'array',
+                        maxItems: 5,
+                        items: {
+                            type: 'object',
+                            required: ['name', 'theyDoBetter', 'whereYouWin'],
+                            properties: {
+                                name: { type: 'string' },
+                                theyDoBetter: { type: 'array', items: { type: 'string' }, maxItems: 3 },
+                                whereYouWin: { type: 'array', items: { type: 'string' }, maxItems: 3 },
+                            },
+                        },
+                    },
+                    cuisineOf: {
+                        type: 'object',
+                        description: 'Map of nearby restaurant name -> primary cuisine label, for every restaurant in the nearby list.',
+                        additionalProperties: { type: 'string' },
+                    },
+                },
+            },
+        },
+    });
+    const es = (out.executiveSummary ?? {}) as GraderInsights['executiveSummary'];
+    const kw = (out.keywords ?? {}) as GraderInsights['keywords'];
+    return {
+        baseCuisine: typeof out.baseCuisine === 'string' ? out.baseCuisine : '',
+        executiveSummary: {
+            overview: typeof es.overview === 'string' ? es.overview : '',
+            keyFindings: strArr(es.keyFindings, 6),
+            immediateThreats: typeof es.immediateThreats === 'string' ? es.immediateThreats : '',
+            growthOpportunities: typeof es.growthOpportunities === 'string' ? es.growthOpportunities : '',
+            recommendation: typeof es.recommendation === 'string' ? es.recommendation : '',
+            actionPlan: Array.isArray(es.actionPlan)
+                ? es.actionPlan.slice(0, 5).map((a, i) => ({
+                      priority: typeof a?.priority === 'number' ? a.priority : i + 1,
+                      action: String(a?.action ?? ''),
+                      detail: String(a?.detail ?? ''),
+                      impact: String(a?.impact ?? 'Medium'),
+                      timeframe: String(a?.timeframe ?? '1 month'),
+                  })).filter((a) => a.action)
+                : [],
+        },
+        verdict: typeof out.verdict === 'string' ? out.verdict : '',
+        keywords: {
+            primary: strArr(kw.primary, 8),
+            positive: strArr(kw.positive, 8),
+            negative: strArr(kw.negative, 6),
+            longTail: strArr(kw.longTail, 8),
+            trending: strArr(kw.trending, 6),
+        },
+        rivals: Array.isArray(out.rivals)
+            ? out.rivals
+                  .slice(0, 5)
+                  .map((r) => ({
+                      name: String(r?.name ?? ''),
+                      theyDoBetter: strArr(r?.theyDoBetter, 3),
+                      whereYouWin: strArr(r?.whereYouWin, 3),
+                  }))
+                  .filter((r) => r.name)
+            : [],
+        cuisineOf:
+            out.cuisineOf && typeof out.cuisineOf === 'object'
+                ? Object.fromEntries(Object.entries(out.cuisineOf).map(([k, v]) => [k, String(v)]))
+                : {},
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Review reply drafting — the one-tap follow-through for the "negative review"
 // nudge. Draft-only: the owner copies it to Google today; once Business Profile
 // connect exists this becomes "post reply". Haiku: cheap, fast, good at tone.

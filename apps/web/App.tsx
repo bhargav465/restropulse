@@ -158,6 +158,13 @@ const App: React.FC = () => {
         if (isInstagramCallback) return;
 
         const initializeApp = async () => {
+            // Public grader route (?view=grader) renders before auth -- skip the
+            // whole session restore so it never rewrites the URL to ?view=dashboard
+            // (which made the shared grader link land on the dashboard on reload).
+            if (new URLSearchParams(window.location.search).get('view') === 'grader') {
+                setLoading(false);
+                return;
+            }
             const token = localStorage.getItem('rp_token');
             const session = localStorage.getItem('rp_session');
 

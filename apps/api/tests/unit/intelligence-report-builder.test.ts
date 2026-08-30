@@ -20,6 +20,7 @@ const base: BaseRestaurant = {
     website: null,
     phone: '+910000000000',
     hasHours: true,
+    photoName: null,
     photoCount: 40,
     hasDescription: true,
     recentReviews: [{ rating: 5, text: 'Great biryani', time: new Date().toISOString() }],
